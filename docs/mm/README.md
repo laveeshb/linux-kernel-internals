@@ -1,0 +1,121 @@
+# Memory Management (mm/)
+
+> How Linux manages the most fundamental resource: memory
+
+## Getting Started
+
+This documentation explains how Linux manages memory - not just the theory, but the actual implementation decisions, trade-offs, and lessons learned over 30+ years of development.
+
+### Prerequisites
+
+This documentation assumes familiarity with:
+- **C programming** - The kernel is written in C
+- **Pointers and memory addresses** - Virtual vs physical addressing
+- **Basic OS concepts** - Processes, kernel vs userspace
+
+If you've covered virtual memory and paging, that's a good foundation. See [Further Reading](#further-reading) for recommended textbooks.
+
+### Getting the Kernel Source
+
+```bash
+git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+cd linux
+```
+
+For building and configuration, see [Documentation/admin-guide/README.rst](https://docs.kernel.org/admin-guide/README.html).
+
+### Running Tests
+
+The fastest way to test kernel changes without rebooting your machine:
+
+```bash
+# Install virtme-ng (runs kernel in QEMU with your filesystem)
+pip install virtme-ng
+
+# Build and boot with a test module
+virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
+
+# Check results
+# (dmesg output appears in the virtual console)
+```
+
+For comprehensive testing documentation, see [Documentation/dev-tools/testing-overview.rst](https://docs.kernel.org/dev-tools/testing-overview.html).
+
+### Suggested Reading Order
+
+1. **[Glossary](glossary.md)** - Terminology reference
+2. **[Overview: The Story](overview.md)** - The narrative of how mm/ evolved
+3. **[vmalloc](vmalloc.md)** - Deep dive into one allocator
+4. **[vrealloc](vrealloc.md)** - A recent feature with instructive bugs
+
+### What You'll Learn
+
+| Textbook Concept | Linux Reality |
+|------------------|---------------|
+| "Page tables map virtual to physical" | Multi-level page tables, TLB flushing costs, lazy unmapping |
+| "Memory allocator" | Multiple allocators for different use cases (slab, vmalloc, buddy) |
+| "Fragmentation" | Why physically contiguous memory is hard, vmalloc as a solution |
+| "Memory is finite" | OOM killer, memory cgroups, reclaim |
+
+### What Makes This Different
+
+- **Real commits**: Every claim links to actual kernel commits
+- **Real bugs**: Learn from what broke and why
+- **Real discussions**: Links to LKML where decisions were debated
+- **Real trade-offs**: Not just "what" but "why this and not that"
+- **Hands-on**: "Try It Yourself" sections with commands to run and code to read
+
+---
+
+## Documentation
+
+### Core Reading
+
+| Document | What You'll Learn |
+|----------|-------------------|
+| [overview](overview.md) | The 30-year story of Linux memory management |
+| [glossary](glossary.md) | Every term defined for newcomers |
+| [vmalloc](vmalloc.md) | How virtually contiguous allocation works |
+| [vrealloc](vrealloc.md) | Resizing allocations - a case study in kernel development |
+
+### Planned
+
+| Document | Status |
+|----------|--------|
+| [page-allocator](page-allocator.md) | Planned - Buddy system deep dive |
+| [slab](slab.md) | Planned - SLUB internals |
+| [page-tables](page-tables.md) | Planned - Virtual memory mapping |
+| [reclaim](reclaim.md) | Planned - What happens under memory pressure |
+| [memcg](memcg.md) | Planned - Container memory limits |
+
+---
+
+## Key Source Files
+
+If you want to read the actual code:
+
+| File | What It Does |
+|------|--------------|
+| [`mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) | Buddy allocator - physical page management |
+| [`mm/slub.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) | SLUB allocator - small object caches |
+| [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | vmalloc - virtually contiguous allocation |
+| [`mm/vmscan.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) | Memory reclaim under pressure |
+| [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | Memory cgroups |
+| [`include/linux/gfp.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/gfp.h) | GFP flags definitions |
+
+---
+
+## Further Reading
+
+### Free Resources
+- [Bonwick, "The Slab Allocator" (1994)](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html) - Original slab paper from USENIX
+- [Gorman, "Understanding the Linux Virtual Memory Manager"](https://www.kernel.org/doc/gorman/) - Free online book
+
+### Kernel Documentation
+- [Documentation/mm/](https://docs.kernel.org/mm/) in the kernel tree
+- [Documentation/admin-guide/mm/](https://docs.kernel.org/admin-guide/mm/) for sysadmin perspective
+
+### Textbooks
+- Silberschatz, "Operating System Concepts" - Ch. 9-10 (Memory)
+- Tanenbaum, "Modern Operating Systems" - Ch. 3 (Memory Management)
+- Love, "Linux Kernel Development" - Ch. 12 (Memory Management)
