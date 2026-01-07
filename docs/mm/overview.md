@@ -70,6 +70,8 @@ How Linux memory allocators relate to each other:
 
 Physical memory is finite. You need a way to hand out chunks of it and get them back.
 
+*Note: The buddy allocator dates to Linux 0.01 (1991). This predates LKML - early Linux development happened on comp.os.minix and early mailing lists without good archives. Linus's [original announcement](https://www.cs.cmu.edu/~awb/linux.history.html) is preserved, but detailed mm discussions from this era are largely lost to history.*
+
 ### The Solution: Buddy System
 
 Linux uses a "buddy allocator" (borrowed from older systems). Here's the clever idea:
@@ -124,10 +126,13 @@ Each object type gets its own cache. Allocating is fast (grab from cache), freei
 
 ### The Evolution
 
-**SLAB (Original)**: Complex. Multiple levels of caches. Good debugging. But hard to maintain.
+**SLAB (Original, ~1996)**: Ported from SunOS, based on [Bonwick's 1994 USENIX paper](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html). Complex. Multiple levels of caches. Good debugging. But hard to maintain.
+
+*Note: SLAB predates good LKML archives. The Bonwick paper is the canonical design reference.*
 
 **SLUB (v2.6.22, 2007)**: Simpler redesign by Christoph Lameter.
 - **Commit**: [81819f0fc828](https://git.kernel.org/linus/81819f0fc828)
+- **LKML**: [SLUB: The unqueued Slab allocator](https://lkml.iu.edu/hypermail/linux/kernel/0702.2/2430.html) (Feb 2007)
 - Removed complex queuing
 - Lower memory overhead
 - Better NUMA support
