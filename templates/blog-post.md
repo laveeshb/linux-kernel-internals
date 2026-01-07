@@ -25,5 +25,4 @@ Key takeaways.
 ## References
 
 - [Commit abcd1234](https://git.kernel.org/...) - Description
-- [LWN: Article Title](https://lwn.net/...) - Description
 - [LKML Thread](https://lore.kernel.org/...) - Description

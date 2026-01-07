@@ -26,7 +26,7 @@ Explanation with code if relevant:
 
 Explain the rationale, link to sources.
 
-**Source**: [commit/mailing list/LWN]
+**Source**: [commit/mailing list]
 
 ## History
 

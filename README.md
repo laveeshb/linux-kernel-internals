@@ -12,7 +12,7 @@ A community hub for understanding the Linux kernel — documentation, blog posts
 
 ## Why?
 
-The kernel has extensive API documentation, but understanding the *rationale* requires digging through mailing list archives, paywalled LWN articles, and tribal knowledge. We're building a more accessible resource.
+The kernel has extensive API documentation, but understanding the *rationale* requires digging through mailing list archives, scattered articles, and tribal knowledge. We're building a more accessible resource.
 
 ## Structure
 
