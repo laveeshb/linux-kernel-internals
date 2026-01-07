@@ -49,7 +49,7 @@ Hardware accessing memory directly without CPU involvement. DMA buffers need phy
 When free memory exists but isn't usable because it's broken into small, non-contiguous pieces.
 
 **External fragmentation**: Free pages scattered throughout memory.
-**Internal fragmentation**: Allocated more than needed (asked for 5KB, got 8KB).
+**Internal fragmentation**: Allocated more than needed (asked for `5KB`, got `8KB`).
 
 ---
 
@@ -66,7 +66,7 @@ Flags passed to allocation functions specifying behavior:
 ## H
 
 ### Huge Pages
-Pages larger than the default 4KB (typically 2MB or 1GB). Reduce TLB pressure for large allocations but increase internal fragmentation.
+Pages larger than the default `4KB` (typically `2MB` or `1GB`). Reduce TLB pressure for large allocations but increase internal fragmentation.
 
 ---
 
@@ -126,17 +126,17 @@ Architecture where memory access time depends on which CPU is accessing which me
 When the system runs out of memory. The OOM killer selects a process to terminate and free memory.
 
 ### Order (Page Order)
-Power of 2 indicating allocation size. Order 0 = 1 page (4KB), Order 1 = 2 pages (8KB), Order 2 = 4 pages (16KB), etc.
+Power of 2 indicating allocation size. Order 0 = 1 page (`4KB`), Order 1 = 2 pages (`8KB`), Order 2 = 4 pages (`16KB`), etc.
 
 ---
 
 ## P
 
 ### Page
-The basic unit of memory management. Typically 4KB on x86. The smallest unit the MMU can map.
+The basic unit of memory management. Typically `4KB` on x86. The smallest unit the MMU can map.
 
 ### Page Table
-Data structure mapping virtual addresses to physical addresses. Multi-level (PGD → PUD → PMD → PTE on x86-64) to save space.
+Data structure mapping virtual addresses to physical addresses. Multi-level (`PGD` -> `PUD` -> `PMD` -> `PTE` on x86-64) to save space.
 
 ### Physical Address
 Actual location in RAM hardware. What the memory controller sees.
@@ -146,7 +146,7 @@ Actual location in RAM hardware. What the memory controller sees.
 ## R
 
 ### RBTree (Red-Black Tree)
-Self-balancing binary search tree. Used in vmalloc for O(log n) address lookup. Better than linked lists for large datasets.
+Self-balancing binary search tree. Used in vmalloc for `O(log n)` address lookup. Better than linked lists for large datasets.
 
 ---
 
@@ -198,9 +198,9 @@ Resize a vmalloc allocation. Can shrink in-place (freeing pages) or grow (may ne
 
 ### Zone
 Division of physical memory by characteristics:
-- **ZONE_DMA**: Memory accessible by old 16-bit DMA (first 16MB)
-- **ZONE_NORMAL**: Regular memory
-- **ZONE_HIGHMEM**: Memory above ~896MB on 32-bit (not directly mapped)
+- **`ZONE_DMA`**: Memory accessible by old 16-bit DMA (first `16MB`)
+- **`ZONE_NORMAL`**: Regular memory
+- **`ZONE_HIGHMEM`**: Memory above ~`896MB` on 32-bit (not directly mapped)
 
 ---
 

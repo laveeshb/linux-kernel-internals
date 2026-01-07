@@ -35,7 +35,7 @@ Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
 
 **The solution**:
 1. **Lazy TLB flushing**: Don't flush immediately on vunmap. Addresses won't be reused until reallocated, so batch multiple unmaps into single flush.
-2. **RBTree for vmap_area**: Fast O(log n) lookups instead of linear list scan.
+2. **RBTree for vmap_area**: Fast `O(log n)` lookups instead of linear list scan.
 3. **Percpu frontend**: Fast, scalable allocation for small vmaps.
 
 **Trade-off**: XEN and PAT need immediate TLB flush due to aliasing issues. They call `vm_unmap_aliases()` to force flush when needed.
@@ -48,15 +48,15 @@ Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
 **Kernel**: v5.13
 **Author**: Nicholas Piggin
 
-**What changed**: vmalloc can now use PMD-sized huge pages for large allocations.
+**What changed**: vmalloc can now use `PMD`-sized huge pages for large allocations.
 
 **How it works**:
-- If allocation >= PMD size, try huge pages first
+- If allocation >= `PMD` size, try huge pages first
 - Fall back to small pages if huge allocation fails
 - `VM_NOHUGE` flag to force small pages (needed for module allocations with strict rwx)
 - Boot option `nohugevmalloc` to disable globally
 
-**Trade-off**: More internal fragmentation (allocating 2MB when you need 1.1MB), but fewer TLB entries needed.
+**Trade-off**: More internal fragmentation (allocating `2MB` when you need `1.1MB`), but fewer TLB entries needed.
 
 ### v6.12: vrealloc Introduction
 
@@ -196,7 +196,7 @@ Batching multiple vunmaps into a single flush amortizes this cost. The kernel tr
 
 ### Why RBTree for vmap_area?
 
-Before v2.6.28, vmalloc used a simple linked list. As systems grew larger, linear O(n) searches became a bottleneck. RBTree provides O(log n) lookup, insertion, and deletion.
+Before v2.6.28, vmalloc used a simple linked list. As systems grew larger, linear `O(n)` searches became a bottleneck. RBTree provides `O(log n)` lookup, insertion, and deletion.
 
 ## Common Issues
 
@@ -206,7 +206,7 @@ Under heavy vmalloc/vfree workload, lazy flushing can cause "flush storms" where
 
 ### Address Space Exhaustion
 
-vmalloc has limited address space (VMALLOC_START to VMALLOC_END). On 32-bit systems this was often only 128MB. Heavy users like BPF, modules, and drivers can exhaust it.
+vmalloc has limited address space (`VMALLOC_START` to `VMALLOC_END`). On 32-bit systems this was often only `128MB`. Heavy users like BPF, modules, and drivers can exhaust it.
 
 ### NUMA Locality
 

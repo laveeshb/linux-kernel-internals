@@ -93,7 +93,7 @@ When they free those 2 pages, you merge them back with their "buddy":
 [__][_][_] -> [____][_] -> [________] -> etc.
 ```
 
-**Why it works**: Fast allocation (O(log n)), automatic merging reduces fragmentation.
+**Why it works**: Fast allocation (`O(log n)`), automatic merging reduces fragmentation.
 
 **What it can't do**: Give you, say, 3 pages. You'll get 4 (next power of 2).
 
@@ -103,12 +103,12 @@ When they free those 2 pages, you merge them back with their "buddy":
 
 ### The Problem
 
-The page allocator works in page-sized chunks (4KB). But kernel objects are often tiny:
+The page allocator works in page-sized chunks (`4KB`). But kernel objects are often tiny:
 - An inode? ~600 bytes
-- A task_struct? ~8KB
+- A `task_struct`? ~`8KB`
 - A socket buffer? ~200 bytes
 
-Giving someone a whole 4KB page for a 200-byte object wastes memory.
+Giving someone a whole `4KB` page for a 200-byte object wastes memory.
 
 ### The Solution: Slab
 
@@ -154,7 +154,7 @@ kfree(ptr);                        // Give it back
 
 ### The Problem
 
-kmalloc gives you *physically contiguous* memory. As the system runs, physical memory becomes fragmented. Eventually, you can't find a contiguous 1MB chunk even if total free memory is 100MB.
+`kmalloc` gives you *physically contiguous* memory. As the system runs, physical memory becomes fragmented. Eventually, you can't find a contiguous `1MB` chunk even if total free memory is `100MB`.
 
 ### The Solution: Virtual Contiguity
 
@@ -182,16 +182,16 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 **The fix**: Nick Piggin rewrote vmalloc from scratch:
 - **Commit**: [db64fe02258f](https://git.kernel.org/linus/db64fe02258f)
 - Lazy TLB flushing: Don't flush immediately, batch multiple unmaps
-- RBTree for address lookup: O(log n) instead of O(n) list scan
+- RBTree for address lookup: `O(log n)` instead of `O(n)` list scan
 - Per-CPU frontend: Reduce lock contention
 
 **LKML Discussion**: [vmap rewrite](https://lkml.kernel.org/r/20081015031109.GA11393@wotan.suse.de)
 
 **v5.13 (2021): Huge Pages**
 
-**The problem**: With huge vmalloc buffers (BPF programs, modules), each 4KB page needed a TLB entry. TLB is limited. Lots of TLB misses.
+**The problem**: With huge vmalloc buffers (BPF programs, modules), each `4KB` page needed a TLB entry. TLB is limited. Lots of TLB misses.
 
-**The fix**: Use huge pages (2MB) when possible:
+**The fix**: Use huge pages (`2MB`) when possible:
 - **Commit**: [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe)
 - Fewer TLB entries needed
 - Trade-off: More internal fragmentation

@@ -78,7 +78,7 @@ Introduced `vm_struct::requested_size` to track actual requested size separately
 
 **Commit**: [e64f42036ef4](https://git.kernel.org/linus/e64f42036ef4) ("mm/vmalloc: free pages when vrealloc() shrinks allocation")
 
-**Problem identified**: vrealloc() shrinking only updated metadata but kept all pages mapped. Shrinking 256KB to 16KB still consumed 256KB of physical memory.
+**Problem identified**: `vrealloc()` shrinking only updated metadata but kept all pages mapped. Shrinking `256KB` to `16KB` still consumed `256KB` of physical memory.
 
 **The fix**:
 - Unmap pages beyond new size via `vunmap_range()`
@@ -86,7 +86,7 @@ Introduced `vm_struct::requested_size` to track actual requested size separately
 - Update memcg accounting
 - Update `nr_vmalloc_pages` counter
 
-**Result**: 93% memory reduction when shrinking 256KB → 16KB.
+**Result**: 93% memory reduction when shrinking `256KB` -> `16KB`.
 
 ## Behavior
 
