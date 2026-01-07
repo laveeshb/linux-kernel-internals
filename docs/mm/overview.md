@@ -1,64 +1,221 @@
-# Memory Management Overview
+# Memory Management: The Story
 
-## The Big Picture
+## The Problem (1991)
 
-Linux manages two types of memory:
+When Linus Torvalds started Linux, he faced a fundamental question: **how do you let multiple programs share limited RAM?**
 
-1. **Physical memory** - Actual RAM, divided into pages (usually 4KB)
-2. **Virtual memory** - Address space seen by processes and kernel
+Every program thinks it has the entire computer's memory to itself. But there's only so much physical RAM. The memory management (mm) subsystem solves this with two key tricks:
 
-The mm/ subsystem bridges these, providing:
-- Allocation APIs for different use cases
-- Page tables to translate virtual → physical
-- Reclaim mechanisms when memory is tight
+1. **Virtual memory**: Each program gets its own "fake" address space
+2. **Paging**: Only keep in RAM what's actually being used
 
-## Allocation Layers
+This document tells the story of how Linux's memory allocators evolved over 30+ years.
+
+---
+
+## Chapter 1: The Page Allocator (The Foundation)
+
+### The Original Problem
+
+Physical memory is finite. You need a way to hand out chunks of it and get them back.
+
+### The Solution: Buddy System
+
+Linux uses a "buddy allocator" (borrowed from older systems). Here's the clever idea:
 
 ```
-┌─────────────────────────────────────────────┐
-│           Kernel/Driver Code                │
-├─────────────────────────────────────────────┤
-│  kmalloc()     vmalloc()     alloc_pages()  │  ← APIs
-├─────────────────────────────────────────────┤
-│  SLUB/SLAB       vmalloc                    │  ← Allocators
-├─────────────────────────────────────────────┤
-│              Page Allocator                 │  ← Buddy system
-├─────────────────────────────────────────────┤
-│              Physical Memory                │
-└─────────────────────────────────────────────┘
+Imagine you have 16 pages of RAM:
+
+[________________]  <- 16 pages (order 4)
+
+Someone asks for 2 pages. You split:
+
+[________][______]  <- two 8-page blocks
+[____][__][______]  <- split again: 4, 4, 8
+[__][_][_][______]  <- split again: 2, 2, 4, 8
+    ^^
+    Given to requester
+
+When they free those 2 pages, you merge them back with their "buddy":
+[__][_][_] -> [____][_] -> [________] -> etc.
 ```
 
-## When to Use What
+**Why it works**: Fast allocation (O(log n)), automatic merging reduces fragmentation.
 
-| API | Use Case | Memory Type |
-|-----|----------|-------------|
-| `kmalloc()` | Small allocations (<page), needs physical contiguity | Physically contiguous |
-| `vmalloc()` | Large allocations, physical contiguity not needed | Virtually contiguous |
-| `alloc_pages()` | Direct page allocation, DMA buffers | Physical pages |
-| `kvmalloc()` | Try kmalloc first, fall back to vmalloc | Either |
+**What it can't do**: Give you, say, 3 pages. You'll get 4 (next power of 2).
 
-## Design Decisions
+---
 
-### Why separate allocators?
+## Chapter 2: The Slab Allocator (v2.0, ~1996)
 
-Physical contiguity is expensive. As the system runs, physical memory becomes fragmented. kmalloc requires physically contiguous pages, which gets harder to satisfy for large allocations.
+### The Problem
 
-vmalloc solves this by only requiring *virtual* contiguity - it can stitch together scattered physical pages into a contiguous virtual address range using page tables.
+The page allocator works in page-sized chunks (4KB). But kernel objects are often tiny:
+- An inode? ~600 bytes
+- A task_struct? ~8KB
+- A socket buffer? ~200 bytes
 
-**Trade-off**: vmalloc has overhead (page table manipulation, TLB pressure) but can satisfy large allocations that kmalloc cannot.
+Giving someone a whole 4KB page for a 200-byte object wastes memory.
 
-### Why SLUB over SLAB?
+### The Solution: Slab
 
-SLUB (default since ~2008) simplified the slab allocator:
-- Removed per-CPU queues complexity
-- Better NUMA awareness
+The "slab allocator" (borrowed from SunOS) carves pages into fixed-size object caches:
+
+```
+Page for 200-byte objects:
+[obj][obj][obj][obj][obj][obj]...[obj]  <- ~20 objects fit
+
+Page for 600-byte objects:
+[object][object][object][object]...     <- ~6 objects fit
+```
+
+Each object type gets its own cache. Allocating is fast (grab from cache), freeing is fast (return to cache).
+
+### The Evolution
+
+**SLAB (Original)**: Complex. Multiple levels of caches. Good debugging. But hard to maintain.
+
+**SLUB (v2.6.22, 2007)**: Simpler redesign by Christoph Lameter.
+- **Commit**: [81819f0fc828](https://git.kernel.org/linus/81819f0fc828)
+- Removed complex queuing
 - Lower memory overhead
-- Simpler debugging
+- Better NUMA support
+- Same API, simpler internals
 
-SLAB still exists for compatibility but SLUB is the default.
+**Why SLUB won**: Kernel developers learned that simpler code is easier to maintain and debug. SLAB's complexity wasn't worth the marginal performance gains.
 
-## Related
+**SLOB (embedded, removed v6.2)**: Minimal allocator for tiny systems. Removed because SLUB became efficient enough for embedded too.
 
-- [page-allocator](page-allocator.md) - Foundation of all allocations
-- [slab](slab.md) - kmalloc internals
-- [vmalloc](vmalloc.md) - Large allocations
+**The API** (`kmalloc`/`kfree`):
+```c
+ptr = kmalloc(size, GFP_KERNEL);  // Get memory
+kfree(ptr);                        // Give it back
+```
+
+---
+
+## Chapter 3: vmalloc (1993 → Present)
+
+### The Problem
+
+kmalloc gives you *physically contiguous* memory. As the system runs, physical memory becomes fragmented. Eventually, you can't find a contiguous 1MB chunk even if total free memory is 100MB.
+
+### The Solution: Virtual Contiguity
+
+What if the memory only needs to *look* contiguous to the user?
+
+```
+Virtual addresses:     Physical pages:
+0xFFFF0000 ──────────→ Page at 0x1234000
+0xFFFF1000 ──────────→ Page at 0x8765000  (scattered!)
+0xFFFF2000 ──────────→ Page at 0x2222000
+```
+
+The program sees contiguous 0xFFFF0000-0xFFFF3000, but the physical pages are scattered. This is `vmalloc()`.
+
+### The Cost
+
+Page tables must be set up. TLB (translation cache) entries are consumed. It's slower than kmalloc. But it can satisfy large allocations when kmalloc can't.
+
+### Major Evolution
+
+**v2.6.28 (2008): The Scalability Crisis**
+
+**The problem**: vunmap needed to flush TLB entries. On multi-core systems, this meant an IPI (interrupt) to *every* CPU. Under a global lock. As core counts grew from 4 to 64+, this became quadratic slowdown.
+
+**The fix**: Nick Piggin rewrote vmalloc from scratch:
+- **Commit**: [db64fe02258f](https://git.kernel.org/linus/db64fe02258f)
+- Lazy TLB flushing: Don't flush immediately, batch multiple unmaps
+- RBTree for address lookup: O(log n) instead of O(n) list scan
+- Per-CPU frontend: Reduce lock contention
+
+**LKML Discussion**: [vmap rewrite](https://lkml.kernel.org/r/20081015031109.GA11393@wotan.suse.de)
+
+**v5.13 (2021): Huge Pages**
+
+**The problem**: With huge vmalloc buffers (BPF programs, modules), each 4KB page needed a TLB entry. TLB is limited. Lots of TLB misses.
+
+**The fix**: Use huge pages (2MB) when possible:
+- **Commit**: [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe)
+- Fewer TLB entries needed
+- Trade-off: More internal fragmentation
+
+**v6.12 (2024): vrealloc**
+
+**The problem**: You have a vmalloc buffer and want to resize it. Previously, you'd have to allocate new, copy, free old.
+
+**The fix**: `vrealloc()` - resize in place when possible:
+- **Commit**: [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3)
+- Motivated by Rust's allocator needs (`Vec` resizing)
+- See [vrealloc](vrealloc.md) for the full story and bugs found
+
+---
+
+## Chapter 4: When Things Broke
+
+Real bugs teach more than perfect code. Here are instructive failures:
+
+### KASAN vs vrealloc (v6.12)
+
+**What broke**: vrealloc reused existing memory but didn't update KASAN (memory sanitizer) annotations. Result: false-positive "use-after-free" reports.
+
+**The lesson**: When you have memory safety tooling, you must keep it in sync with actual memory state. Annotations are code, not comments.
+
+**Fix**: [d699440f58ce](https://git.kernel.org/linus/d699440f58ce)
+
+### The Return Value Bug (v6.13)
+
+**What broke**: vrealloc was refactored to support in-place growing. The code did all the work correctly... then returned the wrong variable. Growing allocations silently fell back to the slow path.
+
+**The lesson**: After complex refactoring, double-check your return statements. The happy path isn't always the executed path.
+
+**Impact**: BPF verifier performance regression - it uses vrealloc heavily.
+
+**Fix**: [f7a35a3c36d1](https://git.kernel.org/linus/f7a35a3c36d1) - one line change.
+
+### Redundant Zeroing (v6.13)
+
+**What broke**: With `init_on_alloc` enabled, vrealloc was zeroing memory on both grow and shrink. But on grow, the new memory was already zeroed by the allocator.
+
+**The lesson**: Understand what upstream code already did. Don't assume you need to do everything yourself.
+
+**Fix**: [70d1eb031a68](https://git.kernel.org/linus/70d1eb031a68)
+
+---
+
+## Chapter 5: Choosing the Right Allocator
+
+After all this history, here's the practical guidance:
+
+| Situation | Use | Why |
+|-----------|-----|-----|
+| Small object (<page) | `kmalloc()` | Fast, low overhead |
+| Large buffer (pages+) | `vmalloc()` | Doesn't need physical contiguity |
+| Don't know size ahead | `kvmalloc()` | Tries kmalloc, falls back to vmalloc |
+| DMA buffer | `dma_alloc_coherent()` | Need physical address for hardware |
+| Resizable buffer | `krealloc()`/`vrealloc()` | Efficient resize |
+
+---
+
+## Timeline Summary
+
+| Year | Kernel | What Happened |
+|------|--------|---------------|
+| 1991 | 0.01 | Buddy allocator for pages |
+| ~1996 | 2.0 | SLAB allocator for small objects |
+| 1993-2002 | 2.x | vmalloc evolution (Linus, then Christoph Hellwig) |
+| 2007 | 2.6.22 | SLUB replaces SLAB as default |
+| 2008 | 2.6.28 | vmalloc rewrite (RBTree, lazy TLB) |
+| 2021 | 5.13 | vmalloc huge page support |
+| 2023 | 6.2 | SLOB removed |
+| 2024 | 6.12 | vrealloc introduced |
+| 2025 | 6.13+ | vrealloc bugs fixed, shrink optimization |
+
+---
+
+## Further Reading
+
+- [vmalloc](vmalloc.md) - Deep dive into virtual memory allocation
+- [vrealloc](vrealloc.md) - The full story of vmalloc resizing
+- [page-allocator](page-allocator.md) - Buddy system details (planned)
+- [slab](slab.md) - SLUB internals (planned)

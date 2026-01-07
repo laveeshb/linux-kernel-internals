@@ -11,6 +11,60 @@ void *vmalloc(unsigned long size);
 void vfree(const void *addr);
 ```
 
+## History & Evolution
+
+### Origins (1993)
+
+vmalloc dates back to the original Linux kernel by Linus Torvalds.
+
+From `mm/vmalloc.c`:
+```
+Copyright (C) 1993  Linus Torvalds
+Support of BIGMEM added by Gerhard Wichert, Siemens AG, July 1999
+SMP-safe vmalloc/vfree/ioremap, Tigran Aivazian, May 2000
+Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
+```
+
+### v2.6.28: Major Rewrite - RBTree & Lazy TLB
+
+**Commit**: [db64fe02258f](https://git.kernel.org/linus/db64fe02258f) ("mm: rewrite vmap layer")
+**Kernel**: v2.6.28
+**Author**: Nick Piggin
+
+**The problem**: vunmap required a global kernel TLB flush (broadcast IPI to all CPUs), all under a single global rwlock taken for write in fast paths. Quadratic scalability as CPU count increased.
+
+**The solution**:
+1. **Lazy TLB flushing**: Don't flush immediately on vunmap. Addresses won't be reused until reallocated, so batch multiple unmaps into single flush.
+2. **RBTree for vmap_area**: Fast O(log n) lookups instead of linear list scan.
+3. **Percpu frontend**: Fast, scalable allocation for small vmaps.
+
+**Trade-off**: XEN and PAT need immediate TLB flush due to aliasing issues. They call `vm_unmap_aliases()` to force flush when needed.
+
+**LKML Discussion**: [vmap rewrite](https://lkml.kernel.org/r/20081015031109.GA11393@wotan.suse.de)
+
+### v5.13: Huge Page Support
+
+**Commit**: [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe) ("mm/vmalloc: hugepage vmalloc mappings")
+**Kernel**: v5.13
+**Author**: Nicholas Piggin
+
+**What changed**: vmalloc can now use PMD-sized huge pages for large allocations.
+
+**How it works**:
+- If allocation >= PMD size, try huge pages first
+- Fall back to small pages if huge allocation fails
+- `VM_NOHUGE` flag to force small pages (needed for module allocations with strict rwx)
+- Boot option `nohugevmalloc` to disable globally
+
+**Trade-off**: More internal fragmentation (allocating 2MB when you need 1.1MB), but fewer TLB entries needed.
+
+### v6.12: vrealloc Introduction
+
+**Commit**: [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) ("mm: vmalloc: implement vrealloc()")
+**Kernel**: v6.12
+
+See [vrealloc](vrealloc.md) for detailed history.
+
 ## When to Use vmalloc
 
 **Use vmalloc when:**
@@ -19,17 +73,19 @@ void vfree(const void *addr);
 - Memory won't be used for DMA
 
 **Don't use vmalloc when:**
-- Small allocations (use kmalloc)
+- Small allocations (use kmalloc - less overhead)
 - Need physical contiguity (use kmalloc or alloc_pages)
 - DMA operations (need physical addresses)
-- Performance critical hot paths (TLB overhead)
+- Performance critical hot paths (page table overhead, potential TLB misses)
 
 ## How It Works
 
-1. **Find virtual address range** - Reserve space in the vmalloc address range
-2. **Allocate physical pages** - Get individual pages from page allocator
-3. **Build page tables** - Map virtual addresses to physical pages
-4. **Return pointer** - Caller sees contiguous virtual memory
+### Allocation Flow
+
+1. **Find virtual address range**: Search vmap_area rbtree for free space
+2. **Allocate physical pages**: Get individual pages from buddy allocator
+3. **Build page tables**: Map virtual addresses to physical pages
+4. **Return pointer**: Caller sees contiguous virtual memory
 
 ```
 Virtual Address Space          Physical Memory
@@ -42,6 +98,13 @@ Virtual Address Space          Physical Memory
 └──────────────┘               └──────────────┘
 ```
 
+### Free Flow (Lazy TLB)
+
+1. **Mark area for freeing**: Add to lazy free list
+2. **Don't flush TLB immediately**: Address won't be reused yet
+3. **Batch flush**: When threshold reached or `vm_unmap_aliases()` called
+4. **Return pages**: Free physical pages to buddy allocator
+
 ## Key Data Structures
 
 ### vm_struct
@@ -50,41 +113,91 @@ Describes a vmalloc region:
 
 ```c
 struct vm_struct {
-    void *addr;           /* Virtual address */
-    unsigned long size;   /* Size including guard page */
-    struct page **pages;  /* Array of backing pages */
-    unsigned int nr_pages;/* Number of pages */
-    unsigned long flags;  /* VM_ALLOC, VM_MAP, etc. */
-    /* ... */
+    void *addr;              /* Virtual address */
+    unsigned long size;      /* Size including guard page */
+    struct page **pages;     /* Array of backing pages */
+    unsigned int nr_pages;   /* Number of pages */
+    phys_addr_t phys_addr;   /* Physical address (for ioremap) */
+    unsigned long flags;     /* VM_ALLOC, VM_MAP, VM_IOREMAP, etc. */
+    unsigned long requested_size; /* Actual requested size (v6.13+) */
 };
 ```
 
 ### vmap_area
 
-Tracks vmalloc address space usage (red-black tree for fast lookup).
+Tracks vmalloc address space usage:
+
+```c
+struct vmap_area {
+    unsigned long va_start;  /* Start of virtual range */
+    unsigned long va_end;    /* End of virtual range */
+    struct rb_node rb_node;  /* RBTree node for fast lookup */
+    struct list_head list;   /* Linked list */
+    struct vm_struct *vm;    /* Associated vm_struct */
+};
+```
 
 ## Variants
 
-| Function | Description |
-|----------|-------------|
-| `vmalloc()` | Standard allocation |
-| `vzalloc()` | Zero-initialized |
-| `vmalloc_node()` | NUMA-aware allocation |
-| `vrealloc()` | Resize existing allocation |
-| `vfree()` | Free allocation |
+| Function | Description | Since |
+|----------|-------------|-------|
+| `vmalloc()` | Standard allocation | Original |
+| `vzalloc()` | Zero-initialized | v2.6.37 |
+| `vmalloc_node()` | NUMA-aware | v2.6.16 |
+| `vmalloc_huge()` | Prefer huge pages | v5.13 |
+| `vmalloc_no_huge()` | Force small pages | v5.13 |
+| `vrealloc()` | Resize allocation | v6.12 |
+| `vfree()` | Free allocation | Original |
 
 ## Design Decisions
 
-### Why a guard page?
+### Why guard pages?
 
-Each vmalloc region has a guard page (unmapped) at the end. Buffer overflows hit the guard and trigger a fault immediately rather than silently corrupting adjacent allocations.
+Each vmalloc region has a guard page (unmapped) at the end. Buffer overflows hit the guard and trigger a page fault immediately, rather than silently corrupting adjacent allocations.
+
+**Commit**: The `VM_NO_GUARD` flag exists for special cases that don't want guard pages, but [bd1a8fb2d43f](https://git.kernel.org/linus/bd1a8fb2d43f) ("mm/vmalloc: don't allow VM_NO_GUARD on vmap()") restricts its use.
 
 ### Why lazy TLB flushing?
 
-TLB flushes are expensive (IPI to all CPUs). vmalloc batches unmappings and flushes lazily when possible to amortize the cost.
+TLB flushes are expensive:
+- IPI (Inter-Processor Interrupt) to all CPUs
+- Each CPU must flush its TLB
+- All done under lock
+
+Batching multiple vunmaps into a single flush amortizes this cost. The kernel tracks `vmap_lazy_nr` and flushes when it exceeds a threshold.
+
+### Why RBTree for vmap_area?
+
+Before v2.6.28, vmalloc used a simple linked list. As systems grew larger, linear O(n) searches became a bottleneck. RBTree provides O(log n) lookup, insertion, and deletion.
+
+## Common Issues
+
+### TLB Flush Storms
+
+Under heavy vmalloc/vfree workload, lazy flushing can cause "flush storms" where many IPIs fire at once when threshold is reached.
+
+### Address Space Exhaustion
+
+vmalloc has limited address space (VMALLOC_START to VMALLOC_END). On 32-bit systems this was often only 128MB. Heavy users like BPF, modules, and drivers can exhaust it.
+
+### NUMA Locality
+
+vmalloc wasn't always NUMA-aware. Modern kernels try to allocate pages from the same node when possible via `vmalloc_node()`.
 
 ## References
 
+### Key Commits
+| Commit | Kernel | Description |
+|--------|--------|-------------|
+| [1da177e4c3f4](https://git.kernel.org/linus/1da177e4c3f4) | v2.6.12 | Initial git history |
+| [db64fe02258f](https://git.kernel.org/linus/db64fe02258f) | v2.6.28 | RBTree + lazy TLB rewrite |
+| [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe) | v5.13 | Huge page support |
+| [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) | v6.12 | vrealloc introduction |
+
+### Code
 - `mm/vmalloc.c` - Implementation
 - `include/linux/vmalloc.h` - API
+
+### Related
 - [vrealloc](vrealloc.md) - Resizing allocations
+- [overview](overview.md) - Memory management overview
