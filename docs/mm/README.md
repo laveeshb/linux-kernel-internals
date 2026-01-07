@@ -114,12 +114,12 @@ If you want to read the actual code:
 
 | File | What It Does |
 |------|--------------|
-| `mm/page_alloc.c` | Buddy allocator - physical page management |
-| `mm/slub.c` | SLUB allocator - small object caches |
-| `mm/vmalloc.c` | vmalloc - virtually contiguous allocation |
-| `mm/vmscan.c` | Memory reclaim under pressure |
-| `mm/memcontrol.c` | Memory cgroups |
-| `include/linux/gfp.h` | GFP flags definitions |
+| [`mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) | Buddy allocator - physical page management |
+| [`mm/slub.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) | SLUB allocator - small object caches |
+| [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | vmalloc - virtually contiguous allocation |
+| [`mm/vmscan.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) | Memory reclaim under pressure |
+| [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | Memory cgroups |
+| [`include/linux/gfp.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/gfp.h) | GFP flags definitions |
 
 ---
 

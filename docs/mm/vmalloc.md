@@ -317,8 +317,8 @@ void test_vmalloc_basic(void)
 | [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) | [v6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.12) | vrealloc introduction |
 
 ### Code
-- `mm/vmalloc.c` - Implementation
-- `include/linux/vmalloc.h` - API
+- [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) - Implementation
+- [`include/linux/vmalloc.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/vmalloc.h) - API
 
 ### Related
 - [vrealloc](vrealloc.md) - Resizing allocations

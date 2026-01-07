@@ -157,8 +157,8 @@ virtme-ng --append 'test_vmalloc.run_test_mask=4096'
 - [BPF verifier slowdown](https://lore.kernel.org/all/20250515-bpf-verifier-slowdown-vwo2meju4cgp2su5ckj@6gi6ssxbnfqg)
 
 ### Code
-- `mm/vmalloc.c` - Implementation
-- `lib/test_vmalloc.c` - Test module
+- [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) - Implementation
+- [`lib/test_vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/test_vmalloc.c) - Test module
 
 ### Related
 - [vmalloc](vmalloc.md) - Parent allocator
