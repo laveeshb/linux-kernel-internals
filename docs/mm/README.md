@@ -43,10 +43,10 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 
 ### Suggested Reading Order
 
-1. **[Glossary](glossary.md)** - Terminology reference
-2. **[Overview: The Story](overview.md)** - The narrative of how mm/ evolved
-3. **[vmalloc](vmalloc.md)** - Deep dive into one allocator
-4. **[vrealloc](vrealloc.md)** - A recent feature with instructive bugs
+1. **[Overview](overview.md)** - The narrative of how mm/ evolved
+2. **[Page Allocator](page-allocator.md)** - Buddy system fundamentals
+3. **[Slab](slab.md)** - SLUB allocator for small objects
+4. **[vmalloc](vmalloc.md)** - Virtual memory allocation
 
 ### What You'll Learn
 
@@ -74,16 +74,15 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 | Document | What You'll Learn |
 |----------|-------------------|
 | [overview](overview.md) | The 30-year story of Linux memory management |
-| [glossary](glossary.md) | Every term defined for newcomers |
-| [vmalloc](vmalloc.md) | How virtually contiguous allocation works |
-| [vrealloc](vrealloc.md) | Resizing allocations - a case study in kernel development |
+| [page-allocator](page-allocator.md) | Buddy system - physical page management |
+| [slab](slab.md) | SLUB - small object allocation |
+| [vmalloc](vmalloc.md) | Virtually contiguous allocation |
+| [vrealloc](vrealloc.md) | Resizing allocations |
 
 ### Planned
 
 | Document | Status |
 |----------|--------|
-| [page-allocator](page-allocator.md) | Planned - Buddy system deep dive |
-| [slab](slab.md) | Planned - SLUB internals |
 | [page-tables](page-tables.md) | Planned - Virtual memory mapping |
 | [reclaim](reclaim.md) | Planned - What happens under memory pressure |
 | [memcg](memcg.md) | Planned - Container memory limits |
@@ -119,3 +118,9 @@ If you want to read the actual code:
 - Silberschatz, "Operating System Concepts" - Ch. 9-10 (Memory)
 - Tanenbaum, "Modern Operating Systems" - Ch. 3 (Memory Management)
 - Love, "Linux Kernel Development" - Ch. 12 (Memory Management)
+
+---
+
+## Appendix
+
+- **[Glossary](glossary.md)** - Terminology reference
