@@ -40,7 +40,7 @@ Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
 
 **Trade-off**: XEN and PAT need immediate TLB flush due to aliasing issues. They call `vm_unmap_aliases()` to force flush when needed.
 
-**LKML Discussion**: [vmap rewrite](https://lkml.kernel.org/r/20081015031109.GA11393@wotan.suse.de)
+*Note: The original LKML discussion (Oct 2008) predates reliable archives. The commit message documents the rationale.*
 
 ### v5.13: Huge Page Support
 

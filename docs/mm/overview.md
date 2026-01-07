@@ -198,7 +198,7 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 - RBTree for address lookup: `O(log n)` instead of `O(n)` list scan
 - Per-CPU frontend: Reduce lock contention
 
-**LKML Discussion**: [vmap rewrite](https://lkml.kernel.org/r/20081015031109.GA11393@wotan.suse.de)
+*Note: The original LKML discussion (Oct 2008) predates reliable archives.*
 
 **v5.13 (2021): Huge Pages**
 
