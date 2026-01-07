@@ -271,13 +271,13 @@ dmesg | grep test_vmalloc
 
 | Function | File:Line | What It Does |
 |----------|-----------|--------------|
-| `vmalloc()` | [`mm/vmalloc.c:3510`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L3510) | Main entry point |
-| `__vmalloc_node_range()` | [`mm/vmalloc.c:3380`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L3380) | Core allocation logic |
-| `vfree()` | [`mm/vmalloc.c:2950`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L2950) | Free vmalloc memory |
-| `find_vmap_area()` | [`mm/vmalloc.c:820`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L820) | RBTree lookup |
-| `vrealloc()` | [`mm/vmalloc.c:3600`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L3600) | Resize allocation |
+| `vmalloc()` | [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | Main entry point |
+| `__vmalloc_node_range()` | [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | Core allocation logic |
+| `vfree()` | [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | Free vmalloc memory |
+| `find_vmap_area()` | [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | RBTree lookup |
+| `vrealloc()` | [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | Resize allocation |
 
-*Note: Line numbers are approximate and vary by kernel version. Use [Bootlin Elixir](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c) for current code.*
+*Note: Line numbers vary by kernel version. Search for the function name in the file.*
 
 ### Write a Simple Test
 

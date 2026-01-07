@@ -339,13 +339,11 @@ virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
 
 | Subsystem | File | What to Look For |
 |-----------|------|------------------|
-| Buddy allocator | [`mm/page_alloc.c`](https://elixir.bootlin.com/linux/latest/source/mm/page_alloc.c) | `__alloc_pages()`, `free_pages()` |
-| SLUB allocator | [`mm/slub.c`](https://elixir.bootlin.com/linux/latest/source/mm/slub.c) | `kmem_cache_alloc()`, `kmalloc()` |
-| vmalloc | [`mm/vmalloc.c`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c) | `vmalloc()`, `vfree()` |
-| Memory reclaim | [`mm/vmscan.c`](https://elixir.bootlin.com/linux/latest/source/mm/vmscan.c) | `shrink_node()`, `kswapd()` |
-| OOM killer | [`mm/oom_kill.c`](https://elixir.bootlin.com/linux/latest/source/mm/oom_kill.c) | `out_of_memory()`, `oom_badness()` |
-
-*Use [Bootlin Elixir](https://elixir.bootlin.com/linux/latest/source/mm/) for navigating kernel source with cross-references.*
+| Buddy allocator | [`mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) | `__alloc_pages()`, `free_pages()` |
+| SLUB allocator | [`mm/slub.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) | `kmem_cache_alloc()`, `kmalloc()` |
+| vmalloc | [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | `vmalloc()`, `vfree()` |
+| Memory reclaim | [`mm/vmscan.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) | `shrink_node()`, `kswapd()` |
+| OOM killer | [`mm/oom_kill.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) | `out_of_memory()`, `oom_badness()` |
 
 ---
 
