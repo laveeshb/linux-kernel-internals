@@ -189,10 +189,10 @@ vmalloc wasn't always NUMA-aware. Modern kernels try to allocate pages from the 
 ### Key Commits
 | Commit | Kernel | Description |
 |--------|--------|-------------|
-| [1da177e4c3f4](https://git.kernel.org/linus/1da177e4c3f4) | v2.6.12 | Initial git history |
-| [db64fe02258f](https://git.kernel.org/linus/db64fe02258f) | v2.6.28 | RBTree + lazy TLB rewrite |
-| [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe) | v5.13 | Huge page support |
-| [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) | v6.12 | vrealloc introduction |
+| [1da177e4c3f4](https://git.kernel.org/linus/1da177e4c3f4) | [v2.6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.12) | Initial git history |
+| [db64fe02258f](https://git.kernel.org/linus/db64fe02258f) | [v2.6.28](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.28) | RBTree + lazy TLB rewrite |
+| [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe) | [v5.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v5.13) | Huge page support |
+| [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) | [v6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.12) | vrealloc introduction |
 
 ### Code
 - `mm/vmalloc.c` - Implementation

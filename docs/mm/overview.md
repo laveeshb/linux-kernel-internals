@@ -204,12 +204,12 @@ After all this history, here's the practical guidance:
 | 1991 | 0.01 | Buddy allocator for pages |
 | ~1996 | 2.0 | SLAB allocator for small objects |
 | 1993-2002 | 2.x | vmalloc evolution (Linus, then Christoph Hellwig) |
-| 2007 | 2.6.22 | SLUB replaces SLAB as default |
-| 2008 | 2.6.28 | vmalloc rewrite (RBTree, lazy TLB) |
-| 2021 | 5.13 | vmalloc huge page support |
-| 2023 | 6.2 | SLOB removed |
-| 2024 | 6.12 | vrealloc introduced |
-| 2025 | 6.13+ | vrealloc bugs fixed, shrink optimization |
+| 2007 | [v2.6.22](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.22) | SLUB replaces SLAB as default |
+| 2008 | [v2.6.28](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.28) | vmalloc rewrite (RBTree, lazy TLB) |
+| 2021 | [v5.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v5.13) | vmalloc huge page support |
+| 2023 | [v6.2](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.2) | SLOB removed |
+| 2024 | [v6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.12) | vrealloc introduced |
+| 2025 | [v6.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.13)+ | vrealloc bugs fixed, shrink optimization |
 
 ---
 

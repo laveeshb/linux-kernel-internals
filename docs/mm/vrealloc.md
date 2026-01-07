@@ -144,11 +144,11 @@ virtme-ng --append 'test_vmalloc.run_test_mask=4096'
 ### Commits (chronological)
 | Commit | Kernel | Description |
 |--------|--------|-------------|
-| [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) | v6.12 | Initial implementation |
-| [d699440f58ce](https://git.kernel.org/linus/d699440f58ce) | v6.12 | Fix KASAN poisoning |
-| [a0309faf1cb0](https://git.kernel.org/linus/a0309faf1cb0) | v6.13 | requested_size tracking |
-| [f7a35a3c36d1](https://git.kernel.org/linus/f7a35a3c36d1) | v6.13 | Fix in-place region return |
-| [70d1eb031a68](https://git.kernel.org/linus/70d1eb031a68) | v6.13 | Fix redundant zero-init |
+| [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) | [v6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.12) | Initial implementation |
+| [d699440f58ce](https://git.kernel.org/linus/d699440f58ce) | [v6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.12) | Fix KASAN poisoning |
+| [a0309faf1cb0](https://git.kernel.org/linus/a0309faf1cb0) | [v6.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.13) | requested_size tracking |
+| [f7a35a3c36d1](https://git.kernel.org/linus/f7a35a3c36d1) | [v6.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.13) | Fix in-place region return |
+| [70d1eb031a68](https://git.kernel.org/linus/70d1eb031a68) | [v6.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.13) | Fix redundant zero-init |
 | [e64f42036ef4](https://git.kernel.org/linus/e64f42036ef4) | v6.14+ | Shrink optimization |
 
 ### LKML Discussions

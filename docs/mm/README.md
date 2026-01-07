@@ -72,12 +72,12 @@ A quick reference of major events in Linux mm/ history:
 | 1991 | 0.01 | Linux born with basic memory management |
 | ~1996 | 2.0 | SLAB allocator introduced |
 | 2002 | 2.5 | vmalloc rewritten by Christoph Hellwig |
-| 2007 | 2.6.22 | SLUB replaces SLAB as default |
-| 2008 | 2.6.28 | vmalloc rewritten again (RBTree, lazy TLB) |
-| 2021 | 5.13 | vmalloc huge page support |
-| 2023 | 6.2 | SLOB removed |
-| 2024 | 6.12 | vrealloc introduced |
-| 2025 | 6.13+ | vrealloc bugs fixed, optimized |
+| 2007 | [v2.6.22](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.22) | SLUB replaces SLAB as default |
+| 2008 | [v2.6.28](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.28) | vmalloc rewritten again (RBTree, lazy TLB) |
+| 2021 | [v5.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v5.13) | vmalloc huge page support |
+| 2023 | [v6.2](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.2) | SLOB removed |
+| 2024 | [v6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.12) | vrealloc introduced |
+| 2025 | [v6.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.13)+ | vrealloc bugs fixed, optimized |
 
 ---
 
@@ -98,15 +98,15 @@ If you want to read the actual code:
 
 ## Further Reading
 
-### Academic Papers
-- Bonwick, "The Slab Allocator" (1994) - Original slab paper
-- Gorman, "Understanding the Linux Virtual Memory Manager" - Free online book
+### Free Resources
+- [Bonwick, "The Slab Allocator" (1994)](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html) - Original slab paper from USENIX
+- [Gorman, "Understanding the Linux Virtual Memory Manager"](https://www.kernel.org/doc/gorman/) - Free online book
 
 ### Kernel Documentation
-- `Documentation/mm/` in the kernel tree
-- `Documentation/admin-guide/mm/` for sysadmin perspective
+- [Documentation/mm/](https://docs.kernel.org/mm/) in the kernel tree
+- [Documentation/admin-guide/mm/](https://docs.kernel.org/admin-guide/mm/) for sysadmin perspective
 
-### Textbook Connections
+### Textbooks
 - Silberschatz, "Operating System Concepts" - Ch. 9-10 (Memory)
 - Tanenbaum, "Modern Operating Systems" - Ch. 3 (Memory Management)
 - Love, "Linux Kernel Development" - Ch. 12 (Memory Management)
