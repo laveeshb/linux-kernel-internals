@@ -70,7 +70,19 @@ How Linux memory allocators relate to each other:
 
 Physical memory is finite. You need a way to hand out chunks of it and get them back.
 
-*Note: The buddy allocator dates to Linux 0.01 (1991). This predates LKML - early Linux development happened on comp.os.minix and early mailing lists without good archives. Linus's [original announcement](https://www.cs.cmu.edu/~awb/linux.history.html) is preserved, but detailed mm discussions from this era are largely lost to history. For context on the era, see the famous [Tanenbaum-Torvalds debate](https://www.oreilly.com/openbook/opensources/book/appa.html) (1992) on monolithic vs microkernel design - a decision that shaped how mm/ integrates with the rest of the kernel.*
+*Note: The buddy allocator dates to Linux 0.01 (1991). This predates LKML - early Linux development happened on comp.os.minix and early mailing lists without good archives. Detailed mm discussions from this era are largely lost to history.*
+
+> **Historical Context: How Linux Started**
+>
+> On August 25, 1991, Linus Torvalds [posted to comp.os.minix](https://www.cs.cmu.edu/~awb/linux.history.html): *"I'm doing a (free) operating system (just a hobby, won't be big and professional like gnu) for 386(486) AT clones."* He was a 21-year-old student in Helsinki, frustrated that MINIX (a teaching OS) couldn't be freely modified. Linux 0.01 had basic memory management - a simple buddy allocator for physical pages. Within months, others were contributing.
+>
+> **The Monolithic vs Microkernel Debate (1992)**
+>
+> In January 1992, Andrew Tanenbaum (MINIX creator, OS professor) [declared "Linux is obsolete"](https://www.oreilly.com/openbook/opensources/book/appa.html) on comp.os.minix. His argument: Linux's monolithic kernel (where mm/, filesystems, drivers all run in kernel space) was a "giant step back into the 1970s." Microkernels (like MINIX) were the future - minimal kernel, everything else in userspace.
+>
+> Torvalds responded the next day: monolithic was a pragmatic choice. Microkernels had theoretical elegance but real-world performance overhead from context switches and message passing. He prioritized getting things working on real hardware (the 386) over architectural purity. History proved him right - Linux runs everywhere from phones to supercomputers, while pure microkernels remain niche.
+>
+> **Why this matters for mm/**: Linux's monolithic design means memory management runs in kernel space with direct hardware access. No message-passing overhead. `kmalloc()` is a function call, not an IPC. This shaped every allocator discussed below - they optimize for this tight integration.
 
 ### The Solution: Buddy System
 
