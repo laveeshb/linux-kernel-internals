@@ -30,5 +30,5 @@ docs/
 
 ## License
 
-- Documentation: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
-- Code snippets: [GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html) (matching kernel)
+- Documentation: [CC BY-SA 4.0](LICENSE-CC-BY-SA-4.0)
+- Code snippets: [GPL-2.0](LICENSE-GPL-2.0)
