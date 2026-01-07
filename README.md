@@ -41,18 +41,10 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 | [mm/vmalloc](docs/mm/vmalloc.md) | In Progress | Virtual memory allocation |
 | More coming... | | |
 
-## Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-- **Found something interesting in the kernel?** Write about it.
-- **Submitted a patch?** Document your journey.
-- **Have a question?** Open a [Discussion](../../discussions).
-
 ## Community
 
-- Use [GitHub Discussions](../../discussions) for questions and conversations
-- Use [Issues](../../issues) to suggest topics or report problems
+- [GitHub Discussions](../../discussions) for questions and conversations
+- [Issues](../../issues) to suggest topics or report problems
 
 ## License
 
