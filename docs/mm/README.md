@@ -8,12 +8,12 @@ This documentation explains how Linux manages memory - not just the theory, but 
 
 ### Prerequisites
 
-Before diving in, you should understand:
-- **C programming** - Kernel is written in C
+This documentation assumes familiarity with:
+- **C programming** - The kernel is written in C
 - **Pointers and memory addresses** - Virtual vs physical addressing
 - **Basic OS concepts** - Processes, kernel vs userspace
 
-If your textbook covers virtual memory and paging (Silberschatz Ch. 9-10, Tanenbaum Ch. 3), you have enough background.
+If you've covered virtual memory and paging (e.g., Silberschatz Ch. 9-10, Tanenbaum Ch. 3), that's a good foundation.
 
 ### Getting the Kernel Source
 
@@ -41,9 +41,9 @@ virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
 
 For comprehensive testing documentation, see [Documentation/dev-tools/testing-overview.rst](https://docs.kernel.org/dev-tools/testing-overview.html).
 
-### Start Here
+### Suggested Reading Order
 
-1. **[Glossary](glossary.md)** - Learn the terminology first
+1. **[Glossary](glossary.md)** - Terminology reference
 2. **[Overview: The Story](overview.md)** - The narrative of how mm/ evolved
 3. **[vmalloc](vmalloc.md)** - Deep dive into one allocator
 4. **[vrealloc](vrealloc.md)** - A recent feature with instructive bugs
