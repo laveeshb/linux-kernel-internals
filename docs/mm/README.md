@@ -37,6 +37,7 @@ If your textbook covers virtual memory and paging (Silberschatz Ch. 9-10, Tanenb
 - **Real bugs**: Learn from what broke and why
 - **Real discussions**: Links to LKML where decisions were debated
 - **Real trade-offs**: Not just "what" but "why this and not that"
+- **Hands-on**: "Try It Yourself" sections with commands to run and code to read
 
 ---
 

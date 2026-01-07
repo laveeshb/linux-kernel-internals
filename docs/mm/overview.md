@@ -197,6 +197,89 @@ After all this history, here's the practical guidance:
 
 ---
 
+## Try It Yourself
+
+### Explore the Buddy Allocator
+
+```bash
+# View buddy allocator state per zone
+cat /proc/buddyinfo
+
+# Example output:
+# Node 0, zone   Normal  1024  512  256  128   64   32   16    8    4    2    1
+#                        ^     ^    ^    ^     ^    ^    ^     ^    ^    ^    ^
+#                        |     |    |    |     |    |    |     |    |    |    order 10 (4MB blocks)
+#                        order 0 (4KB pages)
+
+# Each number = count of free blocks at that order
+# Order 0 = 4KB, Order 1 = 8KB, ... Order 10 = 4MB
+```
+
+### Explore the Slab Allocator
+
+```bash
+# View all slab caches
+cat /proc/slabinfo
+
+# Better: use slabtop for live monitoring
+slabtop
+
+# Key columns:
+# OBJS     - Total objects (active + inactive)
+# ACTIVE   - Objects currently in use
+# USE      - Percentage utilization
+# OBJ SIZE - Size of each object
+# SLABS    - Number of slabs
+
+# Find biggest memory consumers
+slabtop -s c  # Sort by cache size
+```
+
+### Check Overall Memory
+
+```bash
+# High-level memory overview
+cat /proc/meminfo
+
+# Key fields for mm/:
+# MemTotal      - Total usable RAM
+# MemFree       - Completely unused pages
+# Buffers       - Block device cache
+# Cached        - Page cache (file data)
+# Slab          - Kernel slab allocator total
+# SReclaimable  - Slab memory that can be reclaimed
+# VmallocUsed   - vmalloc usage
+```
+
+### Run Kernel Memory Tests
+
+```bash
+# Build test modules (in kernel tree with CONFIG_TEST_* enabled)
+make M=lib/ lib/test_vmalloc.ko
+make M=mm/ mm/test_hmm.ko
+
+# Run vmalloc tests
+modprobe test_vmalloc run_test_mask=0xFFFF
+dmesg | grep test_vmalloc
+
+# Run via virtme-ng (recommended for testing)
+virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
+```
+
+### Key Code Locations
+
+| Subsystem | File | What to Look For |
+|-----------|------|------------------|
+| Buddy allocator | [`mm/page_alloc.c`](https://elixir.bootlin.com/linux/latest/source/mm/page_alloc.c) | `__alloc_pages()`, `free_pages()` |
+| SLUB allocator | [`mm/slub.c`](https://elixir.bootlin.com/linux/latest/source/mm/slub.c) | `kmem_cache_alloc()`, `kmalloc()` |
+| vmalloc | [`mm/vmalloc.c`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c) | `vmalloc()`, `vfree()` |
+| Memory reclaim | [`mm/vmscan.c`](https://elixir.bootlin.com/linux/latest/source/mm/vmscan.c) | `shrink_node()`, `kswapd()` |
+| OOM killer | [`mm/oom_kill.c`](https://elixir.bootlin.com/linux/latest/source/mm/oom_kill.c) | `out_of_memory()`, `oom_badness()` |
+
+*Use [Bootlin Elixir](https://elixir.bootlin.com/linux/latest/source/mm/) for navigating kernel source with cross-references.*
+
+---
+
 ## Timeline Summary
 
 | Year | Kernel | What Happened |

@@ -184,6 +184,100 @@ vmalloc has limited address space (VMALLOC_START to VMALLOC_END). On 32-bit syst
 
 vmalloc wasn't always NUMA-aware. Modern kernels try to allocate pages from the same node when possible via `vmalloc_node()`.
 
+## Try It Yourself
+
+### Inspect vmalloc Usage
+
+View all vmalloc allocations on a running system:
+
+```bash
+# List all vmalloc regions with addresses, sizes, and callers
+cat /proc/vmallocinfo
+
+# Example output:
+# 0xffffc90000000000-0xffffc90000201000 2101248 bpf_prog_alloc+0x5e/0x100 pages=512 vmalloc N0=512
+# 0xffffc90000201000-0xffffc90000206000   20480 pcpu_alloc+0x3fa/0x7e0 pages=4 vmalloc N0=4
+```
+
+Key fields:
+- **Address range**: Virtual address start-end
+- **Size**: In bytes
+- **Caller**: Function that allocated (useful for debugging leaks)
+- **pages=N**: Number of physical pages backing this allocation
+- **vmalloc**: Allocation type (vs ioremap, vmap)
+- **N0=N**: NUMA node distribution
+
+### Check vmalloc Statistics
+
+```bash
+# Total vmalloc pages in use
+grep VmallocUsed /proc/meminfo
+
+# vmalloc address space limits
+grep Vmalloc /proc/meminfo
+# VmallocTotal:   34359738367 kB  (address space size)
+# VmallocUsed:           0 kB     (may show 0 on modern kernels)
+# VmallocChunk:          0 kB     (largest contiguous free block)
+```
+
+### Run the Test Module
+
+The kernel includes `test_vmalloc` for testing vmalloc functionality:
+
+```bash
+# Build the test module (in kernel tree)
+make M=lib/ lib/test_vmalloc.ko
+
+# Load with specific tests (in QEMU or on test machine)
+# Test mask bits: see lib/test_vmalloc.c for all options
+modprobe test_vmalloc run_test_mask=0xFFFF
+
+# Or via virtme-ng for quick testing
+virtme-ng --append 'test_vmalloc.run_test_mask=0xFFFF'
+
+# Check results
+dmesg | grep test_vmalloc
+```
+
+### Key Code Locations
+
+| Function | File:Line | What It Does |
+|----------|-----------|--------------|
+| `vmalloc()` | [`mm/vmalloc.c:3510`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L3510) | Main entry point |
+| `__vmalloc_node_range()` | [`mm/vmalloc.c:3380`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L3380) | Core allocation logic |
+| `vfree()` | [`mm/vmalloc.c:2950`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L2950) | Free vmalloc memory |
+| `find_vmap_area()` | [`mm/vmalloc.c:820`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L820) | RBTree lookup |
+| `vrealloc()` | [`mm/vmalloc.c:3600`](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c#L3600) | Resize allocation |
+
+*Note: Line numbers are approximate and vary by kernel version. Use [Bootlin Elixir](https://elixir.bootlin.com/linux/latest/source/mm/vmalloc.c) for current code.*
+
+### Write a Simple Test
+
+```c
+// In a kernel module or via BPF
+#include <linux/vmalloc.h>
+
+void test_vmalloc_basic(void)
+{
+    void *ptr;
+
+    // Allocate 1MB virtually contiguous
+    ptr = vmalloc(1024 * 1024);
+    if (!ptr) {
+        pr_err("vmalloc failed\n");
+        return;
+    }
+
+    // Use it...
+    memset(ptr, 0, 1024 * 1024);
+
+    // Free it
+    vfree(ptr);
+}
+```
+
+---
+
 ## References
 
 ### Key Commits
