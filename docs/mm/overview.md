@@ -144,11 +144,12 @@ Each object type gets its own cache. Allocating is fast (grab from cache), freei
 
 **SLUB (v2.6.22, 2007)**: Simpler redesign by Christoph Lameter.
 - **Commit**: [81819f0fc828](https://git.kernel.org/linus/81819f0fc828)
-- **LKML**: [SLUB: The unqueued Slab allocator](https://lkml.iu.edu/hypermail/linux/kernel/0702.2/2430.html) (Feb 2007)
 - Removed complex queuing
 - Lower memory overhead
 - Better NUMA support
 - Same API, simpler internals
+
+*Note: The original "SLUB: The unqueued Slab allocator" LKML thread (Feb 2007) predates reliable archives. The commit message and code comments document the design rationale.*
 
 **Why SLUB won**: Kernel developers learned that simpler code is easier to maintain and debug. SLAB's complexity wasn't worth the marginal performance gains.
 

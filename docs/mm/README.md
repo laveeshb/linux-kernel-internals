@@ -90,24 +90,6 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 
 ---
 
-## Timeline
-
-A quick reference of major events in Linux mm/ history:
-
-| Year | Version | Event |
-|------|---------|-------|
-| 1991 | 0.01 | Linux born with basic memory management |
-| ~1996 | 2.0 | SLAB allocator introduced |
-| 2002 | 2.5 | vmalloc rewritten by Christoph Hellwig |
-| 2007 | [v2.6.22](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.22) | SLUB replaces SLAB as default |
-| 2008 | [v2.6.28](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.28) | vmalloc rewritten again (RBTree, lazy TLB) |
-| 2021 | [v5.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v5.13) | vmalloc huge page support |
-| 2023 | [v6.2](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.2) | SLOB removed |
-| 2024 | [v6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.12) | vrealloc introduced |
-| 2025 | [v6.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.13)+ | vrealloc bugs fixed, optimized |
-
----
-
 ## Key Source Files
 
 If you want to read the actual code:
