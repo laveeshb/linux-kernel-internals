@@ -70,7 +70,7 @@ How Linux memory allocators relate to each other:
 
 Physical memory is finite. You need a way to hand out chunks of it and get them back.
 
-*Note: The buddy allocator dates to Linux 0.01 (1991). This predates LKML - early Linux development happened on comp.os.minix and early mailing lists without good archives. Linus's [original announcement](https://www.cs.cmu.edu/~awb/linux.history.html) is preserved, but detailed mm discussions from this era are largely lost to history.*
+*Note: The buddy allocator dates to Linux 0.01 (1991). This predates LKML - early Linux development happened on comp.os.minix and early mailing lists without good archives. Linus's [original announcement](https://www.cs.cmu.edu/~awb/linux.history.html) is preserved, but detailed mm discussions from this era are largely lost to history. For context on the era, see the famous [Tanenbaum-Torvalds debate](https://www.oreilly.com/openbook/opensources/book/appa.html) (1992) on monolithic vs microkernel design - a decision that shaped how mm/ integrates with the rest of the kernel.*
 
 ### The Solution: Buddy System
 
