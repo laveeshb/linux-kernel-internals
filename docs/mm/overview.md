@@ -13,6 +13,57 @@ This document tells the story of how Linux's memory allocators evolved over 30+ 
 
 ---
 
+## The Big Picture
+
+How Linux memory allocators relate to each other:
+
+```
+                           +---------------------------------------------+
+                           |              User Space                     |
+                           |  malloc() / mmap() / brk()                  |
+                           +-----------------------+---------------------+
+                                                   |  system calls
+                           +-----------------------v---------------------+
+                           |              Kernel                         |
+                           |                                             |
+  +------------------------+---------------------------------------------+
+  |                        |                                             |
+  |   +--------------------v--------------------+                        |
+  |   |             kmalloc / kfree             | <--- Small objects     |
+  |   |         (physically contiguous)         |      (<page size)      |
+  |   +--------------------+--------------------+                        |
+  |                        |                                             |
+  |   +--------------------v--------------------+                        |
+  |   |           SLUB Allocator                | <--- Object caches     |
+  |   |    (carves pages into fixed objects)    |      (inodes, tasks)   |
+  |   +--------------------+--------------------+                        |
+  |                        |                                             |
+  |   +--------------------v--------------------+   +-----------------+  |
+  |   |          Buddy Allocator                |<--|    vmalloc      |  |
+  |   |   (manages physical page frames)        |   |  (virtual only) |  |
+  |   |        mm/page_alloc.c                  |   |  mm/vmalloc.c   |  |
+  |   +--------------------+--------------------+   +--------+--------+  |
+  |                        |                                 |           |
+  +------------------------+---------------------------------+-----------+
+                           |                                 |
+                           v                                 v
+              +------------------------------------------------------------+
+              |                  Physical RAM                              |
+              |   [page][page][page][page][page][page][page][page]         |
+              |     ^     ^     ^                 ^           ^            |
+              |     |     |     |                 |           |            |
+              |     +-----+-----+                 +-----------+            |
+              |      contiguous                    scattered               |
+              |      (kmalloc)                     (vmalloc)               |
+              +------------------------------------------------------------+
+```
+
+**Key insight**: All allocators ultimately get pages from the buddy allocator. The difference is how they present memory to callers:
+- **kmalloc/SLUB**: Physically contiguous, fast, small allocations
+- **vmalloc**: Virtually contiguous, can satisfy large requests from fragmented memory
+
+---
+
 ## Chapter 1: The Page Allocator (The Foundation)
 
 ### The Original Problem

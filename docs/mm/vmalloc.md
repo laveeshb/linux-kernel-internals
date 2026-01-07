@@ -89,13 +89,15 @@ See [vrealloc](vrealloc.md) for detailed history.
 
 ```
 Virtual Address Space          Physical Memory
-┌──────────────┐               ┌──────────────┐
-│   vmalloc    │──────────────→│   Page A     │
-│   buffer     │               ├──────────────┤
-│   (contiguous│──────────────→│   Page B     │ (scattered)
-│    virtual)  │               ├──────────────┤
-│              │──────────────→│   Page C     │
-└──────────────┘               └──────────────┘
++---------------+              +---------------+
+|   vmalloc     |------------->|   Page A      |
+|   buffer      |              +---------------+
+|   (contiguous |              :               :
+|    virtual)   |------------->|   Page B      | (scattered!)
+|               |              +---------------+
+|               |              :               :
+|               |------------->|   Page C      |
++---------------+              +---------------+
 ```
 
 ### Free Flow (Lazy TLB)
@@ -106,6 +108,32 @@ Virtual Address Space          Physical Memory
 4. **Return pages**: Free physical pages to buddy allocator
 
 ## Key Data Structures
+
+How vmalloc tracks allocations:
+
+```
+  vmap_area RBTree                      vm_struct                Physical Pages
+  (fast lookup)                      (allocation info)           (actual memory)
+
++------------------+              +-------------------+        +---------+
+| vmap_area        |              | vm_struct         |        | struct  |
+|------------------|              |-------------------|        | page    |
+| va_start --------|--+           | addr = 0xFFFF0000 |        +---------+
+| va_end           |  |           | size = 12288      |            ^
+| rb_node ------+  |  |           | nr_pages = 3      |            |
+| vm -----------)--|--+---------->| pages[] ----------|--+---------+
++------------------+  |           | flags = VM_ALLOC  |  |     +---------+
+        |             |           +-------------------+  |     | struct  |
+        v             |                                  +---->| page    |
+   +----+----+        |                                  |     +---------+
+   |         |        |                                  |         ^
+   v         v        |                                  |         |
+ [left]   [right]     |                                  |     +---------+
+                      |                                  +---->| struct  |
+                      v                                        | page    |
+              Virtual Address                                  +---------+
+              0xFFFF0000-0xFFFF3000
+```
 
 ### vm_struct
 
