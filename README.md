@@ -28,19 +28,6 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 └── resources/          # Useful links, tools, references
 ```
 
-## Recent Posts
-
-<!-- Add blog posts here as they're written -->
-
-*Coming soon...*
-
-## Documentation
-
-| Subsystem | Status | Description |
-|-----------|--------|-------------|
-| [mm/vmalloc](docs/mm/vmalloc.md) | In Progress | Virtual memory allocation |
-| More coming... | | |
-
 ## Community
 
 - [GitHub Discussions](../../discussions) for questions and conversations
