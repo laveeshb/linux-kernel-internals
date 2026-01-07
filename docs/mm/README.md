@@ -2,9 +2,9 @@
 
 > How Linux manages the most fundamental resource: memory
 
-## For Students
+## Getting Started
 
-This documentation is designed to help you understand how a real operating system manages memory - not just the theory from textbooks, but the actual implementation decisions, trade-offs, and lessons learned over 30+ years of development.
+This documentation explains how Linux manages memory - not just the theory, but the actual implementation decisions, trade-offs, and lessons learned over 30+ years of development.
 
 ### Prerequisites
 
