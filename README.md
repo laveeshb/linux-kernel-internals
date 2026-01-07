@@ -12,16 +12,15 @@ A community hub for understanding the Linux kernel — documentation and discuss
 
 The kernel has extensive API documentation, but understanding the *rationale* requires digging through mailing list archives, scattered articles, and tribal knowledge. We're building a more accessible resource.
 
-## Structure
+## Documentation
 
-```
-docs/
-├── mm/             # Memory management
-├── scheduler/      # Process scheduler
-├── networking/     # Network stack
-├── bpf/            # BPF/eBPF subsystem
-└── drivers/        # Driver subsystems
-```
+| Subsystem | Status | Start Here |
+|-----------|--------|------------|
+| [mm/](docs/mm/) | Available | [Overview](docs/mm/overview.md) |
+| scheduler/ | Planned | |
+| networking/ | Planned | |
+| bpf/ | Planned | |
+| drivers/ | Planned | |
 
 ## Community
 
