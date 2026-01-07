@@ -13,7 +13,7 @@ This documentation assumes familiarity with:
 - **Pointers and memory addresses** - Virtual vs physical addressing
 - **Basic OS concepts** - Processes, kernel vs userspace
 
-If you've covered virtual memory and paging (e.g., Silberschatz Ch. 9-10, Tanenbaum Ch. 3), that's a good foundation.
+If you've covered virtual memory and paging, that's a good foundation. See [Further Reading](#further-reading) for recommended textbooks.
 
 ### Getting the Kernel Source
 
