@@ -15,13 +15,12 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 ## Structure
 
 ```
-├── docs/               # Reference documentation
-│   ├── mm/             # Memory management
-│   ├── scheduler/      # Process scheduler
-│   ├── networking/     # Network stack
-│   ├── bpf/            # BPF/eBPF subsystem
-│   └── drivers/        # Driver subsystems
-└── resources/          # Useful links, tools, references
+docs/
+├── mm/             # Memory management
+├── scheduler/      # Process scheduler
+├── networking/     # Network stack
+├── bpf/            # BPF/eBPF subsystem
+└── drivers/        # Driver subsystems
 ```
 
 ## Community
