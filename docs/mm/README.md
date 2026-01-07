@@ -15,6 +15,32 @@ Before diving in, you should understand:
 
 If your textbook covers virtual memory and paging (Silberschatz Ch. 9-10, Tanenbaum Ch. 3), you have enough background.
 
+### Getting the Kernel Source
+
+```bash
+git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+cd linux
+```
+
+For building and configuration, see [Documentation/admin-guide/README.rst](https://docs.kernel.org/admin-guide/README.html).
+
+### Running Tests
+
+The fastest way to test kernel changes without rebooting your machine:
+
+```bash
+# Install virtme-ng (runs kernel in QEMU with your filesystem)
+pip install virtme-ng
+
+# Build and boot with a test module
+virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
+
+# Check results
+# (dmesg output appears in the virtual console)
+```
+
+For comprehensive testing documentation, see [Documentation/dev-tools/testing-overview.rst](https://docs.kernel.org/dev-tools/testing-overview.html).
+
 ### Start Here
 
 1. **[Glossary](glossary.md)** - Learn the terminology first
