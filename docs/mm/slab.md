@@ -24,7 +24,7 @@ The page allocator works in `4KB` chunks. But kernel objects are often much smal
 |--------|--------------|
 | `struct inode` | ~600 bytes |
 | `struct dentry` | ~200 bytes |
-| `struct task_struct` | ~8KB |
+| `struct file` | ~256 bytes |
 | `struct sk_buff` | ~256 bytes |
 
 Allocating a full page for a 200-byte object wastes 95% of the memory.
@@ -81,29 +81,23 @@ CPU 0                    CPU 1
 | free   |              | free   |
 | list   |              | list   |
 +--------+              +--------+
-
-No locking needed for per-CPU slab!
 ```
+
+Fast path uses atomic `cmpxchg` instead of locks (when hardware supports it).
 
 ### Allocation Fast Path
 
-```c
-/* Simplified allocation */
-void *slab_alloc(struct kmem_cache *s) {
-    struct slab *slab = this_cpu_read(s->cpu_slab);
-    void *object = slab->freelist;
+From `mm/slub.c`:
 
-    if (likely(object)) {
-        slab->freelist = get_next_free(object);
-        return object;
-    }
+> "The fast path allocation (slab_alloc_node()) and freeing (do_slab_free()) are fully lockless when satisfied from the percpu slab (and when cmpxchg_double is possible to use, otherwise slab_lock is taken). They rely on the transaction id (tid) field to detect being preempted or moved to another cpu."
 
-    /* Slow path: get new slab */
-    return __slab_alloc(s);
-}
-```
+The fast path:
+1. Read `freelist` and `tid` from per-CPU structure
+2. Attempt atomic compare-and-swap (`this_cpu_cmpxchg`) to update freelist
+3. If cmpxchg fails (another CPU or preemption changed tid), retry
+4. If freelist is empty, fall back to slow path with locks
 
-Fast path: load freelist pointer, advance it, return object. No locks.
+This avoids traditional locks in the common case while remaining correct under preemption and migration.
 
 ### Freelist Encoding
 
@@ -127,10 +121,11 @@ When a CPU slab fills, SLUB gets a partially-full slab from the node's partial l
 ```
 Per-CPU          Per-Node Partial List
 +--------+       +--------+  +--------+  +--------+
-| full   | ----> | 75%    |->| 50%    |->| 25%    |
+| full   | ----> |partial |->|partial |->|partial |
 +--------+       +--------+  +--------+  +--------+
-                 (sorted by fullness for efficiency)
 ```
+
+The per-CPU partial list behavior is controlled by `CONFIG_SLUB_CPU_PARTIAL`. When enabled (default), each CPU maintains its own partial list, reducing contention on the node's partial list.
 
 ## kmalloc Size Classes
 
@@ -148,6 +143,17 @@ kmalloc-8k     (8192 bytes)
 ```
 
 Request for 100 bytes -> `kmalloc-128` (28 bytes internal fragmentation)
+
+### kvmalloc
+
+For allocations that might be large, use `kvmalloc()` instead of `kmalloc()`:
+
+```c
+void *kvmalloc(size_t size, gfp_t flags);
+void kvfree(const void *addr);
+```
+
+`kvmalloc()` tries `kmalloc()` first, falls back to `vmalloc()` for larger allocations. This avoids high-order allocation failures while keeping small allocations fast.
 
 ## Cache Merging
 
@@ -185,9 +191,33 @@ cat /sys/kernel/slab/kmalloc-256/sanity_checks
 
 | Pattern | Meaning |
 |---------|---------|
-| `0x5a` | Newly allocated (uninitialized) |
-| `0x6b` | Freed (use-after-free detection) |
-| `0xa5` | Red zone (buffer overflow detection) |
+| `0x5a` | Object in use (`POISON_INUSE`) - detects corruption of live objects |
+| `0x6b` | Object freed (`POISON_FREE`) - detects use-after-free |
+| `0xa5` | Red zone padding - detects buffer overflows |
+
+## Security Hardening
+
+SLUB has several security features:
+
+| Config Option | Purpose |
+|---------------|---------|
+| `CONFIG_SLAB_FREELIST_RANDOM` | Randomize freelist order to make heap exploits harder |
+| `CONFIG_SLAB_FREELIST_HARDENED` | XOR freelist pointers with random value to detect corruption |
+| `CONFIG_INIT_ON_ALLOC_DEFAULT_ON` | Zero memory on allocation |
+| `CONFIG_INIT_ON_FREE_DEFAULT_ON` | Zero memory on free |
+
+### KFENCE
+
+KFENCE (Kernel Electric Fence) is a sampling-based memory safety error detector. From the [kernel documentation](https://docs.kernel.org/dev-tools/kfence.html):
+
+> "KFENCE is designed to be enabled in production kernels, and has near zero performance overhead."
+
+Unlike `slub_debug`, KFENCE can run in production because it only samples a fraction of allocations.
+
+```bash
+# Check if enabled
+cat /sys/module/kfence/parameters/sample_interval
+```
 
 ## Try It Yourself
 
@@ -248,11 +278,18 @@ struct kmem_cache {
 ### struct kmem_cache_cpu
 
 ```c
+/* From mm/slub.c */
 struct kmem_cache_cpu {
-    void **freelist;           /* Pointer to next free object */
-    struct slab *slab;         /* Current slab */
-    struct slab *partial;      /* Per-CPU partial list */
-    /* ... */
+    union {
+        struct {
+            void *freelist;        /* Pointer to next available object */
+            unsigned long tid;     /* Globally unique transaction id */
+        };
+        freelist_full_t freelist_tid;
+    };
+    struct slab *slab;             /* The slab from which we are allocating */
+    struct slab *partial;          /* Partially allocated slabs */
+    local_trylock_t lock;          /* Protects the fields above */
 };
 ```
 
@@ -267,9 +304,10 @@ Ported from SunOS, based on [Bonwick's 1994 paper](https://www.usenix.org/legacy
 ### SLUB Introduction (v2.6.22, 2007)
 
 **Commit**: [81819f0fc828](https://git.kernel.org/linus/81819f0fc828)
+
 **Author**: Christoph Lameter
 
-*Note: Original LKML thread (Feb 2007) predates reliable archives. See commit message for design rationale.*
+*See [LKML](https://lore.kernel.org/lkml/?q=SLUB+unqueued+slab) for the original proposal.*
 
 ### SLAB Deprecation (v6.5, 2023)
 

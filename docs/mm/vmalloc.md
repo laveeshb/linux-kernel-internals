@@ -15,7 +15,7 @@ void vfree(const void *addr);
 
 ### Origins (1993)
 
-vmalloc dates back to the original Linux kernel by Linus Torvalds.
+vmalloc was added to Linux in 1993, two years after the initial release.
 
 From `mm/vmalloc.c`:
 ```
@@ -40,7 +40,7 @@ Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
 
 **Trade-off**: XEN and PAT need immediate TLB flush due to aliasing issues. They call `vm_unmap_aliases()` to force flush when needed.
 
-*Note: The original LKML discussion (Oct 2008) predates reliable archives. The commit message documents the rationale.*
+*The commit message documents the design rationale. See also [lore.kernel.org](https://lore.kernel.org/all/?q=vmap+rewrite+nick+piggin) for related discussions.*
 
 ### v5.13: Huge Page Support
 

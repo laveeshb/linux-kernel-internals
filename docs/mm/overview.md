@@ -105,7 +105,7 @@ When they free those 2 pages, you merge them back with their "buddy":
 [__][_][_] -> [____][_] -> [________] -> etc.
 ```
 
-**Why it works**: Fast allocation (`O(log n)`), automatic merging reduces fragmentation.
+**Why it works**: Fast allocation (`O(1)` from a given order's free list), automatic merging reduces fragmentation.
 
 **What it can't do**: Give you, say, 3 pages. You'll get 4 (next power of 2).
 
@@ -117,7 +117,7 @@ When they free those 2 pages, you merge them back with their "buddy":
 
 The page allocator works in page-sized chunks (`4KB`). But kernel objects are often tiny:
 - An inode? ~600 bytes
-- A `task_struct`? ~`8KB`
+- A dentry? ~200 bytes
 - A socket buffer? ~200 bytes
 
 Giving someone a whole `4KB` page for a 200-byte object wastes memory.
@@ -149,11 +149,11 @@ Each object type gets its own cache. Allocating is fast (grab from cache), freei
 - Better NUMA support
 - Same API, simpler internals
 
-*Note: The original "SLUB: The unqueued Slab allocator" LKML thread (Feb 2007) predates reliable archives. The commit message and code comments document the design rationale.*
+*See [LKML discussion](https://lore.kernel.org/lkml/?q=SLUB+unqueued+slab+allocator) for the original proposal and rationale.*
 
 **Why SLUB won**: Kernel developers learned that simpler code is easier to maintain and debug. SLAB's complexity wasn't worth the marginal performance gains.
 
-**SLOB (embedded, removed v6.2)**: Minimal allocator for tiny systems. Removed because SLUB became efficient enough for embedded too.
+**SLOB (embedded, removed v6.4)**: Minimal allocator for tiny systems. Removed because SLUB became efficient enough for embedded too.
 
 **The API** (`kmalloc`/`kfree`):
 ```c
@@ -198,7 +198,7 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 - RBTree for address lookup: `O(log n)` instead of `O(n)` list scan
 - Per-CPU frontend: Reduce lock contention
 
-*Note: The original LKML discussion (Oct 2008) predates reliable archives.*
+*See [lore.kernel.org](https://lore.kernel.org/all/?q=vmap+rewrite) for the original discussion.*
 
 **v5.13 (2021): Huge Pages**
 
@@ -357,7 +357,7 @@ virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
 | 2007 | [v2.6.22](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.22) | SLUB replaces SLAB as default |
 | 2008 | [v2.6.28](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.28) | vmalloc rewrite (RBTree, lazy TLB) |
 | 2021 | [v5.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v5.13) | vmalloc huge page support |
-| 2023 | [v6.2](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.2) | SLOB removed |
+| 2023 | [v6.4](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.4) | SLOB removed |
 | 2024 | [v6.12](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.12) | vrealloc introduced |
 | 2025 | [v6.13](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v6.13)+ | vrealloc bugs fixed, shrink optimization |
 
@@ -367,5 +367,6 @@ virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
 
 - [vmalloc](vmalloc.md) - Deep dive into virtual memory allocation
 - [vrealloc](vrealloc.md) - The full story of vmalloc resizing
-- [page-allocator](page-allocator.md) - Buddy system details (planned)
-- [slab](slab.md) - SLUB internals (planned)
+- [page-allocator](page-allocator.md) - Buddy system details
+- [slab](slab.md) - SLUB internals
+- [glossary](glossary.md) - Terminology reference

@@ -45,6 +45,15 @@ Hardware accessing memory directly without CPU involvement. DMA buffers need phy
 
 ## F
 
+### Folio
+A modern abstraction (v5.16+) representing one or more contiguous pages. Replaces the ambiguous use of `struct page` for compound pages. A folio is always the head of a compound page or a single page.
+
+```c
+struct folio *folio = page_folio(page);
+```
+
+**Why it exists**: `struct page` was overloaded - it could be a single page, a tail page of a compound page, or a head page. Folios make the API clearer and enable future optimizations.
+
 ### Fragmentation
 When free memory exists but isn't usable because it's broken into small, non-contiguous pieces.
 
@@ -103,6 +112,14 @@ Postponing work until necessary. Example: Lazy TLB flushing delays flush until a
 
 ## M
 
+### memblock
+Early boot memory allocator. Before the buddy allocator is initialized, the kernel uses memblock to track and allocate memory. It's simple (just tracks reserved and free regions) but sufficient for boot.
+
+```bash
+# View memblock regions (if debugfs enabled)
+cat /sys/kernel/debug/memblock/memory
+```
+
 ### memcg (Memory Cgroup)
 Memory control group. Allows limiting and tracking memory usage per container or group of processes. Foundation of container memory limits.
 
@@ -138,6 +155,19 @@ The basic unit of memory management. Typically `4KB` on x86. The smallest unit t
 ### Page Table
 Data structure mapping virtual addresses to physical addresses. Multi-level (`PGD` -> `PUD` -> `PMD` -> `PTE` on x86-64) to save space.
 
+### PFN (Page Frame Number)
+Index of a physical page frame. If a page is at physical address `0x1234000` and page size is `4KB`, PFN = `0x1234000 / 4096 = 0x1234`.
+
+```c
+/* Convert between PFN and physical address */
+pfn = phys_addr >> PAGE_SHIFT;
+phys_addr = pfn << PAGE_SHIFT;
+
+/* Convert between PFN and struct page */
+struct page *page = pfn_to_page(pfn);
+pfn = page_to_pfn(page);
+```
+
 ### Physical Address
 Actual location in RAM hardware. What the memory controller sees.
 
@@ -157,6 +187,23 @@ Carves pages into fixed-size object caches. Avoids internal fragmentation for sm
 
 ### SLUB
 Current default slab allocator (since v2.6.22). Simpler than original SLAB, lower overhead, better NUMA support.
+
+### struct page
+The kernel's descriptor for a physical page frame. One `struct page` exists for every physical page in the system (stored in the `mem_map` array or vmemmap).
+
+```c
+struct page {
+    unsigned long flags;        /* Page status flags (PG_locked, PG_dirty, etc.) */
+    atomic_t _refcount;         /* Reference count */
+    atomic_t _mapcount;         /* Number of page table mappings */
+    struct address_space *mapping;  /* Owner (file, swap, anon) */
+    pgoff_t index;              /* Offset within mapping */
+    struct list_head lru;       /* LRU list for reclaim */
+    /* ... many more fields via unions */
+};
+```
+
+**Note**: Modern code should prefer `struct folio` for multi-page operations.
 
 ---
 
@@ -197,10 +244,17 @@ Resize a vmalloc allocation. Can shrink in-place (freeing pages) or grow (may ne
 ## Z
 
 ### Zone
-Division of physical memory by characteristics:
-- **`ZONE_DMA`**: Memory accessible by old 16-bit DMA (first `16MB`)
-- **`ZONE_NORMAL`**: Regular memory
-- **`ZONE_HIGHMEM`**: Memory above ~`896MB` on 32-bit (not directly mapped)
+Division of physical memory by hardware constraints. Zones vary by architecture:
+
+**x86-64:**
+- **`ZONE_DMA`**: First 16MB (legacy 16-bit DMA)
+- **`ZONE_DMA32`**: 16MB - 4GB (32-bit DMA devices)
+- **`ZONE_NORMAL`**: Above 4GB (regular allocations)
+
+**32-bit x86:**
+- **`ZONE_DMA`**: First 16MB
+- **`ZONE_NORMAL`**: 16MB - ~896MB (directly mapped)
+- **`ZONE_HIGHMEM`**: Above ~896MB (not directly mapped, requires kmap)
 
 ---
 

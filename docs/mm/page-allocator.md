@@ -23,7 +23,7 @@ Order 0 = 1 page (4KB)
 Order 1 = 2 pages (8KB)
 Order 2 = 4 pages (16KB)
 ...
-Order 10 = 1024 pages (4MB) - MAX_ORDER default
+Order 10 = 1024 pages (4MB) - max order (MAX_ORDER=11, so 0-10 valid)
 
 Free lists per order:
 +-------------------------------------------+
@@ -53,10 +53,10 @@ Request for 3 pages (needs order 2 = 4 pages):
 
 ### Free Example (Buddy Merging)
 
-Freeing a 4-page block at address 0x1000:
+Freeing a 4-page block at address 0x4000 (order-2 blocks must be 4-page aligned):
 
 ```
-1. Find buddy address: 0x1000 XOR (4 * PAGE_SIZE) = 0x5000
+1. Find buddy address: 0x4000 XOR (4 * PAGE_SIZE) = 0x0000
 
 2. Is buddy free and same order?
    - Yes: merge into 8-page block, try to merge again
@@ -76,9 +76,9 @@ Physical memory is divided into zones based on hardware constraints:
 | Zone | Purpose | Typical Range (x86-64) |
 |------|---------|------------------------|
 | `ZONE_DMA` | Legacy 16-bit DMA devices | 0 - 16MB |
-| `ZONE_DMA32` | 32-bit DMA devices | 0 - 4GB |
-| `ZONE_NORMAL` | Regular allocations | All memory |
-| `ZONE_MOVABLE` | Migratable pages (memory hotplug) | Configurable |
+| `ZONE_DMA32` | 32-bit DMA devices | 16MB - 4GB |
+| `ZONE_NORMAL` | Regular kernel allocations | Above 4GB |
+| `ZONE_MOVABLE` | Migratable pages (memory hotplug, isolation) | Configurable |
 
 Each zone has its own set of buddy free lists.
 
@@ -98,6 +98,7 @@ GFP_DMA32     /* Must be in ZONE_DMA32 */
 __GFP_ZERO    /* Zero the memory */
 __GFP_NOWARN  /* Suppress allocation failure warnings */
 __GFP_RETRY_MAYFAIL  /* Try hard but may fail */
+__GFP_NOFAIL  /* Never fail - use sparingly, can deadlock */
 ```
 
 See [`include/linux/gfp.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/gfp.h) for the full list.
@@ -112,11 +113,13 @@ The buddy allocator has been in Linux since the beginning. The basic algorithm i
 
 *Note: Pre-LKML era. Early implementation details are in the git history starting from v2.6.12.*
 
-### Per-CPU Page Lists (v2.6)
+### Per-CPU Page Lists (v2.5/2.6)
 
 **Problem**: The zone lock became a bottleneck on SMP systems - every allocation/free needed it.
 
 **Solution**: Per-CPU page lists (`per_cpu_pages`) cache single pages, reducing lock contention.
+
+*Note: Developed incrementally during 2.5 cycle. Predates searchable git history (v2.6.12+).*
 
 ```
 CPU 0: [page] [page] [page] ...  (hot cache)
@@ -127,7 +130,7 @@ CPU 1: [page] [page] ...
    Zone free lists (locked)
 ```
 
-### NUMA Awareness
+### NUMA Awareness (v2.6)
 
 **Problem**: On NUMA systems, accessing remote memory is slower than local memory.
 
@@ -137,6 +140,8 @@ CPU 1: [page] [page] ...
 /* Allocate from specific node */
 alloc_pages_node(node_id, gfp, order);
 ```
+
+*Note: NUMA support evolved over many releases. See `mm/mempolicy.c` for allocation policies.*
 
 ### Compaction (v2.6.35, 2010)
 
@@ -207,7 +212,7 @@ cat /sys/kernel/debug/tracing/trace_pipe
 
 ```c
 struct zone {
-    unsigned long watermark[NR_WMARK];     /* min/low/high */
+    unsigned long watermark[NR_WMARK];     /* min/low/high thresholds */
     unsigned long nr_reserved_highatomic;
     struct per_cpu_pages __percpu *per_cpu_pageset;
     struct free_area free_area[NR_PAGE_ORDERS];  /* buddy free lists */
@@ -219,6 +224,31 @@ struct zone {
     /* ... */
 };
 ```
+
+*Note: `NR_PAGE_ORDERS` replaced `MAX_ORDER` in recent kernels. When reading older code, `MAX_ORDER` is the same concept.*
+
+### Watermarks
+
+Each zone has watermarks that control reclaim behavior:
+
+| Watermark | When Reached |
+|-----------|--------------|
+| `high` | Zone is healthy, no action needed |
+| `low` | Wake `kswapd` to reclaim pages in background |
+| `min` | Direct reclaim - allocating process must help free pages |
+| `promo` | For tiered memory (CXL/NUMA), controls page promotion |
+
+Watermarks are derived from `vm.min_free_kbytes`:
+
+```bash
+# View watermarks
+cat /proc/zoneinfo | grep -E "pages free|min|low|high"
+
+# Adjust minimum free memory (affects all watermarks)
+sysctl vm.min_free_kbytes=65536
+```
+
+**Zone fallback**: When a zone is exhausted, allocations fall back to other zones in order: NORMAL → DMA32 → DMA (preferring higher zones first).
 
 ### struct free_area
 
@@ -238,6 +268,14 @@ Pages are grouped by mobility to reduce fragmentation:
 | `MIGRATE_UNMOVABLE` | Kernel allocations that can't move |
 | `MIGRATE_MOVABLE` | User pages, can be migrated/compacted |
 | `MIGRATE_RECLAIMABLE` | Caches that can be freed under pressure |
+| `MIGRATE_HIGHATOMIC` | Reserved for high-priority atomic allocations |
+| `MIGRATE_CMA` | Contiguous Memory Allocator regions |
+| `MIGRATE_ISOLATE` | Pages being isolated for migration/offlining |
+
+```bash
+# View migrate type distribution
+cat /proc/pagetypeinfo
+```
 
 ## Common Issues
 
