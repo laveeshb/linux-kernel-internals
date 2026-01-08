@@ -2,9 +2,6 @@ site_name: Linux Kernel Internals
 site_description: Documentation about Linux kernel internals, design decisions, and the journey of contributing
 site_url: https://kernel-internals.org/
 
-repo_name: laveeshb/linux-kernel-internals
-repo_url: https://github.com/laveeshb/linux-kernel-internals
-
 theme:
   name: material
   palette:
