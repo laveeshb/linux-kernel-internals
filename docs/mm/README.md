@@ -78,14 +78,16 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 | [slab](slab.md) | SLUB - small object allocation |
 | [vmalloc](vmalloc.md) | Virtually contiguous allocation |
 | [vrealloc](vrealloc.md) | Resizing allocations |
-
-### Planned
-
-| Document | Status |
-|----------|--------|
-| [page-tables](page-tables.md) | Planned - Virtual memory mapping |
-| [reclaim](reclaim.md) | Planned - What happens under memory pressure |
-| [memcg](memcg.md) | Planned - Container memory limits |
+| [page-tables](page-tables.md) | Virtual address translation |
+| [reclaim](reclaim.md) | What happens under memory pressure |
+| [memcg](memcg.md) | Container memory limits |
+| [thp](thp.md) | Transparent Huge Pages - automatic 2MB pages |
+| [numa](numa.md) | NUMA memory policies and balancing |
+| [compaction](compaction.md) | Memory defragmentation for large allocations |
+| [ksm](ksm.md) | Kernel Same-page Merging - memory deduplication |
+| [mmap](mmap.md) | Process address space and VMAs |
+| [page-cache](page-cache.md) | File data caching in memory |
+| [swap](swap.md) | Extending memory to disk |
 
 ---
 
@@ -100,6 +102,13 @@ If you want to read the actual code:
 | [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | vmalloc - virtually contiguous allocation |
 | [`mm/vmscan.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) | Memory reclaim under pressure |
 | [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | Memory cgroups |
+| [`mm/huge_memory.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/huge_memory.c) | Transparent Huge Pages |
+| [`mm/mempolicy.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mempolicy.c) | NUMA memory policies |
+| [`mm/compaction.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/compaction.c) | Memory compaction |
+| [`mm/ksm.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/ksm.c) | Kernel Same-page Merging |
+| [`mm/mmap.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap.c) | Process address space, VMAs |
+| [`mm/filemap.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/filemap.c) | Page cache |
+| [`mm/swapfile.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/swapfile.c) | Swap area management |
 | [`include/linux/gfp.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/gfp.h) | GFP flags definitions |
 
 ---
