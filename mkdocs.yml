@@ -21,10 +21,15 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.expand
+    - navigation.top
+    - navigation.footer
     - toc.integrate
     - content.code.copy
+    - search.highlight
+    - search.share
 
 markdown_extensions:
   - tables
@@ -46,6 +51,12 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/laveeshb/linux-kernel-internals
+    - icon: fontawesome/solid/comments
+      link: https://github.com/laveeshb/linux-kernel-internals/discussions
+      name: Discussions
+    - icon: fontawesome/solid/bug
+      link: https://github.com/laveeshb/linux-kernel-internals/issues
+      name: Issues
 
 # This makes external links open in new tabs
 extra_javascript:
@@ -53,22 +64,30 @@ extra_javascript:
 
 nav:
   - Home: index.md
-  - Linux Evolution: linux-evolution.md
+  - Index: site-index.md
+  - Guide: navigation.md
+  - Background:
+    - Linux Evolution: linux-evolution.md
   - Memory Management:
     - Getting Started: mm/README.md
     - Overview: mm/overview.md
-    - Page Allocator: mm/page-allocator.md
-    - SLUB Allocator: mm/slab.md
-    - vmalloc: mm/vmalloc.md
-    - vrealloc: mm/vrealloc.md
-    - Page Tables: mm/page-tables.md
-    - Page Reclaim: mm/reclaim.md
-    - Memory Cgroups: mm/memcg.md
-    - Transparent Huge Pages: mm/thp.md
-    - NUMA: mm/numa.md
-    - Compaction: mm/compaction.md
-    - KSM: mm/ksm.md
-    - Process Address Space: mm/mmap.md
-    - Page Cache: mm/page-cache.md
-    - Swap: mm/swap.md
-    - Glossary: mm/glossary.md
+    - Fundamentals:
+      - Page Allocator: mm/page-allocator.md
+      - kmalloc (SLUB): mm/slab.md
+      - vmalloc: mm/vmalloc.md
+      - NUMA: mm/numa.md
+    - Address Translation:
+      - Page Tables: mm/page-tables.md
+      - Process Address Space: mm/mmap.md
+    - Caching & Reclaim:
+      - Page Cache: mm/page-cache.md
+      - Page Reclaim: mm/reclaim.md
+      - Swap: mm/swap.md
+    - Advanced:
+      - Memory Cgroups: mm/memcg.md
+      - Transparent Huge Pages: mm/thp.md
+      - Compaction: mm/compaction.md
+      - KSM: mm/ksm.md
+      - vrealloc: mm/vrealloc.md
+    - Reference:
+      - Glossary: mm/glossary.md

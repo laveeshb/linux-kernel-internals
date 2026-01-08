@@ -330,7 +330,9 @@ zram became suitable for swap use, enabling diskless swap.
 
 ### THP Swap (v4.13, 2017)
 
-**Commit**: [38d8b4e6bdc8](https://git.kernel.org/linus/38d8b4e6bdc8) ("mm, THP, swap: delay splitting THP during swap out")
+**Commit**: [38d8b4e6bdc8](https://git.kernel.org/linus/38d8b4e6bdc8) ("mm, THP, swap: delay splitting THP during swap out") | [LKML](https://lore.kernel.org/lkml/20170724051840.2309-1-ying.huang@intel.com/)
+
+**Author**: Huang Ying
 
 Transparent Huge Pages can now be swapped without splitting first.
 

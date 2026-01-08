@@ -226,17 +226,23 @@ cat /proc/<pid>/ksm_stat
 
 **Authors**: Izik Eidus, Andrea Arcangeli, Chris Wright (Red Hat, VMware)
 
+*Note: Pre-2010 LKML archives on lore.kernel.org are sparse. The commit message documents the design.*
+
 Originally developed for KVM to reduce memory footprint of virtual machines.
 
 ### NUMA Awareness (v3.9, 2013)
 
-**Commit**: [90bd6fd31c80](https://git.kernel.org/linus/90bd6fd31c80) ("ksm: allow trees per NUMA node")
+**Commit**: [90bd6fd31c80](https://git.kernel.org/linus/90bd6fd31c80) ("ksm: allow trees per NUMA node") | [LKML](https://lore.kernel.org/all/alpine.LNX.2.00.1302111410290.1174@eggly.anvils/)
+
+**Author**: Petr Holasek (submitted by Hugh Dickins)
 
 Added `merge_across_nodes` option to prevent cross-node sharing that hurts NUMA locality.
 
 ### Per-Process Statistics (v6.1, 2022)
 
-**Commit**: [cb4df4cae4f2](https://git.kernel.org/linus/cb4df4cae4f2) ("ksm: count allocated ksm rmap_items for each process")
+**Commit**: [cb4df4cae4f2](https://git.kernel.org/linus/cb4df4cae4f2) ("ksm: count allocated ksm rmap_items for each process") | [LKML](https://lore.kernel.org/linux-mm/20220822053653.204150-1-xu.xin16@zte.com.cn/)
+
+**Author**: xu xin
 
 Added `/proc/<pid>/ksm_stat` for per-process memory savings tracking.
 

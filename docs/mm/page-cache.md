@@ -282,7 +282,9 @@ Pages indexed in radix tree for fast lookup by file offset.
 
 ### XArray (v4.20, 2018)
 
-**Commit**: [a28334862993](https://git.kernel.org/linus/a28334862993) ("page cache: Finish XArray conversion")
+**Commit**: [a28334862993](https://git.kernel.org/linus/a28334862993) ("page cache: Finish XArray conversion") | [LKML](https://lore.kernel.org/lkml/20180611140639.17215-1-willy@infradead.org/)
+
+**Author**: Matthew Wilcox
 
 Radix tree replaced with XArray - cleaner API, same performance.
 

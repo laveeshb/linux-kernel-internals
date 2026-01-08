@@ -239,17 +239,27 @@ Basic NUMA support added by SGI, IBM and others for their large systems. Memory 
 
 **Commit**: [68860ec10bcc](https://git.kernel.org/linus/68860ec10bcc) ("cpusets: automatic numa mempolicy rebinding")
 
+**Author**: Paul Jackson (SGI)
+
+*Note: Pre-2008 LKML archives on lore.kernel.org are sparse. The commit message documents the design.*
+
 cpusets allowed constraining processes to specific nodes, enabling NUMA-aware container isolation.
 
 ### Automatic NUMA Balancing (v3.8, 2013)
 
 **Merge**: [3d59eebc5e13](https://git.kernel.org/linus/3d59eebc5e13) ("Merge tag 'balancenuma-v11'")
 
-Kernel-level automatic page migration based on access patterns. Major work by Mel Gorman, Rik van Riel, and others.
+**Authors**: Mel Gorman, Rik van Riel, Ingo Molnar, Peter Zijlstra
+
+*Note: Pre-2013 LKML archives on lore.kernel.org have limited indexing. See [LWN article](https://lwn.net/Articles/568870/) for design discussion.*
+
+Kernel-level automatic page migration based on access patterns.
 
 ### Memory Tiering (v5.18+, 2022)
 
-**Commit**: [c574bbe91703](https://git.kernel.org/linus/c574bbe91703) ("NUMA balancing: optimize page placement for memory tiering system")
+**Commit**: [c574bbe91703](https://git.kernel.org/linus/c574bbe91703) ("NUMA balancing: optimize page placement for memory tiering system") | [LKML](https://lore.kernel.org/linux-mm/20220128082751.593478-1-ying.huang@intel.com/)
+
+**Author**: Huang Ying (Intel)
 
 Support for heterogeneous memory (CXL, persistent memory) as additional NUMA tiers with automatic promotion/demotion. Further refined in v6.1 with explicit memory tier framework ([992bf77591cb](https://git.kernel.org/linus/992bf77591cb)).
 
