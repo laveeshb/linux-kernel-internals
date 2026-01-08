@@ -191,9 +191,11 @@ cat /sys/kernel/slab/kmalloc-256/sanity_checks
 
 | Pattern | Meaning |
 |---------|---------|
-| `0x5a` | Object in use (`POISON_INUSE`) - detects corruption of live objects |
+| `0x5a` | Uninitialized (`POISON_INUSE`) - detects uninitialized access |
 | `0x6b` | Object freed (`POISON_FREE`) - detects use-after-free |
-| `0xa5` | Red zone padding - detects buffer overflows |
+| `0xa5` | End marker (`POISON_END`) - marks end of poisoned region |
+| `0xbb` | Red zone inactive (`SLUB_RED_INACTIVE`) - detects buffer overflows on free objects |
+| `0xcc` | Red zone active (`SLUB_RED_ACTIVE`) - detects buffer overflows on in-use objects |
 
 ## Security Hardening
 
