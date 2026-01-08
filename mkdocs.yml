@@ -4,6 +4,9 @@ site_url: https://kernel-internals.org/
 
 theme:
   name: material
+  icon:
+    logo: fontawesome/brands/linux
+  favicon: assets/tux.svg
   palette:
     - scheme: default
       primary: indigo
