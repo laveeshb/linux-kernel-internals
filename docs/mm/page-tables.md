@@ -216,7 +216,7 @@ Added PUD for x86-64's 48-bit virtual address space. This predates git history (
 
 ### Five-Level (v4.14, 2017)
 
-**Commit**: [77ef56e4f0fb](https://git.kernel.org/linus/77ef56e4f0fb) ("x86: Enable 5-level paging support via CONFIG_X86_5LEVEL=y")
+**Commit**: [77ef56e4f0fb](https://git.kernel.org/linus/77ef56e4f0fb) ("x86: Enable 5-level paging support via CONFIG_X86_5LEVEL=y") | [LKML](https://lore.kernel.org/all/20170313055020.69655-1-kirill.shutemov@linux.intel.com/)
 
 Added P4D for 57-bit virtual addresses (128PB), needed for machines with >64TB physical memory.
 

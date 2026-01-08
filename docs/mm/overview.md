@@ -209,6 +209,8 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 - Fewer TLB entries needed
 - Trade-off: More internal fragmentation
 
+*See [LKML patch series](https://lore.kernel.org/linux-mm/20210317062402.533919-1-npiggin@gmail.com/) by Nicholas Piggin.*
+
 **v6.12 (2024): vrealloc**
 
 **The problem**: You have a vmalloc buffer and want to resize it. Previously, you'd have to allocate new, copy, free old.
@@ -217,6 +219,8 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 - **Commit**: [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3)
 - Motivated by Rust's allocator needs (`Vec` resizing)
 - See [vrealloc](vrealloc.md) for the full story and bugs found
+
+*See [LKML patch series](https://lore.kernel.org/all/20240722163111.4766-1-dakr@kernel.org/) by Danilo Krummrich.*
 
 ---
 

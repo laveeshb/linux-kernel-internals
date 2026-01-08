@@ -320,7 +320,7 @@ Swap files became as efficient as partitions.
 
 ### zswap (v3.11, 2013)
 
-**Commit**: [2b2811178e85](https://git.kernel.org/linus/2b2811178e85) ("zswap: add to mm/")
+**Commit**: [2b2811178e85](https://git.kernel.org/linus/2b2811178e85) ("zswap: add to mm/") | [LKML](https://lore.kernel.org/lkml/1361397888-14863-1-git-send-email-sjenning@linux.vnet.ibm.com/)
 
 Compressed swap cache to reduce disk I/O.
 
