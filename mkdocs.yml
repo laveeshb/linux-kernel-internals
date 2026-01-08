@@ -1,6 +1,6 @@
 site_name: Linux Kernel Internals
 site_description: Documentation about Linux kernel internals, design decisions, and the journey of contributing
-site_url: https://laveeshb.github.io/linux-kernel-internals/
+site_url: https://kernel-internals.org/
 
 repo_name: laveeshb/linux-kernel-internals
 repo_url: https://github.com/laveeshb/linux-kernel-internals
@@ -55,9 +55,20 @@ nav:
   - Home: index.md
   - Linux Evolution: linux-evolution.md
   - Memory Management:
+    - Getting Started: mm/README.md
     - Overview: mm/overview.md
-    - Glossary: mm/glossary.md
-    - vmalloc: mm/vmalloc.md
-    - vrealloc: mm/vrealloc.md
     - Page Allocator: mm/page-allocator.md
     - SLUB Allocator: mm/slab.md
+    - vmalloc: mm/vmalloc.md
+    - vrealloc: mm/vrealloc.md
+    - Page Tables: mm/page-tables.md
+    - Page Reclaim: mm/reclaim.md
+    - Memory Cgroups: mm/memcg.md
+    - Transparent Huge Pages: mm/thp.md
+    - NUMA: mm/numa.md
+    - Compaction: mm/compaction.md
+    - KSM: mm/ksm.md
+    - Process Address Space: mm/mmap.md
+    - Page Cache: mm/page-cache.md
+    - Swap: mm/swap.md
+    - Glossary: mm/glossary.md

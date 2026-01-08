@@ -209,7 +209,7 @@ Pre-v6.1: Red-Black Tree     v6.1+: Maple Tree
 [VMA] [VMA]
 ```
 
-**Commit**: [d4af56c5c7c6](https://git.kernel.org/linus/d4af56c5c7c6) ("mm: start tracking VMAs with maple tree")
+**Commit**: [d4af56c5c7c6](https://git.kernel.org/linus/d4af56c5c7c6) ("mm: start tracking VMAs with maple tree") | [LKML](https://lore.kernel.org/linux-mm/20220822150128.1562046-1-Liam.Howlett@oracle.com/)
 
 ## Demand Paging
 

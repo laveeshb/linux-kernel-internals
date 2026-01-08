@@ -288,7 +288,7 @@ Radix tree replaced with XArray - cleaner API, same performance.
 
 ### Folios (v5.16, 2022)
 
-**Commit**: [7b230db3b8d3](https://git.kernel.org/linus/7b230db3b8d3) ("mm: Introduce struct folio")
+**Commit**: [7b230db3b8d3](https://git.kernel.org/linus/7b230db3b8d3) ("mm: Introduce struct folio") | [LKML](https://lore.kernel.org/linux-mm/20210430180740.2707166-1-willy@infradead.org/)
 
 **Author**: Matthew Wilcox
 

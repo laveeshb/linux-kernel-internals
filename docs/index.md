@@ -21,12 +21,12 @@ This is a community learning resource, not a definitive reference. The Linux ker
 ### General
 | Document | Description |
 |----------|-------------|
-| [Linux Evolution](docs/linux-evolution.md) | From hobby project to world infrastructure |
+| [Linux Evolution](linux-evolution.md) | From hobby project to world infrastructure |
 
 ### Subsystems
 | Subsystem | Status | Start Here |
 |-----------|--------|------------|
-| [mm/](docs/mm/) | Available | [Overview](docs/mm/overview.md) |
+| [mm/](mm/README.md) | Available | [Getting Started](mm/README.md) |
 | scheduler/ | Planned | |
 | networking/ | Planned | |
 | bpf/ | Planned | |

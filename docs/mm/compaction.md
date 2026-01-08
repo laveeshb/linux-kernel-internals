@@ -193,7 +193,7 @@ cat /sys/kernel/debug/tracing/trace_pipe
 
 ### Introduction (v2.6.35, 2010)
 
-**Commit**: [748446bb6b5a](https://git.kernel.org/linus/748446bb6b5a) ("mm: compaction: memory compaction core")
+**Commit**: [748446bb6b5a](https://git.kernel.org/linus/748446bb6b5a) ("mm: compaction: memory compaction core") | [LKML](https://lore.kernel.org/lkml/1269347146-7461-1-git-send-email-mel@csn.ul.ie/)
 
 **Author**: Mel Gorman
 

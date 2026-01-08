@@ -43,10 +43,31 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 
 ### Suggested Reading Order
 
+**Fundamentals:**
+
 1. **[Overview](overview.md)** - The narrative of how mm/ evolved
 2. **[Page Allocator](page-allocator.md)** - Buddy system fundamentals
 3. **[Slab](slab.md)** - SLUB allocator for small objects
 4. **[vmalloc](vmalloc.md)** - Virtual memory allocation
+
+**Address Translation & Process Memory:**
+
+5. **[Page Tables](page-tables.md)** - Virtual address translation
+6. **[Process Address Space](mmap.md)** - VMAs, mmap, demand paging
+
+**Memory Pressure & Reclaim:**
+
+7. **[Page Reclaim](reclaim.md)** - LRU, kswapd, MGLRU
+8. **[Swap](swap.md)** - Extending memory to disk
+9. **[Page Cache](page-cache.md)** - File data caching
+
+**Advanced Topics:**
+
+10. **[Memory Cgroups](memcg.md)** - Container memory limits
+11. **[NUMA](numa.md)** - Multi-node memory management
+12. **[Transparent Huge Pages](thp.md)** - Automatic huge pages
+13. **[Compaction](compaction.md)** - Memory defragmentation
+14. **[KSM](ksm.md)** - Page deduplication for VMs
 
 ### What You'll Learn
 
@@ -116,17 +137,17 @@ If you want to read the actual code:
 ## Further Reading
 
 ### Free Resources
-- [Bonwick, "The Slab Allocator" (1994)](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html) - Original slab paper from USENIX
-- [Gorman, "Understanding the Linux Virtual Memory Manager"](https://www.kernel.org/doc/gorman/) - Free online book
+- Bonwick, [*The Slab Allocator*](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html) (1994) - Original slab paper from USENIX
+- Gorman, [*Understanding the Linux Virtual Memory Manager*](https://www.kernel.org/doc/gorman/) - Free online book
 
 ### Kernel Documentation
 - [Documentation/mm/](https://docs.kernel.org/mm/) in the kernel tree
 - [Documentation/admin-guide/mm/](https://docs.kernel.org/admin-guide/mm/) for sysadmin perspective
 
 ### Textbooks
-- Silberschatz, "Operating System Concepts" - Ch. 9-10 (Memory)
-- Tanenbaum, "Modern Operating Systems" - Ch. 3 (Memory Management)
-- Love, "Linux Kernel Development" - Ch. 12 (Memory Management)
+- Silberschatz et al., [*Operating System Concepts*](https://www.os-book.com/) - Ch. 9-10 (Memory)
+- Tanenbaum & Bos, [*Modern Operating Systems*](https://www.pearson.com/en-us/subject-catalog/p/modern-operating-systems/P200000003295) - Ch. 3 (Memory Management)
+- Love, [*Linux Kernel Development*](https://www.oreilly.com/library/view/linux-kernel-development/9780768696974/) - Ch. 12 (Memory Management)
 
 ---
 
