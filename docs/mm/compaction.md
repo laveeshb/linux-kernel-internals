@@ -201,13 +201,17 @@ Initial compaction implementation to support THP and reduce high-order allocatio
 
 ### kcompactd (v4.6, 2016)
 
-**Commit**: [698b1b30642f](https://git.kernel.org/linus/698b1b30642f) ("mm, compaction: introduce kcompactd")
+**Commit**: [698b1b30642f](https://git.kernel.org/linus/698b1b30642f) ("mm, compaction: introduce kcompactd") | [LKML](https://lore.kernel.org/lkml/1454938691-2197-1-git-send-email-vbabka@suse.cz/)
+
+**Author**: Vlastimil Babka
 
 Background compaction daemon, similar to kswapd for reclaim.
 
 ### Proactive Compaction (v5.9, 2020)
 
-**Commit**: [facdaa917c4d](https://git.kernel.org/linus/facdaa917c4d) ("mm: proactive compaction")
+**Commit**: [facdaa917c4d](https://git.kernel.org/linus/facdaa917c4d) ("mm: proactive compaction") | [LKML](https://lore.kernel.org/linux-mm/20200428221055.598-1-nigupta@nvidia.com/)
+
+**Author**: Nitin Gupta
 
 Compact proactively based on fragmentation levels, reducing direct compaction stalls.
 

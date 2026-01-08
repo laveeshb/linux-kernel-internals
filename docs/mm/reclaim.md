@@ -257,11 +257,17 @@ Page reclaim has existed since early Linux. The basic kswapd mechanism predates 
 
 **Commit**: [4f98a2fee8ac](https://git.kernel.org/linus/4f98a2fee8ac) ("vmscan: split LRU lists into anon & file sets")
 
+**Author**: Rik van Riel
+
+*Note: Pre-2009 LKML archives on lore.kernel.org are sparse. The commit message documents the rationale.*
+
 Split single LRU into separate anonymous and file lists for better reclaim decisions.
 
 ### MGLRU (v6.1, 2022)
 
-**Commit**: [ac35a4902374](https://git.kernel.org/linus/ac35a4902374) ("mm: multi-gen LRU: minimal implementation")
+**Commit**: [ac35a4902374](https://git.kernel.org/linus/ac35a4902374) ("mm: multi-gen LRU: minimal implementation") | [LKML](https://lore.kernel.org/linux-mm/20220815071332.627393-1-yuzhao@google.com/)
+
+**Author**: Yu Zhao
 
 Multi-generational LRU for improved page aging and reduced overhead.
 

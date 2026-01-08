@@ -31,6 +31,8 @@ Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
 **Kernel**: v2.6.28
 **Author**: Nick Piggin
 
+*Note: Pre-2009 LKML archives on lore.kernel.org are sparse. The commit message documents the design rationale.*
+
 **The problem**: vunmap required a global kernel TLB flush (broadcast IPI to all CPUs), all under a single global rwlock taken for write in fast paths. Quadratic scalability as CPU count increased.
 
 **The solution**:
@@ -40,11 +42,11 @@ Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
 
 **Trade-off**: XEN and PAT need immediate TLB flush due to aliasing issues. They call `vm_unmap_aliases()` to force flush when needed.
 
-*The commit message documents the design rationale. See also [lore.kernel.org](https://lore.kernel.org/all/?q=vmap+rewrite+nick+piggin) for related discussions.*
+*Note: The commit message documents the detailed design rationale for lazy TLB flushing and RCU.*
 
 ### v5.13: Huge Page Support
 
-**Commit**: [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe) ("mm/vmalloc: hugepage vmalloc mappings")
+**Commit**: [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe) ("mm/vmalloc: hugepage vmalloc mappings") | [LKML](https://lore.kernel.org/linux-mm/1616036421.amjz2efujj.astroid@bobo.none/)
 **Kernel**: v5.13
 **Author**: Nicholas Piggin
 
@@ -60,8 +62,9 @@ Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
 
 ### v6.12: vrealloc Introduction
 
-**Commit**: [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) ("mm: vmalloc: implement vrealloc()")
+**Commit**: [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) ("mm: vmalloc: implement vrealloc()") | [LKML](https://lore.kernel.org/linux-mm/20240717222427.2211-2-dakr@kernel.org/)
 **Kernel**: v6.12
+**Author**: Danilo Krummrich
 
 See [vrealloc](vrealloc.md) for detailed history.
 
@@ -183,7 +186,7 @@ struct vmap_area {
 
 Each vmalloc region has a guard page (unmapped) at the end. Buffer overflows hit the guard and trigger a page fault immediately, rather than silently corrupting adjacent allocations.
 
-**Commit**: The `VM_NO_GUARD` flag exists for special cases that don't want guard pages, but [bd1a8fb2d43f](https://git.kernel.org/linus/bd1a8fb2d43f) ("mm/vmalloc: don't allow VM_NO_GUARD on vmap()") restricts its use.
+**Commit**: The `VM_NO_GUARD` flag exists for special cases that don't want guard pages, but [bd1a8fb2d43f](https://git.kernel.org/linus/bd1a8fb2d43f) ("mm/vmalloc: don't allow VM_NO_GUARD on vmap()") restricts its use. ([LKML](https://lore.kernel.org/lkml/YUMfdA36fuyZ+%2Fxt@hirez.programming.kicks-ass.net/))
 
 ### Why lazy TLB flushing?
 

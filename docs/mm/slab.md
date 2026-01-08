@@ -299,7 +299,7 @@ struct kmem_cache_cpu {
 
 ### SLAB (1996)
 
-Ported from SunOS, based on [Bonwick's 1994 paper](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html).
+Ported from SunOS, based on [Bonwick's 1994 paper](https://people.eecs.berkeley.edu/~kubitron/courses/cs194-24-S14/hand-outs/bonwick_slab.pdf).
 
 *Note: Predates LKML archives.*
 
@@ -309,17 +309,21 @@ Ported from SunOS, based on [Bonwick's 1994 paper](https://www.usenix.org/legacy
 
 **Author**: Christoph Lameter
 
-*See [LKML](https://lore.kernel.org/lkml/?q=SLUB+unqueued+slab) for the original proposal.*
+*Note: The commit message contains the design rationale. Pre-2008 LKML archives are sparse.*
 
 ### SLAB Deprecation (v6.5, 2023)
 
-**Commit**: [03aecd6e4982](https://git.kernel.org/linus/03aecd6e4982)
+**Commit**: [eb07c4f39c3e](https://git.kernel.org/linus/eb07c4f39c3e) ("mm/slab: rename CONFIG_SLAB to CONFIG_SLAB_DEPRECATED") | [LKML](https://lore.kernel.org/linux-arm-kernel/20230523091139.21449-1-vbabka@suse.cz/)
+
+**Author**: Vlastimil Babka
 
 SLAB was deprecated, with SLUB as the sole remaining allocator.
 
 ### SLAB Removal (v6.8, 2024)
 
-**Commit**: [dade3b5a628d](https://git.kernel.org/linus/dade3b5a628d)
+**Commit**: [16a1d968358a](https://git.kernel.org/linus/16a1d968358a) ("mm/slab: remove mm/slab.c and slab_def.h") | [LKML](https://lore.kernel.org/lkml/20231113191340.17482-22-vbabka@suse.cz/)
+
+**Author**: Vlastimil Babka
 
 SLAB code removed. SLUB is now the only slab allocator.
 
@@ -356,12 +360,12 @@ Per-CPU slab contention on workloads that allocate on one CPU and free on anothe
 | Commit | Kernel | Description |
 |--------|--------|-------------|
 | [81819f0fc828](https://git.kernel.org/linus/81819f0fc828) | v2.6.22 | SLUB introduction |
-| [03aecd6e4982](https://git.kernel.org/linus/03aecd6e4982) | v6.5 | SLAB deprecation |
-| [dade3b5a628d](https://git.kernel.org/linus/dade3b5a628d) | v6.8 | SLAB removal |
+| [eb07c4f39c3e](https://git.kernel.org/linus/eb07c4f39c3e) | v6.5 | SLAB deprecation |
+| [16a1d968358a](https://git.kernel.org/linus/16a1d968358a) | v6.8 | SLAB removal |
 
 ### Further Reading
 
-- [Bonwick, "The Slab Allocator" (1994)](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html) - Original design paper
+- [Bonwick, "The Slab Allocator" (1994)](https://people.eecs.berkeley.edu/~kubitron/courses/cs194-24-S14/hand-outs/bonwick_slab.pdf) - Original design paper
 
 ### Related
 

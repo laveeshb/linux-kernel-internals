@@ -191,7 +191,9 @@ cat /sys/fs/cgroup/mygroup/memory.events
 
 ### OOM Group Kill (v4.19+)
 
-**Commit**: [3d8b38eb81ca](https://git.kernel.org/linus/3d8b38eb81ca) ("mm, oom: introduce memory.oom.group")
+**Commit**: [3d8b38eb81ca](https://git.kernel.org/linus/3d8b38eb81ca) ("mm, oom: introduce memory.oom.group") | [LKML](https://lore.kernel.org/all/20180730180100.25079-4-guro@fb.com/)
+
+**Author**: Roman Gushchin
 
 Kill entire cgroup instead of single process:
 
@@ -253,6 +255,10 @@ cat /sys/fs/cgroup/mygroup/memory.swap.current
 
 **Commit**: [8cdea7c05454](https://git.kernel.org/linus/8cdea7c05454) ("Memory controller: cgroups setup")
 
+**Author**: Balbir Singh
+
+*Note: Pre-2009 LKML archives on lore.kernel.org are sparse. The commit message documents the design.*
+
 Initial memory cgroup implementation for cgroup v1.
 
 ### Unified Hierarchy (cgroup v2, v4.5, 2016)
@@ -265,7 +271,9 @@ Kernel memory (slab, stacks) included in memory.current by default in v2.
 
 ### memory.reclaim (v5.19, 2022)
 
-**Commit**: [94968384dde1](https://git.kernel.org/linus/94968384dde1) ("memcg: introduce per-memcg reclaim interface")
+**Commit**: [94968384dde1](https://git.kernel.org/linus/94968384dde1) ("memcg: introduce per-memcg reclaim interface") | [LKML](https://lore.kernel.org/linux-mm/20220421234426.3494842-2-yosryahmed@google.com/)
+
+**Author**: Shakeel Butt
 
 Proactive reclaim interface.
 

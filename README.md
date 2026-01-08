@@ -12,10 +12,6 @@ A community hub for understanding the Linux kernel — documentation and discuss
 
 The kernel has extensive API documentation, but understanding the *rationale* requires digging through mailing list archives, scattered articles, and tribal knowledge. We're building a more accessible resource.
 
-## Disclaimer
-
-This is a community learning resource, not a definitive reference. The Linux kernel is complex and constantly evolving. While we strive for accuracy and link to primary sources (commits, LKML), errors may exist. When in doubt, consult the [official kernel documentation](https://docs.kernel.org/) and source code. Contributions and corrections are welcome.
-
 ## Documentation
 
 ### General
@@ -24,18 +20,22 @@ This is a community learning resource, not a definitive reference. The Linux ker
 | [Linux Evolution](docs/linux-evolution.md) | From hobby project to world infrastructure |
 
 ### Subsystems
-| Subsystem | Status | Start Here |
-|-----------|--------|------------|
-| [mm/](docs/mm/) | Available | [Overview](docs/mm/overview.md) |
-| scheduler/ | Planned | |
-| networking/ | Planned | |
-| bpf/ | Planned | |
-| drivers/ | Planned | |
+| Subsystem | Status |
+|-----------|--------|
+| [Memory Management (mm/)](docs/mm/README.md) | Available |
+| scheduler/ | Planned |
+| networking/ | Planned |
+| bpf/ | Planned |
+| drivers/ | Planned |
 
 ## Community
 
 - [GitHub Discussions](../../discussions) for questions and conversations
 - [Issues](../../issues) to suggest topics or report problems
+
+## Disclaimer
+
+This is a community learning resource, not a definitive reference. The Linux kernel is complex and constantly evolving. While we strive for accuracy and link to primary sources (commits, LKML), errors may exist. When in doubt, consult the [official kernel documentation](https://docs.kernel.org/) and source code. Contributions and corrections are welcome.
 
 ## License
 

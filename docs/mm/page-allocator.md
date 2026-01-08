@@ -145,7 +145,9 @@ alloc_pages_node(node_id, gfp, order);
 
 ### Compaction (v2.6.35, 2010)
 
-**Commit**: [748446bb6b5a](https://git.kernel.org/linus/748446bb6b5a)
+**Commit**: [748446bb6b5a](https://git.kernel.org/linus/748446bb6b5a) ("mm: compaction: memory compaction core") | [LKML](https://lore.kernel.org/lkml/1269347146-7461-1-git-send-email-mel@csn.ul.ie/)
+
+**Author**: Mel Gorman
 
 **Problem**: External fragmentation - free pages scattered, can't satisfy high-order allocations.
 
@@ -153,7 +155,11 @@ alloc_pages_node(node_id, gfp, order);
 
 ### CMA (Contiguous Memory Allocator, v3.5, 2012)
 
-**Commit**: [c64be2bb1c6e](https://git.kernel.org/linus/c64be2bb1c6e)
+**Commit**: [c64be2bb1c6e](https://git.kernel.org/linus/c64be2bb1c6e) ("drivers: add Contiguous Memory Allocator")
+
+**Author**: Marek Szyprowski (Samsung)
+
+*Note: Pre-2013 LKML archives on lore.kernel.org are sparse. See [LWN article](https://lwn.net/Articles/486301/) for design discussion.*
 
 **Problem**: Devices need large contiguous buffers but memory fragments over time.
 

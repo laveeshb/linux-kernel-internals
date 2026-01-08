@@ -24,18 +24,18 @@ This is a community learning resource, not a definitive reference. The Linux ker
 | [Linux Evolution](linux-evolution.md) | From hobby project to world infrastructure |
 
 ### Subsystems
-| Subsystem | Status | Start Here |
-|-----------|--------|------------|
-| [mm/](mm/README.md) | Available | [Getting Started](mm/README.md) |
-| scheduler/ | Planned | |
-| networking/ | Planned | |
-| bpf/ | Planned | |
-| drivers/ | Planned | |
+| Subsystem | Status |
+|-----------|--------|
+| [Memory Management (mm/)](mm/README.md) | Available |
+| scheduler/ | Planned |
+| networking/ | Planned |
+| bpf/ | Planned |
+| drivers/ | Planned |
 
 ## Community
 
-- [GitHub Discussions](../../discussions) for questions and conversations
-- [Issues](../../issues) to suggest topics or report problems
+- [GitHub Discussions](https://github.com/laveeshb/linux-kernel-internals/discussions) for questions and conversations
+- [GitHub Issues](https://github.com/laveeshb/linux-kernel-internals/issues) to suggest topics or report problems
 
 ## License
 

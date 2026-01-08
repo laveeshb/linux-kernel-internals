@@ -318,13 +318,17 @@ VMA lookup changed from O(n) to O(log n) using rb-tree.
 
 ### Maple Tree (v6.1, 2022)
 
-**Commit**: [d4af56c5c7c6](https://git.kernel.org/linus/d4af56c5c7c6)
+**Commit**: [d4af56c5c7c6](https://git.kernel.org/linus/d4af56c5c7c6) ("mm: start tracking VMAs with maple tree") | [LKML](https://lore.kernel.org/linux-mm/20220906194824.2110408-9-Liam.Howlett@oracle.com/)
+
+**Author**: Liam R. Howlett
 
 Replaced rb-tree with maple tree for better cache behavior and RCU-safe lookups.
 
 ### Per-VMA Locks (v6.4, 2023)
 
-**Commit**: [5e31275cc997](https://git.kernel.org/linus/5e31275cc997) ("mm: add per-VMA lock and helper functions to control it")
+**Commit**: [5e31275cc997](https://git.kernel.org/linus/5e31275cc997) ("mm: add per-VMA lock and helper functions to control it") | [LKML](https://lore.kernel.org/all/20230109205336.3665937-1-surenb@google.com/)
+
+**Author**: Suren Baghdasaryan
 
 Fine-grained locking per VMA instead of mmap_lock for entire mm, improving scalability for page fault handling.
 

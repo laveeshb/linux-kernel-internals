@@ -138,7 +138,7 @@ Each object type gets its own cache. Allocating is fast (grab from cache), freei
 
 ### The Evolution
 
-**SLAB (Original, ~1996)**: Ported from SunOS, based on [Bonwick's 1994 USENIX paper](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html). Complex. Multiple levels of caches. Good debugging. But hard to maintain.
+**SLAB (Original, ~1996)**: Ported from SunOS, based on [Bonwick's 1994 USENIX paper](https://people.eecs.berkeley.edu/~kubitron/courses/cs194-24-S14/hand-outs/bonwick_slab.pdf). Complex. Multiple levels of caches. Good debugging. But hard to maintain.
 
 *Note: SLAB predates good LKML archives. The Bonwick paper is the canonical design reference.*
 
@@ -149,7 +149,7 @@ Each object type gets its own cache. Allocating is fast (grab from cache), freei
 - Better NUMA support
 - Same API, simpler internals
 
-*See [LKML discussion](https://lore.kernel.org/lkml/?q=SLUB+unqueued+slab+allocator) for the original proposal and rationale.*
+*Note: The commit message contains the design rationale. Pre-2008 LKML archives are sparse.*
 
 **Why SLUB won**: Kernel developers learned that simpler code is easier to maintain and debug. SLAB's complexity wasn't worth the marginal performance gains.
 
@@ -198,18 +198,16 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 - RBTree for address lookup: `O(log n)` instead of `O(n)` list scan
 - Per-CPU frontend: Reduce lock contention
 
-*See [lore.kernel.org](https://lore.kernel.org/all/?q=vmap+rewrite) for the original discussion.*
+*Note: The commit message documents the detailed design rationale for lazy TLB flushing and RCU.*
 
 **v5.13 (2021): Huge Pages**
 
 **The problem**: With huge vmalloc buffers (BPF programs, modules), each `4KB` page needed a TLB entry. TLB is limited. Lots of TLB misses.
 
 **The fix**: Use huge pages (`2MB`) when possible:
-- **Commit**: [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe)
+- **Commit**: [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe) | [LKML](https://lore.kernel.org/linux-mm/1616036421.amjz2efujj.astroid@bobo.none/)
 - Fewer TLB entries needed
 - Trade-off: More internal fragmentation
-
-*See [LKML patch series](https://lore.kernel.org/linux-mm/20210317062402.533919-1-npiggin@gmail.com/) by Nicholas Piggin.*
 
 **v6.12 (2024): vrealloc**
 

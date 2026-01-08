@@ -137,7 +137,7 @@ If you want to read the actual code:
 ## Further Reading
 
 ### Free Resources
-- Bonwick, [*The Slab Allocator*](https://www.usenix.org/legacy/publications/library/proceedings/bos94/bonwick.html) (1994) - Original slab paper from USENIX
+- Bonwick, [*The Slab Allocator*](https://people.eecs.berkeley.edu/~kubitron/courses/cs194-24-S14/hand-outs/bonwick_slab.pdf) (1994) - Original slab paper from USENIX
 - Gorman, [*Understanding the Linux Virtual Memory Manager*](https://www.kernel.org/doc/gorman/) - Free online book
 
 ### Kernel Documentation

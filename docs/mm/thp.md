@@ -223,17 +223,23 @@ cat /sys/kernel/debug/tracing/trace_pipe
 
 **Author**: Andrea Arcangeli (Red Hat)
 
+*Note: Pre-2012 LKML archives on lore.kernel.org are sparse. The commit message documents the design rationale.*
+
 Initial THP implementation for anonymous memory.
 
 ### THP Swap Support (v4.13, 2017)
 
-**Commit**: [38d8b4e6bdc8](https://git.kernel.org/linus/38d8b4e6bdc8) ("mm, THP, swap: delay splitting THP during swap out")
+**Commit**: [38d8b4e6bdc8](https://git.kernel.org/linus/38d8b4e6bdc8) ("mm, THP, swap: delay splitting THP during swap out") | [LKML](https://lore.kernel.org/lkml/20170724051840.2309-1-ying.huang@intel.com/)
+
+**Author**: Huang Ying
 
 THP pages can now be swapped as a unit without splitting first, improving swap performance.
 
 ### Multi-Size THP (v6.10, 2024)
 
-**Commit**: [19eaf44954df](https://git.kernel.org/linus/19eaf44954df) ("mm: thp: support allocation of anonymous multi-size THP")
+**Commit**: [19eaf44954df](https://git.kernel.org/linus/19eaf44954df) ("mm: thp: support allocation of anonymous multi-size THP") | [LKML](https://lore.kernel.org/linux-mm/20231204102027.57185-1-ryan.roberts@arm.com/)
+
+**Author**: Ryan Roberts
 
 Enables THP at sizes between 4KB and 2MB (e.g., 16KB, 64KB), providing more flexibility for workloads where 2MB is too large.
 
