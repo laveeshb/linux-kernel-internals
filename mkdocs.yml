@@ -1,0 +1,63 @@
+site_name: Linux Kernel Internals
+site_description: Documentation about Linux kernel internals, design decisions, and the journey of contributing
+site_url: https://laveeshb.github.io/linux-kernel-internals/
+
+repo_name: laveeshb/linux-kernel-internals
+repo_url: https://github.com/laveeshb/linux-kernel-internals
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - toc.integrate
+    - content.code.copy
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - attr_list
+
+plugins:
+  - search
+
+# Open external links in new tab
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/laveeshb/linux-kernel-internals
+
+# This makes external links open in new tabs
+extra_javascript:
+  - javascripts/external-links.js
+
+nav:
+  - Home: index.md
+  - Linux Evolution: linux-evolution.md
+  - Memory Management:
+    - Overview: mm/overview.md
+    - Glossary: mm/glossary.md
+    - vmalloc: mm/vmalloc.md
+    - vrealloc: mm/vrealloc.md
+    - Page Allocator: mm/page-allocator.md
+    - SLUB Allocator: mm/slab.md
