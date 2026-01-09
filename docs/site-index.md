@@ -63,6 +63,8 @@ A complete listing of all documentation, organized by topic.
 | [Virtual vs Physical vs Resident](mm/virtual-physical-resident.md) | Understanding VSZ, RSS, PSS, and USS |
 | [Memory Overcommit](mm/overcommit.md) | Why it's the only sane default |
 | [brk vs mmap](mm/brk-vs-mmap.md) | Two ways to get memory from the kernel |
+| [Contiguous Memory](mm/contiguous-memory.md) | Why large allocations fail despite free memory |
+| [Copy-on-Write](mm/cow.md) | COW edge cases and when it breaks |
 
 ### Reference
 

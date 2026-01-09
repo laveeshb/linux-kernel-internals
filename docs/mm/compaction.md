@@ -280,3 +280,4 @@ Background compaction consuming CPU.
 - [page-allocator](page-allocator.md) - Buddy system, migrate types
 - [thp](thp.md) - Primary consumer of compaction
 - [reclaim](reclaim.md) - Works alongside compaction
+- [contiguous-memory](contiguous-memory.md) - Why contiguous allocations fail and solutions
