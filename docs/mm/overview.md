@@ -345,7 +345,7 @@ virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
 | SLUB allocator | [`mm/slub.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) | `kmem_cache_alloc()`, `kmalloc()` |
 | vmalloc | [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) | `vmalloc()`, `vfree()` |
 | Memory reclaim | [`mm/vmscan.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) | `shrink_node()`, `kswapd()` |
-| OOM killer | [`mm/oom_kill.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) | `out_of_memory()`, `oom_badness()` |
+| OOM killer | [`mm/oom_kill.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) | `out_of_memory()`, `oom_badness()` - see [overcommit](overcommit.md) |
 
 ---
 
@@ -372,3 +372,9 @@ virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
 - [page-allocator](page-allocator.md) - Buddy system details
 - [slab](slab.md) - SLUB internals
 - [glossary](glossary.md) - Terminology reference
+
+### Explainers
+
+- [virtual-physical-resident](virtual-physical-resident.md) - VSZ vs RSS vs PSS explained
+- [overcommit](overcommit.md) - Why overcommit is the only sane default
+- [brk-vs-mmap](brk-vs-mmap.md) - Two ways to get memory from the kernel

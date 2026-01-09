@@ -76,7 +76,7 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 | "Page tables map virtual to physical" | Multi-level page tables, TLB flushing costs, lazy unmapping |
 | "Memory allocator" | Multiple allocators for different use cases (slab, vmalloc, buddy) |
 | "Fragmentation" | Why physically contiguous memory is hard, vmalloc as a solution |
-| "Memory is finite" | OOM killer, memory cgroups, reclaim |
+| "Memory is finite" | [OOM killer](overcommit.md), memory cgroups, reclaim |
 
 ### What Makes This Different
 
@@ -109,6 +109,16 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 | [mmap](mmap.md) | Process address space and VMAs |
 | [page-cache](page-cache.md) | File data caching in memory |
 | [swap](swap.md) | Extending memory to disk |
+
+### Explainers
+
+Conceptual guides for common memory management questions:
+
+| Document | What You'll Learn |
+|----------|-------------------|
+| [virtual-physical-resident](virtual-physical-resident.md) | VSZ vs RSS vs PSS vs USS - why memory numbers don't add up |
+| [overcommit](overcommit.md) | Why overcommit is the only sane default |
+| [brk-vs-mmap](brk-vs-mmap.md) | Two ways to get memory from the kernel |
 
 ---
 

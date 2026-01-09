@@ -92,5 +92,9 @@ nav:
       - Compaction: mm/compaction.md
       - KSM: mm/ksm.md
       - vrealloc: mm/vrealloc.md
+    - Explainers:
+      - Virtual vs Physical vs Resident: mm/virtual-physical-resident.md
+      - Memory Overcommit: mm/overcommit.md
+      - brk vs mmap: mm/brk-vs-mmap.md
     - Reference:
       - Glossary: mm/glossary.md

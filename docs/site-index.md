@@ -56,6 +56,14 @@ A complete listing of all documentation, organized by topic.
 | [KSM](mm/ksm.md) | Page deduplication for VMs |
 | [vrealloc](mm/vrealloc.md) | Resizing vmalloc allocations |
 
+### Explainers
+
+| Page | Description |
+|------|-------------|
+| [Virtual vs Physical vs Resident](mm/virtual-physical-resident.md) | Understanding VSZ, RSS, PSS, and USS |
+| [Memory Overcommit](mm/overcommit.md) | Why it's the only sane default |
+| [brk vs mmap](mm/brk-vs-mmap.md) | Two ways to get memory from the kernel |
+
 ### Reference
 
 | Page | Description |
