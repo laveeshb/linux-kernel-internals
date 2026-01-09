@@ -4,6 +4,8 @@ site_url: https://kernel-internals.org/
 
 theme:
   name: material
+  logo: assets/tux.svg
+  favicon: assets/tux-outline.svg
   palette:
     - scheme: default
       primary: indigo
@@ -57,6 +59,9 @@ extra:
       name: Issues
 
 # This makes external links open in new tabs
+extra_css:
+  - stylesheets/extra.css
+
 extra_javascript:
   - javascripts/external-links.js
 
