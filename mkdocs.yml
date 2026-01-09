@@ -69,6 +69,7 @@ nav:
   - Home: index.md
   - Index: site-index.md
   - Guide: navigation.md
+  - Contributing: contributing.md
   - Background:
     - Linux Evolution: linux-evolution.md
   - Memory Management:
