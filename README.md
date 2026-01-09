@@ -41,3 +41,4 @@ This is a community learning resource, not a definitive reference. The Linux ker
 
 - Documentation: [CC BY-SA 4.0](LICENSE-CC-BY-SA-4.0)
 - Code snippets: [GPL-2.0](LICENSE-GPL-2.0)
+- Tux logo: Created by Larry Ewing using [GIMP](https://www.gimp.org/), SVG by Simon Budig
