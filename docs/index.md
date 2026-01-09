@@ -40,6 +40,6 @@ This is a community learning resource, not a definitive reference. The Linux ker
 
 ## License
 
-- Documentation: [CC BY-SA 4.0](LICENSE-CC-BY-SA-4.0)
-- Code snippets: [GPL-2.0](LICENSE-GPL-2.0)
+- Documentation: [CC BY-SA 4.0](https://github.com/laveeshb/linux-kernel-internals/blob/main/LICENSE-CC-BY-SA-4.0)
+- Code snippets: [GPL-2.0](https://github.com/laveeshb/linux-kernel-internals/blob/main/LICENSE-GPL-2.0)
 - Tux logo: Larry Ewing (original), Simon Budig (SVG)
