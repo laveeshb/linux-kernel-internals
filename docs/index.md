@@ -30,6 +30,7 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 
 ## Community
 
+- [Contributing Guide](contributing.md) to get started as a contributor
 - [GitHub Discussions](https://github.com/laveeshb/linux-kernel-internals/discussions) for questions and conversations
 - [GitHub Issues](https://github.com/laveeshb/linux-kernel-internals/issues) to suggest topics or report problems
 
@@ -41,4 +42,4 @@ This is a community learning resource, not a definitive reference. The Linux ker
 
 - Documentation: [CC BY-SA 4.0](LICENSE-CC-BY-SA-4.0)
 - Code snippets: [GPL-2.0](LICENSE-GPL-2.0)
-- Tux logo: Created by Larry Ewing using [GIMP](https://www.gimp.org/), SVG by Simon Budig
+- Tux logo: Larry Ewing (original), Simon Budig (SVG)
