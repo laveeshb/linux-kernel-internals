@@ -282,7 +282,7 @@ This replaced the "refcount > 1" heuristic with explicit exclusivity tracking, m
 
 Part of the ongoing per-VMA lock work to improve page fault scalability. COW faults can now be handled without taking `mmap_lock` in many cases.
 
-### THP COW improvements (v6.8+, 2024)
+### THP COW improvements (v6.15, 2025)
 
 **Commit**: [1da190f4d0a6](https://git.kernel.org/linus/1da190f4d0a6) ("mm: Copy-on-Write (COW) reuse support for PTE-mapped THP") | [LKML](https://lkml.kernel.org/r/20250303163014.1128035-14-david@redhat.com)
 
