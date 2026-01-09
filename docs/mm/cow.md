@@ -243,9 +243,11 @@ COW was first implemented in the late 1960s/early 1970s. The technique became wi
 
 ### The Dirty COW vulnerability (2016)
 
-**CVE-2016-5195** - Fixed by [commit 19be0eaffa3a](https://git.kernel.org/linus/19be0eaffa3a) ("mm: remove gup_flags FOLL_WRITE games from __get_user_pages()")
+**CVE-2016-5195** - Fixed by [commit 19be0eaffa3a](https://git.kernel.org/linus/19be0eaffa3a) ("mm: remove gup_flags FOLL_WRITE games from __get_user_pages()") | [LKML (stable backport)](https://lore.kernel.org/lkml/20161019182853.224077572@linuxfoundation.org/)
 
 A race condition between COW and `get_user_pages()` allowed unprivileged users to write to read-only files, enabling privilege escalation. The bug was 11 years old - Linus Torvalds had attempted to fix it in 2005 ([commit 4ceb5db9757a](https://git.kernel.org/linus/4ceb5db9757a)) but that fix was reverted due to s390 issues.
+
+*Note: The 2005 fix predates modern LKML archiving on lore.kernel.org.*
 
 From the fix commit message:
 > *"This is an ancient bug that was actually attempted to be fixed once (badly) by me eleven years ago... In the meantime, the VM has become more scalable, and what used to be a purely theoretical race back then has become easier to trigger."*
