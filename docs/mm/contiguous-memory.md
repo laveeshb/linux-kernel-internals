@@ -261,6 +261,8 @@ The kernel's approach to contiguous allocation has evolved significantly:
 
 **Author**: Mel Gorman
 
+*Note: This commit predates modern LKML archiving on lore.kernel.org.*
+
 The first major anti-fragmentation feature. Created a zone that only accepts movable allocations, guaranteeing that memory in this zone can always be migrated or reclaimed. Configured via `kernelcore=` or `movablecore=` boot parameters.
 
 ```bash
@@ -277,6 +279,8 @@ movablecore=8G
 
 **Author**: Mel Gorman
 
+*Note: This commit predates modern LKML archiving on lore.kernel.org.*
+
 Split the buddy allocator free lists by page mobility. This was a less invasive alternative to ZONE_MOVABLE that works automatically without boot parameters. The two approaches complement each other.
 
 ### Memory compaction (v2.6.35, 2010)
@@ -292,6 +296,8 @@ Active defragmentation by migrating pages. Before this, the kernel could only *p
 **Commit**: [c64be2bb1c6e](https://git.kernel.org/linus/c64be2bb1c6e) ("drivers: add Contiguous Memory Allocator")
 
 **Author**: Marek Szyprowski (Samsung)
+
+*Note: The original patch series is not archived on lore.kernel.org; see [LWN coverage](https://lwn.net/Articles/486301/) for discussion.*
 
 Solved the device driver problem by creating regions that serve double duty - used for movable pages normally, reclaimed for contiguous DMA buffers on demand. See [LWN article](https://lwn.net/Articles/486301/).
 

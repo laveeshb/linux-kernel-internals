@@ -278,13 +278,13 @@ This replaced the "refcount > 1" heuristic with explicit exclusivity tracking, m
 
 ### COW under VMA lock (v6.4+, 2023)
 
-**Commit**: [164b06f238b9](https://git.kernel.org/linus/164b06f238b9) ("mm: call wp_page_copy() under the VMA lock")
+**Commit**: [164b06f238b9](https://git.kernel.org/linus/164b06f238b9) ("mm: call wp_page_copy() under the VMA lock") | [LKML](https://lkml.kernel.org/r/20231006195318.4087158-3-willy@infradead.org)
 
 Part of the ongoing per-VMA lock work to improve page fault scalability. COW faults can now be handled without taking `mmap_lock` in many cases.
 
 ### THP COW improvements (v6.8+, 2024)
 
-**Commit**: [1da190f4d0a6](https://git.kernel.org/linus/1da190f4d0a6) ("mm: Copy-on-Write (COW) reuse support for PTE-mapped THP")
+**Commit**: [1da190f4d0a6](https://git.kernel.org/linus/1da190f4d0a6) ("mm: Copy-on-Write (COW) reuse support for PTE-mapped THP") | [LKML](https://lkml.kernel.org/r/20250303163014.1128035-14-david@redhat.com)
 
 When a THP is PTE-mapped and a COW fault occurs, the kernel can now reuse subpages that are exclusively owned rather than always copying. This reduces COW overhead for THP significantly.
 
