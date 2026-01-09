@@ -264,6 +264,8 @@ Parent          Child
 
 This makes `fork()` fast - page tables are duplicated (pointing to the same physical pages, now marked read-only), but the actual data pages are not copied. Only when either process writes does a copy occur.
 
+See [Copy-on-Write explainer](cow.md) for edge cases, performance implications, and when COW breaks.
+
 ## Common Operations
 
 ### brk/sbrk (Heap)

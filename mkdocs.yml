@@ -97,5 +97,7 @@ nav:
       - Virtual vs Physical vs Resident: mm/virtual-physical-resident.md
       - Memory Overcommit: mm/overcommit.md
       - brk vs mmap: mm/brk-vs-mmap.md
+      - Contiguous Memory: mm/contiguous-memory.md
+      - Copy-on-Write: mm/cow.md
     - Reference:
       - Glossary: mm/glossary.md

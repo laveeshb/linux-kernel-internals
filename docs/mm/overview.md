@@ -378,3 +378,5 @@ virtme-ng --kdir . --append 'test_vmalloc.run_test_mask=0xFFFF'
 - [virtual-physical-resident](virtual-physical-resident.md) - VSZ vs RSS vs PSS explained
 - [overcommit](overcommit.md) - Why overcommit is the only sane default
 - [brk-vs-mmap](brk-vs-mmap.md) - Two ways to get memory from the kernel
+- [contiguous-memory](contiguous-memory.md) - Why large allocations fail despite free memory
+- [cow](cow.md) - Copy-on-write edge cases and when it breaks
