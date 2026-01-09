@@ -15,7 +15,7 @@ struct page *pages = alloc_pages(GFP_KERNEL, 10);  // order 10 = 4MB (1024 pages
 void *buf = kmalloc(4 * 1024 * 1024, GFP_KERNEL);
 ```
 
-*Note: `MAX_PAGE_ORDER` is typically 10 (4MB) on most configs. `kmalloc()` doesn't have a separate size cap - large requests become high-order page allocations internally (see `__kmalloc_large_noprof()` in mm/slub.c).*
+*Note: `MAX_PAGE_ORDER` is typically 10 (4MB with 4KB pages) on most configs. `kmalloc()` doesn't have a separate size cap - large requests become high-order page allocations internally (see `__kmalloc_large_noprof()` in mm/slub.c).*
 
 The answer is **external fragmentation** - free memory exists, but not in contiguous chunks.
 
