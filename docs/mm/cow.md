@@ -150,13 +150,13 @@ For processes with large sparse address spaces, page table copying during fork c
 
 ```
 Original 2MB THP (after fork, shared):
-┌──────────────────────────────────────────────────┐
-│                    2MB page                       │
-└──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│                    2MB page                     │
+└─────────────────────────────────────────────────┘
                         │
                         ▼ Write triggers split first
 ┌────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
-│ 4K │ 4K │ 4K │...│ 4K │ 4K │ 4K │ 4K │ 4K │ 4K │
+│ 4K │ 4K │ 4K │... │ 4K │ 4K │ 4K │ 4K │ 4K │ 4K │
 └────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
                         │
                         ▼ Then COW only the written 4K page
