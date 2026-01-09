@@ -73,7 +73,7 @@ The buddy allocator maintains separate free lists per migrate type ([mm/page_all
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Physical memory                          │
+│                     Physical memory                         │
 ├───────────────────┬────────────────────┬────────────────────┤
 │    UNMOVABLE      │      MOVABLE       │    RECLAIMABLE     │
 │  (kernel stuff)   │   (user pages)     │    (caches)        │
