@@ -93,6 +93,7 @@ Links to kernel docs, LWN articles, relevant commits.
 ### Formatting Conventions
 
 **Headers**
+
 - Use sentence case: "Page allocator" not "Page Allocator"
 - H1 (`#`) for page title only
 - H2 (`##`) for major sections
@@ -132,6 +133,7 @@ graph LR
 ### Content Guidelines
 
 **Do include:**
+
 - Real kernel function names and structures
 - Links to actual kernel commits when discussing changes
 - Specific kernel versions when features were introduced
@@ -140,6 +142,7 @@ graph LR
 - Historical context for design decisions
 
 **Don't include:**
+
 - Speculation or unverified information
 - Outdated information without noting it's outdated
 - Copy-pasted content from other sources
@@ -151,7 +154,8 @@ graph LR
 Every claim, opinion, or technical statement should be backed by verifiable sources:
 
 **Acceptable sources:**
-- Kernel commits (`git.kernel.org`)
+
+- Kernel commits (`git.kernel.org` only — not mirrors or forks)
 - LKML threads (`lore.kernel.org`)
 - Official kernel documentation (`docs.kernel.org`)
 - LWN.net articles
@@ -160,6 +164,7 @@ Every claim, opinion, or technical statement should be backed by verifiable sour
 - Maintainer blog posts
 
 **Not acceptable:**
+
 - Commercial vendor documentation
 - Product marketing materials
 - Unsourced Stack Overflow answers
@@ -175,6 +180,7 @@ The buddy allocator coalesces free blocks to reduce fragmentation
 ### Linking to Kernel Source
 
 When referencing kernel code:
+
 - Link to [git.kernel.org](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/) for browsable source
 - Use stable/latest kernel version unless discussing historical changes
 - Include function signatures when introducing APIs
@@ -207,6 +213,7 @@ This was introduced in kernel 5.18
 ### Review Process
 
 Reviewers will check for:
+
 - Technical accuracy
 - Clarity and readability
 - Adherence to style guide
@@ -235,7 +242,7 @@ mkdocs serve
 
 ### Preview
 
-Open http://127.0.0.1:8000 to preview your changes. The server auto-reloads on file changes.
+Open `http://127.0.0.1:8000` to preview your changes. The server auto-reloads on file changes.
 
 ### Build
 
@@ -258,11 +265,13 @@ Add KASAN documentation
 ```
 
 **Do:**
+
 - Use imperative mood ("Add" not "Added")
 - Keep first line under 50 characters
 - Explain what and why in the body
 
 **Don't:**
+
 - Include AI/assistant attribution
 - Use vague messages like "Update docs"
 - Include unrelated changes in one commit
@@ -275,5 +284,6 @@ Add KASAN documentation
 ## License
 
 By contributing, you agree that your contributions will be licensed under the same dual license as the project:
-- Documentation: [CC BY-SA 4.0](LICENSE-CC-BY-SA-4.0)
-- Code examples: [GPL-2.0](LICENSE-GPL-2.0)
+
+- Documentation: [CC BY-SA 4.0](https://github.com/laveeshb/linux-kernel-internals/blob/main/LICENSE-CC-BY-SA-4.0)
+- Code examples: [GPL-2.0](https://github.com/laveeshb/linux-kernel-internals/blob/main/LICENSE-GPL-2.0)
