@@ -32,6 +32,7 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 
 - [GitHub Discussions](../../discussions) for questions and conversations
 - [Issues](../../issues) to suggest topics or report problems
+- [Contributing Guide](CONTRIBUTING.md) to get started as a contributor
 
 ## Disclaimer
 
