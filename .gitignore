@@ -1,0 +1,22 @@
+# Python virtual environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# MkDocs build output
+site/
+
+# Claude Code
+.claude/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
