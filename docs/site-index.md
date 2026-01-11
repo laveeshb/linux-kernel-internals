@@ -56,6 +56,17 @@ A complete listing of all documentation, organized by topic.
 | [KSM](mm/ksm.md) | Page deduplication for VMs |
 | [vrealloc](mm/vrealloc.md) | Resizing vmalloc allocations |
 
+### Lifecycle
+
+| Page | Description |
+|------|-------------|
+| [Life of a malloc](mm/life-of-malloc.md) | Tracing malloc() from userspace to physical pages |
+| [Life of a page](mm/life-of-page.md) | A physical page's journey through allocation, use, and reclaim |
+| [What happens when you fork](mm/fork.md) | COW setup, page table copying, and COW fault handling |
+| [Running out of memory](mm/oom.md) | Watermarks, kswapd, direct reclaim, and OOM killer |
+| [Life of a file read](mm/life-of-read.md) | How read() flows through the page cache |
+| [What happens during swapping](mm/swapping.md) | Swap-out and swap-in mechanics in detail |
+
 ### Explainers
 
 | Page | Description |
