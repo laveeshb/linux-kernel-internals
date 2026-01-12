@@ -278,6 +278,121 @@ khugepaged consuming too much CPU.
 - Increase `scan_sleep_millisecs`
 - Reduce `pages_to_scan`
 
+## Notorious bugs and edge cases
+
+THP involves complex operations - collapsing pages, splitting huge pages, handling faults - all while processes continue running. The complexity has led to numerous race conditions and data corruption bugs.
+
+### Case 1: THP COW race (CVE-2020-29368)
+
+#### What happened
+
+Jann Horn (Google Project Zero) discovered that the copy-on-write implementation for THP could grant unintended write access due to a race condition in mapcount checking.
+
+#### The bug
+
+When splitting a huge PMD during a COW fault, the kernel checks if the page is shared by examining `mapcount`. But this check races with other operations - another thread can map the same page between the check and the page table modification.
+
+#### The fix
+
+**Commit**: [c444eb564fb1](https://git.kernel.org/linus/c444eb564fb1) ("mm: thp: make the THP mapcount atomic against __split_huge_pmd_locked()")
+
+**Author**: Jann Horn
+
+---
+
+### Case 2: khugepaged collapse races
+
+#### What happened
+
+The khugepaged daemon scans memory looking for 512 contiguous 4KB pages to collapse into a 2MB huge page. This background operation races with application activity.
+
+#### The bug class
+
+Multiple bugs have been found in khugepaged collapse:
+- Race with concurrent page faults
+- Race with munmap
+- Race with madvise(MADV_DONTNEED)
+
+#### Mitigations in modern kernels
+
+- Better locking protocols between khugepaged and fault paths
+- Page lock held during critical sections
+- Validation after acquiring locks
+
+---
+
+### Case 3: khugepaged CPU storms
+
+#### What happened
+
+Under certain conditions, khugepaged can consume excessive CPU time, impacting application performance.
+
+#### The bug
+
+khugepaged continuously scans for collapsible pages. When conditions prevent collapse but appear promising (e.g., 500 of 512 pages present), it keeps retrying wastefully.
+
+#### Tuning
+
+```bash
+# Reduce scan frequency
+echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs
+
+# Or disable
+echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag
+```
+
+---
+
+### Case 4: THP split failures
+
+#### What happened
+
+When a huge page needs to be split (e.g., for partial munmap), the split can fail, leaving the system in an unexpected state.
+
+#### The bug class
+
+Splitting requires allocating 511 additional page descriptors and updating all PTEs. Failure scenarios include memory exhaustion and inability to freeze the page.
+
+#### Mitigations
+
+Modern kernels handle split failures more gracefully with retry logic and fallback paths.
+
+---
+
+### Case 5: THP and NUMA balancing conflicts
+
+#### What happened
+
+THP interacts poorly with NUMA balancing, which tries to move pages closer to the CPUs accessing them.
+
+#### The bug
+
+NUMA balancing marks pages inaccessible to catch faults and migrate. With 2MB THP, any access to any 4KB within triggers migration of the entire 2MB, causing thrashing between nodes.
+
+#### Tuning
+
+```bash
+# Disable NUMA balancing (if THP is more valuable)
+echo 0 > /proc/sys/kernel/numa_balancing
+
+# Or disable THP
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+```
+
+---
+
+### Summary: Lessons learned
+
+| Bug | Year | Root Cause | Impact |
+|-----|------|------------|--------|
+| CVE-2020-29368 | 2020 | Mapcount race | COW bypass |
+| khugepaged races | Ongoing | Lock ordering | Corruption |
+| CPU storms | Ongoing | Aggressive scanning | Performance |
+| Split failures | Ongoing | Resource exhaustion | ENOMEM |
+| NUMA thrashing | Ongoing | Design conflict | Performance |
+
+**The pattern**: THP bugs stem from concurrent operations on the same memory. The optimization requires complex coordination that is difficult to get right.
+
 ## References
 
 ### Key Code
@@ -301,3 +416,4 @@ khugepaged consuming too much CPU.
 - [page-tables](page-tables.md) - PMD-level huge page mapping
 - [compaction](compaction.md) - Memory defragmentation for THP
 - [reclaim](reclaim.md) - THP and memory pressure
+- [Bug Index](bugs/README.md) - Index of all mm kernel bugs

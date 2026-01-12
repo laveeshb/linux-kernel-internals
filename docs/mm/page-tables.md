@@ -279,6 +279,117 @@ Can't allocate huge pages due to fragmentation.
 - Enable THP: `/sys/kernel/mm/transparent_hugepage/enabled`
 - Compact memory: `echo 1 > /proc/sys/vm/compact_memory`
 
+## Notorious bugs and edge cases
+
+Page tables mediate all memory access. Bugs here range from privilege escalation to information disclosure to complete CPU security model breakdown.
+
+### Case 1: Meltdown (CVE-2017-5754)
+
+#### What happened
+
+In January 2018, researchers disclosed [Meltdown](https://meltdownattack.com/), a hardware vulnerability affecting Intel CPUs that allowed unprivileged processes to read kernel memory.
+
+#### The bug
+
+Meltdown exploits **speculative execution** combined with **cache timing**. The CPU speculatively executes an illegal kernel read, and even though it raises a fault, the cache side effects remain, leaking the data.
+
+#### The fix: KPTI
+
+**Commit**: [5aa90a84589282](https://git.kernel.org/linus/5aa90a84589282b87666f92b6c3c917c8080a9bf) ("x86/pti: Add infrastructure for page table isolation")
+
+**Author**: Dave Hansen (Intel)
+
+KPTI creates separate page tables for kernel and user mode. When entering the kernel, page tables are switched to include kernel mappings.
+
+```bash
+# Check KPTI status
+cat /sys/devices/system/cpu/vulnerabilities/meltdown
+```
+
+---
+
+### Case 2: Spectre (CVE-2017-5753, CVE-2017-5715)
+
+#### What happened
+
+Disclosed alongside Meltdown, [Spectre](https://spectreattack.com/) exploits speculative execution to leak data from other processes or the kernel.
+
+#### Variant 1 (Bounds Check Bypass)
+
+The CPU speculatively executes past bounds checks, allowing out-of-bounds reads via cache timing.
+
+**Fix**: Array index masking with `array_index_nospec()`.
+
+#### Variant 2 (Branch Target Injection)
+
+Attackers poison the branch predictor to redirect speculative execution to chosen gadgets.
+
+**Fix**: Retpoline - replaces indirect calls with a sequence that traps speculative execution.
+
+**Commit**: [76b043848fd2](https://git.kernel.org/linus/76b043848fd2) ("x86/retpoline: Add initial retpoline support")
+
+---
+
+### Case 3: TLB flush races
+
+#### What happened
+
+The TLB caches page table entries. When page tables change, the TLB must be flushed. Races between changes and flushes cause security vulnerabilities.
+
+#### The bug pattern
+
+A CPU can use stale TLB entries to access pages that should be unmapped:
+1. Page table entry cleared
+2. TLB flush pending (not yet complete)
+3. Another CPU accesses via stale TLB entry
+4. Access succeeds to freed/reallocated page
+
+#### Example: CVE-2018-18281
+
+The `mremap()` syscall moved page table entries but flushed TLBs too late.
+
+**Commit**: [eb66ae030829](https://git.kernel.org/linus/eb66ae030829) ("mremap: properly flush TLB before releasing the page")
+
+---
+
+### Case 4: KASLR bypasses
+
+#### What is KASLR?
+
+Kernel Address Space Layout Randomization randomizes where the kernel is loaded, making exploits harder.
+
+#### Bypass techniques
+
+| Technique | Method |
+|-----------|--------|
+| Info leak | Kernel pointer exposed to userspace |
+| Timing side channel | Measure access times |
+| dmesg leak | Kernel addresses in logs |
+
+#### Hardening
+
+```bash
+# Restrict kernel pointers
+echo 2 > /proc/sys/kernel/kptr_restrict
+
+# Restrict dmesg
+echo 1 > /proc/sys/kernel/dmesg_restrict
+```
+
+---
+
+### Summary: Lessons learned
+
+| Bug | Year | Type | Mitigation |
+|-----|------|------|------------|
+| Meltdown | 2017 | Hardware | KPTI |
+| Spectre v1 | 2017 | Hardware | nospec barriers |
+| Spectre v2 | 2017 | Hardware | Retpoline |
+| TLB races | Ongoing | Software | Proper flush ordering |
+| KASLR bypass | Ongoing | Info leak | Pointer restrictions |
+
+**The pattern**: Page table bugs often involve timing (TLB races, speculation) or assumptions about hardware behavior that turn out to be wrong.
+
 ## References
 
 ### Key Code
@@ -297,3 +408,4 @@ Can't allocate huge pages due to fragmentation.
 
 - [overview](overview.md) - Memory management overview
 - [glossary](glossary.md) - PFN, TLB, MMU definitions
+- [Bug Index](bugs/README.md) - Index of all mm kernel bugs

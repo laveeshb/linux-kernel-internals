@@ -6,6 +6,8 @@
 
 This documentation explains how Linux manages memory - not just the theory, but the actual implementation decisions, trade-offs, and lessons learned over 30+ years of development.
 
+> **Browsing on GitHub?** See the [full site index](../site-index.md) for a complete listing of all documentation.
+
 ### Prerequisites
 
 This documentation assumes familiarity with:
@@ -69,14 +71,29 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 13. **[Compaction](compaction.md)** - Memory defragmentation
 14. **[KSM](ksm.md)** - Page deduplication for VMs
 
+**End-to-End Walkthroughs:**
+
+After the fundamentals, these trace operations through the entire stack:
+
+15. **[Life of a malloc](life-of-malloc.md)** - From userspace to physical page
+16. **[Life of a page](life-of-page.md)** - Allocation through reclaim
+17. **[What happens when you fork](fork.md)** - COW mechanics
+18. **[Running out of memory](oom.md)** - The path to OOM kill
+19. **[Life of a file read](life-of-read.md)** - Page cache in action
+20. **[What happens during swapping](swapping.md)** - Swap-out and swap-in
+
 ### What You'll Learn
 
 | Textbook Concept | Linux Reality |
 |------------------|---------------|
-| "Page tables map virtual to physical" | Multi-level page tables, TLB flushing costs, lazy unmapping |
+| "malloc allocates memory" | [No - it reserves address space](life-of-malloc.md). Physical pages come later via demand paging |
+| "fork copies process memory" | [Copy-on-write](fork.md) means pages are shared until written |
+| "Page tables map virtual to physical" | Multi-level page tables, TLB flushing costs, [lazy creation](life-of-malloc.md) |
 | "Memory allocator" | Multiple allocators for different use cases (slab, vmalloc, buddy) |
 | "Fragmentation" | Why physically contiguous memory is hard, vmalloc as a solution |
-| "Memory is finite" | [OOM killer](overcommit.md), memory cgroups, reclaim |
+| "Memory is finite" | [Watermarks, kswapd, direct reclaim, OOM killer](oom.md) - a progression, not a cliff |
+| "Reading files hits disk" | [Page cache](life-of-read.md) means most reads are from memory |
+| "Swap is slow" | [Swap mechanics](swapping.md) - understand when and why it hurts |
 
 ### What Makes This Different
 
@@ -110,6 +127,19 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 | [page-cache](page-cache.md) | File data caching in memory |
 | [swap](swap.md) | Extending memory to disk |
 
+### Lifecycle
+
+Narrative walkthroughs following memory operations end-to-end:
+
+| Document | What You'll Learn |
+|----------|-------------------|
+| [life-of-malloc](life-of-malloc.md) | Tracing malloc() from userspace to physical pages |
+| [life-of-page](life-of-page.md) | A physical page's journey through allocation, use, and reclaim |
+| [fork](fork.md) | COW setup, page table copying, and COW fault handling |
+| [oom](oom.md) | Watermarks, kswapd, direct reclaim, and OOM killer |
+| [life-of-read](life-of-read.md) | How read() flows through the page cache |
+| [swapping](swapping.md) | Swap-out and swap-in mechanics in detail |
+
 ### Explainers
 
 Conceptual guides for common memory management questions:
@@ -121,6 +151,17 @@ Conceptual guides for common memory management questions:
 | [brk-vs-mmap](brk-vs-mmap.md) | Two ways to get memory from the kernel |
 | [contiguous-memory](contiguous-memory.md) | Why large allocations fail despite free memory |
 | [cow](cow.md) | Copy-on-write edge cases and when it breaks |
+
+### Kernel Bugs & CVEs
+
+Analysis of notable Linux kernel vulnerabilities, data corruption bugs, and edge cases:
+
+| Document | What You'll Learn |
+|----------|-------------------|
+| [Bug Index](bugs/README.md) | Catalog of all mm bugs by severity, year, and subsystem |
+| [SLUB Bugs](slab.md#notorious-bugs-and-edge-cases) | Heap exploitation (CVE-2021-22555, CVE-2022-29582) |
+| [THP Bugs](thp.md#notorious-bugs-and-edge-cases) | khugepaged races, COW issues (CVE-2020-29368) |
+| [Page Table Bugs](page-tables.md#notorious-bugs-and-edge-cases) | Meltdown, Spectre, TLB flush races |
 
 ---
 
@@ -142,6 +183,8 @@ If you want to read the actual code:
 | [`mm/mmap.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap.c) | Process address space, VMAs |
 | [`mm/filemap.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/filemap.c) | Page cache |
 | [`mm/swapfile.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/swapfile.c) | Swap area management |
+| [`mm/oom_kill.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) | OOM killer, victim selection |
+| [`kernel/fork.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/fork.c) | Process creation, dup_mm() |
 | [`include/linux/gfp.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/gfp.h) | GFP flags definitions |
 
 ---

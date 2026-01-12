@@ -93,11 +93,20 @@ nav:
       - Compaction: mm/compaction.md
       - KSM: mm/ksm.md
       - vrealloc: mm/vrealloc.md
+    - Lifecycle:
+      - Life of a malloc: mm/life-of-malloc.md
+      - Life of a page: mm/life-of-page.md
+      - What happens when you fork: mm/fork.md
+      - Running out of memory: mm/oom.md
+      - Life of a file read: mm/life-of-read.md
+      - What happens during swapping: mm/swapping.md
     - Explainers:
       - Virtual vs Physical vs Resident: mm/virtual-physical-resident.md
       - Memory Overcommit: mm/overcommit.md
       - brk vs mmap: mm/brk-vs-mmap.md
       - Contiguous Memory: mm/contiguous-memory.md
       - Copy-on-Write: mm/cow.md
+    - Bugs:
+      - Bug Index: mm/bugs/README.md
     - Reference:
       - Glossary: mm/glossary.md
