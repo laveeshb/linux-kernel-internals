@@ -6,7 +6,9 @@
 
 This documentation explains how Linux manages memory - not just the theory, but the actual implementation decisions, trade-offs, and lessons learned over 30+ years of development.
 
+<div class="github-only" markdown>
 > **Browsing on GitHub?** See the [full site index](../site-index.md) for a complete listing of all documentation.
+</div>
 
 ### Prerequisites
 
