@@ -345,6 +345,132 @@ Allocations without matching frees.
 
 Per-CPU slab contention on workloads that allocate on one CPU and free on another.
 
+## Notorious bugs and edge cases
+
+Heap exploitation is the bread and butter of kernel exploits. The SLUB allocator's design - storing freelist pointers inline with objects, using per-CPU caches, and merging similar caches - creates a rich attack surface.
+
+### Case 1: Netfilter heap out-of-bounds (CVE-2021-22555)
+
+#### What happened
+
+In July 2021, Andy Nguyen (Google) demonstrated a 15-year-old heap out-of-bounds write in Linux Netfilter that bypassed all modern mitigations to achieve kernel code execution. The exploit won $10,000 in Google's kCTF program.
+
+#### The bug
+
+From the [Project Zero writeup](https://google.github.io/security-research/pocs/linux/cve-2021-22555/writeup.html):
+
+The vulnerability exists in `net/netfilter/x_tables.c`. When `IPT_SO_SET_REPLACE` is called in compatibility mode, structures must be converted from 32-bit to 64-bit format. The conversion function `xt_compat_target_from_user()` could write 4 bytes of zeros out-of-bounds.
+
+#### Exploitation technique
+
+The exploit uses several advanced techniques:
+
+1. **Heap spray with msg_msg**: Use `msgsnd()` to spray the heap with controlled `msg_msg` structures
+2. **Corrupt msg_msg->m_list.next**: The 4-byte zero write partially overwrites a freelist pointer
+3. **UAF primitive**: The corrupted pointer creates a use-after-free condition
+4. **Leak kernel addresses**: Read freed msg_msg to defeat KASLR
+5. **Fake object injection**: Spray fake objects to control execution
+
+#### The fix
+
+**Commit**: [b29c457a6511](https://git.kernel.org/linus/b29c457a6511) ("netfilter: x_tables: fix compat match/target pad out-of-bound write")
+
+**Author**: Florian Westphal
+
+---
+
+### Case 2: io_uring use-after-free (CVE-2022-29582)
+
+#### What happened
+
+In 2022, security researchers discovered a race condition in io_uring's timeout handling that led to a use-after-free. The exploit achieved root privileges on Google's hardened kCTF environment.
+
+#### The bug
+
+From the [technical writeup](https://ruia-ruia.github.io/2022/08/05/CVE-2022-29582-io-uring/):
+
+A race exists between timeout flush and removal in io_uring. When the same timeout request is processed by both paths simultaneously, it gets freed twice, creating a use-after-free.
+
+#### Exploitation technique
+
+The exploit uses a **cross-cache attack**:
+
+1. **Trigger UAF**: Race the timeout paths to free `io_kiocb` twice
+2. **Reclaim with different object**: Free the slab page, reallocate in a different cache
+3. **Type confusion**: The freed `io_kiocb` slot now holds a different object type
+4. **Arbitrary read/write**: Manipulate the confused object to gain primitives
+
+#### The fix
+
+**Commit**: [e677edbcabee](https://git.kernel.org/linus/e677edbcabee) ("io_uring: fix race between timeout flush and removal")
+
+**Author**: Pavel Begunkov
+
+---
+
+### Case 3: SLUB freelist hardening bypasses
+
+#### The hardening
+
+Linux added `CONFIG_SLAB_FREELIST_HARDENED` to protect against freelist corruption. The freelist pointer is XORed with a per-cache random value and the pointer's own address.
+
+#### Bypassing the hardening
+
+Despite hardening, researchers have found bypasses:
+
+1. **Information leak first**: If you can leak the XOR key, hardening provides no protection
+2. **Partial overwrite**: Overwriting only the lower bytes of a freelist pointer can create valid pointers
+3. **Double-free timing**: Control timing of frees to avoid detection
+
+| Config | Protection | Bypass Difficulty |
+|--------|-----------|-------------------|
+| `SLAB_FREELIST_HARDENED` | Freelist pointer XOR | Medium (need leak) |
+| `SLAB_FREELIST_RANDOM` | Random freelist order | Low (probabilistic) |
+| `RANDOM_KMALLOC_CACHES` | Multiple caches per size | Medium (more spray) |
+
+---
+
+### Case 4: Cache merging security issues
+
+#### The problem
+
+SLUB merges caches with similar object sizes and flags to reduce memory overhead. When caches merge, objects of different types share the same slab pages, and UAF in one object type can affect the other.
+
+#### The fix
+
+For security-sensitive caches, use `SLAB_ACCOUNT` or `SLAB_NO_MERGE`. Boot option `slub_nomerge` disables all merging (performance cost).
+
+---
+
+### Case 5: Out-of-slab access patterns
+
+#### The bug class
+
+Many vulnerabilities involve accessing memory just outside a slab object (off-by-one, linear overflow). With standard SLUB, this corrupts adjacent objects or freelist pointers.
+
+#### Detection
+
+```bash
+# Enable red zoning to detect overflows
+slub_debug=Z
+
+# KFENCE for production
+CONFIG_KFENCE=y
+```
+
+---
+
+### Summary: Lessons learned
+
+| Bug | Year | Root Cause | Exploitation |
+|-----|------|------------|--------------|
+| CVE-2021-22555 | 2021 | Bounds check error | msg_msg spray |
+| CVE-2022-29582 | 2022 | Race condition | Cross-cache attack |
+| Freelist bypasses | Ongoing | Hardening limitations | Info leak + craft |
+| Cache merging | Design | Memory optimization | Type confusion |
+
+**The pattern**: SLUB bugs are rarely in SLUB itself - they're in code that *uses* SLUB. But understanding SLUB internals is essential for both exploitation and defense.
+
 ## References
 
 ### Key Code
@@ -371,3 +497,4 @@ Per-CPU slab contention on workloads that allocate on one CPU and free on anothe
 
 - [page-allocator](page-allocator.md) - Where SLUB gets its pages
 - [overview](overview.md) - How slab fits in the allocator hierarchy
+- [Bug Index](bugs/README.md) - Index of all mm kernel bugs
