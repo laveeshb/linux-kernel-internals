@@ -318,7 +318,7 @@ Support for multiple swap partitions with priorities.
 
 ### Swap Files (v2.6)
 
-Swap files became as efficient as partitions — the kernel maps file blocks to disk sectors at swapon time and performs direct block I/O, bypassing the filesystem entirely (see [swapping: partition vs file](swapping.md#swap-types) for details).
+Swap files became as efficient as partitions — the kernel maps file blocks to disk sectors at swapon time and performs direct block I/O, bypassing the filesystem entirely (see [swapping: swap space organization](swapping.md#swap-space-organization) for details).
 
 ### zswap (v3.11, 2013)
 
