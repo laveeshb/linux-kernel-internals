@@ -109,4 +109,5 @@ nav:
     - Bugs:
       - Bug Index: mm/bugs/README.md
     - Reference:
+      - Sysctl Tuning: mm/sysctl-reference.md
       - Glossary: mm/glossary.md
