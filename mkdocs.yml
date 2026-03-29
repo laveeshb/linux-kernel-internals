@@ -106,6 +106,7 @@ nav:
       - brk vs mmap: mm/brk-vs-mmap.md
       - Contiguous Memory: mm/contiguous-memory.md
       - Copy-on-Write: mm/cow.md
+      - hugetlbfs vs THP: mm/hugetlbfs-vs-thp.md
     - Bugs:
       - Bug Index: mm/bugs/README.md
     - Reference:
