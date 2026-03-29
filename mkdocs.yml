@@ -92,6 +92,7 @@ nav:
       - Transparent Huge Pages: mm/thp.md
       - Compaction: mm/compaction.md
       - KSM: mm/ksm.md
+      - PSI (Pressure Stall Information): mm/psi.md
       - vrealloc: mm/vrealloc.md
     - Lifecycle:
       - Life of a malloc: mm/life-of-malloc.md
