@@ -16,7 +16,7 @@ Virtual Address                Physical Address
 
 ## The Five-Level Hierarchy
 
-Linux uses a five-level page table hierarchy (since v4.14 for x86-64):
+Linux uses a five-level page table hierarchy (since [v4.14](https://git.kernel.org/linus/77ef56e4f0fb) for x86-64, see [x86_64 memory map](https://docs.kernel.org/arch/x86/x86_64/mm.html)):
 
 ```
 +-----+

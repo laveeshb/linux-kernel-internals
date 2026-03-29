@@ -53,7 +53,7 @@ The key insight: **malloc doesn't allocate physical memory**. It reserves virtua
 
 ### The allocator's job
 
-`malloc()` is a library function, not a system call. glibc implements it using ptmalloc2 (derived from dlmalloc). The allocator has one goal: satisfy memory requests without calling into the kernel more than necessary.
+`malloc()` is a library function, not a system call. glibc implements it using [ptmalloc (derived from dlmalloc)](https://sourceware.org/glibc/manual/latest/html_node/The-GNU-Allocator.html). The allocator has one goal: satisfy memory requests without calling into the kernel more than necessary.
 
 ```c
 void *malloc(size_t size);
@@ -77,10 +77,10 @@ glibc uses two system calls to get memory from the kernel:
 
 | Method | When Used | Typical Threshold |
 |--------|-----------|-------------------|
-| `brk()` | Small allocations, heap growth | < 128KB (tunable via `M_MMAP_THRESHOLD`) |
+| `brk()` | Small allocations, heap growth | < [128KB](https://man7.org/linux/man-pages/man3/mallopt.3.html) (tunable via `M_MMAP_THRESHOLD`) |
 | `mmap()` | Large allocations | >= 128KB |
 
-The threshold is adaptive - glibc adjusts it based on allocation patterns. You can override with `mallopt(M_MMAP_THRESHOLD, bytes)`.
+The threshold is [adaptive](https://man7.org/linux/man-pages/man3/mallopt.3.html) - glibc adjusts it upward when large blocks are freed. You can override with `mallopt(M_MMAP_THRESHOLD, bytes)`.
 
 **Why two methods?**
 
@@ -572,7 +572,7 @@ Local privilege escalation on many Linux distributions. The vulnerability affect
 The kernel increased the stack guard gap from 1 page (4KB) to 1MB by default:
 
 ```bash
-# Check current guard gap
+# Check current guard gap (Documentation/admin-guide/kernel-parameters.txt)
 cat /proc/sys/vm/stack_guard_gap
 # Default: 256 (pages) = 1MB on 4KB page systems
 ```
@@ -608,7 +608,7 @@ Multiple commits fixed the SELinux policy and strengthened `mmap_min_addr` enfor
 ```bash
 # Check current minimum mmap address
 cat /proc/sys/vm/mmap_min_addr
-# Default: 65536 (64KB) on most distributions
+# Default: 65536 (64KB) - set by LSM_MMAP_MIN_ADDR in security/Kconfig
 ```
 
 #### Why this matters for malloc

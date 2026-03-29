@@ -26,7 +26,7 @@ Free Pages Available
 
 ### 1. Background Reclaim (kswapd)
 
-`kswapd` is a per-node kernel thread that reclaims pages in the background when memory falls below the `low` watermark.
+[`kswapd`](https://docs.kernel.org/mm/physical_memory.html) is a per-node kernel thread that reclaims pages in the background when memory falls below the `low` watermark.
 
 ```
 Free pages fall below low watermark
@@ -78,7 +78,7 @@ Each zone has three watermarks controlling reclaim behavior:
              └──────────────────┘
 ```
 
-Watermarks are derived from `vm.min_free_kbytes`:
+Watermarks are [derived from `vm.min_free_kbytes`](https://docs.kernel.org/admin-guide/sysctl/vm.html):
 
 ```bash
 # View watermarks
@@ -114,7 +114,7 @@ Four lists per node (two types x two states):
 
 ### Multi-Gen LRU (MGLRU)
 
-Introduced in v6.1, MGLRU replaces the two-list model with multiple generations for better aging accuracy.
+[Introduced in v6.1](https://lwn.net/Articles/910608/), MGLRU replaces the two-list model with [multiple generations](https://docs.kernel.org/admin-guide/mm/multigen_lru.html) for better aging accuracy ([commit ec1c86b25f4b](https://git.kernel.org/linus/ec1c86b25f4b)).
 
 ```
 Generation 0 (oldest) ──> Generation 1 ──> ... ──> Generation N (youngest)
@@ -182,7 +182,7 @@ cat /sys/kernel/debug/shrinker/*
 
 ## Swappiness
 
-`vm.swappiness` controls the balance between reclaiming file pages vs anonymous pages:
+[`vm.swappiness`](https://docs.kernel.org/admin-guide/sysctl/vm.html) controls the balance between reclaiming file pages vs anonymous pages:
 
 | Value | Behavior |
 |-------|----------|
@@ -221,7 +221,7 @@ The kernel considers:
 1. Memory usage (primary factor)
 2. `oom_score_adj` adjustments
 3. Whether killing frees memory (children, shared pages)
-4. Root processes get slight protection
+4. Root processes [got slight protection](https://www.kernel.org/doc/gorman/html/understand/understand016.html) (3% bonus, [removed in v4.17](https://git.kernel.org/linus/d46078b28889))
 
 ```bash
 # Watch OOM events
@@ -245,7 +245,7 @@ echo 1 > /sys/kernel/debug/tracing/events/oom/oom_score_adj_update/enable
 
 ### Origins
 
-Page reclaim has existed since early Linux. The basic kswapd mechanism predates git history.
+Page reclaim has existed since early Linux. The basic [kswapd mechanism](https://www.kernel.org/doc/gorman/html/understand/understand013.html) was added by Stephen Tweedie in January 1996 (noted in the [vmscan.c header](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c)), predating git history.
 
 ### rmap (Reverse Mapping, v2.5)
 

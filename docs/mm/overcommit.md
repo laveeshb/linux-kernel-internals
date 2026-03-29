@@ -242,7 +242,7 @@ Why this made sense:
 
 ### The OOM Killer (1998)
 
-The inevitable consequence of optimistic allocation: sometimes the bet fails. [Rik van Riel](https://github.com/torvalds/linux/blob/master/mm/oom_kill.c) created the OOM killer in **August 1998** (Linux 2.1.x development series) to handle this:
+The inevitable consequence of optimistic allocation: sometimes the bet fails. Rik van Riel created the OOM killer in [**August 1998**](https://lwn.net/1998/0903/a/oom.html) (Linux 2.1.x development series, see [`mm/oom_kill.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c)) to handle this:
 
 > *"Copyright (C) 1998,2000 Rik van Riel"*
 > *"Thanks go out to Claus Fischer for some serious inspiration and for goading me into coding this file."*

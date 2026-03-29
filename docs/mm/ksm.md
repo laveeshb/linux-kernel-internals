@@ -150,6 +150,8 @@ cat /sys/kernel/mm/ksm/run
 
 ### Scan Rate
 
+Defaults documented in the [KSM admin guide](https://docs.kernel.org/admin-guide/mm/ksm.html):
+
 ```bash
 # Pages to scan per cycle
 cat /sys/kernel/mm/ksm/pages_to_scan
@@ -252,7 +254,7 @@ Added `/proc/<pid>/ksm_stat` for per-process memory savings tracking.
 
 | Benefit | Impact |
 |---------|--------|
-| Memory savings | 10-50% for VM workloads |
+| Memory savings | Varies widely: ~9% in [Meta's diverse workloads](https://lwn.net/Articles/953141/), higher for many identical VMs (see [Owens et al., IEEE ISPA 2011](https://ieeexplore.ieee.org/document/5951913/)) |
 | Higher VM density | More VMs per host |
 | Overcommit | Safely run more than physical RAM |
 
@@ -267,12 +269,14 @@ Added `/proc/<pid>/ksm_stat` for per-process memory savings tracking.
 
 ### Security Considerations
 
-KSM can leak information through timing:
+KSM can leak information through timing side-channels ([CVE-2021-3714](https://www.ndss-symposium.org/wp-content/uploads/2022-81-paper.pdf)):
+
 - Attacker allocates page with guessed content
 - If merged quickly, content exists elsewhere
 - Timing attack reveals memory contents
+- Can be used to [bypass ASLR](https://svs.informatik.uni-hamburg.de/publications/2018/2018-04-10-Lindemann-Memory-Deduplication-Side-Channel.pdf) or detect applications running in co-resident VMs
 
-For security-sensitive environments, consider disabling KSM or using `merge_across_nodes=0` with process isolation.
+[Red Hat recommends disabling KSM](https://docs.redhat.com/en/documentation/red_hat_openstack_platform/17.1/html/hardening_red_hat_openstack_platform/assembly_hardening-infrastructure-and-virtualization_security_and_hardening) in multi-tenant environments (public clouds). The kernel defaults KSM to off (`/sys/kernel/mm/ksm/run` = 0); applications must explicitly opt in via `MADV_MERGEABLE`.
 
 ## Common Issues
 

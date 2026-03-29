@@ -29,6 +29,8 @@ Application ──► Kernel ──► Page Cache (fast, ~100ns)
 | SATA SSD | ~100µs | ~600 MB/s |
 | HDD | ~10ms | ~200 MB/s |
 
+(Order-of-magnitude figures; see [Latency Numbers Every Programmer Should Know](https://colin-scott.github.io/personal_website/research/interactive_latency.html).)
+
 RAM is 1000-100,000x faster than storage. Caching exploits temporal locality - recently accessed data is likely to be accessed again.
 
 ### Benefits
@@ -124,6 +126,8 @@ Clean page ──► write() ──► Dirty page ──► writeback ──► 
 | Dirty age | Page dirty longer than `dirty_expire_centisecs` |
 
 ### Dirty Page Limits
+
+Defaults defined in [`mm/page-writeback.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page-writeback.c); tunables documented in the [vm sysctl docs](https://docs.kernel.org/admin-guide/sysctl/vm.html):
 
 ```bash
 # Percentage of memory that can be dirty

@@ -13,7 +13,7 @@ void free_pages(unsigned long addr, unsigned int order);
 
 ## The Buddy System
 
-Linux uses a **buddy allocator**, an algorithm dating back to 1965 (Knowlton). The key insight: manage memory in power-of-2 sized blocks, and when you free memory, merge it with its "buddy" if also free.
+Linux uses a **buddy allocator**, an algorithm dating back to 1965 ([Knowlton, CACM](https://dl.acm.org/doi/10.1145/365628.365655)). The key insight: manage memory in power-of-2 sized blocks, and when you free memory, merge it with its "buddy" if also free.
 
 ### How It Works
 
@@ -231,7 +231,7 @@ struct zone {
 };
 ```
 
-*Note: `NR_PAGE_ORDERS` replaced `MAX_ORDER` in recent kernels. When reading older code, `MAX_ORDER` is the same concept.*
+*Note: `NR_PAGE_ORDERS` [replaced `MAX_ORDER`](https://git.kernel.org/linus/fd37721803c6) in v6.8. When reading older code, `MAX_ORDER` is the same concept.*
 
 ### Watermarks
 

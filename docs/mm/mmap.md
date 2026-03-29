@@ -174,6 +174,8 @@ cat /proc/sys/kernel/randomize_va_space
 # 2 = + heap randomized (full ASLR)
 ```
 
+See [kernel sysctl docs](https://docs.kernel.org/admin-guide/sysctl/kernel.html) and [x86_64 memory map](https://docs.kernel.org/arch/x86/x86_64/mm.html) for details.
+
 ## Memory Management Structures
 
 ### mm_struct
@@ -316,7 +318,7 @@ Simple linear list of VMAs. Worked for small address spaces.
 
 ### Red-Black Tree (v2.4.10, 2001)
 
-VMA lookup changed from O(n) to O(log n) using rb-tree.
+VMA lookup changed from O(n) to O(log n) using [rb-tree](https://docs.kernel.org/core-api/rbtree.html) (implemented by Andrea Arcangeli, predates git history).
 
 ### Maple Tree (v6.1, 2022)
 
@@ -371,7 +373,7 @@ echo 1 > /sys/kernel/debug/tracing/events/exceptions/page_fault_user/enable
 
 ### Virtual Memory Exhaustion
 
-Process hits `TASK_SIZE` limit or `vm.max_map_count`.
+Process hits `TASK_SIZE` limit or [`vm.max_map_count`](https://docs.kernel.org/admin-guide/sysctl/vm.html).
 
 ```bash
 # View/set max VMAs per process

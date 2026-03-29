@@ -272,7 +272,7 @@ These two system calls come from different eras and were designed for different 
 
 ### brk(): The Original (1979)
 
-`brk()` appeared in **Version 7 AT&T Unix (1979)** - one of the earliest Unix system calls. In the 1970s, address spaces were tiny (often 64KB total). The "program break" literally divided the program's code from its data, and you grew the heap by moving this boundary upward.
+`brk()` appeared in [**Version 7 AT&T Unix (1979)**](https://www.tuhs.org/cgi-bin/utree.pl?file=V7/usr/man/man2/brk.2) - one of the earliest Unix system calls. In the 1970s, address spaces were tiny (often 64KB total). The "program break" literally divided the program's code from its data, and you grew the heap by moving this boundary upward.
 
 For over a decade, `brk()` was the **only** way for applications to acquire heap memory. Every `malloc()` implementation used it.
 
@@ -299,7 +299,7 @@ The feature that made `mmap()` useful for heap allocation: **`MAP_ANONYMOUS`** (
 
 - Allows memory mappings **not backed by any file**
 - Before this existed, the workaround was `mmap("/dev/zero", ...)`
-- **`MAP_ANONYMOUS` with `MAP_PRIVATE`**: Available in early Linux (inherited from BSD)
+- **`MAP_ANONYMOUS` with `MAP_PRIVATE`**: Available in early Linux (concept from [BSD's `MAP_ANON`](https://man.freebsd.org/cgi/man.cgi?query=mmap&sektion=2))
 
 #### The "Monstrosity" That Took Years
 
@@ -314,7 +314,7 @@ The feature that made `mmap()` useful for heap allocation: **`MAP_ANONYMOUS`** (
 
 He recommended SysV shared memory instead and wanted to "avoid shared anonymous mmap altogether."
 
-**2000-2001**: **Christoph Rohland** (SAP AG) finally implemented the solution in the 2.3/2.4 development cycle by creating the **`shmem`/`tmpfs`** filesystem. The clever trick: Linux creates an "artificial file-backing for anonymous pages using a RAM-based filesystem." Shared anonymous mappings aren't truly anonymous - they're backed by an invisible `tmpfs` file.
+**2000-2001**: **Christoph Rohland** (SAP AG) finally implemented the solution in the 2.3/2.4 development cycle by creating the **[`shmem`/`tmpfs`](https://docs.kernel.org/filesystems/tmpfs.html)** filesystem (see [`mm/shmem.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/shmem.c)). The clever trick: Linux creates an "artificial file-backing for anonymous pages using a RAM-based filesystem." Shared anonymous mappings aren't truly anonymous - they're backed by an invisible `tmpfs` file.
 
 *Note: Linux 2.4 predates git (kernel switched to git in April 2005 with 2.6.12). No commit IDs exist for pre-git history.*
 

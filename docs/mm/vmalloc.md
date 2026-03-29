@@ -17,13 +17,15 @@ void vfree(const void *addr);
 
 vmalloc was added to Linux in 1993, two years after the initial release.
 
-From `mm/vmalloc.c`:
+From [`mm/vmalloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c):
 ```
 Copyright (C) 1993  Linus Torvalds
 Support of BIGMEM added by Gerhard Wichert, Siemens AG, July 1999
 SMP-safe vmalloc/vfree/ioremap, Tigran Aivazian, May 2000
 Major rework to support vmap/vunmap, Christoph Hellwig, SGI, August 2002
 ```
+
+The Hellwig rework is [documented on LWN](https://lwn.net/Articles/7473/).
 
 ### v2.6.28: Major Rewrite - RBTree & Lazy TLB
 

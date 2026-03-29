@@ -26,7 +26,7 @@ flowchart TD
     G --> H["read() returns bytes read"]
 ```
 
-The key insight: **the page cache makes most reads fast**. Sequential file reads typically hit cache 99%+ of the time due to readahead.
+The key insight: **the page cache makes most reads fast**. Once the kernel detects a sequential pattern, it [prefetches pages asynchronously](https://lwn.net/Articles/888715/) so that most subsequent reads are served from cache rather than disk. In steady state, readahead can achieve cache hit rates [above 90%](https://lwn.net/Articles/155510/) for sequential workloads.
 
 ## The page cache
 
@@ -39,6 +39,8 @@ The page cache is the kernel's cache of file contents. Every file read goes thro
 | Memory access | ~100 nanoseconds |
 | SSD read | ~100 microseconds (1000x slower) |
 | HDD read | ~10 milliseconds (100,000x slower) |
+
+(Order-of-magnitude figures from [Latency Numbers Every Programmer Should Know](https://colin-scott.github.io/personal_website/research/interactive_latency.html), originally Jeff Dean via Peter Norvig.)
 
 Even with fast SSDs, memory is orders of magnitude faster. The page cache exploits temporal locality - data read once is likely to be read again soon.
 
@@ -240,11 +242,11 @@ struct folio *__filemap_get_folio(struct address_space *mapping,
 }
 ```
 
-The lookup is effectively `O(1)` for practical file sizes - `xarray` is a radix tree with bounded height, not a balanced tree, so performance doesn't degrade with more pages.
+The lookup is effectively `O(1)` for practical file sizes - [`xarray`](https://docs.kernel.org/core-api/xarray.html) is a radix tree with bounded height, not a balanced tree, so performance doesn't degrade with more pages.
 
 ## Stage 4: Cache hit (fast path)
 
-When the page is in cache and up-to-date, reading is fast:
+When the page is in cache and up-to-date, reading is fast (order-of-magnitude estimates; actual latency depends on CPU and workload):
 
 ```mermaid
 flowchart TD

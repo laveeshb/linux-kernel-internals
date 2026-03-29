@@ -136,7 +136,7 @@ flowchart LR
     R1 -->|"put_page()"| R0
 ```
 
-The `_mapcount` tracks page table mappings specifically:
+The [`_mapcount`](https://lwn.net/Articles/974223/) tracks page table mappings specifically (see [`include/linux/mm.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mm.h)):
 - `-1`: Not mapped in any page table
 - `0`: Mapped in exactly one page table
 - `N`: Mapped in N+1 page tables (shared)
@@ -198,7 +198,7 @@ This prevents single accesses from keeping cold pages in memory while still prot
 
 ### Multi-Gen LRU (MGLRU)
 
-Kernel v6.1 introduced MGLRU as an alternative to the classic two-list model:
+Kernel v6.1 introduced [MGLRU](https://docs.kernel.org/admin-guide/mm/multigen_lru.html) as an alternative to the classic two-list model ([commit ec1c86b25f4b](https://git.kernel.org/linus/ec1c86b25f4b), [LWN coverage](https://lwn.net/Articles/910608/)):
 
 ```mermaid
 flowchart LR
@@ -553,7 +553,7 @@ Page lifecycle management involves reference counting, LRU tracking, and writeba
 
 #### What happened
 
-Page reference counting bugs are a perennial source of kernel vulnerabilities. A refcount going negative (underflow) or wrapping around (overflow) leads to use-after-free.
+Page reference counting bugs are a perennial source of kernel vulnerabilities. A refcount going negative (underflow) or wrapping around (overflow) [leads to use-after-free](https://lwn.net/Articles/786044/).
 
 #### The bug
 
