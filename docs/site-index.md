@@ -86,6 +86,14 @@ A complete listing of all documentation, organized by topic.
 | [THP Bugs](mm/thp.md#notorious-bugs-and-edge-cases) | CVE-2020-29368, khugepaged races, collapse bugs |
 | [Page Table Bugs](mm/page-tables.md#notorious-bugs-and-edge-cases) | Meltdown, Spectre, TLB flush races |
 
+### Debugging
+
+| Page | Description |
+|------|-------------|
+| [Understanding /proc/meminfo](mm/proc-meminfo.md) | Every field explained with diagnostic patterns |
+| [Understanding /proc/vmstat](mm/proc-vmstat.md) | Counters and gauges for memory diagnostics |
+| [Reading an OOM log](mm/reading-oom-log.md) | Annotated OOM killer output with common patterns |
+
 ### Reference
 
 | Page | Description |

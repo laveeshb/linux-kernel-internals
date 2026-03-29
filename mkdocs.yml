@@ -106,6 +106,10 @@ nav:
       - brk vs mmap: mm/brk-vs-mmap.md
       - Contiguous Memory: mm/contiguous-memory.md
       - Copy-on-Write: mm/cow.md
+    - Debugging:
+      - Understanding /proc/meminfo: mm/proc-meminfo.md
+      - Understanding /proc/vmstat: mm/proc-vmstat.md
+      - Reading an OOM log: mm/reading-oom-log.md
     - Bugs:
       - Bug Index: mm/bugs/README.md
     - Reference:
