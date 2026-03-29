@@ -19,7 +19,9 @@ Without THP:                    With THP:
 
 ### The TLB Problem
 
-The TLB (Translation Lookaside Buffer) caches page table entries. It's small (typically 64-1536 entries) but critical for performance. With 4KB pages:
+The TLB (Translation Lookaside Buffer) caches virtual-to-physical address translations in a [multi-level hierarchy](https://lwn.net/Articles/379748/).
+
+On modern x86-64, the L1 dTLB holds 64-96 entries and the L2 (STLB) holds 1024-3072 entries depending on microarchitecture (sources: [7-cpu.com](https://www.7-cpu.com/cpu/Skylake.html), [WikiChip](https://en.wikichip.org/wiki/intel/microarchitectures/skylake_(server)#Memory_Hierarchy)). With 4KB pages, even a few gigabytes of working set exhausts the TLB:
 
 | Workload Size | Pages Needed | TLB Pressure |
 |---------------|--------------|--------------|
@@ -136,6 +138,8 @@ cat /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan
 cat /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none
 # 511 (default - collapse even if 511 of 512 PTEs are none/zero)
 ```
+
+(See [THP kernel docs](https://docs.kernel.org/admin-guide/mm/transhuge.html) for all tunables.)
 
 ## THP and Specific Workloads
 

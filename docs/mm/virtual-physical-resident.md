@@ -244,7 +244,7 @@ Matt Mackall proposed `PSS` at the [Embedded Linux Conference](https://lwn.net/A
 
 The insight was simple: if 4 processes share a 40MB library, charge each 10MB (40/4) instead of 40MB. This makes `PSS` values actually sum to physical memory usage.
 
-The [original LKML patch](https://lkml.iu.edu/hypermail/linux/kernel/0708.1/3420.html) (August 2007) was submitted by Fengguang Wu implementing Matt Mackall's concept. It was merged as part of the "maps4" series in kernel 2.6.25.
+The [original LKML patch](https://lkml.iu.edu/hypermail/linux/kernel/0708.1/3420.html) (August 2007) was submitted by Fengguang Wu implementing Matt Mackall's concept. It was merged as part of the ["maps4" series](https://lwn.net/Articles/256333/) in kernel 2.6.25 ([commit ec4dd3eb3575](https://git.kernel.org/linus/ec4dd3eb3575)).
 
 ### Finer-Grained PSS Breakdown
 

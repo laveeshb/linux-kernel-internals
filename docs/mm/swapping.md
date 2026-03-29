@@ -84,7 +84,7 @@ Linux supports two types of swap:
 | Swap partition | `/dev/sda2` | Dedicated, fixed size |
 | Swap file | `/swapfile` | Flexible, can resize, easier to manage |
 
-On modern systems (especially SSDs), performance between partition and file swap is nearly identical. The "partition is faster" advice is largely historical - filesystem overhead is negligible compared to actual I/O.
+On modern kernels (2.6+), the kernel [maps swap file blocks to disk sectors at swapon time](https://lwn.net/Articles/2668/) and performs [direct block I/O, bypassing all filesystem code](https://lkml.org/lkml/2005/7/7/326). Performance between partition and file swap is effectively identical for non-fragmented files on non-COW filesystems (ext4, XFS). On SSDs, even fragmented swap files show negligible overhead since seek penalties don't apply.
 
 ### Swap area structure
 
@@ -765,9 +765,9 @@ Unlike zswap (which caches before a real swap device), zram *is* the swap device
 
 **v5.8 (2020)**: Swap slot allocation improvements for SSD performance.
 
-**Commit**: [ba81f838aec9](https://git.kernel.org/linus/ba81f838aec9) ("mm/swap: fix race between swapoff and swap_entry_free()") | [LKML](https://lore.kernel.org/linux-mm/20200714140753.97sp5xkgmi4xg2r4@techsingularity.net/)
+**Commit**: [490705888107](https://git.kernel.org/linus/490705888107) ("swap: reduce lock contention on swap cache from swap slots allocation")
 
-**Author**: Miaohe Lin
+**Author**: Huang Ying (Intel)
 
 In Stage 1 (slot allocation) above, the kernel now uses a swap slot cache to batch slot allocations, reducing contention on SSDs where swap I/O is fast enough that allocation overhead becomes significant.
 

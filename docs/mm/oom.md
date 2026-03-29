@@ -59,7 +59,7 @@ enum zone_watermarks {
 
 ### How watermarks are calculated
 
-Watermarks derive from `vm.min_free_kbytes` and `vm.watermark_scale_factor`:
+Watermarks derive from [`vm.min_free_kbytes` and `vm.watermark_scale_factor`](https://docs.kernel.org/admin-guide/sysctl/vm.html):
 
 ```bash
 # View current settings
@@ -170,7 +170,7 @@ sysctl vm.swappiness=10  # Minimize swapping
 | 61-100 | Prefer swapping anonymous pages |
 | 101-200 | MGLRU only: finer-grained swap aggressiveness |
 
-**Note**: Values above 100 only have effect with MGLRU enabled (kernel 6.1+). On older kernels or with MGLRU disabled, values are effectively clamped to 0-100.
+**Note**: Values above 100 only have effect with [MGLRU](https://docs.kernel.org/admin-guide/mm/multigen_lru.html) enabled (kernel 6.1+). On older kernels or with MGLRU disabled, values are effectively clamped to 0-100.
 
 ## Stage 3: Direct reclaim
 
@@ -275,6 +275,8 @@ Sometimes reclaim doesn't free enough memory. The kernel retries with increasing
 #define MAX_RECLAIM_RETRIES 16
 ```
 
+(Defined in [`mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c).)
+
 ### What causes reclaim to fail?
 
 | Cause | Description |
@@ -373,7 +375,7 @@ long oom_badness(struct task_struct *p, ...)
 | RSS (Resident Size) | Primary factor - bigger = worse |
 | Swap usage | Counts against the process |
 | `oom_score_adj` | Manual adjustment (-1000 to +1000) |
-| Root processes | Slight bonus (3% reduction) |
+| Root processes | Had 3% bonus ([removed in v4.17](https://git.kernel.org/linus/d46078b28889)) |
 | Children's memory | Considered if killing parent frees more |
 
 ### Controlling OOM behavior

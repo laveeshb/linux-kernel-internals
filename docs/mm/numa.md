@@ -21,8 +21,9 @@ NUMA (Non-Uniform Memory Access) describes systems where memory access time depe
 │                    interconnect                          │
 └─────────────────────────────────────────────────────────┘
 
-CPU 0 accessing Node 0 memory: ~80ns
-CPU 0 accessing Node 1 memory: ~150ns (1.9x slower)
+CPU 0 accessing Node 0 memory: ~80-100ns (local)
+CPU 0 accessing Node 1 memory: ~130-150ns (1.5-1.7x slower, varies by platform)
+(measured with Intel MLC; see Lameter, "NUMA: An Overview", ACM Queue 2013)
 ```
 
 ## Why NUMA Matters
@@ -233,7 +234,7 @@ cat /proc/<pid>/numa_maps
 
 ### Early NUMA (v2.5-2.6, 2003-2004)
 
-Basic NUMA support added by SGI, IBM and others for their large systems. Memory policies (`set_mempolicy`, `mbind`) introduced by Andi Kleen. The mempolicy code predates git history (included in initial v2.6.12 import).
+Basic NUMA support added by SGI, IBM and others for their large systems. Memory policies ([`set_mempolicy`](https://man7.org/linux/man-pages/man2/set_mempolicy.2.html), `mbind`) [introduced by Andi Kleen](https://lwn.net/Articles/79100/) (see also [Kleen's NUMA API paper](https://halobates.de/numaapi3.pdf)). The mempolicy code predates git history (included in initial v2.6.12 import).
 
 ### cpusets Integration (v2.6.16, 2005)
 

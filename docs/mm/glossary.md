@@ -46,7 +46,7 @@ Hardware accessing memory directly without CPU involvement. DMA buffers need phy
 ## F
 
 ### Folio
-A modern abstraction (v5.16+) representing one or more contiguous pages. Replaces the ambiguous use of `struct page` for compound pages. A folio is always the head of a compound page or a single page.
+A modern abstraction ([v5.16+](https://git.kernel.org/linus/7b230db3b8d3)) representing one or more contiguous pages. Replaces the ambiguous use of `struct page` for compound pages. A folio is always the head of a compound page or a single page.
 
 ```c
 struct folio *folio = page_folio(page);

@@ -60,7 +60,7 @@ swapon /swapfile
 # /swapfile none swap sw 0 0
 ```
 
-**Note for btrfs (COW filesystems):** The `+C` (no-copy-on-write) attribute must be set before the file has data:
+**Note for btrfs (COW filesystems):** The `+C` (no-copy-on-write) attribute [must be set before the file has data](https://btrfs.readthedocs.io/en/latest/Swapfile.html) (see [`chattr(1)`](https://man7.org/linux/man-pages/man1/chattr.1.html)):
 
 ```bash
 # Method 1: Create empty file, set +C, then allocate
@@ -210,7 +210,7 @@ Resume process
 
 ### Swappiness
 
-Controls preference for swapping anonymous pages vs dropping file cache:
+Controls preference for swapping anonymous pages vs dropping file cache (see [vm sysctl docs](https://docs.kernel.org/admin-guide/sysctl/vm.html)):
 
 ```bash
 cat /proc/sys/vm/swappiness
@@ -238,6 +238,8 @@ swapon -p -2 /dev/sda2      # Low priority (default)
 ```
 
 ### Overcommit
+
+See [vm sysctl docs](https://docs.kernel.org/admin-guide/sysctl/vm.html) for details:
 
 ```bash
 # Memory overcommit policy
@@ -306,9 +308,9 @@ cat /sys/kernel/debug/zswap/written_back_pages  # Evicted to disk
 
 ## Evolution
 
-### Original Swap (1991)
+### Original Swap (v0.12, January 1992)
 
-Basic swap support from the beginning. Single swap area.
+Swap (virtual memory) was added in Linux 0.12 (early 1992). The [RELNOTES-0.12](https://www.kernel.org/pub/linux/kernel/Historic/old-versions/RELNOTES-0.12) describe the new `mkswap` program and swap activation. Linux 0.01 had no swap support.
 
 ### Multiple Swap Areas (v1.3)
 
@@ -316,7 +318,7 @@ Support for multiple swap partitions with priorities.
 
 ### Swap Files (v2.6)
 
-Swap files became as efficient as partitions.
+Swap files became as efficient as partitions — the kernel maps file blocks to disk sectors at swapon time and performs direct block I/O, bypassing the filesystem entirely (see [swapping: partition vs file](swapping.md#swap-types) for details).
 
 ### zswap (v3.11, 2013)
 
@@ -326,7 +328,9 @@ Compressed swap cache to reduce disk I/O.
 
 ### zram Swap (v3.14, 2014)
 
-zram became suitable for swap use, enabling diskless swap.
+**Commit**: [cd67e10ac699](https://git.kernel.org/linus/cd67e10ac699) ("zram: promote zram from staging")
+
+zram moved from staging to mainline, enabling diskless swap.
 
 ### THP Swap (v4.13, 2017)
 
@@ -362,10 +366,16 @@ Work ongoing to allow swapping to network storage for diskless systems.
 
 ### Recommendation
 
-Most systems benefit from some swap:
-- **Servers**: RAM + zswap, small disk swap for emergencies
-- **Desktops**: RAM/2 to RAM, with zswap
-- **Embedded**: Often none (limited storage, predictable workload)
+Most systems benefit from some swap. The kernel itself has no sizing recommendation — this is a distribution-level decision. [Red Hat's RHEL 9 guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_storage_devices/getting-started-with-swap_managing-storage-devices) is a commonly referenced set of guidelines:
+
+| RAM | Swap (no hibernation) | Swap (with hibernation) |
+|-----|----------------------|------------------------|
+| ≤ 2 GB | 2x RAM | 3x RAM |
+| 2-8 GB | Equal to RAM | 2x RAM |
+| 8-64 GB | At least 4 GB | 1.5x RAM |
+| > 64 GB | At least 4 GB | Not recommended |
+
+Adding zswap on top reduces disk I/O significantly. Embedded systems often use no swap due to limited storage and predictable workloads.
 
 ## Common Issues
 

@@ -20,8 +20,8 @@ void kmem_cache_free(struct kmem_cache *cache, void *ptr);
 
 The page allocator works in `4KB` chunks. But kernel objects are often much smaller:
 
-| Object | Typical Size |
-|--------|--------------|
+| Object | Typical Size (x86-64) |
+|--------|------------------------|
 | `struct inode` | ~600 bytes |
 | `struct dentry` | ~200 bytes |
 | `struct file` | ~256 bytes |
@@ -31,7 +31,7 @@ Allocating a full page for a 200-byte object wastes 95% of the memory.
 
 ## The Slab Concept
 
-Originally from SunOS (Bonwick, 1994), the idea:
+Originally from SunOS ([Bonwick, USENIX Summer 1994](https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel)), the idea:
 
 1. Pre-allocate pages for specific object types
 2. Carve each page into fixed-size slots
@@ -54,9 +54,9 @@ Linux has had three slab implementations:
 
 | Allocator | Status | Characteristics |
 |-----------|--------|-----------------|
-| SLAB | Removed (v6.8) | Original, complex, per-CPU queues |
-| SLUB | **Default** | Simpler, lower overhead, no queues |
-| SLOB | Removed (v6.4) | Minimal, for embedded systems |
+| SLAB | [Removed (v6.8)](https://git.kernel.org/linus/16a1d968358a) | Original, complex, per-CPU queues |
+| SLUB | **Default** ([since v2.6.23](https://git.kernel.org/linus/a0acd820)) | Simpler, lower overhead, no queues |
+| SLOB | [Removed (v6.4)](https://git.kernel.org/linus/c9929f0e344a) | Minimal, for embedded systems |
 
 **SLUB** (the "unqueued slab allocator") won because:
 - Simpler code (easier to maintain, debug)

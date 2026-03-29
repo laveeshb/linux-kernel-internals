@@ -4,7 +4,7 @@
 
 ## What Is memcg?
 
-Memory cgroups (memcg) allow limiting and tracking memory usage for groups of processes. They're the foundation of container memory limits (Docker, Kubernetes, systemd).
+[Memory cgroups](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory) (memcg) allow limiting and tracking memory usage for groups of processes. They're the foundation of container memory limits (Docker, Kubernetes, systemd).
 
 ```
 Container A (limit: 1GB)      Container B (limit: 2GB)
@@ -31,7 +31,7 @@ Linux has two cgroup implementations:
 | Pressure notification | Limited | PSI (Pressure Stall Info) |
 | Default (modern systems) | Legacy | Preferred |
 
-**v2 is recommended** for new deployments. This document focuses on v2.
+**[v2 is recommended](https://lwn.net/Articles/679786/)** for new deployments (declared production-ready in v4.5). This document focuses on v2.
 
 ```bash
 # Check which version is mounted
@@ -82,8 +82,8 @@ cat /sys/fs/cgroup/mygroup/memory.stat
 |------|-------------|
 | `memory.max` | Hard limit. OOM kill if exceeded. |
 | `memory.high` | Soft limit. Throttle and reclaim aggressively. |
-| `memory.low` | Protection. Best-effort preservation under pressure. |
-| `memory.min` | Hard protection. Never reclaim below this. |
+| `memory.low` | Protection. [Best-effort preservation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files) under pressure. |
+| `memory.min` | Hard protection. [Never reclaim below this](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files). |
 
 ```
                     memory.max
@@ -155,9 +155,9 @@ Reclaim from Cgroup A only
 (other cgroups unaffected)
 ```
 
-### memory.reclaim (v5.19+)
+### memory.reclaim ([v5.19+](https://lwn.net/Articles/894849/))
 
-Proactively trigger reclaim:
+Proactively trigger reclaim ([commit 94968384dde1](https://git.kernel.org/linus/94968384dde1)):
 
 ```bash
 # Reclaim 100MB from cgroup
@@ -263,11 +263,11 @@ Initial memory cgroup implementation for cgroup v1.
 
 ### Unified Hierarchy (cgroup v2, v4.5, 2016)
 
-The cgroup v2 unified hierarchy was marked non-experimental in v4.5, with the memory controller considered stable for production use. The memory controller was reworked significantly from v1, with cleaner semantics and integrated pressure stall information.
+The cgroup v2 unified hierarchy was [marked non-experimental in v4.5](https://lwn.net/Articles/679786/) ([commit 67e9c74b8a87](https://git.kernel.org/linus/67e9c74b8a87)), with the memory controller considered stable for production use. The memory controller was reworked significantly from v1, with cleaner semantics and integrated pressure stall information.
 
 ### Kernel Memory Accounting (v4.5+)
 
-Kernel memory (slab, stacks) included in memory.current by default in v2.
+Kernel memory (slab, stacks) [included in memory.current by default](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory) in v2 ([background: the new slab memory controller](https://lwn.net/Articles/798605/)).
 
 ### memory.reclaim (v5.19, 2022)
 

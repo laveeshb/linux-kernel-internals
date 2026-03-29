@@ -237,7 +237,7 @@ grep -E "Private|Shared" /proc/<pid>/smaps | head -20
 
 ### Origins (pre-Linux)
 
-COW was first implemented in the late 1960s/early 1970s. The technique became widespread in Unix systems in the 1980s. Linux inherited COW from the Unix tradition when Linus Torvalds wrote the first version in 1991.
+The TENEX papers ([Bobrow et al., CACM 1972](https://dl.acm.org/doi/10.1145/361268.361271)) describe COW on the PDP-10, crediting its first development to the BBN-LISP system for the SDS 940 (late 1960s). The technique became widespread in Unix systems in the 1980s. Linux inherited COW from the Unix tradition when Linus Torvalds wrote the first version in 1991.
 
 *Note: The original Linux COW implementation predates git. The core logic in `mm/memory.c` has been substantially rewritten multiple times.*
 
