@@ -263,6 +263,7 @@ nav:
       - request_irq and free_irq: interrupts/request-irq.md
       - Threaded IRQs: interrupts/threaded-irq.md
       - IRQ Affinity and CPU Isolation: interrupts/irq-affinity.md
+      - MSI and MSI-X: interrupts/msi-msix.md
     - Deferred Work:
       - Softirqs: interrupts/softirq.md
       - Tasklets: interrupts/tasklets.md
