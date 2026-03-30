@@ -295,7 +295,7 @@ Meltdown exploits **speculative execution** combined with **cache timing**. The 
 
 #### The fix: KPTI
 
-**Commit**: [aa8c6248f8c7](https://git.kernel.org/linus/aa8c6248f8c7) ("x86/pti: Add infrastructure for page table isolation")
+**Commit**: [aa8c6248f8c7](https://git.kernel.org/linus/aa8c6248f8c7) ("x86/mm/pti: Add infrastructure for page table isolation")
 
 **Author**: Thomas Gleixner
 
