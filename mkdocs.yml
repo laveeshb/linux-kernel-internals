@@ -323,3 +323,8 @@ nav:
     - cpufreq and P-states: power/cpufreq.md
     - Runtime PM: power/runtime-pm.md
     - System Suspend: power/suspend.md
+  - Time:
+    - Getting Started: time/README.md
+    - Timekeeping and Clocksources: time/timekeeping.md
+    - hrtimers: time/hrtimers.md
+    - POSIX Timers and timerfd: time/posix-timers.md
