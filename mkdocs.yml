@@ -176,3 +176,7 @@ nav:
       - CFS: sched/cfs.md
       - EEVDF: sched/eevdf.md
       - Runqueues & Task Selection: sched/runqueues.md
+    - Lifecycle:
+      - Life of a Context Switch: sched/context-switch.md
+      - What Happens When a Process Wakes Up: sched/wakeup.md
+      - "What Happens When You fork()": sched/sched-fork.md
