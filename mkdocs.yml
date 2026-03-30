@@ -215,3 +215,8 @@ nav:
       - XDP (eXpress Data Path): net/xdp.md
       - AF_XDP Sockets: net/af-xdp.md
       - TC and qdisc: net/tc-qdisc.md
+    - Debugging & Observability:
+      - Network Debugging with ss and ip: net/net-debugging.md
+      - Network Tracing: net/net-tracing.md
+      - Understanding /proc/net/snmp: net/proc-snmp.md
+      - Network Buffer Tuning: net/net-buffer-tuning.md
