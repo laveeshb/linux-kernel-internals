@@ -256,3 +256,9 @@ nav:
     - Lifecycle:
       - Life of a write() Syscall: vfs/life-of-write.md
       - Dentry and Inode Caches: vfs/dcache-icache.md
+  - Block Layer:
+    - Getting Started: block/README.md
+    - Block Layer Overview: block/block-overview.md
+    - bio and request structures: block/bio-request.md
+    - blk-mq (Multi-Queue): block/blk-mq.md
+    - I/O Schedulers: block/io-schedulers.md
