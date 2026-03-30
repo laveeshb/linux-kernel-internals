@@ -304,6 +304,7 @@ nav:
     - Resource Controllers: cgroups/cgroup-controllers.md
     - Namespaces: cgroups/namespaces.md
     - Container Isolation: cgroups/container-isolation.md
+    - io Controller: cgroups/io-cgroup.md
   - System Calls:
     - Getting Started: syscalls/README.md
     - Syscall Entry Path: syscalls/syscall-entry.md
