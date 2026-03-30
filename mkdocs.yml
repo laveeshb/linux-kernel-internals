@@ -91,6 +91,7 @@ nav:
     - Caching & Reclaim:
       - Page Cache: mm/page-cache.md
       - Page Reclaim: mm/reclaim.md
+      - MGLRU: mm/mglru.md
       - Reclaim Throttling: mm/reclaim-throttling.md
       - Zone Reclaim Policy: mm/zone-reclaim.md
       - Shrinker API: mm/shrinker.md
@@ -109,6 +110,7 @@ nav:
       - RCU in Memory Management: mm/rcu-mm.md
       - TLB Optimization: mm/tlb-optimization.md
       - CXL Memory Tiering: mm/cxl-memory-tiering.md
+      - Memory Tiering: mm/memory-tiering.md
       - vrealloc: mm/vrealloc.md
     - Memory Cgroups:
       - Container Memory Limits: mm/container-memory-limits.md
