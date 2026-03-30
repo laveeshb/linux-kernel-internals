@@ -246,3 +246,13 @@ nav:
       - Tasklets: interrupts/tasklets.md
       - Workqueues: interrupts/workqueues.md
       - Timers and hrtimers: interrupts/timers.md
+  - VFS:
+    - Getting Started: vfs/README.md
+    - Fundamentals:
+      - "VFS Objects: superblock, inode, dentry, file": vfs/vfs-objects.md
+      - Path Resolution: vfs/namei.md
+      - File Operations: vfs/file-ops.md
+      - Filesystem Registration and Mounting: vfs/mounting.md
+    - Lifecycle:
+      - Life of a write() Syscall: vfs/life-of-write.md
+      - Dentry and Inode Caches: vfs/dcache-icache.md
