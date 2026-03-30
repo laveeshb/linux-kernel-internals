@@ -275,3 +275,8 @@ nav:
     - Resource Controllers: cgroups/cgroup-controllers.md
     - Namespaces: cgroups/namespaces.md
     - Container Isolation: cgroups/container-isolation.md
+  - System Calls:
+    - Getting Started: syscalls/README.md
+    - Syscall Entry Path: syscalls/syscall-entry.md
+    - SYSCALL_DEFINE and Dispatch: syscalls/syscall-define.md
+    - Adding a New Syscall: syscalls/adding-syscall.md
