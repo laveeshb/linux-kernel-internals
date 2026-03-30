@@ -168,3 +168,11 @@ nav:
       - "War Stories: Bug Incident Narratives": mm/war-stories-bugs.md
     - Reference:
       - Glossary: mm/glossary.md
+  - Scheduler:
+    - Getting Started: sched/README.md
+    - Fundamentals:
+      - Scheduler Evolution: sched/scheduler-evolution.md
+      - Scheduler Classes: sched/scheduler-classes.md
+      - CFS: sched/cfs.md
+      - EEVDF: sched/eevdf.md
+      - Runqueues & Task Selection: sched/runqueues.md
