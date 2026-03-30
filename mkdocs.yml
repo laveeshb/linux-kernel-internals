@@ -349,6 +349,7 @@ nav:
     - ext4 Journaling (JBD2): filesystems/ext4-journal.md
     - tmpfs and ramfs: filesystems/tmpfs.md
     - btrfs: filesystems/btrfs.md
+    - XFS: filesystems/xfs.md
     - OverlayFS: filesystems/overlayfs.md
   - Security:
     - Getting Started: security/README.md

@@ -230,9 +230,148 @@ RCU is not suited for:
   ✗ Small per-CPU data (use per-CPU variables instead)
 ```
 
+## Tree RCU: grace period detection mechanism
+
+`synchronize_rcu()` on a real system can't simply "wait for every CPU to context switch" — it would block the caller indefinitely on a loaded system. Tree RCU solves this with an efficient hierarchical algorithm:
+
+```
+Tree RCU node hierarchy (for 16 CPUs, FANOUT=8):
+          [root rcu_node]
+         /               \
+   [node 0-7]         [node 8-15]
+   /  |  |  \  \       ...
+ CPU0 CPU1 ... CPU7
+
+Each node tracks:
+  qsmask:   bitmask of children that haven't reported QS yet
+  qsmaskinit: initial value at grace period start
+```
+
+### Grace period phases
+
+```c
+/* kernel/rcu/tree.c */
+
+/* Phase 1: RCU GP kthread starts a new grace period */
+static void rcu_gp_init(void)
+{
+    /* Set qsmaskinit for all nodes based on online CPUs */
+    /* Wake up all CPUs that need to report quiescent state */
+    rcu_gp_slow(rcu_get_gp_seq());
+}
+
+/* Phase 2: Each CPU reports its quiescent state */
+/* On context switch: */
+void rcu_note_context_switch(bool preempt)
+{
+    /* Report quiescent state to parent node */
+    rcu_qs();
+}
+
+/* Phase 3: When all bits in root qsmask are clear, GP ends */
+static void rcu_gp_cleanup(void)
+{
+    /* Invoke all callbacks registered via call_rcu() */
+    /* Advance the grace period sequence counter */
+    rcu_advance_cbs_nowake(rdp);
+}
+```
+
+### Expedited grace periods
+
+`synchronize_rcu_expedited()` forces a fast grace period by sending IPIs to all CPUs to make them immediately report a quiescent state:
+
+```c
+/* Completes in ~100µs vs ~10ms for normal GP */
+synchronize_rcu_expedited();
+/* Use sparingly: IPI storm overhead, hurts real-time latency */
+
+/* The kernel automatically switches between:
+   - Normal GP: low overhead, used when no one is waiting urgently
+   - Expedited GP: after a threshold of synchronize_rcu() callers queue up */
+```
+
+### TASKS RCU
+
+For "tasks" (non-atomic, can-sleep contexts), Tasks RCU tracks quiescent states differently:
+
+```c
+/* Tasks RCU: used for BPF program updates, trampoline code patching */
+synchronize_rcu_tasks();   /* wait until no task is in old trampolines */
+call_rcu_tasks(&rcu_head, callback);
+
+/* Quiescent state for tasks RCU: voluntary scheduling (cond_resched) */
+/* Used by: BPF, ftrace, live patching */
+```
+
+## RCU torture testing
+
+The kernel includes an extensive RCU stress test:
+
+```bash
+# Load rcutorture module to stress-test RCU:
+modprobe rcutorture
+
+# Watch results:
+dmesg | grep -E "rcu_torture|Readers Stall"
+# rcu_torture: Readers stall PASSED: n=0
+# rcu_torture: 0 expedited-grace-period failures
+
+# rcuperf: performance measurement
+modprobe rcuperf perf_type="rcu" perf_runnable=1
+dmesg | grep "rcuperf"
+```
+
+## RCU in the kernel: key usage sites
+
+```c
+/* Routing table lookup (hot path): */
+rcu_read_lock();
+rt = rcu_dereference(dev->ip_ptr->rt_cache);  /* no lock needed */
+/* ... use rt ... */
+rcu_read_unlock();
+
+/* Network interface list: */
+rcu_read_lock();
+list_for_each_entry_rcu(dev, &net->dev_base_head, dev_list) {
+    if (dev->flags & IFF_UP)
+        do_something(dev);
+}
+rcu_read_unlock();
+
+/* Process credentials (very hot path): */
+rcu_read_lock();
+uid = rcu_dereference(current->cred)->uid;
+rcu_read_unlock();
+/* Or the optimized helper: */
+uid = current_uid();  /* uses rcu_read_lock internally */
+```
+
+## Debugging RCU
+
+```bash
+# Check for RCU stalls (CPUs stuck in read-side critical section):
+# Kernel detects and prints: "INFO: rcu_sched detected stalls on CPUs/tasks"
+dmesg | grep "rcu.*stall"
+
+# Lockdep checks for misuse:
+# rcu_read_lock() annotates the task; lockdep warns if you sleep
+
+# CONFIG_PROVE_RCU=y: enables lockdep-style RCU correctness checking
+# Warns about: rcu_dereference() outside rcu_read_lock, sleeping in read-side
+
+# rcustat BPF tool:
+bpftrace -e '
+kprobe:synchronize_rcu { @[kstack] = count(); }' &
+# Shows who is calling synchronize_rcu (the expensive operation)
+```
+
 ## Further reading
 
 - [RCU in Memory Management](../mm/rcu-mm.md) — How RCU is used in the mm subsystem
 - [Spinlock](spinlock.md) — For write-heavy short critical sections
 - [rwsem](rwlock-rwsem.md) — For sleeping reader-writer locking
+- [SRCU](srcu.md) — Sleepable RCU for contexts that need to sleep
 - `Documentation/RCU/` in the kernel tree — Paul McKenney's extensive RCU docs
+- `kernel/rcu/tree.c` — Tree RCU implementation
+- `kernel/rcu/tasks.h` — Tasks RCU
