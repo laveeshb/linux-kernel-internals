@@ -344,3 +344,8 @@ nav:
     - Getting Started: crypto/README.md
     - Kernel Crypto API: crypto/crypto-api.md
     - dm-crypt and fscrypt: crypto/encryption.md
+  - Architecture:
+    - ARM64:
+      - Getting Started: arch/arm64/README.md
+      - Exception Model: arch/arm64/exception-model.md
+      - Memory Model: arch/arm64/memory-model.md
