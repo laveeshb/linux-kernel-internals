@@ -358,15 +358,16 @@ numastat          # per-node hit/miss counters (reads /sys/devices/system/node/n
 numastat -p <pid> # per-process NUMA mapping
 ```
 
-The relevant per-node counters (also visible in `/sys/devices/system/node/nodeN/numastat`):
+The relevant per-node counters in `/sys/devices/system/node/nodeN/numastat`:
 
-| Counter | Meaning |
-|---|---|
-| `numa_hit` | Allocations that landed on the intended node |
-| `numa_miss` | Allocations that landed on a different node (process got remote memory) |
-| `numa_foreign` | Allocations intended for this node that landed elsewhere |
-| `numa_local` | Allocations by a CPU local to this node |
-| `numa_other` | Allocations by a CPU on a remote node |
+| sysfs name | `/proc/vmstat` name | Meaning |
+|---|---|---|
+| `numa_hit` | `numa_hit` | Allocations that landed on the intended node |
+| `numa_miss` | `numa_miss` | Allocations that landed on a different node |
+| `numa_foreign` | `numa_foreign` | Allocations intended for this node that landed elsewhere |
+| `local_node` | `numa_local` | Allocations by a CPU local to this node |
+| `other_node` | `numa_other` | Allocations by a CPU on a remote node |
+| `interleave_hit` | `numa_interleave` | Interleave policy landed on the intended node |
 
 A rising `numa_miss` on Node 1 alongside active kswapd reclaim on Node 1 is the canonical sign that Node 1 is memory-pressured and falling back to remote allocation.
 
@@ -423,13 +424,7 @@ For applications that mix NUMA pinning with THP:
 
 On AMD EPYC or similar multi-die platforms where 2-hop NUMA distance is reported as 32 (above the default `RECLAIM_DISTANCE` of 30), the kernel may refuse to do local reclaim across the intra-socket fabric even though those accesses are relatively fast. The distance threshold can be tuned:
 
-```bash
-# Raise the distance threshold so intra-socket remote nodes are eligible for reclaim
-echo 40 > /proc/sys/vm/numa_reclaim_distance   # if exposed as sysctl
-```
-
-!!!warning
-    `node_reclaim_distance` is a compile-time and boot-time tunable. Some distributions expose it via `/proc/sys/vm/numa_reclaim_distance`; others require a kernel parameter. Confirm availability before scripting.
+The `node_reclaim_distance` variable in `mm/page_alloc.c` defaults to `RECLAIM_DISTANCE` (30). It is **not** exposed as a sysctl — changing it requires modifying the kernel source or using a custom kernel module. To work around this, configure `vm.zone_reclaim_mode = 0` to disable local reclaim entirely, or adjust NUMA memory policies to prefer remote allocation on these platforms.
 
 ---
 

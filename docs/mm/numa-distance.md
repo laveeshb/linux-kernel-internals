@@ -210,7 +210,7 @@ taskimp = task_weight(p, env.dst_nid, dist) - taskweight;
 
 ### NUMA balancing: migration decisions
 
-`should_numa_migrate_memory()` in `kernel/sched/fair.c` decides whether a page fault on a remote page should trigger migration. For pages in slow memory tiers, the decision is based on access frequency (how recently the page was faulted) rather than distance alone. For conventional NUMA balancing, the mempolicy layer's `numa_migrate_prep()` path in `mm/mempolicy.c` uses `node_distance()` to find nodes closer to the faulting CPU:
+`should_numa_migrate_memory()` in `kernel/sched/fair.c` decides whether a page fault on a remote page should trigger migration. For pages in slow memory tiers, the decision is based on access frequency (how recently the page was faulted) rather than distance alone. For conventional NUMA balancing, the mempolicy layer's `numa_nearest_node()` function in `mm/mempolicy.c` uses `node_distance()` to find nodes closer to the faulting CPU, and `numa_migrate_check()` in `mm/memory.c` prepares the migration:
 
 ```c
 /* mm/mempolicy.c — nearest-node search */

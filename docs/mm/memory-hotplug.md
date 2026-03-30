@@ -26,7 +26,7 @@ Section size is architecture-defined via `SECTION_SIZE_BITS`. On x86-64:
 # define SECTION_SIZE_BITS  27  /* matt - 128 is convenient right now */
 ```
 
-This means sections are `1 << 27` = **128 MB** on x86-64. For comparison, arm64 uses 512 MB sections (`SECTION_SIZE_BITS = 29`).
+This means sections are `1 << 27` = **128 MB** on x86-64. arm64 defaults to the same 128 MB sections with 4K pages; with `CONFIG_ARM64_64K_PAGES`, it uses 512 MB sections (`SECTION_SIZE_BITS = 29`).
 
 Each section is represented by `struct mem_section` from `include/linux/mmzone.h`:
 
@@ -63,7 +63,6 @@ Every memory block has a sysfs directory under `/sys/devices/system/memory/`:
 ├── block_size_bytes            # Memory block size in hex bytes
 ├── memory0/                    # Block 0 (often firmware-reserved)
 │   ├── node0                   # NUMA node symlink
-│   ├── online_type             # Last online type used
 │   ├── phys_index              # Physical block index
 │   ├── removable               # Whether block can be removed
 │   ├── state                   # offline / online / going-offline

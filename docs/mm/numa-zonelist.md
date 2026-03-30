@@ -348,12 +348,14 @@ numastat
 
 | Counter | Meaning |
 |---|---|
-| `numa_hit` | Allocated on the intended (preferred) node |
-| `numa_miss` | Allocated on a different node because the preferred node was full |
-| `numa_foreign` | A remote task allocated from this node |
-| `numa_interleave_hit` | Interleave policy landed on the intended node |
-| `numa_local` | Allocated on the local node (CPU and memory are co-located) |
-| `numa_other` | Allocated on a non-local node |
+| sysfs name | `/proc/vmstat` name | Meaning |
+|---|---|---|
+| `numa_hit` | `numa_hit` | Allocated on the intended (preferred) node |
+| `numa_miss` | `numa_miss` | Allocated on a different node because the preferred node was full |
+| `numa_foreign` | `numa_foreign` | A remote task allocated from this node |
+| `interleave_hit` | `numa_interleave` | Interleave policy landed on the intended node |
+| `local_node` | `numa_local` | Allocated on the local node (CPU and memory are co-located) |
+| `other_node` | `numa_other` | Allocated on a non-local node |
 
 High `numa_miss` counts indicate memory pressure on the preferred node and frequent fallback to remote memory.
 
