@@ -175,11 +175,16 @@ kernel_stack 2097152     #   process kernel stacks
 pagetables 1048576       #   page table pages
 slab_reclaimable 6291456 #   reclaimable slab (dentry/inode caches)
 slab_unreclaimable 2097152 # unreclaimable slab (task_struct, etc.)
+slab 8388608             #   total slab (reclaimable + unreclaimable)
 sock 4194304             # socket receive/send buffers
 shmem 0                  # shared memory (tmpfs, IPC shm)
 file_mapped 104857600    # file pages that are mapped (subset of file)
 file_dirty 0             # file pages with pending writes
 file_writeback 0         # file pages currently being written
+inactive_anon 0          # anonymous pages on the inactive LRU
+active_anon 1073741824   # anonymous pages on the active LRU
+inactive_file 104857600  # file pages on the inactive LRU (reclaim candidates)
+active_file 104857600    # file pages on the active LRU
 unevictable 0            # pages that cannot be reclaimed (mlock'd, etc.)
 pgfault 458923           # total page faults
 pgmajfault 12            # major faults (required disk I/O)
