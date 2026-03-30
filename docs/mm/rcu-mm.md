@@ -6,7 +6,8 @@
 
 | File | Purpose |
 |------|---------|
-| `mm/mmap_lock.c` | `lock_vma_under_rcu()`, `vma_start_read()`, `vma_end_write_all()` |
+| `mm/mmap_lock.c` | `lock_vma_under_rcu()`, `vma_start_read()` |
+| `include/linux/mmap_lock.h` | `vma_end_write_all()` |
 | `mm/vma_init.c` | `vm_area_alloc()`, `vm_area_free()`, `SLAB_TYPESAFE_BY_RCU` slab setup |
 | `lib/maple_tree.c` | `ma_free_rcu()`, `mt_free_walk()` — RCU-deferred node freeing |
 | `include/linux/mm_types.h` | `struct vm_area_struct` — `vm_freeptr`, `vm_lock_seq`, `vm_refcnt` |

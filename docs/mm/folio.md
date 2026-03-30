@@ -310,8 +310,8 @@ For page-cache use, allocate via `filemap_alloc_folio()`:
 
 ```c
 /* include/linux/pagemap.h */
-#define filemap_alloc_folio(gfp, order, mapping) \
-    alloc_hooks(filemap_alloc_folio_noprof(gfp, order, mapping))
+#define filemap_alloc_folio(gfp, order, policy) \
+    alloc_hooks(filemap_alloc_folio_noprof(gfp, order, policy))
 ```
 
 For generic kernel use, `folio_alloc()` (in `include/linux/gfp.h`) wraps the buddy allocator:
@@ -468,5 +468,5 @@ if (!folio_try_get(folio))
 | `folio_test_large(folio)` | `page-flags.h` | True for order ≥ 1 folios |
 | `folio_add_lru(folio)` | `swap.h` | Add folio to the LRU list |
 | `filemap_grab_folio(mapping, index)` | `pagemap.h` | Look up or create a page-cache folio |
-| `filemap_alloc_folio(gfp, order, mapping)` | `pagemap.h` | Allocate a page-cache folio |
+| `filemap_alloc_folio(gfp, order, policy)` | `pagemap.h` | Allocate a page-cache folio |
 | `readahead_folio(ractl)` | `pagemap.h` | Get next folio from a readahead batch |

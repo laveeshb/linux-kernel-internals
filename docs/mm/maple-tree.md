@@ -558,7 +558,7 @@ Prints the current state of an `ma_state` cursor (index, last, node pointer, sta
     The maple tree has built-in tracepoints (`trace_ma_read`, `trace_ma_write`, `trace_ma_op`) instrumented throughout `lib/maple_tree.c`. These are visible via `ftrace` when the corresponding `maple_tree` event group is enabled and provide per-operation visibility into the tree without requiring `CONFIG_DEBUG_MAPLE_TREE`.
 
 !!! note "RCU mode and debugging"
-    When `CONFIG_DEBUG_MAPLE_TREE` is combined with `CONFIG_MAPLE_RCU_DISABLED` (a compile-time option at the top of `maple_tree.h`), RCU freeing is suppressed entirely and nodes are freed immediately. This can help expose use-after-free bugs in tree consumers but is not safe for production.
+    When `CONFIG_DEBUG_MAPLE_TREE` is combined with `CONFIG_MAPLE_RCU_DISABLED` (a compile-time option at the top of `lib/maple_tree.c`), RCU freeing is suppressed entirely and nodes are freed immediately. This can help expose use-after-free bugs in tree consumers but is not safe for production.
 
 ---
 
@@ -568,4 +568,4 @@ Prints the current state of an `ma_state` cursor (index, last, node pointer, sta
 - **`/proc/PID/maps`** iterates `mm->mm_mt` via `for_each_vma()` under `mmap_lock` for read.
 - **`dup_mmap()`** uses `__mt_dup()` to bulk-copy the parent maple tree into the child `mm`, then replaces any `VM_DONTCOPY` entries with `vma_iter_clear_gfp()`.
 - **`execve()`** tears down the address space by calling `exit_mmap()`, which calls `__mt_destroy(&mm->mm_mt)` after clearing all page table entries.
-- **vmalloc** uses its own separate maple tree (`vmap_area_root`) for the kernel virtual address space — the same data structure, but a different tree instance unrelated to `mm->mm_mt`.
+- **vmalloc** uses a red-black tree (`free_vmap_area_root`, a `struct rb_root`) for tracking kernel virtual address space — not a maple tree.
