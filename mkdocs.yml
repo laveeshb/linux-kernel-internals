@@ -86,6 +86,9 @@ nav:
     - Caching & Reclaim:
       - Page Cache: mm/page-cache.md
       - Page Reclaim: mm/reclaim.md
+      - Reclaim Throttling: mm/reclaim-throttling.md
+      - Zone Reclaim Policy: mm/zone-reclaim.md
+      - Shrinker API: mm/shrinker.md
       - DAMON: mm/damon.md
       - Swap: mm/swap.md
       - zswap: mm/zswap.md
