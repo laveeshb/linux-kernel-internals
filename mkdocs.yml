@@ -303,3 +303,8 @@ nav:
     - Getting Started: modules/README.md
     - Writing and Loading Modules: modules/module-basics.md
     - Parameters, Symbols, and Kconfig: modules/module-params.md
+  - Filesystems:
+    - Getting Started: filesystems/README.md
+    - ext4: filesystems/ext4.md
+    - tmpfs and ramfs: filesystems/tmpfs.md
+    - btrfs: filesystems/btrfs.md
