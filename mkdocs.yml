@@ -144,5 +144,8 @@ nav:
       - /proc/vmstat reference: mm/proc-vmstat.md
     - Bugs:
       - Bug Index: mm/bugs/README.md
+      - War Stories: Performance Regressions: mm/war-stories-regressions.md
+      - War Stories: CVE Case Studies: mm/war-stories-cves.md
+      - War Stories: Bug Incident Narratives: mm/war-stories-bugs.md
     - Reference:
       - Glossary: mm/glossary.md
