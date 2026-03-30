@@ -308,3 +308,8 @@ nav:
     - ext4: filesystems/ext4.md
     - tmpfs and ramfs: filesystems/tmpfs.md
     - btrfs: filesystems/btrfs.md
+  - Security:
+    - Getting Started: security/README.md
+    - LSM Framework: security/lsm.md
+    - Capabilities: security/capabilities.md
+    - seccomp BPF: security/seccomp.md
