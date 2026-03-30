@@ -365,6 +365,7 @@ nav:
     - dm-crypt (Block Encryption): security/dm-crypt.md
     - fscrypt (Per-File Encryption): security/fscrypt.md
     - SELinux: security/selinux.md
+    - Kernel Hardening: security/kernel-hardening.md
   - Virtualization:
     - Getting Started: virtualization/README.md
     - KVM Architecture: virtualization/kvm-arch.md
