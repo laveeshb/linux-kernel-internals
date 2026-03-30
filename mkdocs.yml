@@ -207,3 +207,7 @@ nav:
     - TCP/IP:
       - TCP Implementation: net/tcp.md
       - IP Routing: net/ip-routing.md
+    - Filtering:
+      - Netfilter Architecture: net/netfilter.md
+      - nftables vs iptables: net/nftables-iptables.md
+      - Connection Tracking: net/conntrack.md
