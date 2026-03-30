@@ -299,3 +299,7 @@ nav:
     - ftrace: tracing/ftrace.md
     - Kprobes and Tracepoints: tracing/kprobes-tracepoints.md
     - perf Events: tracing/perf-events.md
+  - Kernel Modules:
+    - Getting Started: modules/README.md
+    - Writing and Loading Modules: modules/module-basics.md
+    - Parameters, Symbols, and Kconfig: modules/module-params.md
