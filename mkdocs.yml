@@ -131,8 +131,13 @@ nav:
       - Copy-on-Write: mm/cow.md
     - Boot & Subsystems:
       - memblock: mm/memblock.md
+      - Memory Reservation: mm/memory-reservation.md
+      - Boot Page Tables: mm/boot-page-tables.md
+      - NUMA Topology (ACPI SRAT/SLIT): mm/numa-acpi-srat.md
       - CMA: mm/cma.md
       - DMA: mm/dma.md
+      - Device Coherency: mm/device-coherency.md
+      - PCI BAR Mapping: mm/pci-bar-mapping.md
       - hugetlbfs vs THP: mm/hugetlbfs-vs-thp.md
     - Tuning:
       - PSI: mm/psi.md
