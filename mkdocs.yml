@@ -350,6 +350,10 @@ nav:
     - Getting Started: crypto/README.md
     - Kernel Crypto API: crypto/crypto-api.md
     - dm-crypt and fscrypt: crypto/encryption.md
+  - Live Patching:
+    - Getting Started: livepatch/README.md
+    - Kernel Live Patching: livepatch/klp.md
+    - kexec: livepatch/kexec.md
   - Architecture:
     - ARM64:
       - Getting Started: arch/arm64/README.md
