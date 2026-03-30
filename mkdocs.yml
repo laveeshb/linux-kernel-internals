@@ -262,3 +262,10 @@ nav:
     - bio and request structures: block/bio-request.md
     - blk-mq (Multi-Queue): block/blk-mq.md
     - I/O Schedulers: block/io-schedulers.md
+  - BPF/eBPF:
+    - Getting Started: bpf/README.md
+    - Architecture & Program Types: bpf/bpf-overview.md
+    - BPF Maps: bpf/bpf-maps.md
+    - BPF Verifier: bpf/bpf-verifier.md
+    - BTF and CO-RE: bpf/btf-core.md
+    - libbpf and Skeletons: bpf/libbpf.md
