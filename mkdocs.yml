@@ -314,6 +314,7 @@ nav:
     - ext4: filesystems/ext4.md
     - tmpfs and ramfs: filesystems/tmpfs.md
     - btrfs: filesystems/btrfs.md
+    - OverlayFS: filesystems/overlayfs.md
   - Security:
     - Getting Started: security/README.md
     - LSM Framework: security/lsm.md
