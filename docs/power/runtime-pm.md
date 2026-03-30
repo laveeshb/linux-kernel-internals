@@ -1,0 +1,346 @@
+# Runtime PM
+
+> Device-level power management: suspending idle devices while the system runs
+
+## What is Runtime PM?
+
+Runtime PM allows individual devices to enter low-power states while the rest of the system continues running. A GPU can be powered off when no display is attached; a USB device can be suspended when idle; a PCIe NIC can cut power to its PHY between bursts.
+
+```
+System running (S0)
+├── CPU: P-state varies with load
+├── GPU:  [active] → [runtime suspended] after 2 seconds idle
+├── NVMe: [active] → [runtime suspended] after 1 second idle
+├── USB:  [runtime suspended] (nothing plugged in)
+└── NIC:  [active]
+```
+
+## PM callbacks: struct dev_pm_ops
+
+Every driver can register power management callbacks:
+
+```c
+/* include/linux/pm.h */
+struct dev_pm_ops {
+    /* System sleep: called on system suspend/resume */
+    int (*prepare)(struct device *dev);
+    void (*complete)(struct device *dev);
+    int (*suspend)(struct device *dev);
+    int (*resume)(struct device *dev);
+    int (*freeze)(struct device *dev);    /* hibernate snapshot */
+    int (*thaw)(struct device *dev);
+    int (*poweroff)(struct device *dev);
+    int (*restore)(struct device *dev);
+
+    /* Runtime PM: called when device idles or resumes */
+    int (*runtime_suspend)(struct device *dev);
+    int (*runtime_resume)(struct device *dev);
+    int (*runtime_idle)(struct device *dev);
+};
+```
+
+A driver registers them with:
+
+```c
+static const struct dev_pm_ops mydriver_pm_ops = {
+    SET_SYSTEM_SLEEP_PM_OPS(mydriver_suspend, mydriver_resume)
+    SET_RUNTIME_PM_OPS(mydriver_runtime_suspend,
+                       mydriver_runtime_resume,
+                       mydriver_runtime_idle)
+};
+
+static struct platform_driver mydriver = {
+    .driver = {
+        .name   = "mydriver",
+        .pm     = &mydriver_pm_ops,
+    },
+    /* ... */
+};
+```
+
+## Usage counting: get and put
+
+The core of Runtime PM is a **usage counter**. The device stays active while the counter is > 0; it may be suspended when it reaches 0.
+
+```c
+#include <linux/pm_runtime.h>
+
+/* Increment usage count and wait for device to become active.
+   If device is suspended, resumes it first. */
+int ret = pm_runtime_get_sync(dev);
+if (ret < 0) {
+    /* Device could not be resumed — return error */
+    return ret;
+}
+
+/* ... use the device ... */
+
+/* Decrement usage count. If count reaches 0, idle callback fires.
+   The device MAY be suspended asynchronously after this. */
+pm_runtime_put(dev);
+
+/* Or: decrement and schedule suspend immediately */
+pm_runtime_put_autosuspend(dev);
+```
+
+The difference between `pm_runtime_put` variants:
+
+| Function | Behavior |
+|----------|---------- |
+| `pm_runtime_put_sync` | Suspends synchronously if count reaches 0 |
+| `pm_runtime_put` | Schedules async suspend if count reaches 0 |
+| `pm_runtime_put_autosuspend` | Suspends after autosuspend delay |
+| `pm_runtime_put_noidle` | Decrements but does not trigger suspend |
+
+## Autosuspend
+
+Autosuspend adds a configurable delay before suspension. This prevents thrashing when a device is briefly idle between bursts of activity:
+
+```c
+/* In probe: enable autosuspend with 2-second delay */
+pm_runtime_set_autosuspend_delay(dev, 2000 /* ms */);
+pm_runtime_use_autosuspend(dev);
+pm_runtime_enable(dev);
+
+/* Mark the device as initially active (since probe just brought it up) */
+pm_runtime_get_noresume(dev);
+pm_runtime_set_active(dev);
+pm_runtime_put_autosuspend(dev);
+```
+
+The autosuspend delay is also exported to userspace:
+
+```bash
+# Read/write autosuspend delay for a device (ms, -1 = disabled)
+cat /sys/bus/usb/devices/1-1/power/autosuspend_delay_ms
+echo 1000 | sudo tee /sys/bus/usb/devices/1-1/power/autosuspend_delay_ms
+```
+
+## Runtime PM state machine
+
+```
+           pm_runtime_enable()
+                   │
+                   ▼
+              [RPM_ACTIVE]
+              usage_count > 0
+                   │
+         pm_runtime_put() → count=0
+                   │
+                   ▼
+              [RPM_IDLE]
+         idle callback fires
+                   │
+    idle CB returns 0 → pm_runtime_suspend()
+                   │
+                   ▼
+           [RPM_SUSPENDING]
+      runtime_suspend() callback
+                   │
+                   ▼
+           [RPM_SUSPENDED]
+                   │
+         pm_runtime_get_sync()
+                   │
+                   ▼
+           [RPM_RESUMING]
+      runtime_resume() callback
+                   │
+                   ▼
+              [RPM_ACTIVE]
+```
+
+### The idle callback
+
+The idle callback is called when usage count reaches 0. It decides whether to actually suspend:
+
+```c
+static int mydriver_runtime_idle(struct device *dev)
+{
+    struct mydata *priv = dev_get_drvdata(dev);
+
+    /* Don't suspend if there's pending work */
+    if (!list_empty(&priv->pending_list))
+        return -EBUSY;  /* don't suspend */
+
+    /* Let PM core call runtime_suspend */
+    return pm_runtime_autosuspend(dev);
+    /* or: return 0 (PM core will call runtime_suspend immediately) */
+}
+```
+
+## struct device power fields
+
+```c
+/* include/linux/pm.h */
+struct dev_pm_info {
+    pm_message_t        power_state;    /* current power state */
+    unsigned int        can_wakeup:1;   /* device can generate wakeup events */
+    unsigned int        async_suspend:1;
+    bool                in_dpm_list:1;
+
+    /* Runtime PM fields */
+    struct timer_list   suspend_timer;  /* autosuspend timer */
+    unsigned long       timer_expires;
+    struct work_struct  work;
+
+    wait_queue_head_t   wait_queue;
+    struct hrtimer      suspend_timer_hr;
+
+    atomic_t            usage_count;    /* get/put counter */
+    atomic_t            child_count;    /* children that are active */
+
+    unsigned int        disable_depth;  /* depth of pm_runtime_disable() calls */
+    int                 runtime_error;
+
+    int                 last_status;    /* RPM_ACTIVE/SUSPENDED/etc. */
+
+    enum rpm_status     runtime_status; /* current runtime PM state */
+    int                 runtime_usage;
+};
+```
+
+## Power domains
+
+A power domain is a hardware block that can be independently powered off. Multiple devices may share a domain — the domain stays on until all devices in it are suspended.
+
+```c
+/* drivers/base/power/domain.c */
+struct generic_pm_domain {
+    struct dev_pm_domain domain;    /* embedded — has dev_pm_ops */
+    struct list_head      gpd_list_node;
+
+    const char           *name;
+    atomic_t              sd_count;  /* number of active subdomains */
+    enum gpd_status       status;    /* GPD_STATE_ACTIVE/POWER_OFF */
+
+    unsigned int          device_count;
+    unsigned int          suspended_count;
+    unsigned int          prepared_count;
+
+    struct list_head      master_links; /* parent domains */
+    struct list_head      slave_links;  /* child domains */
+    struct list_head      dev_list;     /* devices in this domain */
+
+    int (*power_off)(struct generic_pm_domain *domain);
+    int (*power_on)(struct generic_pm_domain *domain);
+};
+```
+
+### genpd usage (ARM SoC example)
+
+```c
+/* SoC power domain setup (in platform code or device tree) */
+static struct generic_pm_domain gpu_pd = {
+    .name      = "gpu",
+    .power_off = gpu_domain_power_off,
+    .power_on  = gpu_domain_power_on,
+};
+
+/* Attach a device to the domain */
+pm_genpd_add_device(&gpu_pd, &gpu_dev);
+
+/* Now: when all devices in gpu_pd are runtime-suspended,
+   power_off() is called automatically */
+```
+
+## Runtime PM in interrupt context
+
+`pm_runtime_get_sync` may sleep (to wait for resume). This is not allowed in interrupt context. Use the non-blocking variant:
+
+```c
+/* In interrupt handler: try to get, but don't sleep */
+ret = pm_runtime_get_if_active(dev, true);
+if (!ret) {
+    /* Device is suspended, can't use it now — schedule work */
+    schedule_work(&priv->deferred_work);
+    return IRQ_HANDLED;
+}
+
+/* Device is active */
+handle_interrupt(dev);
+pm_runtime_put(dev);
+return IRQ_HANDLED;
+```
+
+## Observing Runtime PM
+
+```bash
+# Runtime PM status for all PCI devices
+for d in /sys/bus/pci/devices/*/; do
+    echo -n "$d: "
+    cat "$d/power/runtime_status" 2>/dev/null || echo "N/A"
+done
+
+# Usage count and autosuspend
+cat /sys/bus/pci/devices/0000:00:02.0/power/runtime_usage
+cat /sys/bus/pci/devices/0000:00:02.0/power/autosuspend_delay_ms
+
+# Enable runtime PM for a device (some drivers require userspace enable)
+echo auto | sudo tee /sys/bus/usb/devices/1-1/power/control
+echo on   | sudo tee /sys/bus/usb/devices/1-1/power/control  # disable
+
+# PM tracepoints
+echo 1 > /sys/kernel/tracing/events/rpm/enable
+cat /sys/kernel/tracing/trace_pipe
+# mydriver 0000:01:00.0: rpm_suspend flags 0x4
+# mydriver 0000:01:00.0: rpm_suspended flags 0x4
+
+# powertop shows device runtime PM activity
+sudo powertop --html=powertop.html
+```
+
+## Common pitfalls
+
+### Forgetting pm_runtime_enable
+
+```c
+/* WRONG: runtime PM is disabled by default */
+static int mydriver_probe(struct platform_device *pdev)
+{
+    /* ... setup ... */
+    /* missing: pm_runtime_enable(&pdev->dev) */
+    return 0;
+}
+/* pm_runtime_get_sync will always return -EACCES */
+```
+
+### Not balancing get/put
+
+```c
+/* WRONG: skipping put on error path */
+static int mydriver_do_io(struct device *dev)
+{
+    pm_runtime_get_sync(dev);
+    if (error_condition)
+        return -EIO;  /* leaked get! usage_count never decremented */
+    pm_runtime_put(dev);
+    return 0;
+}
+
+/* RIGHT: always put */
+static int mydriver_do_io(struct device *dev)
+{
+    int ret;
+    pm_runtime_get_sync(dev);
+    ret = do_actual_io(dev);
+    pm_runtime_put(dev);
+    return ret;
+}
+```
+
+### Calling get_sync in atomic context
+
+```c
+/* WRONG: pm_runtime_get_sync may sleep */
+spin_lock_irqsave(&lock, flags);
+pm_runtime_get_sync(dev);  /* may sleep! BUG */
+```
+
+## Further reading
+
+- [cpufreq](cpufreq.md) — CPU-level frequency/voltage scaling
+- [System Suspend](suspend.md) — system-wide sleep states
+- [Device Drivers: platform driver](../drivers/platform-driver.md) — devm_ and probe flow
+- `drivers/base/power/` in the kernel tree — runtime PM core
+- `Documentation/power/runtime_pm.rst` in the kernel tree
