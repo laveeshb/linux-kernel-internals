@@ -122,8 +122,10 @@ nav:
       - Life of a malloc: mm/life-of-malloc.md
       - Life of a page: mm/life-of-page.md
       - What happens when you fork: mm/fork.md
+      - What happens during exec(): mm/exec.md
       - Running out of memory: mm/oom.md
       - Life of a file read: mm/life-of-read.md
+      - File-backed mmap and page faults: mm/file-mmap.md
       - What happens during swapping: mm/swapping.md
     - Explainers:
       - Virtual vs Physical vs Resident: mm/virtual-physical-resident.md
