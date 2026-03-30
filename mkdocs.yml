@@ -331,8 +331,10 @@ nav:
   - Tracing:
     - Getting Started: tracing/README.md
     - ftrace: tracing/ftrace.md
+    - ftrace Advanced: tracing/ftrace-advanced.md
     - Kprobes and Tracepoints: tracing/kprobes-tracepoints.md
     - perf Events: tracing/perf-events.md
+    - perf Profiling Advanced: tracing/perf-profiling.md
   - Kernel Modules:
     - Getting Started: modules/README.md
     - Writing and Loading Modules: modules/module-basics.md
