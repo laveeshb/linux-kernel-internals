@@ -266,6 +266,10 @@ nav:
     - Lifecycle:
       - Life of a write() Syscall: vfs/life-of-write.md
       - Dentry and Inode Caches: vfs/dcache-icache.md
+    - Advanced:
+      - splice, sendfile, copy_file_range: vfs/splice-sendfile.md
+      - inotify and fanotify: vfs/inotify.md
+      - Extended Attributes (xattr): vfs/xattr.md
   - Block Layer:
     - Getting Started: block/README.md
     - Block Layer Overview: block/block-overview.md
