@@ -200,3 +200,7 @@ nav:
       - "sk_buff: The Network Buffer": net/sk-buff.md
       - Socket Layer Overview: net/socket-layer.md
       - Network Device and NAPI: net/napi.md
+    - Lifecycle:
+      - Life of a Packet (receive): net/life-of-packet-rx.md
+      - Life of a Packet (transmit): net/life-of-packet-tx.md
+      - What Happens When You connect(): net/connect.md
