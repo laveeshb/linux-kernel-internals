@@ -344,6 +344,7 @@ nav:
   - Filesystems:
     - Getting Started: filesystems/README.md
     - ext4: filesystems/ext4.md
+    - ext4 Journaling (JBD2): filesystems/ext4-journal.md
     - tmpfs and ramfs: filesystems/tmpfs.md
     - btrfs: filesystems/btrfs.md
     - OverlayFS: filesystems/overlayfs.md
