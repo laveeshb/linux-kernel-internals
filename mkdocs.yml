@@ -231,6 +231,7 @@ nav:
     - Advanced:
       - Container Networking: net/container-networking.md
       - Kernel TLS (kTLS): net/ktls.md
+      - Netlink: net/netlink.md
     - Debugging & Observability:
       - Network Debugging with ss and ip: net/net-debugging.md
       - Network Tracing: net/net-tracing.md
@@ -279,6 +280,7 @@ nav:
       - splice, sendfile, copy_file_range: vfs/splice-sendfile.md
       - inotify and fanotify: vfs/inotify.md
       - Extended Attributes (xattr): vfs/xattr.md
+      - procfs and sysfs: vfs/procfs-sysfs.md
   - Block Layer:
     - Getting Started: block/README.md
     - Block Layer Overview: block/block-overview.md
