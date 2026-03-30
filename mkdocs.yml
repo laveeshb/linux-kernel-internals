@@ -234,3 +234,15 @@ nav:
       - Lockdep: locking/lockdep.md
       - Lock Contention Debugging: locking/lock-debugging.md
       - Futex Internals: locking/futex.md
+  - Interrupts:
+    - Getting Started: interrupts/README.md
+    - Fundamentals:
+      - Interrupt Handling Overview: interrupts/interrupts.md
+      - IRQ Descriptor and irq_chip: interrupts/irq-desc.md
+      - request_irq and free_irq: interrupts/request-irq.md
+      - Threaded IRQs: interrupts/threaded-irq.md
+    - Deferred Work:
+      - Softirqs: interrupts/softirq.md
+      - Tasklets: interrupts/tasklets.md
+      - Workqueues: interrupts/workqueues.md
+      - Timers and hrtimers: interrupts/timers.md
