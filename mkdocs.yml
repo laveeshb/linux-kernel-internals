@@ -228,3 +228,9 @@ nav:
       - rwlock and rwsem: locking/rwlock-rwsem.md
       - RCU (Read-Copy-Update): locking/rcu.md
       - Seqlock: locking/seqlock.md
+    - Advanced:
+      - Atomic Operations and Memory Barriers: locking/atomics.md
+      - Per-CPU Variables: locking/percpu.md
+      - Lockdep: locking/lockdep.md
+      - Lock Contention Debugging: locking/lock-debugging.md
+      - Futex Internals: locking/futex.md
