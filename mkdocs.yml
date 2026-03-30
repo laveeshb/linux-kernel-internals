@@ -368,6 +368,8 @@ nav:
   - Power Management:
     - Getting Started: power/README.md
     - cpufreq and P-states: power/cpufreq.md
+    - cpuidle and C-states: power/cpuidle.md
+    - Thermal Management: power/thermal.md
     - Runtime PM: power/runtime-pm.md
     - System Suspend: power/suspend.md
   - Time:
