@@ -456,15 +456,15 @@ interval:s:60 { print(@); clear(@); }'
 
 Fires when pages are isolated from the LRU as part of a collapse attempt.
 
-**Fields**: `nr_migrate_scanned`, `nr_free_scanned`, `pfn`, `result`
+**Fields**: `pfn`, `none_or_zero`, `referenced`, `status`
 
-**Diagnostic use**: A non-zero `result` here means the isolation step itself failed — the pages were busy (under I/O, locked, etc.) and could not be moved.
+**Diagnostic use**: A non-zero `status` here means the isolation step itself failed — the pages were busy (under I/O, locked, etc.) and could not be moved.
 
 ### mm_khugepaged_scan_pmd
 
 Fires when khugepaged scans a PMD entry looking for collapse opportunities.
 
-**Fields**: `mm`, `pfn`, `writable`, `referenced`, `none_or_zero`, `status`, `unmapped`
+**Fields**: `mm`, `pfn`, `referenced`, `none_or_zero`, `status`, `unmapped`
 
 ---
 
