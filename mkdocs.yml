@@ -337,3 +337,7 @@ nav:
     - KGDB: debugging/kgdb.md
     - kdump and crash: debugging/kdump.md
     - Oops Analysis: debugging/oops-analysis.md
+  - Crypto:
+    - Getting Started: crypto/README.md
+    - Kernel Crypto API: crypto/crypto-api.md
+    - dm-crypt and fscrypt: crypto/encryption.md
