@@ -300,6 +300,10 @@ nav:
     - Signals: ipc/signals.md
     - Pipes and FIFOs: ipc/pipes.md
     - Shared Memory and Semaphores: ipc/shared-memory.md
+  - I/O Patterns:
+    - Getting Started: io/README.md
+    - Direct I/O: io/direct-io.md
+    - Async I/O Evolution: io/async-io.md
   - io_uring:
     - Getting Started: io-uring/README.md
     - Architecture and Rings: io-uring/io-uring-arch.md
