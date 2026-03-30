@@ -120,6 +120,10 @@ nav:
     - Debugging:
       - KASAN: mm/kasan.md
       - KFENCE: mm/kfence.md
+      - Kmemleak: mm/kmemleak.md
+      - Page Poisoning: mm/page-poisoning.md
+      - MM Tracepoints: mm/mm-tracepoints.md
+      - Fault Injection: mm/fault-injection.md
       - Why is my process slow?: mm/why-is-my-process-slow.md
       - Reading an OOM log: mm/reading-oom-log.md
       - OOM Debugging: mm/oom-debugging.md
