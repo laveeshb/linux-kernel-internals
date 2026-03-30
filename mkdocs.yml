@@ -215,6 +215,9 @@ nav:
       - XDP (eXpress Data Path): net/xdp.md
       - AF_XDP Sockets: net/af-xdp.md
       - TC and qdisc: net/tc-qdisc.md
+    - Advanced:
+      - Container Networking: net/container-networking.md
+      - Kernel TLS (kTLS): net/ktls.md
     - Debugging & Observability:
       - Network Debugging with ss and ip: net/net-debugging.md
       - Network Tracing: net/net-tracing.md
