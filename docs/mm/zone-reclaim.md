@@ -168,7 +168,7 @@ Its bits are defined in `include/uapi/linux/mempolicy.h`:
 ```c
 #define RECLAIM_ZONE  (1<<0)  /* Enable zone reclaim */
 #define RECLAIM_WRITE (1<<1)  /* Writeout pages during reclaim */
-#define RECLAIM_UNMAP (1<<2)  /* Unmap mapped file pages during reclaim */
+#define RECLAIM_UNMAP (1<<2)  /* Unmap pages during reclaim */
 ```
 
 The bits are additive:
