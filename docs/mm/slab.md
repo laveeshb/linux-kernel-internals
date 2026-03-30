@@ -404,7 +404,7 @@ The exploit uses a **cross-cache attack**:
 
 **Commit**: [e677edbcabee](https://git.kernel.org/linus/e677edbcabee) ("io_uring: fix race between timeout flush and removal")
 
-**Author**: Pavel Begunkov
+**Author**: Jens Axboe
 
 ---
 

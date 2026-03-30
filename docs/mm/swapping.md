@@ -891,7 +891,7 @@ The classic deadlock scenario:
 
 **`PF_MEMALLOC` and memory reserves**: The kernel reserves memory for critical I/O paths. Processes doing swap I/O can dip into reserves.
 
-**Swap-over-NBD patches**: Commit [c32a8d1eddb0](https://git.kernel.org/linus/c32a8d1eddb0) and related work improved network swap reliability.
+**Swap-over-NBD patches**: Multiple patches over the years improved network swap reliability.
 
 **Practical advice**: Don't swap to NFS in production. Use local swap or zram.
 
