@@ -25,21 +25,24 @@ It was implemented for Linux by Peter Zijlstra (Intel) and merged in kernel 6.6 
 A task is **eligible** if it hasn't consumed more than its fair share of CPU up to the current virtual time. Informally: a task that has been running too much is ineligible and shouldn't preempt others.
 
 ```c
-// kernel/sched/fair.c
-static bool vruntime_eligible(struct cfs_rq *cfs_rq, u64 vruntime)
+// kernel/sched/fair.c:797
+static int vruntime_eligible(struct cfs_rq *cfs_rq, u64 vruntime)
 {
     struct sched_entity *curr = cfs_rq->curr;
-    s64 avg = cfs_rq->avg_vruntime;
-    long load = cfs_rq->avg_load;
+    s64 avg = cfs_rq->sum_w_vruntime;
+    long load = cfs_rq->sum_weight;
 
-    if (curr && curr->on_rq)
-        avg += entity_key(cfs_rq, curr) * curr->load.weight;
+    if (curr && curr->on_rq) {
+        unsigned long weight = scale_load_down(curr->load.weight);
+        avg += entity_key(cfs_rq, curr) * weight;
+        load += weight;
+    }
 
-    return vruntime * load < avg;
+    return avg >= vruntime_op(vruntime, "-", cfs_rq->zero_vruntime) * load;
 }
 ```
 
-A task is eligible if its `vruntime` is at or behind the weighted average vruntime of the runqueue.
+A task is eligible if the weighted sum of vruntimes (`sum_w_vruntime`) is at least as large as the task's adjusted vruntime scaled by the total weight — i.e., the task has not consumed more than its fair share.
 
 ### Virtual deadline
 

@@ -68,7 +68,7 @@ Con Kolivas, a Linux contributor and anesthesiologist, spent years writing patch
 
 **Author**: Ingo Molnar (inspired by Con Kolivas's work)
 
-**Commit**: [2bd8e7d04a0a](https://git.kernel.org/linus/2bd8e7d04a0a) (initial CFS merge)
+**Release**: [v2.6.23](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tag/?h=v2.6.23) (October 2007)
 
 CFS replaced the O(1) scheduler's heuristics with a single elegant concept: **virtual runtime**.
 
