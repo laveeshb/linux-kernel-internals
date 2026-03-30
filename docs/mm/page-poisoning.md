@@ -24,7 +24,7 @@ The implementation lives in [`mm/page_poison.c`](https://git.kernel.org/pub/scm/
 
 The pattern used:
 
-- **On free**: pages are filled with `0xAA` (by `kernel_poison_pages()` called from `__free_pages_ok()` in [`mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c))
+- **On free**: pages are filled with `0xAA` (by `kernel_poison_pages()` called from `__free_pages_prepare()` in [`mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c))
 - **On alloc**: the kernel verifies every byte is still `0xAA` before handing the page to the requester, then fills with `0x00`
 
 ```
@@ -184,10 +184,10 @@ CONFIG_INIT_ON_FREE_DEFAULT_ON=y
 
 The v5.3 commit message measured the overhead on kernel compilation (a CPU-and-allocation-intensive workload):
 
-- `init_on_alloc=1`: approximately 2% slowdown on kernel build
-- `init_on_free=1`: approximately 1% slowdown on kernel build
+- `init_on_alloc=1`: under 1% overhead (zeroing at alloc is largely overlapped with cache warming)
+- `init_on_free=1`: ~8% wall time overhead on kernel build; `security/Kconfig.hardening` documents this as "3–5% in most cases"
 
-These figures reflect a CPU-bound workload. Memory-allocation-heavy workloads (network stack, filesystem I/O, large heap churn) will see higher relative overhead because the zeroing touches more memory per unit of work. Workloads that allocate large contiguous buffers once and reuse them see near-zero overhead.
+`init_on_free` is significantly more expensive than `init_on_alloc` because freed memory is cold cache — zeroing it forces cache misses. Memory-allocation-heavy workloads will see higher relative overhead. Workloads that allocate large contiguous buffers once and reuse them see near-zero overhead.
 
 !!! note
     If `CONFIG_PAGE_POISONING` is also enabled, `init_on_free` and page poisoning both run on free. The kernel does not deduplicate them automatically; you may zero pages twice. Disable one if you enable the other for production-like performance testing.
@@ -257,9 +257,8 @@ Alternatively, target a specific cache at runtime via sysfs:
 # Check which caches exist
 ls /sys/kernel/slab/
 
-# Enable poisoning for a specific cache at runtime
-# (only effective for objects not yet allocated in that cache)
-echo 1 > /sys/kernel/slab/kmalloc-64/poison
+# Check poison status of a specific cache (read-only — reflects compile-time SLAB_POISON flag)
+cat /sys/kernel/slab/kmalloc-64/poison
 ```
 
 Require `CONFIG_SLUB_DEBUG=y` in the kernel config (typically enabled in debug kernels automatically).

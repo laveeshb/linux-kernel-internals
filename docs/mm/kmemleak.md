@@ -31,7 +31,7 @@ Kmemleak uses an algorithm inspired by **garbage collector tri-color marking**. 
 ```
 White  ── not yet reachable from any root; candidate for reporting
 Gray   ── reachable (a pointer to it was found during scanning)
-Black  ── explicitly told to ignore (kmemleak_ignore / kmemleak_not_leak)
+Black  ── explicitly told to ignore (kmemleak_ignore only)
 ```
 
 At the end of a scan:
@@ -49,7 +49,7 @@ To find pointers, kmemleak scans:
 2. **The init section** (`.init.data`) before it is freed
 3. **Per-CPU data areas** — per-CPU variables that could hold allocation pointers
 4. **Stack of every thread** — each task's kernel stack is scanned for pointer-like values
-5. **CPU registers** (where architectures support it) — via `kmemleak_scan_area()` hooks at the time of scanning
+5. **Extra scan areas** explicitly registered via `kmemleak_scan_area()` — used by subsystems that store pointers in memory regions not covered by the above
 
 Any value in any of these regions that **looks like** a pointer into a tracked allocation marks that allocation gray (reachable).
 
@@ -85,7 +85,7 @@ A kernel thread (`kmemleak` kthread) periodically executes `kmemleak_scan()`. Th
 
 1. **Marks all objects white** (candidate state)
 2. **Walks all scan areas** (data, BSS, per-CPU, stacks) looking for pointer values
-3. **Colors reachable objects gray** via `paint_it_gray()`
+3. **Colors reachable objects gray** — objects pointed to by a scanned root are marked reachable via `make_gray_object()`
 4. **Reports survivors** — any object still white after the full walk is reported as a potential leak
 
 The scan is also triggered on demand via the debugfs interface (see [Using Kmemleak](#using-kmemleak)).
@@ -188,7 +188,7 @@ echo clear > /sys/kernel/debug/kmemleak
 # Disable kmemleak at runtime (stops tracking new allocations)
 echo off > /sys/kernel/debug/kmemleak
 
-# Dump all tracked objects (not just unreferenced ones) — verbose
+# Dump information about the tracked object at a specific address
 echo dump=0xffff88801a2b4c00 > /sys/kernel/debug/kmemleak
 ```
 

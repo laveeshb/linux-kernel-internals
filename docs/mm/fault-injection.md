@@ -62,7 +62,7 @@ When `CONFIG_FAULT_INJECTION_DEBUG_FS=y` is enabled, each fault type exposes a d
 │   ├── probability        ← integer 0-100 (percent chance of failure per call)
 │   ├── interval           ← fail at most 1 in N calls (0 = no limit)
 │   ├── times              ← how many times to fail (-1 = unlimited)
-│   ├── space              ← minimum free memory (KB) needed before injecting
+│   ├── space              ← call-budget counter; decremented by alloc size; injection suppressed until it reaches zero
 │   ├── verbose            ← 0=quiet, 1=log failures, 2=log + stack trace
 │   ├── task-filter        ← if 1: only fail tasks with make-it-fail=1
 │   └── stacktrace-depth   ← how many stack frames to inspect for filtering
@@ -159,7 +159,7 @@ echo 1 > /sys/kernel/debug/failslab/stacktrace-depth
 # (stacktrace-depth controls how many frames to inspect)
 ```
 
-The stack trace filter works by reading the call stack at the point `should_fail()` is called and checking whether any frame matches a configured pattern. See [`lib/fault-inject.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/fault-inject.c) — specifically `fail_stacktrace()` — for the implementation.
+The stack trace filter works by reading the call stack at the point `should_fail()` is called and checking whether any frame falls within a configured **address range** (`require-start`/`require-end` to require a frame, `reject-start`/`reject-end` to exclude one). Addresses are written as hex values to the corresponding debugfs files. See [`lib/fault-inject.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/fault-inject.c) — specifically `fail_stacktrace()` — for the implementation.
 
 In practice, the stack filter is most often used via the helper script provided in the kernel tree.
 

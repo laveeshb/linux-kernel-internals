@@ -310,24 +310,24 @@ Fires when the OOM killer selects a process to kill.
 | Field | Type | Description |
 |-------|------|-------------|
 | `pid` | `int` | PID of the victim process |
+| `uid` | `uid_t` | UID of the victim |
 | `comm` | `char[]` | Process name |
-| `oom_score_adj` | `long` | The victim's oom_score_adj |
-| `total_vm` | `unsigned long` | Victim's total virtual memory (pages) |
-| `anon_rss` | `unsigned long` | Anonymous RSS (pages) |
-| `file_rss` | `unsigned long` | File-backed RSS (pages) |
-| `shmem_rss` | `unsigned long` | Shared memory RSS (pages) |
-| `pgtables_bytes` | `unsigned long` | Page table memory (bytes) |
-| `mm_flags` | `unsigned long` | mm_struct flags |
+| `oom_score_adj` | `short` | The victim's oom_score_adj |
+| `total_vm` | `unsigned long` | Victim's total virtual memory (kB) |
+| `anon_rss` | `unsigned long` | Anonymous RSS (kB) |
+| `file_rss` | `unsigned long` | File-backed RSS (kB) |
+| `shmem_rss` | `unsigned long` | Shared memory RSS (kB) |
+| `pgtables` | `unsigned long` | Page table memory (kB) |
 
 **Diagnostic use**: This is the single most useful OOM tracepoint for production monitoring. Subscribe to `mark_victim` to get a structured event every time the OOM killer fires, including which process was selected and why.
 
 ```bash
-# Alert on OOM kills with process details
+# Alert on OOM kills with process details (RSS values are in kB)
 bpftrace -e '
 tracepoint:oom:mark_victim {
-    $rss = args->anon_rss + args->file_rss + args->shmem_rss;
-    printf("OOM kill: pid=%d comm=%s rss_pages=%lu adj=%d\n",
-           args->pid, args->comm, $rss, args->oom_score_adj);
+    $rss_kb = args->anon_rss + args->file_rss + args->shmem_rss;
+    printf("OOM kill: pid=%d comm=%s rss=%lu kB adj=%d\n",
+           args->pid, args->comm, $rss_kb, args->oom_score_adj);
 }'
 ```
 
@@ -382,7 +382,7 @@ Fires when a compaction pass starts and ends.
 | `free_pfn` | `unsigned long` | Final free-page scanner position |
 | `zone_end` | `unsigned long` | Zone end PFN |
 | `sync` | `bool` | Synchronous compaction |
-| `status` | `int` | Result: `COMPACT_SUCCESS`, `COMPACT_PARTIAL`, `COMPACT_CONTINUE`, `COMPACT_SKIPPED`, `COMPACT_DEFERRED`, `COMPACT_NOT_SUITABLE_ZONE` |
+| `status` | `int` | Result: `COMPACT_SUCCESS`, `COMPACT_PARTIAL_SKIPPED`, `COMPACT_CONTINUE`, `COMPACT_SKIPPED`, `COMPACT_DEFERRED`, `COMPACT_NOT_SUITABLE_ZONE`, `COMPACT_CONTENDED` |
 
 **Diagnostic use**: Track compaction duration and success rate. Frequent `COMPACT_DEFERRED` statuses mean the kernel has given up trying to compact a zone (too many failed attempts). `COMPACT_SUCCESS` followed by a successful high-order allocation confirms fragmentation was the root cause.
 
@@ -629,13 +629,13 @@ Set up a persistent monitor that logs every OOM kill with process details:
 ```bash
 bpftrace -e '
 tracepoint:oom:mark_victim {
-    $rss = args->anon_rss + args->file_rss + args->shmem_rss;
+    $rss_kb = args->anon_rss + args->file_rss + args->shmem_rss;
     time("%H:%M:%S ");
-    printf("OOM KILL pid=%d comm=%s rss=%lu pages (%lu MB) adj=%d\n",
+    printf("OOM KILL pid=%d comm=%s rss=%lu kB (%lu MB) adj=%d\n",
            args->pid,
            args->comm,
-           $rss,
-           $rss * 4 / 1024,
+           $rss_kb,
+           $rss_kb / 1024,
            args->oom_score_adj);
 }'
 ```
