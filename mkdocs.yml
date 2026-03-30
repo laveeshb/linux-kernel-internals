@@ -184,3 +184,9 @@ nav:
       - RT Scheduler: sched/rt-scheduler.md
       - SCHED_DEADLINE: sched/deadline.md
       - Priority Inversion & PI Mutexes: sched/pi-mutexes.md
+    - Resource Control & Topology:
+      - CPU cgroup (v1 vs v2): sched/cpu-cgroup.md
+      - CPU Bandwidth Control: sched/cpu-bandwidth.md
+      - cpuset: sched/cpuset.md
+      - Scheduling Domains: sched/sched-domains.md
+      - CPU Affinity: sched/cpu-affinity.md
