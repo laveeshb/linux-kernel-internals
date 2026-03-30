@@ -1,242 +1,349 @@
-# btrfs
+# Btrfs: B-tree Filesystem
 
-> Copy-on-Write B-tree filesystem with snapshots, checksums, and RAID
+> Copy-on-write B-tree layout, snapshots, subvolumes, and RAID
 
-## Core concepts
+## Why Btrfs?
 
-btrfs is built on a single fundamental mechanism: **Copy-on-Write (CoW) B-trees**. Instead of modifying data in-place, btrfs writes new versions and updates parent pointers atomically. This enables:
+Btrfs (B-tree filesystem) was designed to address limitations of ext4:
 
-- **Snapshots**: zero-copy point-in-time copies (shared CoW pages)
-- **Checksums**: every data and metadata block is checksummed
-- **Self-healing**: with redundant data, corrupted blocks are repaired automatically
-- **Online resize**: grow/shrink while mounted
-- **Built-in RAID**: stripe, mirror, or RAID5/6 without MD/LVM
+| Feature | ext4 | Btrfs |
+|---------|------|-------|
+| Max volume | 1 EiB | 16 EiB |
+| Checksums | No | Yes (CRC32C/xxhash/SHA256) |
+| Snapshots | No | Yes (instant, writable) |
+| Subvolumes | No | Yes (independent namespaces) |
+| RAID | mdraid only | Built-in RAID 0/1/5/6/10 |
+| Compression | No | zlib/lzo/zstd inline |
+| Deduplication | No | Offline (duperemove) |
+| Send/receive | No | Yes (incremental backups) |
+| Copy-on-write | Metadata only | Data + metadata |
 
-## The B-tree structure
+## B-tree structure
 
-All btrfs data is organized in a forest of CoW B-trees. Each tree has a root stored in the superblock or its parent tree:
+Everything in Btrfs is stored in B-trees. There is no separate inode table or block bitmap — all metadata lives in these trees:
 
 ```
-Superblock
-    │
-    ├── Root Tree ─────────────────────────────────────┐
-    │   (tree of trees — maps tree IDs to roots)       │
-    │   ├── FS Tree root (subvol 5 = default)  ←───────┤
-    │   ├── Snapshot Tree root (subvol 256)    ←───────┤
-    │   └── ...                                        │
-    │                                                  │
-    ├── Chunk Tree ──────────────────────────────────── physical location mapping
-    │   (maps logical addresses to physical extents)
-    │
-    └── Device Tree ─────────────────────────────────── device info
+Btrfs superblock
+└── tree of tree roots
+    ├── root tree     ← metadata about all other trees
+    ├── extent tree   ← free space and block reference counts
+    ├── chunk tree    ← logical → physical address mapping
+    ├── device tree   ← physical devices
+    ├── checksum tree ← data block checksums
+    └── [subvolume trees]
+        ├── subvol 256 (default root)  ← files and directories
+        ├── subvol 257 (first snapshot)
+        └── ...
 ```
 
-### B-tree nodes
+### B-tree node format
 
 ```c
-/* fs/btrfs/ctree.h */
+/* include/uapi/linux/btrfs_tree.h */
+
+/* Every node starts with this header: */
 struct btrfs_header {
-    /* checksummed area starts here: */
-    u8      csum[BTRFS_CSUM_SIZE];  /* checksum of node */
-    u8      fsid[BTRFS_FSID_SIZE];  /* filesystem UUID */
-    __le64  bytenr;                  /* logical address of this node */
+    __u8    csum[BTRFS_CSUM_SIZE]; /* checksum of this block */
+    __u8    fsid[BTRFS_FSID_SIZE]; /* filesystem UUID */
+    __le64  bytenr;                /* this block's bytenr (logical addr) */
     __le64  flags;
-    u8      chunk_tree_uuid[BTRFS_UUID_SIZE];
-    __le64  generation;              /* transaction ID that wrote this */
-    __le64  owner;                   /* which tree owns this node */
-    __le32  nritems;                 /* number of items */
-    u8      level;                   /* 0 = leaf, >0 = internal */
+    __u8    chunk_tree_uuid[BTRFS_UUID_SIZE];
+    __le64  generation;            /* transaction ID when written */
+    __le64  owner;                 /* tree ID this node belongs to */
+    __le32  nritems;               /* number of items */
+    __u8    level;                 /* 0 = leaf, >0 = internal node */
 };
 
-/* Leaf node item (internal nodes use btrfs_key_ptr instead): */
-struct btrfs_item {
+/* Internal node: array of (key, blockptr) pairs */
+struct btrfs_key_ptr {
     struct btrfs_disk_key key;
-    __le32 offset;  /* offset within leaf data area */
-    __le32 size;    /* size of item data */
+    __le64 blockptr;           /* child node address */
+    __le64 generation;
 };
 
-/* Key: identifies all btrfs items */
-struct btrfs_disk_key {
-    __le64  objectid;   /* inode number, subvol ID, etc. */
-    u8      type;       /* BTRFS_INODE_ITEM_KEY, BTRFS_EXTENT_DATA_KEY, ... */
-    __le64  offset;     /* file offset, extent start, etc. */
+/* Leaf node: items + data packed from both ends */
+struct btrfs_item {
+    struct btrfs_disk_key key;  /* (objectid, type, offset) triple */
+    __le32 offset;              /* data offset from end of leaf */
+    __le32 size;                /* data size */
 };
+/* Item data sits at end of leaf, items array at start, they grow toward center */
 ```
 
-## Copy-on-Write mechanics
+### Keys
 
-When btrfs modifies a block:
+Every item in every Btrfs tree has a 3-part key:
 
 ```
-1. Allocate a new block at a free location
-2. Write new data to the new block
-3. Update parent node: change pointer to new block
-4. Parent node is also CoW'd (recursively up to the root)
-5. Update superblock to point to new root
-6. Old blocks are freed when no snapshot references them
+(objectid, type, offset)
+   ↑            ↑      ↑
+ inode#    item type  varies
+
+Examples:
+(256, INODE_ITEM,    0)           → inode metadata
+(256, INODE_REF,     parent_id)   → directory reference
+(256, EXTENT_DATA,   file_offset) → file data mapping
+(256, DIR_ITEM,      name_hash)   → directory entry
+(256, XATTR_ITEM,    name_hash)   → extended attribute
 ```
 
-This means:
-- Old data remains valid until all snapshots drop their references
-- No partial writes: either the new root is committed or the old is used
-- Crash safety: the superblock update is atomic (single write)
+## Copy-on-write semantics
+
+Btrfs never overwrites data in place. Every write creates new blocks:
+
+```
+Write to file:
+  1. Allocate new block(s) from extent tree
+  2. Write new data to new block
+  3. Update file's EXTENT_DATA item → new block address
+  4. COW the leaf containing EXTENT_DATA
+  5. COW all parent nodes up to root
+  6. Update root pointer in superblock
+
+Old blocks become unreferenced → freed in next transaction
+
+Benefits:
+  • Crash safety: superblock update is atomic, old tree still valid
+  • Snapshots: share unchanged blocks between snapshots
+  • No journal needed for metadata consistency
+```
+
+```
+Before write:                After write:
+
+Root ──→ [A]                 Root ──→ [A']  (new)
+         │                            │
+        [B]                          [B']  (new)
+         │                            │
+        [leaf: extent→blk1]          [leaf': extent→blk2]  (new)
+
+blk1 still valid (could be shared by snapshot)
+```
 
 ## Subvolumes and snapshots
 
-A **subvolume** is an independent filesystem tree (its own FS tree root). The default mount point is subvolume 5 (or the one set with `btrfs subvolume set-default`).
+A **subvolume** is an independently rootable B-tree (its own root inode):
 
 ```bash
-# Create a subvolume
-btrfs subvolume create /data/mysubvol
-# mounts as: /data/mysubvol/
+# Create a subvolume:
+btrfs subvolume create /data/myapp
 
-# List subvolumes
+# List subvolumes:
 btrfs subvolume list /data
-# ID 256 gen 42 top level 5 path mysubvol
+# ID 256 gen 100 top level 5 path myapp
+# ID 257 gen 102 top level 5 path myapp-snap-2024
 
-# Snapshot: instant copy-on-write copy
-btrfs subvolume snapshot /data/mysubvol /data/snap-20240115
-# Takes nanoseconds: just creates a new root pointing to same leaves
+# Create a snapshot (instant, CoW):
+btrfs subvolume snapshot /data/myapp /data/myapp-snap-2024
+# Read-only snapshot:
+btrfs subvolume snapshot -r /data/myapp /data/myapp-backup
 
-# Read-only snapshot (for backups)
-btrfs subvolume snapshot -r /data/mysubvol /data/snap-readonly
+# Delete snapshot:
+btrfs subvolume delete /data/myapp-snap-2024
 
-# Delete a subvolume/snapshot
-btrfs subvolume delete /data/snap-20240115
+# Set default subvolume (what mounts to /):
+btrfs subvolume set-default 256 /data
 ```
 
-### Snapshot internals
+Snapshot creation is O(1) — it just copies the B-tree root pointer. Shared blocks are reference-counted in the extent tree.
 
-A snapshot is just a new FS tree root that shares all B-tree nodes with its parent. Shared nodes have their reference counts incremented. When a shared node needs modification, it's CoW'd and the reference count decremented:
+## Extent tree: space accounting
 
+```c
+/* Each allocated extent has a back-reference: */
+struct btrfs_extent_item {
+    __le64  refs;          /* reference count */
+    __le64  generation;
+    __le64  flags;         /* BTRFS_EXTENT_FLAG_DATA or _TREE_BLOCK */
+};
+
+/* Inline back-reference (for single owner): */
+struct btrfs_extent_inline_ref {
+    __u8    type;           /* BTRFS_EXTENT_DATA_REF_KEY etc. */
+    __le64  offset;         /* depends on type */
+};
 ```
-Before snapshot:         After snapshot:
-FS Tree                  FS Tree    Snapshot
-  Root                     Root       Root
-  [gen=42]                [gen=42]   [gen=42]←─shared, refcount=2
-     │                       │         │
-   dir a                   dir a     dir a (same node, refcount=2)
-```
 
-When a file in the snapshot changes, only the modified path gets CoW'd; unchanged subtrees remain shared.
+```bash
+# Show extent usage:
+btrfs filesystem df /data
+# Data, single: total=2.00GiB, used=1.23GiB
+# Metadata, DUP: total=256.00MiB, used=12.50MiB
+# System, DUP: total=8.00MiB, used=16.00KiB
+
+# Detailed space info:
+btrfs filesystem usage /data
+
+# Show shared extents between snapshots:
+btrfs inspect-internal dump-tree -t extent /dev/sda1 | head -50
+```
 
 ## Checksums
 
-Every data and metadata block has a checksum stored in its B-tree parent:
+Btrfs checksums every data block and every metadata block:
 
 ```bash
-# Default checksum: crc32c
-btrfs inspect-internal dump-super /dev/sda | grep csum_type
-# csum_type 0 (crc32c)
+# Default checksum: crc32c (fast, hardware-accelerated)
+# Available: xxhash (faster), sha256, blake2b (collision-resistant)
 
-# SHA256 checksum (slower but cryptographic)
-mkfs.btrfs --checksum sha256 /dev/sda
+# Set checksum at mkfs:
+mkfs.btrfs --checksum xxhash /dev/sda1
 
-# BLAKE2b (fast and cryptographic)
-mkfs.btrfs --checksum blake2 /dev/sda
+# Check filesystem:
+btrfs scrub start /data          # verify all checksums
+btrfs scrub status /data         # check progress
+# scrub device /dev/sda1 (id 1) done
+# total bytes scrubbed: 100.23GiB with 0 errors
 
-# Verify checksums
-btrfs scrub start /data    # check all data/metadata on device
-btrfs scrub status /data   # check status
+# Scrub finds silent bit-rot that ext4 would miss!
 ```
 
-When a read encounters a checksum mismatch:
-- Single device: returns EIO
-- RAID1/RAID10: reads from redundant copy and repairs the bad block
+```c
+/* Kernel verifies checksum on every read: */
+/* fs/btrfs/disk-io.c */
+static int csum_one_extent_buffer(struct extent_buffer *eb)
+{
+    struct btrfs_fs_info *fs_info = eb->fs_info;
+    u8 result[BTRFS_CSUM_SIZE];
+    int ret;
 
-## Built-in RAID
-
-```bash
-# Create with RAID1 metadata + RAID1 data (2 devices)
-mkfs.btrfs -m raid1 -d raid1 /dev/sda /dev/sdb
-
-# RAID5 (3+ devices, 1 parity)
-mkfs.btrfs -m raid1 -d raid5 /dev/sda /dev/sdb /dev/sdc
-
-# Check RAID status
-btrfs filesystem df /data
-# Data, RAID1: total=10.00GiB, used=8.50GiB
-# Metadata, RAID1: total=1.00GiB, used=0.50GiB
-
-# Balance: restripe data across devices
-btrfs balance start -dconvert=raid1 /data
+    btrfs_csum_block(fs_info, result, (char *)eb->pages[0]->virtual);
+    ret = memcmp_extent_buffer(eb, result,
+                                btrfs_csum_ptr(fs_info, eb->data),
+                                fs_info->csum_size);
+    if (ret)
+        btrfs_warn_rl(fs_info, "checksum verify failed on %llu",
+                       eb->start);
+    return ret;
+}
 ```
 
-## Deduplication
-
-btrfs supports extents sharing (CoW-based dedup):
+## Inline compression
 
 ```bash
-# Online dedup with duperemove
-duperemove -dr /data/
+# Mount with compression:
+mount -o compress=zstd /dev/sda1 /data      # zstd (best ratio/speed balance)
+mount -o compress=lzo /dev/sda1 /data       # lzo (fastest)
+mount -o compress=zlib /dev/sda1 /data      # zlib (best ratio)
+mount -o compress-force=zstd /dev/sda1 /data # force even for incompressible data
 
-# Or FIDEDUPERANGE ioctl (kernel 4.5+): share identical extents
-# btrfs-dedupe tool
+# Per-file compression:
+btrfs property set /data/bigfile compression zstd
+
+# Check compression ratio:
+compsize /data/bigfile
+# Type       Perc     Disk Usage   Uncompressed Referenced
+# TOTAL       42%      420M         1.00G        1.00G
+# zstd        42%      420M         1.00G        1.00G
 ```
 
-Dedup works by finding files with identical content ranges and pointing their extent references to the same physical block (with refcounting).
-
-## Transparent compression
+## Send/receive (incremental backups)
 
 ```bash
-# Mount with transparent compression
-mount -o compress=zstd /dev/sda /data    # zstd (recommended)
-mount -o compress=lzo /dev/sda /data     # lzo (faster)
-mount -o compress=zlib /dev/sda /data    # zlib (best ratio)
+# Full backup:
+btrfs subvolume snapshot -r /data/myapp /data/myapp-snap-1
+btrfs send /data/myapp-snap-1 | btrfs receive /backup/
 
-# Set per-file compression attribute
-btrfs property set /data/myfile compression zstd
+# Incremental: only changed blocks since snap-1
+btrfs subvolume snapshot -r /data/myapp /data/myapp-snap-2
+btrfs send -p /data/myapp-snap-1 /data/myapp-snap-2 | btrfs receive /backup/
+# Sends only the diff between snap-1 and snap-2
 
-# Check compression ratio
-compsize /data/
-# Uncompressed size:  100G
-# Compressed size:    60G
-# Compression ratio:  1.67
+# Over SSH:
+btrfs send /data/myapp-snap-2 | ssh backuphost "btrfs receive /backup/"
 ```
 
-## Send/receive: efficient incremental backup
+## RAID in Btrfs
 
 ```bash
-# Initial backup: send full snapshot
-btrfs subvolume snapshot -r /data/subvol /data/snap-1
-btrfs send /data/snap-1 | btrfs receive /backup/
+# Create RAID 1 (mirrored metadata + data):
+mkfs.btrfs -d raid1 -m raid1 /dev/sda /dev/sdb
 
-# Incremental: only send the diff
-btrfs subvolume snapshot -r /data/subvol /data/snap-2
-btrfs send -p /data/snap-1 /data/snap-2 | btrfs receive /backup/
-# Much smaller than a full send — only CoW'd blocks
+# Add device to existing filesystem:
+btrfs device add /dev/sdc /data
+btrfs balance start -dconvert=raid1 -mconvert=raid1 /data
 
-# Send to remote
-btrfs send /data/snap-2 | ssh backup-server btrfs receive /backup/
-```
-
-## Monitoring btrfs
-
-```bash
-# Filesystem stats
+# Show RAID status:
 btrfs filesystem show /data
+
+# Replace a failed device:
+btrfs replace start /dev/sdb /dev/sdd /data
+btrfs replace status /data
+```
+
+## Transaction model
+
+Btrfs uses a transaction-based model without a journal:
+
+```c
+/* fs/btrfs/transaction.c */
+struct btrfs_trans_handle {
+    u64             transid;         /* transaction ID */
+    u64             bytes_reserved;  /* space reserved */
+    struct btrfs_transaction *transaction;
+};
+
+/* Begin transaction (reserves space): */
+trans = btrfs_start_transaction(root, 10); /* reserve 10 blocks worth */
+
+/* Modify B-tree items: */
+btrfs_insert_inode(trans, root, inode);
+
+/* Commit (COW all dirty nodes, update superblock): */
+btrfs_commit_transaction(trans, root);
+```
+
+The superblock is written last and contains the root of the tree-of-roots. Until the superblock update, the old tree is intact — crash at any point leaves the previous transaction's state valid.
+
+## Defragmentation
+
+CoW fragmentation builds up over time:
+
+```bash
+# Defragment a file (rewrites extents sequentially):
+btrfs filesystem defragment /data/bigfile
+
+# Defragment with compression:
+btrfs filesystem defragment -czstd /data/bigfile
+
+# Defragment entire subvolume (warning: breaks CoW sharing with snapshots!):
+btrfs filesystem defragment -r /data/myapp
+
+# Auto-defrag on mount:
+mount -o autodefrag /dev/sda1 /data
+```
+
+## Observability
+
+```bash
+# Filesystem stats:
+btrfs filesystem show
 btrfs filesystem df /data
+btrfs filesystem usage /data
 
-# Device stats (I/O errors, checksum errors)
+# Tree inspection (low-level):
+btrfs inspect-internal dump-tree /dev/sda1       # all trees
+btrfs inspect-internal dump-tree -t fs /dev/sda1 # subvolume tree
+btrfs inspect-internal dump-super /dev/sda1       # superblock
+
+# Find which file owns a logical address:
+btrfs inspect-internal logical-resolve 12345678 /data
+
+# Check for errors (offline, non-destructive):
+btrfs check --readonly /dev/sda1
+
+# Stats: read/write errors per device
 btrfs device stats /data
-# [/dev/sda].write_io_errs   0
-# [/dev/sda].read_io_errs    0
-# [/dev/sda].flush_io_errs   0
-# [/dev/sda].corruption_errs 0
-# [/dev/sda].generation_errs 0
 
-# Extent and tree statistics
-btrfs inspect-internal dump-tree /dev/sda   # dump all B-tree data
-btrfs inspect-internal inode-resolve <ino> /data
-
-# Balance status
-btrfs balance status /data
+# Performance tracing:
+bpftrace -e 'kprobe:btrfs_file_write_iter { @[comm] = count(); }'
 ```
 
 ## Further reading
 
-- [ext4](ext4.md) — Traditional journaled alternative
-- [tmpfs](tmpfs.md) — Memory-backed filesystem
-- [VFS: Dentry and Inode Caches](../vfs/dcache-icache.md) — How btrfs integrates with VFS
-- [Copy-on-Write](../mm/cow.md) — CoW mechanism from mm perspective
+- [ext4 Journaling (JBD2)](ext4-journal.md) — journal-based contrast
+- [Page Cache](../mm/page-cache.md) — page cache that Btrfs CoW writes through
+- [Copy-on-Write](../mm/copy-on-write.md) — process CoW vs filesystem CoW
+- [xattr](../vfs/xattr.md) — Btrfs stores xattrs in the subvolume tree
+- `fs/btrfs/` — Btrfs implementation
 - `Documentation/filesystems/btrfs.rst`

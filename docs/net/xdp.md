@@ -1,93 +1,115 @@
-# XDP (eXpress Data Path)
+# XDP: eXpress Data Path
 
-> High-performance packet processing before the kernel network stack
+> Kernel bypass at the driver level: BPF programs on the receive fast path
 
-## What XDP is
+## What is XDP?
 
-XDP is a programmable, high-performance packet processing framework that runs eBPF programs **before the kernel allocates `sk_buff`**. It's attached to a network device and invoked by the NIC driver (or the kernel) for every incoming packet.
+XDP (eXpress Data Path) runs a BPF program at the earliest possible point in the kernel network stack — inside the NIC driver, **before** skb allocation. This achieves near-DPDK speeds while staying in the kernel:
 
-XDP eliminates the main overhead sources of traditional kernel packet processing:
-- **No `sk_buff` allocation**: Operates directly on DMA-mapped packet memory
-- **No per-packet memory allocation**: Uses pre-allocated per-CPU buffers
-- **No lock contention**: Each CPU processes its own RX queue independently
+```
+Packet arrival:
 
-This enables packet rates of tens of millions of packets per second on a single core.
+Without XDP:
+  NIC → DMA → driver alloc skb → kernel stack → socket → userspace
+  Latency: ~1-5µs, throughput: limited by skb overhead
 
-## XDP actions (return codes)
+With XDP:
+  NIC → DMA → XDP BPF program → (pass/drop/tx/redirect)
+  Latency: ~100-200ns, throughput: 10-50+ Mpps (million packets/sec)
 
-An XDP program examines the packet and returns one of five actions:
-
-```c
-// include/uapi/linux/bpf.h
-enum xdp_action {
-    XDP_ABORTED = 0,  // BPF error: drop + trace event
-    XDP_DROP,         // Drop the packet immediately
-    XDP_PASS,         // Pass to normal kernel network stack
-    XDP_TX,           // Transmit back out the same NIC (hairpin)
-    XDP_REDIRECT,     // Redirect to another NIC, CPU, or AF_XDP socket
-};
+DPDK (comparison):
+  NIC → userspace poll → DPDK app
+  Latency: ~50-100ns, throughput: 60+ Mpps
+  But: requires dedicated CPUs, no kernel network stack
 ```
 
-## struct xdp_md — the BPF program's context
-
-XDP programs see the packet through `struct xdp_md`:
+## XDP hook points
 
 ```c
-// include/uapi/linux/bpf.h
-struct xdp_md {
-    __u32 data;           // pointer to packet start (cast to void*)
-    __u32 data_end;       // pointer to packet end
-    __u32 data_meta;      // pointer to metadata area (before data)
-    __u32 ingress_ifindex; // receiving interface index
-    __u32 rx_queue_index;  // RX queue number
-    __u32 egress_ifindex;  // for XDP_REDIRECT: target interface
-};
+/* Three attachment modes: */
+
+/* 1. Native XDP (fastest): runs in driver's RX path */
+/*    Supported by: mlx5, i40e, ixgbe, bpfilter, veth, etc. */
+ip link set eth0 xdp obj xdp_prog.o sec xdp
+
+/* 2. Generic XDP (skb-based): works on any driver, slower */
+/*    Runs after skb allocation, in netif_receive_skb() */
+ip link set eth0 xdpgeneric obj xdp_prog.o sec xdp
+
+/* 3. HW offload: runs on the NIC itself (very few NICs) */
+ip link set eth0 xdpoffload obj xdp_prog.o sec xdp
 ```
 
-The underlying kernel structure is `struct xdp_buff`:
+## XDP verdicts
 
 ```c
-// include/net/xdp.h
-struct xdp_buff {
-    void *data;           // packet start
-    void *data_end;       // packet end
-    void *data_meta;      // metadata area
-    void *data_hard_start; // start of DMA buffer (headroom before data)
-    struct xdp_rxq_info *rxq; // RX queue info (device, queue index)
-    u32   frame_sz;       // total frame size
-    u32   flags;
-};
+/* BPF program returns one of these: */
+
+XDP_DROP      /* Drop the packet immediately (no skb alloc, no notification) */
+XDP_PASS      /* Continue normal kernel processing (alloc skb, pass up stack) */
+XDP_TX        /* Retransmit on the same interface (e.g., for reflection) */
+XDP_REDIRECT  /* Forward to another interface, CPU, or AF_XDP socket */
+XDP_ABORTED   /* Drop + trace point for debugging (treated like DROP) */
 ```
 
-## A minimal XDP program
+## XDP program structure
 
 ```c
-// Drop all UDP traffic
+/* xdp_prog.c */
 #include <linux/bpf.h>
+#include <bpf/bpf_helpers.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
-#include <linux/udp.h>
-#include <bpf/bpf_helpers.h>
+
+/* BPF map: track per-source-IP packet counts */
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);    /* source IP */
+    __type(value, __u64);  /* packet count */
+    __uint(max_entries, 65536);
+} ip_counter SEC(".maps");
+
+/* Blocklist map */
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);    /* blocked IP */
+    __type(value, __u8);
+    __uint(max_entries, 1024);
+} blocklist SEC(".maps");
 
 SEC("xdp")
-int xdp_drop_udp(struct xdp_md *ctx)
+int xdp_firewall(struct xdp_md *ctx)
 {
-    void *data = (void *)(long)ctx->data;
+    void *data     = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
 
+    /* Parse Ethernet header */
     struct ethhdr *eth = data;
-    if ((void*)(eth + 1) > data_end)
-        return XDP_PASS;
+    if ((void *)(eth + 1) > data_end)
+        return XDP_DROP;   /* truncated packet */
 
-    if (eth->h_proto != htons(ETH_P_IP))
-        return XDP_PASS;
+    if (eth->h_proto != bpf_htons(ETH_P_IP))
+        return XDP_PASS;   /* not IPv4, pass to stack */
 
-    struct iphdr *iph = (void*)(eth + 1);
-    if ((void*)(iph + 1) > data_end)
-        return XDP_PASS;
-
-    if (iph->protocol == IPPROTO_UDP)
+    /* Parse IP header */
+    struct iphdr *ip = (void *)(eth + 1);
+    if ((void *)(ip + 1) > data_end)
         return XDP_DROP;
+
+    __u32 src_ip = ip->saddr;
+
+    /* Check blocklist */
+    if (bpf_map_lookup_elem(&blocklist, &src_ip))
+        return XDP_DROP;   /* blocked: drop silently */
+
+    /* Count packets per source IP */
+    __u64 *count = bpf_map_lookup_elem(&ip_counter, &src_ip);
+    if (count) {
+        __sync_fetch_and_add(count, 1);
+    } else {
+        __u64 one = 1;
+        bpf_map_update_elem(&ip_counter, &src_ip, &one, BPF_ANY);
+    }
 
     return XDP_PASS;
 }
@@ -95,162 +117,236 @@ int xdp_drop_udp(struct xdp_md *ctx)
 char _license[] SEC("license") = "GPL";
 ```
 
-## Attaching XDP programs
-
 ```bash
-# Compile
-clang -O2 -target bpf -c xdp_drop_udp.c -o xdp_drop_udp.o
+# Compile:
+clang -O2 -target bpf -c xdp_prog.c -o xdp_prog.o
 
-# Attach to interface (native mode: highest performance)
-ip link set dev eth0 xdp obj xdp_drop_udp.o sec xdp
+# Attach:
+ip link set eth0 xdp obj xdp_prog.o sec xdp
 
-# Check it's attached
+# Check:
 ip link show eth0
-# → link/ether ... xdp (id 42, flags <XDP_FLAGS_SKB_MODE>)
+# 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 xdp ...
+#     xdp id 42    ← program loaded
 
-# Remove
-ip link set dev eth0 xdp off
-
-# With bpftool
-bpftool net attach xdp id 42 dev eth0
-bpftool net show dev eth0
+# Detach:
+ip link set eth0 xdp off
 ```
 
-## XDP operation modes
-
-```bash
-# Native/driver mode (fastest): program runs in NIC driver's NAPI poll
-ip link set dev eth0 xdp obj prog.o
-
-# Generic/SKB mode (any NIC, slower): runs after sk_buff allocation
-ip link set dev eth0 xdpgeneric obj prog.o
-
-# Hardware offload (smartNICs: Netronome, etc.): runs on NIC hardware
-ip link set dev eth0 xdpoffload obj prog.o
-```
-
-| Mode | Performance | NIC requirement | When to use |
-|------|-------------|-----------------|-------------|
-| Native | Highest | Driver support | Production DDoS mitigation, load balancing |
-| Generic | Moderate | Any NIC | Development, NICs without XDP support |
-| HW Offload | Maximum | Smartcard NIC | Extreme performance (line-rate 100G) |
-
-## XDP_REDIRECT: steering to other destinations
-
-`XDP_REDIRECT` is the most powerful action, allowing redirection to:
+## Packet modification (NAT)
 
 ```c
-// Redirect to another NIC
-bpf_redirect(ifindex, 0);
+SEC("xdp")
+int xdp_dnat(struct xdp_md *ctx)
+{
+    void *data     = (void *)(long)ctx->data;
+    void *data_end = (void *)(long)ctx->data_end;
 
-// Redirect to a CPU (via CPUMAP)
-bpf_redirect_map(&cpu_map, target_cpu, 0);
+    struct ethhdr *eth = data;
+    if ((void *)(eth + 1) > data_end)
+        return XDP_PASS;
+    if (eth->h_proto != bpf_htons(ETH_P_IP))
+        return XDP_PASS;
 
-// Redirect to AF_XDP socket (for userspace packet processing)
-bpf_redirect_map(&xsk_map, queue_id, 0);
+    struct iphdr *ip = (void *)(eth + 1);
+    if ((void *)(ip + 1) > data_end)
+        return XDP_PASS;
+
+    /* Rewrite destination IP */
+    __u32 new_dst = bpf_htonl(0xc0a80101);  /* 192.168.1.1 */
+    ip->daddr = new_dst;
+
+    /* Recompute IP checksum */
+    bpf_l3_csum_replace(ctx,
+        (void *)&ip->check - data,   /* offset of checksum field */
+        0, new_dst, sizeof(new_dst));
+
+    return XDP_PASS;  /* or XDP_TX to send back */
+}
 ```
 
-### BPF maps for redirection
+## XDP redirect
+
+### Between interfaces
 
 ```c
-// DEVMAP: redirect to another NIC
+/* Redirect packet to eth1: */
+SEC("xdp")
+int xdp_redirect_iface(struct xdp_md *ctx)
+{
+    int ifindex = 3;  /* eth1's ifindex */
+    return bpf_redirect(ifindex, 0);
+}
+```
+
+### DEVMAP: batch redirect
+
+```c
+/* High-performance redirect via devmap */
 struct {
     __uint(type, BPF_MAP_TYPE_DEVMAP);
+    __uint(key_size, sizeof(int));
+    __uint(value_size, sizeof(int));
     __uint(max_entries, 256);
-    __type(key, __u32);    // ifindex
-    __type(value, __u32);  // destination ifindex
-} tx_port SEC(".maps");
-
-// CPUMAP: send to a specific CPU's RX queue
-struct {
-    __uint(type, BPF_MAP_TYPE_CPUMAP);
-    __uint(max_entries, 16);
-    __type(key, __u32);     // CPU id
-    __type(value, struct bpf_cpumap_val); // queue size + optional XDP prog
-} cpu_map SEC(".maps");
-```
-
-## Common XDP use cases
-
-### DDoS mitigation
-
-```c
-// Drop packets from known attack sources (BPF map lookup)
-struct {
-    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
-    __type(key, struct bpf_lpm_trie_key_u8);
-    __type(value, __u64);  // drop counter
-} blocklist SEC(".maps");
+} tx_ports SEC(".maps");
 
 SEC("xdp")
-int xdp_ddos_filter(struct xdp_md *ctx)
+int xdp_devmap_redirect(struct xdp_md *ctx)
 {
-    struct iphdr *iph = parse_iphdr(ctx);
-    if (!iph) return XDP_PASS;
+    int port = 0;  /* devmap key */
+    return bpf_redirect_map(&tx_ports, port, XDP_DROP);
+}
+```
 
-    struct bpf_lpm_trie_key_u8 key = { .prefixlen = 32 };
-    *((__u32 *)key.data) = iph->saddr;
+```bash
+# Populate devmap (userspace):
+int map_fd = bpf_obj_get("/sys/fs/bpf/tx_ports");
+int ifindex = if_nametoindex("eth1");
+bpf_map_update_elem(map_fd, &key, &ifindex, BPF_ANY);
+```
 
-    if (bpf_map_lookup_elem(&blocklist, &key))
-        return XDP_DROP;
+### CPUMAP: steer to specific CPU
+
+```c
+/* Redirect to CPU for further processing (after XDP) */
+struct {
+    __uint(type, BPF_MAP_TYPE_CPUMAP);
+    __uint(key_size, sizeof(__u32));
+    __uint(value_size, sizeof(struct bpf_cpumap_val));
+    __uint(max_entries, 12);
+} cpumap SEC(".maps");
+
+SEC("xdp")
+int xdp_cpumap_redirect(struct xdp_md *ctx)
+{
+    /* RSS-based steering: hash to CPU */
+    __u32 cpu = bpf_get_smp_processor_id() % 4;
+    return bpf_redirect_map(&cpumap, cpu, 0);
+}
+```
+
+## AF_XDP: zero-copy to userspace
+
+AF_XDP (eXpress Data Path socket) moves packets directly to userspace memory without any kernel copying:
+
+```
+NIC DMA → UMEM (userspace memory) → XSK socket → userspace app
+          ↑ zero copy! kernel never touches packet data
+```
+
+### Setup
+
+```c
+/* Userspace: create AF_XDP socket */
+#include <linux/if_xdp.h>
+#include <sys/socket.h>
+
+/* 1. Allocate UMEM (packet buffer pool): */
+void *umem_area = mmap(NULL, UMEM_SIZE, PROT_READ|PROT_WRITE,
+                        MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB, -1, 0);
+
+struct xdp_umem_reg umem_reg = {
+    .addr = (uint64_t)umem_area,
+    .len  = UMEM_SIZE,
+    .chunk_size = FRAME_SIZE,    /* 4096 bytes per frame */
+    .headroom   = 0,
+};
+setsockopt(xsk_fd, SOL_XDP, XDP_UMEM_REG, &umem_reg, sizeof(umem_reg));
+
+/* 2. Create rings (FILL/COMPLETION/RX/TX): */
+int ring_size = 2048;
+setsockopt(xsk_fd, SOL_XDP, XDP_RX_RING, &ring_size, sizeof(ring_size));
+setsockopt(xsk_fd, SOL_XDP, XDP_UMEM_FILL_RING, &ring_size, sizeof(ring_size));
+
+/* 3. mmap the rings: */
+struct xdp_mmap_offsets off;
+getsockopt(xsk_fd, SOL_XDP, XDP_MMAP_OFFSETS, &off, &optlen);
+
+void *fill_ring = mmap(NULL, off.fr.desc + ring_size * sizeof(uint64_t),
+                        PROT_READ|PROT_WRITE, MAP_SHARED|MAP_POPULATE,
+                        xsk_fd, XDP_UMEM_PGOFF_FILL_RING);
+
+/* 4. Bind to interface queue: */
+struct sockaddr_xdp sxdp = {
+    .sxdp_family   = AF_XDP,
+    .sxdp_ifindex  = if_nametoindex("eth0"),
+    .sxdp_queue_id = 0,           /* NIC queue 0 */
+    .sxdp_flags    = XDP_ZEROCOPY, /* requires native XDP driver support */
+};
+bind(xsk_fd, (struct sockaddr *)&sxdp, sizeof(sxdp));
+```
+
+### XDP program for AF_XDP redirect
+
+```c
+/* BPF map of AF_XDP sockets */
+struct {
+    __uint(type, BPF_MAP_TYPE_XSKMAP);
+    __uint(key_size, sizeof(int));
+    __uint(value_size, sizeof(int));
+    __uint(max_entries, 64);
+} xsks_map SEC(".maps");
+
+SEC("xdp")
+int xdp_sock_prog(struct xdp_md *ctx)
+{
+    int index = ctx->rx_queue_index;
+
+    /* Redirect to AF_XDP socket on same queue */
+    if (bpf_map_lookup_elem(&xsks_map, &index))
+        return bpf_redirect_map(&xsks_map, index, 0);
 
     return XDP_PASS;
 }
 ```
 
-### Load balancing
+## XDP vs alternatives
 
-```c
-// XDP load balancer: forward to backend servers via XDP_TX
-// (used by Facebook's Katran, Cloudflare's layer4 load balancer)
-```
+| | XDP | DPDK | kernel TC | iptables |
+|---|-----|------|-----------|----------|
+| Throughput | 50+ Mpps | 60+ Mpps | 10+ Mpps | 1-5 Mpps |
+| Latency | ~200ns | ~100ns | ~1µs | ~10µs |
+| Kernel stack access | Yes (XDP_PASS) | No | Yes | Yes |
+| CPU dedication | No | Yes | No | No |
+| Programmability | BPF | C | BPF/C | limited |
+| Use case | DDoS mitigation, LB, firewall | High-freq trading, NFV | QoS, TC filter | Generic firewall |
 
-### Packet sampling
-
-```c
-// Sample 1 in 1000 packets to userspace via perf ring buffer
-if (bpf_get_prandom_u32() % 1000 == 0) {
-    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
-                          data, data_end - data);
-}
-return XDP_PASS;
-```
-
-## Statistics and observability
+## Observability
 
 ```bash
-# XDP program statistics
-bpftool prog show
-bpftool prog dump xlated id 42  # show XDP bytecode
+# XDP program info:
+bpftool net show dev eth0
+# xdp:
+#         id 42  name xdp_firewall  flags 0x0
 
-# Count XDP drops (per-CPU)
-bpftool map dump id <map_id>
-
-# ethtool XDP stats
+# XDP stats (via driver):
 ethtool -S eth0 | grep xdp
-# rx_xdp_drop: 12345
-# rx_xdp_redirect: 0
-# rx_xdp_pass: 67890
+# rx_xdp_drop: 1234567
+# rx_xdp_pass: 9876543
+# rx_xdp_tx:          0
+# rx_xdp_redirect:    0
 
-# Trace XDP events
-perf record -e xdp:xdp_exception -ag sleep 10
-trace-cmd record -e xdp:xdp_bulk_tx -e xdp:xdp_redirect_err
+# BPF map inspection:
+bpftool map dump id 5   # dump blocklist map
+
+# XDP program tracing:
+bpftrace -e '
+tracepoint:xdp:xdp_exception
+{ printf("XDP exception: ifindex=%d, prog_id=%d, act=%d\n",
+         args->ifindex, args->prog_id, args->act); }'
+
+# Perf event for XDP drop:
+perf record -e xdp:xdp_drop -ag -- sleep 10
+perf script
 ```
-
-## Performance comparison
-
-At 40 Gbps with small packets:
-
-| Path | Mpps/core | Notes |
-|------|-----------|-------|
-| Kernel TCP stack | ~1-2 | Full stack processing |
-| DPDK (userspace) | ~20-30 | Kernel bypass |
-| XDP native | ~20-25 | In-kernel, no copy |
-| XDP HW offload | ~80+ | NIC handles it |
 
 ## Further reading
 
-- [AF_XDP Sockets](af-xdp.md) — Sending XDP-processed packets to userspace
-- [Network Device and NAPI](napi.md) — Where XDP hooks into the driver
-- [TC and qdisc](tc-qdisc.md) — Alternative packet steering (post-stack)
-- [Netfilter Architecture](netfilter.md) — The older hook-based alternative
+- [BPF Networking](../bpf/bpf-networking.md) — TC BPF, sockmap
+- [sk_buff: The Network Buffer](sk-buff.md) — XDP_PASS creates sk_buff
+- [NVMe Driver](../block/nvme.md) — similar DMA/ring buffer pattern
+- [IRQ Affinity](../interrupts/irq-affinity.md) — NIC queue/CPU affinity for XDP
+- `net/core/filter.c` — BPF network filter infrastructure
+- `drivers/net/ethernet/intel/i40e/i40e_xsk.c` — XDP in i40e driver
+- `samples/bpf/xdpsock_user.c` — AF_XDP userspace example
+- `tools/lib/bpf/xsk.c` — libbpf AF_XDP helper
