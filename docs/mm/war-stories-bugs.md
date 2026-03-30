@@ -220,9 +220,9 @@ Examining the v6.2 kernel changelog pointed directly to commit [f1a7941243c1](ht
 
 **After v6.2**: The commit converted RSS to use `percpu_counter`, the kernel's standard per-CPU approximate counter infrastructure. `percpu_counter` maintains a per-CPU batch and flushes to a global sum when the batch overflows. The batch size for `percpu_counter` scales with the number of CPUs: on a 250-CPU machine, the maximum error is approximately `nr_cpus × batch_size × nr_counters`. The commit message acknowledges this scaling:
 
-> *"the inaccuracy increases with O(n²) with the number of CPUs"*
+> *"convert the error margin from (nr_threads * 64) to approximately (nr_cpus ^ 2)"*
 
-The intent was to reduce lock contention on the per-`mm_struct` counter in highly multithreaded workloads, which was a real problem. But the tradeoff — unbounded error proportional to CPU count squared — was not adequately considered in the contexts where RSS accuracy matters most: OOM victim selection and memory monitoring.
+The intent was to reduce lock contention on the per-`mm_struct` counter in highly multithreaded workloads, which was a real problem. But the tradeoff — error scaling approximately as CPU count squared — was not adequately considered in the contexts where RSS accuracy matters most: OOM victim selection and memory monitoring.
 
 On a 250-CPU machine, the error margin grew from bounded kilobytes to potentially gigabytes. A single process could appear to have RSS several hundred megabytes different from its actual resident set size. The commit noted that readers like OOM killer and memory reclaim "are not performance critical and should be ok with slow read" — but it did not implement a precise read path, leaving them using the fast (inaccurate) counter.
 
@@ -239,7 +239,7 @@ The OOM killer path in `oom_badness()` used `get_mm_counter()` to read RSS for e
 
 The OOM killer kills Process B. Process A continues running and immediately triggers another OOM. The system enters an OOM loop killing innocent services.
 
-The bug report from Sweet Tea Dorminy (Meta), as quoted in the fix commit, described exactly this scenario occurring in production.
+The bug report from Sweet Tea Dorminy, as quoted in the fix commit, described exactly this scenario occurring in production.
 
 ### The fix
 

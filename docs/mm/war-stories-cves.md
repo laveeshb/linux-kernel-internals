@@ -23,7 +23,7 @@ Each story follows the same arc:
 
 In October 2016, Phil Oester was performing routine forensic analysis on a compromised production web server. Inside the exploit binary left by the attacker, he identified a previously unknown privilege escalation. The code was exploiting a race condition in the kernel's copy-on-write path. Oester contacted kernel security team members, and the bug was publicly disclosed on October 19, 2016.
 
-The race condition itself had been introduced with kernel 2.6.22 in September 2007. Linus Torvalds had attempted a fix in 2005 — before it even shipped in that form — but the fix was reverted due to compatibility problems on s390. The window between creation and discovery: **nine years**.
+The race condition itself had been introduced with kernel 2.6.22 in July 2007. Linus Torvalds had attempted a fix in 2005 — before it even shipped in that form — but the fix was reverted due to compatibility problems on s390. The window between creation and discovery: **nine years**.
 
 The name "Dirty COW" comes from the dirty bit in the COW path, plus the bug's interaction with copy-on-write. It acquired its own logo and website (dirtycow.ninja), a rarity for kernel CVEs.
 
@@ -53,7 +53,7 @@ The `userfaultfd` syscall (available since kernel 4.3) further widened the race 
 
 The fix is three lines of substantive change. The `FOLL_WRITE` flag is set at the start of `__get_user_pages()` if a write was requested, and it stays set throughout all retries. There is no longer a retry path that drops write intent. If the page cannot be made writable, the fault fails — it does not silently fall back to handing out the read-only page.
 
-Linus's commit message: *"This is an ancient bug that was actually attempted to be fixed once (badly) by me eleven years ago in commit 4ceb5db9757a ('Fix get_user_pages() race for write access') but that was then reverted in 2c0f7441ed0e due to problems on s390."*
+Linus's commit message: *"This is an ancient bug that was actually attempted to be fixed once (badly) by me eleven years ago in commit 4ceb5db9757a ('Fix get_user_pages() race for write access') but that was then reverted in f33ea7f404e5 due to problems on s390."*
 
 The backport went to every stable kernel in active support within 24 hours. The patch for stable kernels was coordinated by Greg Kroah-Hartman.
 
@@ -189,8 +189,8 @@ Cloud environments were the most immediately alarming target. On a shared host, 
 
 ### The fix: KPTI
 
-**Commit**: [5aa90a84589282](https://git.kernel.org/linus/5aa90a84589282b87666f92b6c3c917c8080a9bf) — "x86/pti: Add infrastructure for page table isolation"
-**Author**: Dave Hansen (Intel)
+**Commit**: [aa8c6248f8c7](https://git.kernel.org/linus/aa8c6248f8c7) — "x86/mm/pti: Add infrastructure for page table isolation"
+**Author**: Thomas Gleixner
 
 KPTI — Kernel Page Table Isolation — is the only viable software mitigation for Meltdown. The principle: if kernel virtual addresses are not mapped in the user-mode page tables at all, speculative reads of kernel addresses from user mode will fault before they can populate the cache.
 
@@ -291,7 +291,7 @@ The impact: an attacker who can run code in a process that shares a THP with a p
 ### The fix
 
 **Commit**: [c444eb564fb1](https://git.kernel.org/linus/c444eb564fb1) — "mm: thp: make the THP mapcount atomic against `__split_huge_pmd_locked()`"
-**Author**: Jann Horn
+**Author**: Andrea Arcangeli (reported by Jann Horn)
 
 The fix makes the mapcount read and the PTE update atomic with respect to each other by holding the page table lock across both operations. The mapcount is re-read under the lock, and the COW decision is made only when the kernel can guarantee no new mapping can be added while it proceeds with the direct write.
 
@@ -375,7 +375,7 @@ No single mitigation is complete. The value is in the combination: an attacker w
 ### Key kernel commits
 
 - [19be0eaffa3a](https://git.kernel.org/linus/19be0eaffa3a) — Dirty COW fix
-- [5aa90a84589282](https://git.kernel.org/linus/5aa90a84589282b87666f92b6c3c917c8080a9bf) — KPTI initial infrastructure
+- [aa8c6248f8c7](https://git.kernel.org/linus/aa8c6248f8c7) — KPTI initial infrastructure
 - [eddb1c228f79](https://git.kernel.org/linus/eddb1c228f79) — FOLL_PIN introduction
 - [6c287605fd56](https://git.kernel.org/linus/6c287605fd56) — PG_anon_exclusive
 - [c444eb564fb1](https://git.kernel.org/linus/c444eb564fb1) — THP mapcount atomicity fix
