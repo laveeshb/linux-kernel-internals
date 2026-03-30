@@ -190,6 +190,9 @@ nav:
       - cpuset: sched/cpuset.md
       - Scheduling Domains: sched/sched-domains.md
       - CPU Affinity: sched/cpu-affinity.md
+    - Advanced:
+      - Load Balancing: sched/load-balancing.md
+      - Energy-Aware Scheduling: sched/eas.md
     - Debugging & Observability:
       - Scheduler Statistics: sched/schedstat.md
       - Scheduler Tracing: sched/sched-tracing.md
