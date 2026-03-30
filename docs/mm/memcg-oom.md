@@ -66,7 +66,7 @@ In the cgroup case, `oom_score_adj` has much less absolute impact because `total
 
 ### Candidate enumeration
 
-For a cgroup OOM, only processes within the affected cgroup (and its descendants) are candidates. The selection loop in `select_bad_process()` uses an `oom_scan_process_thread()` callback that checks whether the process is in the target memcg using `task_in_mem_cgroup()`.
+For a cgroup OOM, only processes within the affected cgroup (and its descendants) are candidates. `select_bad_process()` iterates all threads via `for_each_process_thread`, calling `oom_evaluate_task()` for each. `task_in_mem_cgroup()` gates whether a task is a valid candidate for the constrained OOM.
 
 Processes with `oom_score_adj = -1000` are always skipped (immune). Kernel threads are always skipped. The process that triggered the OOM is not automatically the victim — it competes on score like any other process.
 

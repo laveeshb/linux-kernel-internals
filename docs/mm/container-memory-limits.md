@@ -12,7 +12,7 @@ Understanding each stage helps you set limits intelligently, write alerting that
 flowchart TD
     A["memory.current well below memory.high\nNormal operation"]
     B["memory.current approaches memory.high\nReclaim begins; PSI 'some' rises"]
-    C["memory.current exceeds memory.high\nProcess throttled in schedule_timeout_killable()"]
+    C["memory.current exceeds memory.high\nProcess throttled; sleeps until usage drops"]
     D["Reclaim keeps up\nUsage pulled back below memory.high"]
     E["Reclaim cannot keep up\nmemory.current approaches memory.max"]
     F["memory.current exceeds memory.max\nCgroup OOM invoked"]
@@ -49,7 +49,7 @@ The PSI file at `$CGROUP/memory.pressure` will show all zeros during this stage 
 
 ## Stage 2: Approaching memory.high — Throttling Begins
 
-When an allocation would push `memory.current` past `memory.high`, the kernel enters `mem_cgroup_handle_over_high()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c). This function is called from the page fault return path and from `mem_cgroup_charge()`.
+When an allocation would push `memory.current` past `memory.high`, the kernel enters `mem_cgroup_handle_over_high()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c). This function is called from the task's return-to-userspace path (not from the charge function directly — the `over_high` check is deferred to avoid reclaiming on every allocation).
 
 ### The throttling mechanism
 
@@ -57,7 +57,7 @@ When an allocation would push `memory.current` past `memory.high`, the kernel en
 
 1. **Triggers synchronous reclaim** on the current cgroup. It calls `reclaim_high()`, which calls `try_to_free_mem_cgroup_pages()` to reclaim pages from the cgroup's LRU lists. This is direct reclaim scoped to a single cgroup — it does not touch other cgroups.
 
-2. **Throttles the allocating process** if reclaim did not bring usage back below `memory.high`. The process is put to sleep with `schedule_timeout_killable()`, yielding the CPU for a calculated number of jiffies. The sleep duration scales with how far over `memory.high` the cgroup is — a small overage causes a short sleep; a large overage causes a proportionally longer one (this scaling is a heuristic, not a fixed table).
+2. **Throttles the allocating process** if reclaim did not bring usage back below `memory.high`. The process is put to sleep for a calculated number of jiffies, yielding the CPU. The sleep duration scales with how far over `memory.high` the cgroup is — a small overage causes a short sleep; a large overage causes a proportionally longer one (this scaling is a heuristic, not a fixed table).
 
 !!! note "The throttling is per-process, not per-cgroup"
     Each process that allocates while the cgroup is over `memory.high` incurs its own sleep. A single-threaded application serializes its own allocations naturally. A massively multi-threaded application may have many threads sleeping simultaneously.
@@ -105,7 +105,7 @@ mem_cgroup_handle_over_high()
        │         ├─► shrink_lruvec() — walk LRU, reclaim cold pages
        │         └─► wakeup_flusher_threads() — write dirty pages back
        │
-       └─► schedule_timeout_killable() — throttle if still over high
+       └─► sleep (throttle if still over high)
 ```
 
 `try_to_free_mem_cgroup_pages()` calls `shrink_lruvec()` in [`mm/vmscan.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) which walks the cgroup's LRU lists in priority order: inactive file cache first (cheapest to reclaim), then active file cache, then — if no reclaimable file pages remain — anonymous pages (which may require swap I/O).
@@ -248,7 +248,7 @@ When the victim process exits, its pages are freed back to the cgroup. The seque
 1. The process receives SIGKILL and its signal handler (or default disposition) terminates it.
 2. `exit_mm()` is called, which calls `mmput()`, which drops the `mm_struct` reference count.
 3. When the count reaches zero, `__mmput()` runs `exit_mmap()`, which calls `unmap_vmas()` to walk all VMAs and `free_pgtables()` to release page tables.
-4. Each page is unmapped and freed via `release_pages()`, which calls `__mem_cgroup_uncharge_list()` to subtract from the cgroup's counter.
+4. Each page is unmapped and freed via `release_pages()`, which calls `mem_cgroup_uncharge()` (or its folio equivalent) to subtract from the cgroup's counter.
 5. `memory.current` drops. If it falls below `memory.max`, further allocations can succeed.
 
 ### Will the container recover automatically?

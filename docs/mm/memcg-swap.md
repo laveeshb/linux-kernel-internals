@@ -85,11 +85,11 @@ This file was introduced in kernel v6.5 alongside other swap accounting improvem
 
 ### memory.zswap.current
 
-`memory.zswap.current` reports the number of bytes a cgroup is using in the zswap compressed pool. This is uncompressed size — the actual RAM consumed by compressed data is smaller, but `memory.zswap.current` reports the logical swap bytes, not the physical RAM bytes.
+`memory.zswap.current` reports the **compressed** bytes this cgroup is using in the zswap pool — the actual RAM consumed by the compressed data. The uncompressed logical size of the swap data is larger; `memory.zswap.current` reflects the physical RAM footprint of the compressed pages in the pool.
 
 ```bash
 cat /sys/fs/cgroup/mycontainer/memory.zswap.current
-# 104857600   (100MB of uncompressed swap pages stored in zswap)
+# 41943040   (40MB of RAM holding compressed swap pages; uncompressed equivalent may be 100MB+)
 ```
 
 ### memory.zswap.max
@@ -244,7 +244,7 @@ Docker exposes swap control through two flags:
 | `--memory-swap=<value equal to --memory>` | No swap (memsw limit = RAM limit) |
 
 !!! warning "Docker --memory-swap semantics are confusing"
-    `--memory-swap` is a **combined** limit (RAM + swap), not a swap-only limit. `--memory=1g --memory-swap=1g` means no swap. `--memory=1g --memory-swap=2g` means 1GB swap. This is the cgroup v1 memsw model; Docker uses it even when the host is running cgroup v2.
+    `--memory-swap` is a **combined** limit (RAM + swap), not a swap-only limit. `--memory=1g --memory-swap=1g` means no swap. `--memory=1g --memory-swap=2g` means 1GB swap. On cgroup v2 hosts (Docker 20.10+), Docker translates this into `memory.swap.max` (swap-only limit), automatically computing the difference. The combined semantics of the flag are preserved, but the kernel interface used is the native cgroup v2 one.
 
 ```bash
 # Allow 512MB of swap for a 1GB container

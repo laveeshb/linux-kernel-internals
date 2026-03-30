@@ -39,7 +39,7 @@ Both `container-a` and `container-b` have `memory.max = 3G`, but the parent `ser
 - If `container-a` uses 3G and `container-b` tries to use 2G, the parent's 4G limit will throttle or OOM `container-b` even though `container-b`'s own `memory.max` of 3G has not been reached.
 - The effective limit for any cgroup is the minimum of its own limit and what the parent tree can accommodate.
 
-The kernel enforces limits at each level independently via `mem_cgroup_is_root()` checks throughout [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c). Each charge operation walks up the cgroup tree, testing the limit at every ancestor.
+The kernel enforces limits at each level independently in `try_charge()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c). Each charge operation walks up the cgroup tree via the parent pointer chain, testing `memory.max` and `memory.high` at every ancestor.
 
 ```
 Charge path for a page allocation (simplified):
@@ -137,15 +137,15 @@ worker's OOM killer, even though myapp.service has 5G free.
 
 To allow a child to use the parent's headroom, either raise the child's limit or remove it entirely (set `memory.max = max`).
 
-## Local vs Hierarchical Counters in memory.stat
+## Hierarchical Counters in memory.stat
 
-`memory.stat` reports two categories of counters: **local** (charged to this cgroup only) and **hierarchical** (charged to this cgroup and all descendants).
+In cgroup v2, **all** `memory.stat` fields are hierarchical — they include the full subtree (the cgroup itself plus all descendants). This is unlike cgroup v1 where some fields were per-cgroup only.
 
 ```bash
 cat /sys/fs/cgroup/myapp.service/memory.stat
 ```
 
-Fields in `memory.stat` labeled with no prefix are **local** to that cgroup. Fields prefixed in the kernel's accounting code as "hierarchical" represent the sum of the cgroup and all descendants. In cgroup v2, `memory.current` always reflects the hierarchical total — it is the sum of memory charged to the cgroup and all children.
+`memory.current` always reflects the hierarchical total — it is the sum of memory charged to the cgroup and all children. The same applies to all `memory.stat` fields.
 
 To see only a cgroup's own memory (excluding children), subtract each child's `memory.current` from the parent's:
 
@@ -171,16 +171,15 @@ cat /sys/fs/cgroup/myapp.service/worker/memory.stat
 anon 1073741824          # anonymous pages: heap, stack, mmap(MAP_ANONYMOUS)
 file 209715200           # file-backed pages: page cache
 kernel 12582912          # kernel memory: slab, stacks, pagetables
-slab 8388608             #   kernel slab allocations (subset of kernel)
+kernel_stack 2097152     #   process kernel stacks
+pagetables 1048576       #   page table pages
+slab_reclaimable 6291456 #   reclaimable slab (dentry/inode caches)
+slab_unreclaimable 2097152 # unreclaimable slab (task_struct, etc.)
 sock 4194304             # socket receive/send buffers
 shmem 0                  # shared memory (tmpfs, IPC shm)
 file_mapped 104857600    # file pages that are mapped (subset of file)
 file_dirty 0             # file pages with pending writes
 file_writeback 0         # file pages currently being written
-inactive_anon 0          # anonymous pages on the inactive LRU
-active_anon 1073741824   # anonymous pages on the active LRU
-inactive_file 104857600  # file pages on the inactive LRU (reclaim candidates)
-active_file 104857600    # file pages on the active LRU
 unevictable 0            # pages that cannot be reclaimed (mlock'd, etc.)
 pgfault 458923           # total page faults
 pgmajfault 12            # major faults (required disk I/O)

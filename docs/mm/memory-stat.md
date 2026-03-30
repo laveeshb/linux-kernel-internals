@@ -50,7 +50,7 @@ Anonymous pages are not backed by a file. They back heap allocations, stack grow
 
 **What it counts**: Bytes of anonymous memory currently resident in RAM — heap, stack, anonymous `mmap()` regions, and `MAP_PRIVATE` copy-on-write pages that have been dirtied.
 
-**Kernel counter**: `NR_ANON_MAPPED` in the cgroup's `vmstats`, updated in `__mod_memcg_lruvec_state()` whenever an anonymous page is mapped or unmapped. Defined in `include/linux/mm.h`.
+**Kernel counter**: `NR_ANON_MAPPED` in the cgroup's `vmstats`, updated in `__mod_memcg_lruvec_state()` whenever an anonymous page is mapped or unmapped. Defined in `include/linux/mmzone.h`.
 
 **Hierarchical**: Yes — includes all descendant cgroups.
 
@@ -185,7 +185,7 @@ Kernel memory is allocated by kernel code on behalf of cgroup processes — slab
 
 #### `kernel`
 
-**What it counts**: Total bytes of kernel memory attributed to this cgroup: the sum of `kernel_stack`, `pagetables`, `percpu`, `sock`, and slab memory (`slab_reclaimable` + `slab_unreclaimable`).
+**What it counts**: Total bytes of kernel memory attributed to this cgroup: the sum of `kernel_stack`, `pagetables`, `percpu`, `sec_pagetables`, and slab memory (`slab_reclaimable` + `slab_unreclaimable`). Note: socket buffers (`sock`) are tracked separately and are **not** included in this total.
 
 **Hierarchical**: Yes.
 
@@ -517,7 +517,7 @@ These fields reflect the protection configuration and whether it is taking effec
 `memory.current` should equal the sum of resident memory types. The exact relationship, as documented in [`Documentation/admin-guide/cgroup-v2.rst`](https://docs.kernel.org/admin-guide/cgroup-v2.html):
 
 ```
-memory.current ≈ anon + file + kernel + swapcached - (pages charged to children)
+memory.current ≈ anon + file + kernel + swapcached + sock + (children's contributions)
 ```
 
 In practice, due to per-cpu counter batching and timing, `memory.current` may differ slightly from the sum of `memory.stat` fields at any instant. This is expected — the kernel batches counter updates in `__mod_memcg_lruvec_state()` to avoid cache-line contention on hot paths.
