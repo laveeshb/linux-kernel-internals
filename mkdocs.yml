@@ -255,6 +255,7 @@ nav:
       - IRQ Descriptor and irq_chip: interrupts/irq-desc.md
       - request_irq and free_irq: interrupts/request-irq.md
       - Threaded IRQs: interrupts/threaded-irq.md
+      - IRQ Affinity and CPU Isolation: interrupts/irq-affinity.md
     - Deferred Work:
       - Softirqs: interrupts/softirq.md
       - Tasklets: interrupts/tasklets.md
@@ -305,6 +306,7 @@ nav:
     - Linux Device Model: drivers/device-model.md
     - Platform Drivers: drivers/platform-driver.md
     - Character and Misc Devices: drivers/chardev.md
+    - PCI Drivers: drivers/pci-driver.md
   - IPC:
     - Getting Started: ipc/README.md
     - Signals: ipc/signals.md
