@@ -48,13 +48,13 @@ When `memory.swap.max = 0`, the cgroup behaves as if swap does not exist: anonym
 !!! note "memory.swap.max only limits swap pages, not memsw"
     Setting `memory.swap.max = 512M` means the cgroup can use up to 512MB of swap in addition to its `memory.max`. It does not mean the total (RAM + swap) is capped at 512MB. For a combined limit, set both `memory.max` and `memory.swap.max`.
 
-### memory.swap.high (v6.2+)
+### memory.swap.high (v5.8+)
 
 `memory.swap.high` is a soft limit on swap usage, analogous to `memory.high` for RAM. When `memory.swap.current` exceeds `memory.swap.high`, the kernel throttles processes in the cgroup and tries to reclaim swap (by swapping pages back in and then freeing them, or by reclaiming the freed anonymous pages).
 
 No processes are killed at `memory.swap.high`. It exists to create back-pressure before `memory.swap.max` is reached.
 
-**Introduced**: This interface was added in kernel v6.2. See [LWN: Cgroup swap high limit](https://lwn.net/Articles/912708/) for the motivation and design discussion.
+**Introduced**: This interface was added in kernel v5.8. See [LWN: Cgroup swap high limit](https://lwn.net/Articles/912708/) for the motivation and design discussion.
 
 ```bash
 # Throttle when swap exceeds 256MB, hard stop at 512MB
@@ -65,10 +65,10 @@ echo 512M > /sys/fs/cgroup/mycontainer/memory.swap.max
 If your kernel is older than v6.2, `memory.swap.high` will not exist. Check with:
 
 ```bash
-ls /sys/fs/cgroup/mycontainer/memory.swap.high 2>/dev/null || echo "not available (kernel < 6.2)"
+ls /sys/fs/cgroup/mycontainer/memory.swap.high 2>/dev/null || echo "not available (kernel < 5.8)"
 ```
 
-### memory.swap.events (v6.5+)
+### memory.swap.events (v4.18+)
 
 ```bash
 cat /sys/fs/cgroup/mycontainer/memory.swap.events
@@ -343,7 +343,7 @@ python3 -c "x = bytearray(100 * 1024 * 1024)"
 
 | File | Relevant code |
 |------|---------------|
-| [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | Swap charge/uncharge: `mem_cgroup_swapout()`, `mem_cgroup_swapin_charge_page()`; swap limit enforcement; `memory.swap.current` and `memory.swap.max` reads/writes |
+| [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | Swap charge/uncharge: `__mem_cgroup_try_charge_swap()`, `__mem_cgroup_uncharge_swap()`, `mem_cgroup_swapin_charge_folio()`; swap limit enforcement; `memory.swap.current` and `memory.swap.max` reads/writes |
 | [`include/linux/memcontrol.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/memcontrol.h) | `struct mem_cgroup`: `swap`, `memsw`, swap counter fields |
 | [`mm/swap_state.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/swap_state.c) | Swap cache management, interacts with memcg charges |
 | [`mm/zswap.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/zswap.c) | zswap implementation including per-memcg accounting |
@@ -358,13 +358,13 @@ The combined memory+swap (`memsw`) interface was introduced in cgroup v1. It pro
 
 cgroup v2 separated `memory.max` (RAM) from `memory.swap.max` (swap-only), fixing the semantic confusion of `memsw`. The separation was part of the broader cgroup v2 memory controller redesign that reached production readiness in v4.5. See [LWN: The unified cgroup hierarchy](https://lwn.net/Articles/679786/).
 
-### memory.swap.high (v6.2, 2023)
+### memory.swap.high (v5.8, 2020)
 
 **LWN**: [Cgroup swap high limit](https://lwn.net/Articles/912708/)
 
 Added a soft swap limit analogous to `memory.high` for RAM, enabling throttle-before-OOM behavior for swap as well as for RAM.
 
-### Per-cgroup zswap accounting (v6.5, 2023)
+### Per-cgroup zswap accounting (v5.19, 2022)
 
 **Commit**: [f4840ccfca25](https://git.kernel.org/linus/f4840ccfca25) ("zswap: memcg accounting")
 

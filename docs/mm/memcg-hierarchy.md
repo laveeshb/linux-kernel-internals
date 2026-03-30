@@ -53,7 +53,7 @@ Charge path for a page allocation (simplified):
 
 Protection (`memory.min` and `memory.low`) works differently from limits. When a child's protection is considered during global reclaim, the kernel must compute the **effective protection** — the amount the child can actually keep, given what the parent can guarantee.
 
-The calculation is defined in `mem_cgroup_protected()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c). The kernel documentation at [`Documentation/admin-guide/cgroup-v2.rst`](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files) describes the model as follows: a child's effective protection is the minimum of its own configured protection and the parent's protection, distributed proportionally when the sum of children's protections exceeds the parent's.
+The calculation is defined in `mem_cgroup_calculate_protection()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c). The kernel documentation at [`Documentation/admin-guide/cgroup-v2.rst`](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files) describes the model as follows: a child's effective protection is the minimum of its own configured protection and the parent's protection, distributed proportionally when the sum of children's protections exceeds the parent's.
 
 ### The Proportional Distribution Formula
 
@@ -275,7 +275,7 @@ If a parent cgroup's `memory.current` equals its `memory.max`, the parent is at 
 
 | File | Relevant functions |
 |------|--------------------|
-| [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | `mem_cgroup_protected()` — computes effective protection; `mem_cgroup_margin()` — headroom to limit; `try_charge()` — charge + limit enforcement path |
+| [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | `mem_cgroup_calculate_protection()` — computes effective protection; `mem_cgroup_margin()` — headroom to limit; `try_charge()` — charge + limit enforcement path |
 | [`include/linux/memcontrol.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/memcontrol.h) | `struct mem_cgroup`, `mem_cgroup_protection()` inline |
 | [`Documentation/admin-guide/cgroup-v2.rst`](https://docs.kernel.org/admin-guide/cgroup-v2.html) | Authoritative description of the distribution model |
 
@@ -287,7 +287,7 @@ The cgroup v2 memory controller, including the hierarchical protection model, wa
 
 ### memory.low and memory.min (v4.18, 2018)
 
-`memory.low` (best-effort protection) and `memory.min` (hard protection) were introduced as part of the memory protection model described in [LWN: Putting cgroup memory protection back together](https://lwn.net/Articles/762472/). The `mem_cgroup_protected()` function implementing the proportional distribution calculation was developed by Tejun Heo and Roman Gushchin.
+`memory.low` (best-effort protection) and `memory.min` (hard protection) were introduced as part of the memory protection model described in [LWN: Putting cgroup memory protection back together](https://lwn.net/Articles/762472/). The `mem_cgroup_calculate_protection()` function implementing the proportional distribution calculation was developed by Tejun Heo and Roman Gushchin.
 
 ### memory.events.local
 

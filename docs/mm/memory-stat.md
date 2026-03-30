@@ -4,7 +4,7 @@
 
 ## What is memory.stat?
 
-`/sys/fs/cgroup/<cgroup>/memory.stat` is the most detailed memory accounting file the kernel exposes for a cgroup. It is produced by `memcg_stat_show()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c), which reads from the cgroup's per-cpu stat counters and formats them as name/value pairs.
+`/sys/fs/cgroup/<cgroup>/memory.stat` is the most detailed memory accounting file the kernel exposes for a cgroup. It is produced by `memory_stat_show()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c), which reads from the cgroup's per-cpu stat counters and formats them as name/value pairs.
 
 ```bash
 cat /sys/fs/cgroup/mycontainer/memory.stat
@@ -50,7 +50,7 @@ Anonymous pages are not backed by a file. They back heap allocations, stack grow
 
 **What it counts**: Bytes of anonymous memory currently resident in RAM — heap, stack, anonymous `mmap()` regions, and `MAP_PRIVATE` copy-on-write pages that have been dirtied.
 
-**Kernel counter**: `NR_ANON_MAPPED` in the cgroup's `vmstats`, updated in `__mod_memcg_lruvec_state()` whenever an anonymous page is mapped or unmapped. Defined in `include/linux/mmzone.h`.
+**Kernel counter**: `NR_ANON_MAPPED` in the cgroup's `vmstats`, updated in `mod_lruvec_state()` whenever an anonymous page is mapped or unmapped. Defined in `include/linux/mmzone.h`.
 
 **Hierarchical**: Yes — includes all descendant cgroups.
 
@@ -306,7 +306,7 @@ These are monotonically increasing event counters. They do not measure current s
 
 **What it counts**: Total number of minor page faults in this cgroup — faults that were satisfied without disk I/O (page was in RAM, just not mapped: e.g., copy-on-write, accessing a page that was in page cache).
 
-**Kernel counter**: `MEMCG_PGFAULT`.
+**Kernel counter**: `PGFAULT` (in `memcg_vm_event_stat[]`).
 
 **Hierarchical**: Yes.
 
@@ -520,7 +520,7 @@ These fields reflect the protection configuration and whether it is taking effec
 memory.current ≈ anon + file + kernel + swapcached + sock + (children's contributions)
 ```
 
-In practice, due to per-cpu counter batching and timing, `memory.current` may differ slightly from the sum of `memory.stat` fields at any instant. This is expected — the kernel batches counter updates in `__mod_memcg_lruvec_state()` to avoid cache-line contention on hot paths.
+In practice, due to per-cpu counter batching and timing, `memory.current` may differ slightly from the sum of `memory.stat` fields at any instant. This is expected — the kernel batches counter updates in `mod_lruvec_state()` to avoid cache-line contention on hot paths.
 
 ### Example snapshot
 
@@ -566,7 +566,7 @@ The ~330 KiB gap is from `percpu` counters and batching delay — well within no
 | Pages in swap (not in RAM) | `memory.swap.current` tracks this separately |
 | Hugetlb pages | Managed by the `hugetlb` controller, not `memory` |
 | Memory-mapped device I/O | Not tracked by memcg (no page struct backing) |
-| Kernel memory outside slab | e.g., vmalloc allocations — not fully tracked in all kernel versions |
+| Kernel memory outside slab | e.g., ioremap'd or physically-contiguous allocations with no `struct page` backing |
 
 ---
 
@@ -592,14 +592,14 @@ The ~330 KiB gap is from `percpu` counters and batching delay — well within no
 | `slab_reclaimable` | Reclaimable slab | Yes | `NR_SLAB_RECLAIMABLE_B` |
 | `slab_unreclaimable` | Unreclaimable slab | No | `NR_SLAB_UNRECLAIMABLE_B` |
 | `swapcached` | Swap cache | Yes (discard the swap copy) | `NR_SWAPCACHE` |
-| `pgfault` | Event counter | — | `MEMCG_PGFAULT` |
-| `pgmajfault` | Event counter | — | `MEMCG_PGMAJFAULT` |
-| `pgrefill` | Event counter | — | `MEMCG_PGREFILL` |
-| `pgscan` | Event counter | — | `MEMCG_PGSCAN` |
-| `pgsteal` | Event counter | — | `MEMCG_PGSTEAL` |
-| `pgactivate` | Event counter | — | `MEMCG_PGACTIVATE` |
-| `pgdeactivate` | Event counter | — | `MEMCG_PGDEACTIVATE` |
-| `pglazyfreed` | Event counter | — | `MEMCG_PGLAZYFREED` |
+| `pgfault` | Event counter | — | `PGFAULT` |
+| `pgmajfault` | Event counter | — | `PGMAJFAULT` |
+| `pgrefill` | Event counter | — | `PGREFILL` |
+| `pgscan` | Event counter | — | sum of `PGSCAN_KSWAPD` + `PGSCAN_DIRECT` + `PGSCAN_PROACTIVE` + `PGSCAN_KHUGEPAGED` |
+| `pgsteal` | Event counter | — | sum of `PGSTEAL_KSWAPD` + `PGSTEAL_DIRECT` + ... |
+| `pgactivate` | Event counter | — | `PGACTIVATE` |
+| `pgdeactivate` | Event counter | — | `PGDEACTIVATE` |
+| `pglazyfreed` | Event counter | — | `PGLAZYFREED` |
 | `thp_fault_alloc` | Event counter | — | (memcg THP counter) |
 | `thp_collapse_alloc` | Event counter | — | (memcg THP counter) |
 | `workingset_refault_anon` | Event counter | — | `WORKINGSET_REFAULT_ANON` |
@@ -668,7 +668,7 @@ echo "pgmajfault: $MAJFAULT"
 
 | File | Relevance |
 |------|-----------|
-| [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | `memcg_stat_show()` produces `memory.stat`; `__mod_memcg_lruvec_state()` updates counters |
+| [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) | `memory_stat_show()` produces `memory.stat`; `mod_lruvec_state()` updates counters |
 | [`include/linux/memcontrol.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/memcontrol.h) | `mem_cgroup` struct; `MEMCG_*` stat enum; `mem_cgroup_stat_names[]` |
 | [`include/linux/mm.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mm.h) | `NR_*` enum values for global and per-lruvec stats |
 | [`mm/vmscan.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) | Updates `pgscan`, `pgsteal`, `pgrefill`, `pgactivate`, `pgdeactivate` |

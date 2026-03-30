@@ -31,7 +31,7 @@ This page follows that path step by step. See [Memory Cgroups](memcg.md) for how
 
 While `memory.current` stays below `memory.high`, the cgroup memory controller is effectively invisible to running processes. Allocations succeed at normal speed; kswapd runs at the system level for global pressure; no per-cgroup throttling occurs.
 
-The kernel tracks per-cgroup memory usage via struct `mem_cgroup` in [`include/linux/memcontrol.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/memcontrol.h). Every page charged to a cgroup updates the per-cpu counters attached to that struct via `__mod_memcg_lruvec_state()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c). The counters are periodically synced to the global `mem_cgroup->vmstats` array that `memory.stat` reads.
+The kernel tracks per-cgroup memory usage via struct `mem_cgroup` in [`include/linux/memcontrol.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/memcontrol.h). Every page charged to a cgroup updates the per-cpu counters attached to that struct via `mod_lruvec_state()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c). The counters are periodically synced to the global `mem_cgroup->vmstats` array that `memory.stat` reads.
 
 ```bash
 # Check current usage and the limits in effect
@@ -158,9 +158,9 @@ If reclaim from the throttle path cannot keep `memory.current` below `memory.hig
 
 When an allocation fails after exhausting cgroup reclaim, `mem_cgroup_oom()` in [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) is called. It:
 
-1. Calls `mem_cgroup_get_oom_group()` to determine which cgroup should be the OOM target (considering `memory.oom.group` settings in the hierarchy).
-2. Calls `out_of_memory()` in [`mm/oom_kill.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) with `oom_memcg` set — this signals a cgroup-scoped OOM.
-3. `select_bad_process()` is called with the cgroup constraint, so it only considers tasks within the target cgroup.
+1. Calls `out_of_memory()` in [`mm/oom_kill.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) with `oom_memcg` set — this signals a cgroup-scoped OOM.
+2. `select_bad_process()` is called with the cgroup constraint, so it only considers tasks within the target cgroup.
+3. After the victim is selected, `oom_kill_process()` calls `mem_cgroup_get_oom_group()` to check whether `memory.oom.group` is set — if so, the entire cgroup subtree is killed, not just the victim.
 
 ### How cgroup OOM differs from global OOM
 
@@ -248,7 +248,7 @@ When the victim process exits, its pages are freed back to the cgroup. The seque
 1. The process receives SIGKILL and its signal handler (or default disposition) terminates it.
 2. `exit_mm()` is called, which calls `mmput()`, which drops the `mm_struct` reference count.
 3. When the count reaches zero, `__mmput()` runs `exit_mmap()`, which calls `unmap_vmas()` to walk all VMAs and `free_pgtables()` to release page tables.
-4. Each page is unmapped and freed via `release_pages()`, which calls `mem_cgroup_uncharge()` (or its folio equivalent) to subtract from the cgroup's counter.
+4. Each page is unmapped and freed via `release_pages()`, which calls `mem_cgroup_uncharge()` (which takes a `struct folio *` in current kernels) to subtract from the cgroup's counter.
 5. `memory.current` drops. If it falls below `memory.max`, further allocations can succeed.
 
 ### Will the container recover automatically?
