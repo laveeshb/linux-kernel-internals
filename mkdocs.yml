@@ -242,6 +242,8 @@ nav:
       - Lockdep: locking/lockdep.md
       - Lock Contention Debugging: locking/lock-debugging.md
       - Futex Internals: locking/futex.md
+      - SRCU: locking/srcu.md
+      - Completions and Wait Queues: locking/completions.md
   - Interrupts:
     - Getting Started: interrupts/README.md
     - Fundamentals:
