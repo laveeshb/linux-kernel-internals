@@ -300,7 +300,7 @@ When splitting a huge PMD during a COW fault, the kernel checks if the page is s
 
 **Commit**: [c444eb564fb1](https://git.kernel.org/linus/c444eb564fb1) ("mm: thp: make the THP mapcount atomic against __split_huge_pmd_locked()")
 
-**Author**: Jann Horn
+**Author**: Andrea Arcangeli
 
 ---
 

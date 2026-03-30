@@ -794,7 +794,7 @@ The reaper is a dedicated kernel thread that:
 
 Hocko added `MMF_OOM_NOT_REAPABLE` flag: if the reaper can't acquire `mmap_sem` after multiple attempts, it marks the mm as "reaped" anyway, allowing the OOM killer to select another victim.
 
-**Commit**: [bc448e897b6d](https://git.kernel.org/linus/bc448e897b6d) ("mm, oom_reaper: do not attempt to reap a task more than twice")
+**Commit**: [11a410d516e8](https://git.kernel.org/linus/11a410d516e8) ("mm, oom_reaper: do not attempt to reap a task more than twice")
 
 #### Concurrent work: killable mmap_sem
 

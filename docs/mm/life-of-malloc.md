@@ -571,11 +571,7 @@ Local privilege escalation on many Linux distributions. The vulnerability affect
 
 The kernel increased the stack guard gap from 1 page (4KB) to 1MB by default:
 
-```bash
-# Check current guard gap (Documentation/admin-guide/kernel-parameters.txt)
-cat /proc/sys/vm/stack_guard_gap
-# Default: 256 (pages) = 1MB on 4KB page systems
-```
+The guard gap defaults to 256 pages (1MB on 4KB page systems) and is configurable via the `stack_guard_gap=` kernel boot parameter (see `Documentation/admin-guide/kernel-parameters.txt`).
 
 #### Why this matters for malloc
 

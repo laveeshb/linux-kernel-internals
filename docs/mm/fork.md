@@ -247,7 +247,7 @@ static vm_fault_t do_wp_page(struct vm_fault *vmf)
     struct folio *old_folio = page_folio(vmf->page);
 
     // Check if we're the only user of this page
-    if (folio_reuse_one_vma(old_folio, vmf->vma)) {
+    if (wp_can_reuse_anon_folio(old_folio, vmf->vma)) {
         // We're the only mapper - just make it writable
         wp_page_reuse(vmf, old_folio);
         return 0;
@@ -649,7 +649,7 @@ Fork and COW involve subtle race conditions between memory mapping, page table m
 
 #### What happened
 
-In October 2016, Phil Oester discovered a race condition in the kernel's COW handling that had existed since kernel 2.6.22 (September 2007) - **nine years** undetected.
+In October 2016, Phil Oester discovered a race condition in the kernel's COW handling that had existed since kernel 2.6.22 (July 2007) - **nine years** undetected.
 
 The vulnerability allowed an unprivileged local user to gain write access to read-only memory mappings, enabling privilege escalation to root.
 
@@ -795,7 +795,7 @@ In 2018, Jann Horn (Google Project Zero) found a TLB (Translation Lookaside Buff
 
 #### The bug
 
-From Horn's research ["Taking a page from the kernel's book"](https://research.checkpoint.com/2018/mmap-vulnerabilities-linux-kernel/):
+From the [oss-security disclosure](https://www.openwall.com/lists/oss-security/2018/10/10/5) by Jann Horn:
 
 When `mremap()` moves a mapping, it must:
 1. Update page tables
@@ -811,7 +811,7 @@ An attacker could potentially read or write memory belonging to other processes,
 
 **Commit**: [eb66ae030829](https://git.kernel.org/linus/eb66ae030829) ("mremap: properly flush TLB before releasing the page")
 
-**Author**: Will Deacon
+**Author**: Linus Torvalds
 
 The fix ensures TLB flushes happen before releasing both source and destination page table locks, preventing stale TLB entries from accessing reallocated pages.
 

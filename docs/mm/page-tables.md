@@ -295,9 +295,9 @@ Meltdown exploits **speculative execution** combined with **cache timing**. The 
 
 #### The fix: KPTI
 
-**Commit**: [5aa90a84589282](https://git.kernel.org/linus/5aa90a84589282b87666f92b6c3c917c8080a9bf) ("x86/pti: Add infrastructure for page table isolation")
+**Commit**: [aa8c6248f8c7](https://git.kernel.org/linus/aa8c6248f8c7) ("x86/mm/pti: Add infrastructure for page table isolation")
 
-**Author**: Dave Hansen (Intel)
+**Author**: Thomas Gleixner
 
 KPTI creates separate page tables for kernel and user mode. When entering the kernel, page tables are switched to include kernel mappings.
 
