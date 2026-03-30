@@ -204,3 +204,6 @@ nav:
       - Life of a Packet (receive): net/life-of-packet-rx.md
       - Life of a Packet (transmit): net/life-of-packet-tx.md
       - What Happens When You connect(): net/connect.md
+    - TCP/IP:
+      - TCP Implementation: net/tcp.md
+      - IP Routing: net/ip-routing.md
