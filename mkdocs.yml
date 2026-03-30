@@ -80,6 +80,11 @@ nav:
       - kmalloc (SLUB): mm/slab.md
       - vmalloc: mm/vmalloc.md
       - NUMA: mm/numa.md
+    - NUMA Advanced:
+      - Distance Metrics: mm/numa-distance.md
+      - Zonelist & Fallback: mm/numa-zonelist.md
+      - NUMA & Reclaim: mm/numa-reclaim.md
+      - Memory Hotplug: mm/memory-hotplug.md
     - Address Translation:
       - Page Tables: mm/page-tables.md
       - Process Address Space: mm/mmap.md
