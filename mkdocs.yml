@@ -95,7 +95,11 @@ nav:
       - Multi-Size THP: mm/mthp.md
       - Compaction: mm/compaction.md
       - KSM: mm/ksm.md
+      - Folio Abstraction: mm/folio.md
+      - Maple Tree (VMA Data Structure): mm/maple-tree.md
       - Per-VMA Locks: mm/per-vma-locks.md
+      - RCU in Memory Management: mm/rcu-mm.md
+      - TLB Optimization: mm/tlb-optimization.md
       - CXL Memory Tiering: mm/cxl-memory-tiering.md
       - vrealloc: mm/vrealloc.md
     - Memory Cgroups:
