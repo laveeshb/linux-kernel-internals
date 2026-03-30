@@ -68,15 +68,15 @@ Bugs with assigned CVEs, typically exploitable for privilege escalation or infor
 | CVE-2024-26759 | Swap slot ABA | swap | Race/corruption | [swapping.md](../swapping.md#case-1-the-swap-slot-aba-problem-cve-2024-26759) |
 | CVE-2023-3269 | StackRot | maple tree | UAF | [fork.md](../fork.md#case-2-stackrot-cve-2023-3269) |
 | CVE-2023-6246 | glibc syslog | glibc heap | Overflow | [life-of-malloc.md](../life-of-malloc.md#case-1-glibc-heap-overflow-cve-2023-6246) |
-| CVE-2022-29582 | io_uring UAF | io_uring/slub | UAF | [slab.md](../slab.md#case-2-io_uring-use-after-free-cve-2022-29582) |
-| CVE-2021-22555 | Netfilter heap OOB | netfilter/slub | Heap OOB | [slab.md](../slab.md#case-1-netfilter-heap-out-of-bounds-cve-2021-22555) |
-| CVE-2020-29368 | THP COW race | thp | Race | [thp.md](../thp.md#case-1-thp-cow-race-cve-2020-29368) |
+| CVE-2022-29582 | io_uring UAF | io_uring/slub | UAF | [slab.md](slab.md#case-2-io_uring-use-after-free-cve-2022-29582) |
+| CVE-2021-22555 | Netfilter heap OOB | netfilter/slub | Heap OOB | [slab.md](slab.md#case-1-netfilter-heap-out-of-bounds-cve-2021-22555) |
+| CVE-2020-29368 | THP COW race | thp | Race | [thp.md](thp.md#case-1-thp-cow-race-cve-2020-29368) |
 | CVE-2018-18281 | mremap TLB race | mremap | TLB race | [fork.md](../fork.md#case-4-tlb-flush-races-in-mremap-cve-2018-18281) |
-| CVE-2017-5754 | Meltdown | CPU/page tables | Side channel | [page-tables.md](../page-tables.md#case-1-meltdown-cve-2017-5754) |
-| CVE-2017-5753 | Spectre v1 | CPU | Side channel | [page-tables.md](../page-tables.md#case-2-spectre-cve-2017-5753-cve-2017-5715) |
-| CVE-2017-5715 | Spectre v2 | CPU | Side channel | [page-tables.md](../page-tables.md#case-2-spectre-cve-2017-5753-cve-2017-5715) |
+| CVE-2017-5754 | Meltdown | CPU/page tables | Side channel | [page-tables.md](page-tables.md#case-1-meltdown-cve-2017-5754) |
+| CVE-2017-5753 | Spectre v1 | CPU | Side channel | [page-tables.md](page-tables.md#case-2-spectre-cve-2017-5753-cve-2017-5715) |
+| CVE-2017-5715 | Spectre v2 | CPU | Side channel | [page-tables.md](page-tables.md#case-2-spectre-cve-2017-5753-cve-2017-5715) |
 | CVE-2016-5195 | Dirty COW | COW | Race | [fork.md](../fork.md#case-1-dirty-cow-cve-2016-5195) |
-| CVE-2012-4398 | OOM deadlock | OOM | Deadlock | [oom.md](../oom.md#case-5-oom-deadlock-denial-of-service-cve-2012-4398) |
+| CVE-2012-4398 | OOM deadlock | OOM | Deadlock | [oom.md](../oom.md#case-5-cve-2012-4398---oom-deadlock-denial-of-service) |
 | CVE-2009-2695 | mmap_min_addr bypass | mmap | Logic | [life-of-malloc.md](../life-of-malloc.md#case-3-mmap_min_addr-bypass-cve-2009-2695) |
 | CVE-2004-0077 | mremap disaster | mremap | Logic | [fork.md](../fork.md#case-3-the-mremap-disaster-cve-2004-0077) |
 
@@ -108,7 +108,7 @@ Bugs causing severe performance degradation.
 |-----|------|-----------|---------|
 | Thrashing livelock | 2010+ | reclaim | [oom.md](../oom.md#case-3-the-thrashing-livelock-2010-mitigated-2018) |
 | Readahead trap | Ongoing | readahead | [swapping.md](../swapping.md#case-5-the-swap-readahead-trap) |
-| khugepaged CPU | Ongoing | thp | [thp.md](../thp.md#case-3-khugepaged-cpu-storms) |
+| khugepaged CPU | Ongoing | thp | [thp.md](thp.md#case-3-khugepaged-cpu-storms) |
 
 ---
 
