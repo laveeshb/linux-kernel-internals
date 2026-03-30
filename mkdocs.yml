@@ -269,3 +269,9 @@ nav:
     - BPF Verifier: bpf/bpf-verifier.md
     - BTF and CO-RE: bpf/btf-core.md
     - libbpf and Skeletons: bpf/libbpf.md
+  - Cgroups & Namespaces:
+    - Getting Started: cgroups/README.md
+    - Cgroup v2 Architecture: cgroups/cgroup-v2.md
+    - Resource Controllers: cgroups/cgroup-controllers.md
+    - Namespaces: cgroups/namespaces.md
+    - Container Isolation: cgroups/container-isolation.md
