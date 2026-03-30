@@ -332,3 +332,8 @@ nav:
     - Getting Started: iommu/README.md
     - IOMMU Architecture: iommu/iommu-arch.md
     - DMA API: iommu/dma-api.md
+  - Kernel Debugging:
+    - Getting Started: debugging/README.md
+    - KGDB: debugging/kgdb.md
+    - kdump and crash: debugging/kdump.md
+    - Oops Analysis: debugging/oops-analysis.md
