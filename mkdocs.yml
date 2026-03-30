@@ -313,3 +313,8 @@ nav:
     - LSM Framework: security/lsm.md
     - Capabilities: security/capabilities.md
     - seccomp BPF: security/seccomp.md
+  - Virtualization:
+    - Getting Started: virtualization/README.md
+    - KVM Architecture: virtualization/kvm-arch.md
+    - Memory Virtualization: virtualization/kvm-memory.md
+    - virtio: virtualization/virtio.md
