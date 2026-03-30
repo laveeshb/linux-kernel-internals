@@ -122,11 +122,13 @@ nav:
       - CMA: mm/cma.md
       - DMA: mm/dma.md
       - hugetlbfs vs THP: mm/hugetlbfs-vs-thp.md
+      - 1GB Huge Pages: mm/hugepages-1gb.md
     - Tuning:
       - PSI: mm/psi.md
       - Sysctl Reference: mm/sysctl-reference.md
       - Containers: mm/tuning-containers.md
       - Databases: mm/tuning-databases.md
+      - Memory Bandwidth: mm/memory-bandwidth.md
       - Swap Thrashing: mm/swap-thrashing.md
     - Debugging:
       - KASAN: mm/kasan.md
