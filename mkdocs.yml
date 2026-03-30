@@ -290,3 +290,7 @@ nav:
     - Signals: ipc/signals.md
     - Pipes and FIFOs: ipc/pipes.md
     - Shared Memory and Semaphores: ipc/shared-memory.md
+  - io_uring:
+    - Getting Started: io-uring/README.md
+    - Architecture and Rings: io-uring/io-uring-arch.md
+    - Operations and Advanced Features: io-uring/io-uring-ops.md
