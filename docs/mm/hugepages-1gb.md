@@ -112,11 +112,11 @@ On a booted system without boot-time reservation, attempting runtime allocation:
 echo 4 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
 
 # Check what actually happened
-cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages   # may show 4
-cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages # likely shows 0
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages   # shows actual pool size (may be 0-4)
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages # shows unused pages in pool
 ```
 
-`nr_hugepages` records the target; `free_hugepages` shows how many were actually allocated. On a loaded system, `free_hugepages` will typically be 0 or far below the target.
+`nr_hugepages` shows the actual number of huge pages in the pool — not the requested target. If you request 4 but the kernel can only allocate 2 (due to fragmentation), `nr_hugepages` shows 2. `free_hugepages` shows how many pool pages are not currently mapped by any process. On a loaded system, runtime allocation of 1GB pages almost always fails entirely.
 
 !!! note "CONFIG_CONTIG_ALLOC"
     Some distributions enable `CONFIG_CONTIG_ALLOC`, which allows runtime gigantic page allocation via `alloc_contig_pages()`. This may succeed immediately after boot when memory is still unfragmented, but should not be relied upon for production deployments. Boot-time reservation is the only reliable method.

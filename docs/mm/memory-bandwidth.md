@@ -391,7 +391,7 @@ Is your workload memory bandwidth-bound?
 ### Kernel documentation
 
 - [`Documentation/admin-guide/mm/numa_memory_policy.rst`](https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html)
-- [`Documentation/mm/numahint.rst`](https://docs.kernel.org/mm/numahint.html) — NUMA balancing implementation details
+- [`Documentation/mm/numa.rst`](https://docs.kernel.org/mm/numa.html) — NUMA balancing implementation details
 
 ### Mailing list discussions
 
