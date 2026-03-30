@@ -197,6 +197,8 @@ nav:
     - Advanced:
       - Load Balancing: sched/load-balancing.md
       - Energy-Aware Scheduling: sched/eas.md
+      - Preemption Model: sched/preemption.md
+      - The Scheduling Tick: sched/sched-tick.md
     - Debugging & Observability:
       - Scheduler Statistics: sched/schedstat.md
       - Scheduler Tracing: sched/sched-tracing.md
