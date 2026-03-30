@@ -194,3 +194,9 @@ nav:
       - Scheduler Statistics: sched/schedstat.md
       - Scheduler Tracing: sched/sched-tracing.md
       - Scheduler Tuning: sched/sched-tuning.md
+  - Networking:
+    - Fundamentals:
+      - "Why Is the Network Stack So Complex?": net/network-stack-overview.md
+      - "sk_buff: The Network Buffer": net/sk-buff.md
+      - Socket Layer Overview: net/socket-layer.md
+      - Network Device and NAPI: net/napi.md
