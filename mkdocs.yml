@@ -204,6 +204,7 @@ nav:
       - "Why Is the Network Stack So Complex?": net/network-stack-overview.md
       - "sk_buff: The Network Buffer": net/sk-buff.md
       - Socket Layer Overview: net/socket-layer.md
+      - epoll Internals: net/epoll.md
       - Network Device and NAPI: net/napi.md
     - Lifecycle:
       - Life of a Packet (receive): net/life-of-packet-rx.md
@@ -211,6 +212,7 @@ nav:
       - What Happens When You connect(): net/connect.md
     - TCP/IP:
       - TCP Implementation: net/tcp.md
+      - TCP Congestion Control: net/tcp-congestion.md
       - IP Routing: net/ip-routing.md
     - Filtering:
       - Netfilter Architecture: net/netfilter.md
