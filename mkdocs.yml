@@ -211,3 +211,7 @@ nav:
       - Netfilter Architecture: net/netfilter.md
       - nftables vs iptables: net/nftables-iptables.md
       - Connection Tracking: net/conntrack.md
+    - XDP & TC:
+      - XDP (eXpress Data Path): net/xdp.md
+      - AF_XDP Sockets: net/af-xdp.md
+      - TC and qdisc: net/tc-qdisc.md
