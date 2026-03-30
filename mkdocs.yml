@@ -359,6 +359,8 @@ nav:
     - Linux Audit: security/audit.md
     - Credentials and User Namespaces: security/credentials.md
     - dm-crypt (Block Encryption): security/dm-crypt.md
+    - fscrypt (Per-File Encryption): security/fscrypt.md
+    - SELinux: security/selinux.md
   - Virtualization:
     - Getting Started: virtualization/README.md
     - KVM Architecture: virtualization/kvm-arch.md
