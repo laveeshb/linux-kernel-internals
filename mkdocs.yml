@@ -280,3 +280,8 @@ nav:
     - Syscall Entry Path: syscalls/syscall-entry.md
     - SYSCALL_DEFINE and Dispatch: syscalls/syscall-define.md
     - Adding a New Syscall: syscalls/adding-syscall.md
+  - Device Drivers:
+    - Getting Started: drivers/README.md
+    - Linux Device Model: drivers/device-model.md
+    - Platform Drivers: drivers/platform-driver.md
+    - Character and Misc Devices: drivers/chardev.md
