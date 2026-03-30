@@ -220,3 +220,11 @@ nav:
       - Network Tracing: net/net-tracing.md
       - Understanding /proc/net/snmp: net/proc-snmp.md
       - Network Buffer Tuning: net/net-buffer-tuning.md
+  - Locking:
+    - Getting Started: locking/README.md
+    - Fundamentals:
+      - Spinlock and raw_spinlock: locking/spinlock.md
+      - Mutex and rt_mutex: locking/mutex.md
+      - rwlock and rwsem: locking/rwlock-rwsem.md
+      - RCU (Read-Copy-Update): locking/rcu.md
+      - Seqlock: locking/seqlock.md
