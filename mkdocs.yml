@@ -231,6 +231,7 @@ nav:
       - TC and qdisc: net/tc-qdisc.md
     - Advanced:
       - Container Networking: net/container-networking.md
+      - Network Namespaces: net/net-namespaces.md
       - Kernel TLS (kTLS): net/ktls.md
       - Netlink: net/netlink.md
     - Debugging & Observability:
