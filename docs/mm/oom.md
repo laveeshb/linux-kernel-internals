@@ -656,7 +656,7 @@ cat /sys/fs/cgroup/mycontainer/memory.events
 
 #### PSI - Pressure Stall Information (v4.20)
 
-Johannes Weiner (Facebook) added PSI to detect pressure *before* OOM (see [Case 3](#case-3-the-thrashing-livelock-2010-mitigated-2018) above).
+Johannes Weiner (Facebook) added PSI to detect pressure *before* OOM (see [Case 3](#case-3-the-thrashing-livelock-2010-present) above).
 
 **Commit**: [eb414681d5a0](https://git.kernel.org/linus/eb414681d5a0) ("psi: pressure stall information for CPU, memory, and IO") | [LKML](https://lore.kernel.org/linux-mm/20180529093107.13939-1-hannes@cmpxchg.org/)
 
@@ -931,7 +931,7 @@ ulimit -u 500  # Max 500 processes for this user
 
 ---
 
-### Case 5: OOM deadlock denial of service (CVE-2012-4398)
+### Case 5: CVE-2012-4398 - OOM deadlock denial of service
 
 #### What happened
 
