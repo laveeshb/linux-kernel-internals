@@ -73,7 +73,7 @@ Fires whenever the page allocator (`__alloc_pages()` in [`mm/page_alloc.c`](http
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `page` | `struct page *` | Pointer to the first page |
+| `pfn` | `unsigned long` | PFN of the first page (use `pfn_to_page()` to get the `struct page *`) |
 | `order` | `unsigned int` | Allocation order (0 = single page, 1 = 2 pages, ...) |
 | `gfp_flags` | `gfp_t` | GFP flags used for the allocation |
 | `migratetype` | `int` | Migrate type of the allocation (UNMOVABLE, MOVABLE, RECLAIMABLE) |
@@ -112,7 +112,7 @@ Fires when a page (or compound page) is returned to the page allocator via `free
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `page` | `struct page *` | The page being freed |
+| `pfn` | `unsigned long` | PFN of the page being freed |
 | `order` | `unsigned int` | Order of the compound page being freed |
 
 **Diagnostic use**: Paired with `mm_page_alloc`, you can track the net allocation rate (allocs minus frees). A diverging count indicates a memory leak or accumulation.
@@ -130,7 +130,7 @@ Fires when the page allocator falls back to the zone lock path — typically whe
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `page` | `struct page *` | The allocated page |
+| `pfn` | `unsigned long` | PFN of the allocated page |
 | `order` | `unsigned int` | Allocation order |
 | `migratetype` | `int` | Migration type |
 
@@ -257,25 +257,29 @@ Fires when the inactive LRU list is shrunk (pages are being reclaimed or moved t
 | `nr_writeback` | `unsigned long` | Pages currently under writeback |
 | `nr_congested` | `unsigned long` | Pages waiting on congested backing device |
 | `nr_immediate` | `unsigned long` | Pages eligible for immediate reclaim |
-| `nr_activate` | `unsigned long` | Pages promoted back to active list |
+| `nr_activate0` | `unsigned long` | Anonymous pages promoted back to active list |
+| `nr_activate1` | `unsigned long` | File-backed pages promoted back to active list |
 | `nr_ref_keep` | `unsigned long` | Pages kept due to reference |
 | `nr_unmap_fail` | `unsigned long` | Pages that failed unmapping |
 | `priority` | `int` | Reclaim urgency (lower = more urgent) |
 
 **Diagnostic use**: A large `nr_dirty` combined with low `nr_reclaimed` means reclaim is hitting dirty pages and having to wait for writeback. This is a common source of reclaim latency. The `priority` field (from 12 at start down to 0 at desperation) shows how aggressively the kernel is trying.
 
-### mm_vmscan_writepage
+### mm_vmscan_write_folio
 
-Fires when the reclaim path decides to write a dirty page to swap or backing storage.
+!!! note "Renamed in recent kernels"
+    This tracepoint was originally called `mm_vmscan_writepage` and was renamed to `mm_vmscan_write_folio` during the folio conversion. Check `/sys/kernel/debug/tracing/events/vmscan/` on your running kernel for the exact name.
+
+Fires when the reclaim path decides to write a dirty page/folio to swap or backing storage.
 
 **Fields**:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `page` | `struct page *` | The page being written |
+| `pfn` | `unsigned long` | PFN of the folio being written |
 | `reclaim_flags` | `int` | Flags describing the writeback context |
 
-**Diagnostic use**: High rates of `mm_vmscan_writepage` mean the system is swap-writing or syncing dirty file pages due to memory pressure — I/O-driven reclaim that significantly impacts application latency.
+**Diagnostic use**: High rates mean the system is swap-writing or syncing dirty file pages due to memory pressure — I/O-driven reclaim that significantly impacts application latency.
 
 ---
 
@@ -306,12 +310,14 @@ Fires when the OOM killer selects a process to kill.
 | Field | Type | Description |
 |-------|------|-------------|
 | `pid` | `int` | PID of the victim process |
-| `uid` | `uid_t` | UID of the victim |
-| `oom_score_adj` | `short` | The victim's oom_score_adj |
+| `comm` | `char[]` | Process name |
+| `oom_score_adj` | `long` | The victim's oom_score_adj |
 | `total_vm` | `unsigned long` | Victim's total virtual memory (pages) |
-| `rss` | `unsigned long` | Resident set size (pages) |
-| `pgtables_bytes` | `unsigned long` | Page table memory |
-| `oom_score` | `int` | The score that selected this process |
+| `anon_rss` | `unsigned long` | Anonymous RSS (pages) |
+| `file_rss` | `unsigned long` | File-backed RSS (pages) |
+| `shmem_rss` | `unsigned long` | Shared memory RSS (pages) |
+| `pgtables_bytes` | `unsigned long` | Page table memory (bytes) |
+| `mm_flags` | `unsigned long` | mm_struct flags |
 
 **Diagnostic use**: This is the single most useful OOM tracepoint for production monitoring. Subscribe to `mark_victim` to get a structured event every time the OOM killer fires, including which process was selected and why.
 
@@ -319,8 +325,9 @@ Fires when the OOM killer selects a process to kill.
 # Alert on OOM kills with process details
 bpftrace -e '
 tracepoint:oom:mark_victim {
-    printf("OOM kill: pid=%d comm=%s rss_pages=%lu score=%d\n",
-           args->pid, args->comm, args->rss, args->oom_score);
+    $rss = args->anon_rss + args->file_rss + args->shmem_rss;
+    printf("OOM kill: pid=%d comm=%s rss_pages=%lu adj=%d\n",
+           args->pid, args->comm, $rss, args->oom_score_adj);
 }'
 ```
 
@@ -330,35 +337,21 @@ For the full OOM debugging workflow, see [OOM Debugging](oom-debugging.md).
 
 ## Page Fault Tracepoints
 
-**Source**: [`include/trace/events/kmem.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/kmem.h) and architecture-specific files
+The kernel does not expose generic mm-level page fault tracepoints. Page fault observation is architecture-specific:
 
-### mm_anon_fault (mm_anon_pgin, historically)
-
-!!! note "Naming varies by kernel version"
-    Page fault tracepoints have been reorganized across kernel versions. The tracepoint names shown here reflect the tracepoints available via `perf list` and ftrace's events directory. Always check `/sys/kernel/debug/tracing/events/` on your running kernel for the exact names present.
-
-**Conceptual fields** (check your kernel's format file):
-
-| Field | Description |
-|-------|-------------|
-| `address` | Faulting virtual address |
-| `flags` | Fault flags (write fault, instruction fetch, etc.) |
-| `mm` | The `mm_struct` of the faulting task |
-
-**Diagnostic use**: Measure anonymous page fault rate — useful for understanding how much new heap/stack memory a workload is instantiating. A process that page-faults continuously is touching new memory pages, which drives physical memory growth.
-
-### mm_filemap_fault
-
-Fires on a file-backed page fault (demand paging from a file, including executable text pages).
-
-**Diagnostic use**: High rates indicate the page cache is cold — the working set of the application does not fit in available RAM. Correlate with `pgmajfault` in `/proc/vmstat`.
+- **x86/x86_64**: `exceptions:page_fault_user` and `exceptions:page_fault_kernel`
+- **ARM64**: `exceptions:page_fault_user` and `exceptions:page_fault_kernel`
 
 ```bash
-# Compare minor vs major faults to measure I/O-bound paging
-perf stat -e kmem:mm_page_alloc \
-          -e exceptions:page_fault_user \
-          -a -- sleep 10
+# Count user-space page faults (all architectures that support it)
+perf stat -e exceptions:page_fault_user -a -- sleep 10
+
+# Or use /proc/vmstat counters (architecture-independent)
+grep pgfault /proc/vmstat     # minor faults
+grep pgmajfault /proc/vmstat  # major faults (required I/O)
 ```
+
+For page fault analysis, `/proc/vmstat` counters (`pgfault`, `pgmajfault`) and per-process `/proc/<pid>/stat` fields (minflt, majflt) are generally more portable than tracepoints.
 
 ---
 
@@ -434,28 +427,24 @@ Fires when isolated pages are actually migrated to new locations.
 
 **Source**: [`include/trace/events/huge_memory.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/huge_memory.h)
 
-### hugepage_set_pmd / hugepage_set_pud
-
-Fires when a transparent huge page (THP) is mapped into a page table at the PMD or PUD level.
+The available tracepoints cover khugepaged's collapse activity. Check `/sys/kernel/debug/tracing/events/huge_memory/` on your running kernel for the full list, as names evolve with folio and file-THP work.
 
 ### mm_collapse_huge_page
 
-Fires when the khugepaged daemon collapses a set of base pages into a single transparent huge page.
+Fires when the khugepaged daemon finishes a collapse attempt (success or failure).
 
 **Fields**:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `mm` | `struct mm_struct *` | The process address space |
-| `addr` | `unsigned long` | Virtual address of the collapsed region |
 | `isolated` | `int` | Number of pages isolated for collapse |
-| `status` | `int` | Result of the collapse attempt |
-| `sync` | `bool` | Whether the collapse was synchronous |
+| `status` | `int` | Result: 0 = success, non-zero = failure |
 
-**Diagnostic use**: Track THP collapse activity. Frequent collapse failures (`status != 0`) may indicate the process's memory is too fragmented for khugepaged to make progress. Collapsed THPs appear as `AnonHugePages` in `/proc/meminfo`.
+**Diagnostic use**: Track THP collapse activity. Frequent failures (`status != 0`) may indicate the process's memory is too fragmented for khugepaged to make progress. Collapsed THPs appear as `AnonHugePages` in `/proc/meminfo`.
 
 ```bash
-# Count THP collapses per minute
+# Count THP collapses per minute, split by outcome
 bpftrace -e '
 tracepoint:huge_memory:mm_collapse_huge_page {
     @[args->status == 0 ? "success" : "fail"] = count();
@@ -463,22 +452,19 @@ tracepoint:huge_memory:mm_collapse_huge_page {
 interval:s:60 { print(@); clear(@); }'
 ```
 
-### mm_collapse_huge_page_begin / mm_collapse_huge_page_end
+### mm_collapse_huge_page_isolate
 
-Bracket a collapse attempt with timing information, useful for measuring how long khugepaged spends collapsing.
+Fires when pages are isolated from the LRU as part of a collapse attempt.
 
-### thp_fault_alloc / thp_fault_fallback
+**Fields**: `nr_migrate_scanned`, `nr_free_scanned`, `pfn`, `result`
 
-**`thp_fault_alloc`**: Fires when a THP is successfully allocated at fault time (the fault path succeeded in allocating a 2MB page directly rather than falling back to base pages).
+**Diagnostic use**: A non-zero `result` here means the isolation step itself failed — the pages were busy (under I/O, locked, etc.) and could not be moved.
 
-**`thp_fault_fallback`**: Fires when THP allocation at fault time **fails** and the kernel falls back to a regular 4KB page.
+### mm_khugepaged_scan_pmd
 
-**Diagnostic use**: A high ratio of `thp_fault_fallback` to `thp_fault_alloc` means THP is configured to try but the system cannot satisfy 2MB contiguous allocations — fragmentation is preventing it. This is actionable: either reduce THP size pressure with `huge_pages` reservation, or accept the fallback rate as normal for your workload.
+Fires when khugepaged scans a PMD entry looking for collapse opportunities.
 
-```bash
-# THP allocation success rate
-perf stat -e huge_memory:thp_fault_alloc,huge_memory:thp_fault_fallback -a -- sleep 30
-```
+**Fields**: `mm`, `pfn`, `writable`, `referenced`, `none_or_zero`, `status`, `unmapped`
 
 ---
 
@@ -622,21 +608,19 @@ Cross-reference with [KASAN](kasan.md) if the growth is unexpected — it may be
 If you expect THP to be helping but are not seeing `AnonHugePages` grow in `/proc/meminfo`:
 
 ```bash
-# Monitor collapse success/failure and latency
+# Monitor collapse outcomes
 bpftrace -e '
-tracepoint:huge_memory:mm_collapse_huge_page_begin {
-    @start[tid] = nsecs;
-}
-tracepoint:huge_memory:mm_collapse_huge_page_end /@start[tid]/ {
-    $lat = nsecs - @start[tid];
-    @collapse_latency = hist($lat);
-    delete(@start[tid]);
-}
 tracepoint:huge_memory:mm_collapse_huge_page {
     @result[args->status] = count();
 }
-interval:s:30 { print(@result); print(@collapse_latency); }'
+interval:s:30 {
+    printf("\nTHP collapse outcomes (status 0 = success):\n");
+    print(@result);
+    clear(@result);
+}'
 ```
+
+A `status` of 0 is success. Non-zero values map to `SCAN_*` enum values in `mm/khugepaged.c` — check the source for the current mapping (e.g., `SCAN_ALLOC_HUGE_PAGE_FAIL`, `SCAN_CGROUP_CHARGE_FAIL`). If collapses are consistently failing, also check `/sys/kernel/mm/transparent_hugepage/khugepaged/pages_collapsed` and `full_scans` for a longer-term view.
 
 ### Recipe 4: Watching the OOM Killer
 
@@ -645,13 +629,13 @@ Set up a persistent monitor that logs every OOM kill with process details:
 ```bash
 bpftrace -e '
 tracepoint:oom:mark_victim {
+    $rss = args->anon_rss + args->file_rss + args->shmem_rss;
     time("%H:%M:%S ");
-    printf("OOM KILL pid=%d comm=%s rss=%lu pages (%lu MB) score=%d adj=%d\n",
+    printf("OOM KILL pid=%d comm=%s rss=%lu pages (%lu MB) adj=%d\n",
            args->pid,
            args->comm,
-           args->rss,
-           args->rss * 4 / 1024,
-           args->oom_score,
+           $rss,
+           $rss * 4 / 1024,
            args->oom_score_adj);
 }'
 ```
@@ -698,14 +682,14 @@ High `@ownership_stolen` combined with frequent `COMPACT_DEFERRED` results is a 
 | Reclaim | `vmscan:mm_vmscan_kswapd_wake` | Background reclaim pressure |
 | Reclaim | `vmscan:mm_vmscan_direct_reclaim_begin/end` | Allocation latency from reclaim |
 | Reclaim | `vmscan:mm_vmscan_lru_shrink_inactive` | Reclaim efficiency (dirty page bottlenecks) |
-| Reclaim | `vmscan:mm_vmscan_writepage` | Swap/writeback rate from reclaim |
+| Reclaim | `vmscan:mm_vmscan_write_folio` | Swap/writeback rate from reclaim (was `mm_vmscan_writepage` pre-folio) |
 | OOM | `oom:mark_victim` | OOM kills: victim selection |
 | OOM | `oom:oom_score_adj_update` | OOM score manipulation audit |
 | Compaction | `compaction:mm_compaction_begin/end` | Compaction duration and success |
 | Compaction | `compaction:mm_compaction_migratepages` | Pages moved per compaction pass |
-| Huge pages | `huge_memory:thp_fault_alloc` | THP allocation successes at fault time |
-| Huge pages | `huge_memory:thp_fault_fallback` | THP fallback to base pages |
-| Huge pages | `huge_memory:mm_collapse_huge_page` | khugepaged collapse activity |
+| Huge pages | `huge_memory:mm_collapse_huge_page` | khugepaged collapse outcomes |
+| Huge pages | `huge_memory:mm_collapse_huge_page_isolate` | Page isolation step of collapse |
+| Huge pages | `huge_memory:mm_khugepaged_scan_pmd` | khugepaged PMD scan activity |
 | Slab | `kmem:kmem_cache_alloc` | Named-cache allocation by call site |
 | Slab | `kmem:kmem_cache_free` | Named-cache frees |
 | Slab | `kmem:kmalloc` | General kmalloc by call site and size |

@@ -68,7 +68,7 @@ Kmemleak hooks into the kernel allocator by way of callbacks declared in [`inclu
 | `kmalloc()` / `kmem_cache_alloc()` | `kmemleak_alloc()` — register new object |
 | `kfree()` / `kmem_cache_free()` | `kmemleak_free()` — unregister object |
 | `vmalloc()` | `kmemleak_vmalloc()` |
-| `vfree()` | `kmemleak_vfree()` |
+| `vfree()` | `kmemleak_free()` |
 
 These hooks are called from deep inside the slab allocator ([`mm/slab_common.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slab_common.c), [`mm/slub.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c)) and are compiled out entirely when `CONFIG_DEBUG_KMEMLEAK` is not set.
 
@@ -294,7 +294,6 @@ The `min_count` parameter controls how many pointer references are required befo
 | `kmemleak_erase(addrp)` | Remove a pointer from scan consideration |
 | `kmemleak_alloc(ptr, size, min_count, gfp)` | Manually register an object |
 | `kmemleak_free(ptr)` | Manually unregister an object |
-| `kmemleak_alloc(ptr, size, min_count, gfp)` | Manually register with custom `min_count` threshold |
 
 ## Limitations
 

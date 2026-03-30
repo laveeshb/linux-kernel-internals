@@ -62,18 +62,15 @@ The catch is timing: the write can happen anytime between the free and the next 
 ```
 # Kernel config
 CONFIG_PAGE_POISONING=y
-
-# Optionally: use 0x00 as the free pattern instead of 0xAA
-CONFIG_PAGE_POISONING_ZERO=n         # keep 0xAA pattern (default)
 ```
 
-!!! note
-    `CONFIG_PAGE_POISONING_ZERO` changes the free pattern to `0x00` (zero) instead of `0xAA`. This is primarily useful if you also want the security property of zeroing on free, at the cost of losing the ability to distinguish "wrote zero to freed page" from "page was never written." Using `0xAA` is better for debugging.
-
-You can also toggle poisoning at boot time:
+You can also toggle poisoning at boot time (it is **off** by default even when compiled in):
 
 ```bash
-# Disable even if compiled in
+# Enable at boot (required — CONFIG_PAGE_POISONING=y alone does not enable it)
+page_poison=on
+
+# Explicitly disable (the default)
 page_poison=off
 ```
 
@@ -130,7 +127,7 @@ Use `CONFIG_PAGE_POISONING` when:
 Introduced in Linux v5.3, `init_on_alloc` and `init_on_free` are **security features**, not debugging tools. Their purpose is to prevent sensitive kernel data from leaking into new allocations.
 
 **Commit**: [6471384af2a6](https://git.kernel.org/linus/6471384af2a6) ("mm: security: introduce init_on_alloc=1 and init_on_free=1 boot options")
-**Author**: Alexander Popov
+**Author**: Alexander Potapenko
 
 The implementation hooks are in [`mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) (for pages) and [`mm/slab_common.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slab_common.c) (for slab).
 
@@ -344,7 +341,7 @@ Page poisoning predates systematic git history tracking. The `PAGE_POISONING` co
 ### init_on_alloc / init_on_free (v5.3, 2019)
 
 **Commit**: [6471384af2a6](https://git.kernel.org/linus/6471384af2a6) ("mm: security: introduce init_on_alloc=1 and init_on_free=1 boot options")
-**Author**: Alexander Popov
+**Author**: Alexander Potapenko
 **LWN coverage**: [Initializing memory on allocation and release](https://lwn.net/Articles/791380/) (2019)
 
 Motivated by a class of information disclosure vulnerabilities where kernel memory from one context was reused in another without being cleared. The patch was part of a broader push to make the kernel's memory lifecycle safer by default, aligned with the Kernel Self Protection Project (KSPP).

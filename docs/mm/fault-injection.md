@@ -86,9 +86,9 @@ When `CONFIG_FAULT_INJECTION_DEBUG_FS=y` is enabled, each fault type exposes a d
 | Attribute | Type | Meaning |
 |-----------|------|---------|
 | `probability` | 0–100 | Percentage chance each eligible call fails |
-| `interval` | integer ≥ 0 | Skip the first N calls before starting to fail; 0 = no skip |
+| `interval` | integer ≥ 1 | Minimum period between injections: fail at most once every N eligible calls; `1` = fail every eligible call |
 | `times` | integer | Number of times to inject failures; `-1` = unlimited |
-| `space` | integer (KB) | Minimum free memory below which injection is skipped (avoids injecting during real OOM) |
+| `space` | integer | Call-budget counter: decremented by the allocation `size` on each call to `should_fail()`; injection is suppressed until `space` reaches zero |
 | `verbose` | 0, 1, 2 | `0` = no output; `1` = log each failure; `2` = log + dump stack trace |
 | `task-filter` | 0 or 1 | If `1`, only fail allocations made by tasks that have set `/proc/<pid>/make-it-fail` |
 

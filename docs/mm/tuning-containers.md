@@ -301,7 +301,7 @@ The conventional wisdom of "disable swap for containers" comes from cgroup v1 wh
 
 Swap provides a buffer between "memory.high throttling" and "memory.max OOM kill". Without swap, a sudden spike in memory usage goes directly to OOM. With swap, the spike gets absorbed into swap, giving you time to detect and react.
 
-### memory.zswap.max (v6.5+)
+### memory.zswap.max (v5.19+)
 
 [zswap](https://docs.kernel.org/admin-guide/mm/zswap.html) compresses pages in memory before writing them to swap. The `memory.zswap.max` file limits how much compressed data a cgroup can store in the zswap pool:
 
