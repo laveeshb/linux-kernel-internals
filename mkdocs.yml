@@ -364,6 +364,7 @@ nav:
     - KVM Architecture: virtualization/kvm-arch.md
     - Memory Virtualization: virtualization/kvm-memory.md
     - virtio: virtualization/virtio.md
+    - VFIO Device Passthrough: virtualization/vfio.md
   - Power Management:
     - Getting Started: power/README.md
     - cpufreq and P-states: power/cpufreq.md

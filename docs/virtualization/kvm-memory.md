@@ -351,10 +351,82 @@ grep ept /sys/module/kvm_intel/parameters/
 modprobe kvm_intel ept=0
 ```
 
+## KVM dirty logging for live migration
+
+Live migration must transfer guest memory to the destination. KVM's dirty logging tracks which pages were written since the last iteration:
+
+```c
+/* Enable dirty logging on a memory slot: */
+struct kvm_dirty_log {
+    __u32 slot;
+    __u32 padding;
+    union {
+        void __user *dirty_bitmap; /* userspace buffer for dirty bits */
+        __u64 padding;
+    };
+};
+
+/* Phase 1: enable dirty logging */
+struct kvm_userspace_memory_region region = {
+    .slot  = 0,
+    .flags = KVM_MEM_LOG_DIRTY_PAGES,  /* enable dirty tracking */
+    .guest_phys_addr = 0,
+    .memory_size = 4ULL << 30,         /* 4GB */
+    .userspace_addr = (uint64_t)vm_mem,
+};
+ioctl(vm_fd, KVM_SET_USER_MEMORY_REGION, &region);
+
+/* Phase 2: iterative copy — transfer dirty pages, clear bitmap, repeat */
+void *dirty_bitmap = calloc(1, bitmap_size);
+struct kvm_dirty_log dirty = {
+    .slot = 0,
+    .dirty_bitmap = dirty_bitmap,
+};
+ioctl(vm_fd, KVM_GET_DIRTY_LOG, &dirty);
+/* Now dirty_bitmap has a bit set for each 4K page written since last call */
+/* Transfer those pages to destination, then repeat */
+```
+
+The EPT hardware's dirty bit (EPT PTE bit 9) is cleared when KVM resets the bitmap. Next write access causes an EPT violation → KVM marks page dirty and re-enables the dirty bit.
+
+### KVM_DIRTY_LOG_PROTECT_2
+
+A two-phase protocol for very large VMs:
+
+```bash
+# Enable protection phase: write-protect all pages without copying bitmap
+ioctl(vm_fd, KVM_CLEAR_DIRTY_LOG, &clear);
+# Then get the dirty pages that were write-protected since last clear:
+ioctl(vm_fd, KVM_GET_DIRTY_LOG, &dirty);
+```
+
+## Memory overcommit and KSM
+
+```bash
+# KSM (Kernel Samepage Merging): merge identical pages across VMs
+echo 1 > /sys/kernel/mm/ksm/run         # enable
+echo 200 > /sys/kernel/mm/ksm/pages_to_scan  # pages/interval
+echo 100 > /sys/kernel/mm/ksm/sleep_millisecs
+
+# Stats:
+cat /sys/kernel/mm/ksm/pages_shared     # merged pages
+cat /sys/kernel/mm/ksm/pages_sharing    # using those shared pages
+cat /sys/kernel/mm/ksm/pages_unshared   # not mergeable
+# savings = pages_sharing * 4KB
+
+# QEMU: enable KSM for guest memory
+# (automatic: QEMU calls madvise(MADV_MERGEABLE) on guest RAM)
+
+# Memory balloon: reclaim memory from idle guests
+# virtio-balloon driver in guest tells host to reclaim pages
+# Used by libvirt/QEMU to over-provision RAM across VMs
+```
+
 ## Further reading
 
 - [KVM Architecture](kvm-arch.md) — /dev/kvm API, vCPU run loop
 - [virtio](virtio.md) — paravirtual I/O, balloon transport
+- [VFIO](vfio.md) — direct device passthrough to VMs
 - [Memory Management: page tables](../mm/page-tables.md) — host-side page tables
 - [Memory Management: THP](../mm/thp.md) — huge page promotion KVM uses
 - `arch/x86/kvm/mmu/` in the kernel tree — EPT/shadow page table implementation
