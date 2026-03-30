@@ -180,3 +180,7 @@ nav:
       - Life of a Context Switch: sched/context-switch.md
       - What Happens When a Process Wakes Up: sched/wakeup.md
       - "What Happens When You fork()": sched/sched-fork.md
+    - Real-Time:
+      - RT Scheduler: sched/rt-scheduler.md
+      - SCHED_DEADLINE: sched/deadline.md
+      - Priority Inversion & PI Mutexes: sched/pi-mutexes.md
