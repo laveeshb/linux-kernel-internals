@@ -201,6 +201,7 @@ nav:
       - Energy-Aware Scheduling: sched/eas.md
       - Preemption Model: sched/preemption.md
       - The Scheduling Tick: sched/sched-tick.md
+      - Real-Time Linux Tuning: sched/rt-tuning.md
     - Debugging & Observability:
       - Scheduler Statistics: sched/schedstat.md
       - Scheduler Tracing: sched/sched-tracing.md
@@ -314,6 +315,7 @@ nav:
     - Platform Drivers: drivers/platform-driver.md
     - Character and Misc Devices: drivers/chardev.md
     - PCI Drivers: drivers/pci-driver.md
+    - Device Tree: drivers/device-tree.md
   - IPC:
     - Getting Started: ipc/README.md
     - Signals: ipc/signals.md
