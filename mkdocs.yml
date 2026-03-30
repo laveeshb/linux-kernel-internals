@@ -291,6 +291,7 @@ nav:
     - blk-mq (Multi-Queue): block/blk-mq.md
     - I/O Schedulers: block/io-schedulers.md
     - NVMe Driver: block/nvme.md
+    - dm-verity (Integrity): block/dm-verity.md
   - BPF/eBPF:
     - Getting Started: bpf/README.md
     - Architecture & Program Types: bpf/bpf-overview.md
