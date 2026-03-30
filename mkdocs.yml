@@ -304,6 +304,8 @@ nav:
     - Signals: ipc/signals.md
     - Pipes and FIFOs: ipc/pipes.md
     - Shared Memory and Semaphores: ipc/shared-memory.md
+    - eventfd and signalfd: ipc/eventfd-signalfd.md
+    - POSIX Message Queues: ipc/mqueue.md
   - I/O Patterns:
     - Getting Started: io/README.md
     - Direct I/O: io/direct-io.md
