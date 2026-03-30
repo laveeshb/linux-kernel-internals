@@ -328,3 +328,7 @@ nav:
     - Timekeeping and Clocksources: time/timekeeping.md
     - hrtimers: time/hrtimers.md
     - POSIX Timers and timerfd: time/posix-timers.md
+  - IOMMU and DMA:
+    - Getting Started: iommu/README.md
+    - IOMMU Architecture: iommu/iommu-arch.md
+    - DMA API: iommu/dma-api.md
