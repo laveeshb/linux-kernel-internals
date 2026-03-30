@@ -285,3 +285,8 @@ nav:
     - Linux Device Model: drivers/device-model.md
     - Platform Drivers: drivers/platform-driver.md
     - Character and Misc Devices: drivers/chardev.md
+  - IPC:
+    - Getting Started: ipc/README.md
+    - Signals: ipc/signals.md
+    - Pipes and FIFOs: ipc/pipes.md
+    - Shared Memory and Semaphores: ipc/shared-memory.md
