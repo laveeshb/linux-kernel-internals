@@ -130,7 +130,7 @@ echo "8:0 target=10ms" > /sys/fs/cgroup/important/io.latency
 cat /sys/fs/cgroup/important/io.stat
 # 8:0 rbytes=... wbytes=... rios=... wios=... dbytes=... dios=...
 # rbytes=read bytes completed
-# dbytes=direct I/O bytes
+# dbytes=discard bytes (TRIM/DISCARD operations)
 ```
 
 ### How io.latency works
@@ -188,7 +188,7 @@ Dirty page writeback can be attributed to the cgroup that dirtied the pages:
 ```bash
 # Check writeback stats:
 cat /sys/fs/cgroup/mycgroup/io.stat
-# dbytes includes writeback bytes attributed to this cgroup
+# dbytes/dios = discard (TRIM) bytes/count; writeback is counted in wbytes
 
 # Tune writeback throttling:
 echo 80 > /proc/sys/vm/dirty_ratio           # 80% of RAM as dirty threshold

@@ -181,7 +181,7 @@ cat /dev/mqueue/myqueue  # shows: QSIZE:0 NOTIFY:0 SIGNO:0 NOTIFY_PID:0
 
 ## Kernel implementation
 
-### struct mqueue_inode
+### struct mqueue_inode_info
 
 ```c
 /* ipc/mqueue.c */
@@ -230,7 +230,7 @@ static int do_mq_send(mqd_t mqdes, const char __user *u_msg_ptr,
                        size_t msg_len, unsigned int msg_prio,
                        struct timespec64 *ts)
 {
-    struct mqueue_inode *info;
+    struct mqueue_inode_info *info;
     struct msg_msg *msg_ptr;
 
     /* Allocate and copy message data from userspace */
