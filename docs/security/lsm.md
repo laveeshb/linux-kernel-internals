@@ -4,7 +4,7 @@
 
 ## What LSM is
 
-The Linux Security Module framework (introduced in 2.6) provides a set of hooks throughout the kernel where security modules can enforce additional access controls beyond standard DAC.
+The Linux Security Module framework (introduced in Linux 2.6.0, December 2003) provides a set of hooks throughout the kernel where security modules can enforce additional access controls beyond standard DAC. Designed by Crispin Cowan (WireX) with NSA, SGI, and others — presented at USENIX Security 2002: ["Linux Security Modules: General Security Support for the Linux Kernel"](https://www.usenix.org/conference/11th-usenix-security-symposium/linux-security-modules-general-security-support-linux). Kernel docs: [security/lsm.html](https://www.kernel.org/doc/html/latest/security/lsm.html).
 
 LSM hooks are called at security-critical points:
 - File open/read/write/execute
@@ -13,7 +13,7 @@ LSM hooks are called at security-critical points:
 - IPC operations
 - Capability checks
 
-Multiple LSMs can be active simultaneously (stacking, since 4.2). The kernel evaluates all of them: access is granted only if ALL LSMs allow it.
+Multiple LSMs can be active simultaneously (stacking, since Linux 4.2 — [`3c4ed7bdf599`](https://git.kernel.org/linus/3c4ed7bdf5997d8020cbb8d4abbef2fcfb9f1284) by Casey Schaufler). The kernel evaluates all of them: access is granted only if ALL LSMs allow it.
 
 ## LSM hook architecture
 
@@ -90,7 +90,7 @@ bpf, bpf_map, bpf_prog
 
 ## SELinux
 
-SELinux (Security-Enhanced Linux) implements Mandatory Access Control based on **labels** and **policies**.
+SELinux (Security-Enhanced Linux) was developed by the NSA, open-sourced in December 2000, and merged into Linux 2.6.0-test3 (August 2003). It implements Mandatory Access Control based on **labels** and **policies**.
 
 ### Labels
 
@@ -178,7 +178,7 @@ static int selinux_inode_permission(struct inode *inode, int mask)
 
 ## AppArmor
 
-AppArmor uses **path-based** MAC — simpler than SELinux's label model. Profiles are plain text and specify what a program can do:
+AppArmor (originally "SubDomain" by Immunix, 1998; maintained by Canonical since 2009) was merged into Linux 2.6.36 (October 2010) by John Johansen — [`b5e95b48685e`](https://git.kernel.org/linus/b5e95b48685e3481139a5634d14d630d12c7d5ce). It uses **path-based** MAC — simpler than SELinux's label model. Profiles are plain text and specify what a program can do:
 
 ```
 # /etc/apparmor.d/usr.bin.firefox

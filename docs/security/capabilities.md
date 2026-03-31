@@ -6,7 +6,7 @@
 
 Traditionally, privilege in Unix is binary: a process either has UID 0 (root, omnipotent) or it doesn't. This is too coarse — a web server needs to bind to port 80, but shouldn't have access to raw network sockets, loading kernel modules, or rebooting the system.
 
-Linux capabilities split root's power into ~40 discrete privileges that can be granted independently.
+Linux capabilities split root's power into ~40 discrete privileges that can be granted independently. Based on the withdrawn POSIX.1e draft standard; introduced in Linux 2.2 (January 1999). File capability support (allowing binaries to have capabilities without setuid) was added in Linux 2.6.24 by Serge Hallyn — [`b53767719b6c`](https://git.kernel.org/linus/b53767719b6cd8789392ea3e7e2eb7b8906898f0). See [`man 7 capabilities`](https://man7.org/linux/man-pages/man7/capabilities.7.html).
 
 ## The 40 capabilities
 
@@ -90,7 +90,7 @@ Rules:
 - **Permitted**: superset of effective; can re-add dropped effective caps
 - **Inheritable**: can be passed across exec if the file also has it
 - **Bounding**: ceiling — caps in bset can be in permitted; once dropped, cannot be regained
-- **Ambient**: automatically inherited by children and across exec (since 4.3)
+- **Ambient**: automatically inherited by children and across exec (since Linux 4.3 — [`58319057b784`](https://git.kernel.org/linus/58319057b7849f6272afebf1ffeed1da70e5f68a) by Andy Lutomirski)
 
 ## Checking capabilities in the kernel
 

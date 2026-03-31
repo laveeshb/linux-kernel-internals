@@ -41,7 +41,7 @@ Benchmarks on early NVMe drives showed the kernel saturating the `queue_lock` sp
 
 ### blk-mq (Linux 3.13, 2014)
 
-Jens Axboe redesigned the block layer around two key ideas:
+Jens Axboe redesigned the block layer around two key ideas — [`320ae51feed5`](https://git.kernel.org/linus/320ae51feed5c2f13664aa05a76bec198967e04d) ("blk-mq: new multi-queue block IO queueing mechanism"), [LWN](https://lwn.net/Articles/552683/):
 
 1. **Per-CPU software queues** — each CPU has its own `blk_mq_ctx` with its own lock. CPUs never contend with each other during I/O submission. Requests are batched on the per-CPU queue, then dispatched to a hardware queue.
 

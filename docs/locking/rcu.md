@@ -4,6 +4,8 @@
 
 ## The core idea
 
+RCU was added to Linux in kernel 2.5.43 (October 2002) by Dipankar Sarma (IBM) and Paul E. McKenney. See ["What is RCU, Fundamentally?"](https://lwn.net/Articles/262464/) (McKenney & Walpole, LWN 2007) for a comprehensive overview.
+
 RCU solves a specific problem: how do you allow many readers to access a data structure with zero synchronization overhead, while still allowing writers to modify it safely?
 
 The insight: **readers never modify the data**, so they can run truly concurrently as long as the writer doesn't free the old data until all readers that could see it have finished.
@@ -316,7 +318,7 @@ dmesg | grep -E "rcu_torture|Readers Stall"
 # rcu_torture: Readers stall PASSED: n=0
 # rcu_torture: 0 expedited-grace-period failures
 
-# rcuscale: performance measurement (renamed from rcuperf in Linux 5.12)
+# rcuscale: performance measurement (renamed from rcuperf in Linux 5.10 — 4e88ec4a9eb1)
 modprobe rcuscale perf_type="rcu"
 dmesg | grep "rcuscale"
 ```

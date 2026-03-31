@@ -4,7 +4,7 @@
 
 ## What is Landlock?
 
-Landlock (merged in Linux 5.13) is a Linux Security Module that allows **unprivileged processes** to restrict their own access to the filesystem (since 5.13) and TCP network ports (since Linux 6.7, ABI v4). Unlike seccomp which filters syscalls, Landlock controls resource access at a semantic level.
+Landlock (merged in Linux 5.13 by Mickaël Salaün — [`17ae69aba89d`](https://git.kernel.org/linus/17ae69aba89dbfa2139b7f8024b757ab3cc42f59), [LWN](https://lwn.net/Articles/859908/)) is a Linux Security Module that allows **unprivileged processes** to restrict their own access to the filesystem (since 5.13) and TCP network ports (since Linux 6.7, ABI v4). Unlike seccomp which filters syscalls, Landlock controls resource access at a semantic level.
 
 Key properties:
 - **No root required**: any process can create a Landlock sandbox for itself
