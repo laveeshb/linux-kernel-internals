@@ -342,6 +342,7 @@ nav:
     - Kprobes and Tracepoints: tracing/kprobes-tracepoints.md
     - perf Events: tracing/perf-events.md
     - perf Profiling Advanced: tracing/perf-profiling.md
+    - uprobes and USDT: tracing/uprobes-usdt.md
   - Kernel Modules:
     - Getting Started: modules/README.md
     - Writing and Loading Modules: modules/module-basics.md
