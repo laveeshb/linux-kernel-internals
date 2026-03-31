@@ -4,7 +4,7 @@
 
 ## The core idea
 
-RCU was added to Linux in kernel 2.5.43 (October 2002) by Dipankar Sarma (IBM) and Paul E. McKenney. See ["What is RCU, Fundamentally?"](https://lwn.net/Articles/262464/) (McKenney & Walpole, LWN 2007) for a comprehensive overview.
+RCU was added to Linux in kernel 2.5.43 (October 2002) by Dipankar Sarma (IBM) and Paul E. McKenney — confirmed in ["What is RCU, Fundamentally?"](https://lwn.net/Articles/262464/) (McKenney & Walpole, LWN 2007): *"RCU added to the Linux kernel in October 2002."*
 
 RCU solves a specific problem: how do you allow many readers to access a data structure with zero synchronization overhead, while still allowing writers to modify it safely?
 

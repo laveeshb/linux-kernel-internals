@@ -17,7 +17,7 @@ SELinux MAC:
   Even compromised root process → bounded by its security context
 ```
 
-SELinux is built on the **LSM (Linux Security Module)** framework. Every security-sensitive kernel operation calls an LSM hook which SELinux intercepts.
+SELinux was developed by the NSA, open-sourced in December 2000, and merged into Linux 2.6.0-test3 (August 2003). It is built on the **LSM (Linux Security Module)** framework. Every security-sensitive kernel operation calls an LSM hook which SELinux intercepts.
 
 ## Security contexts
 

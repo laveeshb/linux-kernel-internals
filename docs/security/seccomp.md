@@ -45,7 +45,7 @@ The key insight: Classic BPF (the existing socket filter VM) was already a gener
 
 Instead of building a new policy language, seccomp-BPF reused cBPF as-is. The kernel runs the BPF program on every syscall entry; the program returns an action code. This required almost no new kernel machinery — the BPF interpreter/JIT was already there.
 
-Chrome shipped with seccomp-BPF in Chrome 23 (2012), becoming the first major application to sandbox itself this way. systemd, Docker, Firefox, and Android all adopted seccomp-BPF filters. Android's `SECCOMP_RET_USER_NOTIF` extension (Linux 5.0, 2019) allowed supervisors to intercept and handle syscalls on behalf of sandboxed processes, enabling user-namespace container emulation without root.
+Chrome shipped with seccomp-BPF in Chrome 23 (2012), becoming the first major application to sandbox itself this way. systemd, Docker, Firefox, and Android all adopted seccomp-BPF filters. The `SECCOMP_RET_USER_NOTIF` extension (Linux 5.0, 2019 — [`6a21cc50f0c7`](https://git.kernel.org/linus/6a21cc50f0c7f87dae5259f6cfefe024412313f6) by Tycho Andersen) allowed supervisors to intercept and handle syscalls on behalf of sandboxed processes, enabling user-namespace container emulation without root.
 
 ## Classic (strict) mode
 
