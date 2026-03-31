@@ -401,3 +401,15 @@ If `CmaTotal` is 0 in `/proc/meminfo`:
 - [contiguous-memory](contiguous-memory.md) - The fragmentation problem CMA solves
 - [compaction](compaction.md) - The page migration machinery CMA relies on
 - [page-allocator](page-allocator.md) - Buddy allocator and migrate types
+
+## Further reading
+
+- [LWN: A deep dive into CMA](https://lwn.net/Articles/486301/) — design rationale and the long review process before CMA merged in v3.5 (2012)
+- [LWN: Contiguous memory allocation for drivers](https://lwn.net/Articles/396657/) — the early CMA proposal that motivated the final design (2010)
+- [LWN: CMA and compaction](https://lwn.net/Articles/684611/) — interaction between CMA migration and memory compaction (2016)
+- [`Documentation/admin-guide/mm/dma-api-howto.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/admin-guide/mm/dma-api-howto.rst) — kernel documentation covering how drivers should allocate DMA memory including CMA-backed paths
+- [`mm/cma.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/cma.c) — core CMA allocator: bitmap management, `cma_alloc()`, and `cma_release()`
+- [`kernel/dma/contiguous.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma/contiguous.c) — the bridge between `dma_alloc_coherent()` and `cma_alloc()`
+- [DMA Memory Allocation](dma.md) — the DMA API that drivers use to reach CMA transparently
+- [contiguous-memory](contiguous-memory.md) — the fragmentation problem that CMA was designed to solve
+- [memory-reservation](memory-reservation.md) — how CMA regions are carved out of physical memory at boot via memblock

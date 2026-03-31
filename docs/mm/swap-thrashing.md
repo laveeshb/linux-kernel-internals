@@ -218,3 +218,13 @@ find /sys/fs/cgroup -name memory.pressure \
 - [Page Reclaim](reclaim.md) -- how the kernel decides what to evict
 - [Running out of memory](oom.md) -- what happens when reclaim and swap both fail
 - [Memory Cgroups](memcg.md) -- isolating and limiting workload memory
+
+## Further reading
+
+- [swap](swap.md) — swap architecture, swappiness tuning, and swap types including zswap and zram
+- [reclaim](reclaim.md) — how the kernel selects pages for eviction and the LRU lists that drive reclaim decisions
+- [psi](psi.md) — Pressure Stall Information: the kernel interface used to measure and act on memory stall time
+- [mglru](mglru.md) — Multi-Gen LRU, the v6.1 replacement for the traditional active/inactive LRU that reduces thrashing on large working sets
+- [Toward less swapping](https://lwn.net/Articles/401088/) (LWN, 2010) — early analysis of swap readahead and the cost of thrashing under the classic LRU
+- [Making MGLRU a better LRU](https://lwn.net/Articles/909280/) (LWN, 2022) — how Multi-Gen LRU improves page aging and reduces thrashing compared to the classic two-list approach
+- `Documentation/admin-guide/mm/concepts.rst` — kernel documentation on the page reclaim model and the relationship between swap and memory pressure

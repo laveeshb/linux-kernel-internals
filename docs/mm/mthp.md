@@ -161,3 +161,13 @@ Sub-PMD THP behavior at sysfs is only available when both `CONFIG_TRANSPARENT_HU
 !!! warning "Disabling all sizes does not disable MADV_COLLAPSE"
     Writing `never` to every per-size `enabled` file does not prevent `madvise(MADV_COLLAPSE)` from working. `MADV_COLLAPSE` ignores these settings and forces PMD-sized collapse unconditionally. See the kernel documentation note:
     > "Setting 'never' in all sysfs THP controls does **not** disable Transparent Huge Pages globally."
+
+## Further reading
+
+- Commit [19eaf44954df](https://git.kernel.org/linus/19eaf44954df) — the Linux 6.10 merge commit introducing anonymous multi-size THP; the commit message and series cover the sysfs interface design, `THP_ORDERS_ALL_ANON` encoding, and the ARM64 contpte motivation
+- [LWN: Multi-size THP](https://lwn.net/Articles/937239/) — 2023 coverage of Ryan Roberts's mTHP patch series, explaining the fragmentation trade-offs and the ARM64 contiguous-PTE benefit
+- `Documentation/admin-guide/mm/transhuge.rst` — admin guide covering all per-size `enabled` values, the `thp_anon=` boot parameter syntax, and the per-size `stats/` counters; rendered at [docs.kernel.org](https://docs.kernel.org/admin-guide/mm/transhuge.html)
+- [mm/huge_memory.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/huge_memory.c) — mTHP allocation entry points: `thp_vma_allowable_orders()`, `huge_anon_orders_always`, `huge_anon_orders_madvise`, and the per-size sysfs attribute definitions
+- [arch/arm64/include/asm/pgtable.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/include/asm/pgtable.h) — `contpte_try_fold()` and `contpte_try_unfold()`: the ARM64 implementation that turns a naturally-aligned run of PTE-mapped mTHP pages into a single hardware TLB entry
+- [thp.md](thp.md) — classic PMD-sized THP internals, the khugepaged daemon, and the TLB math motivating huge pages in general
+- [folio.md](folio.md) — `struct folio` and large folios: the kernel object used to represent both anonymous mTHP allocations and large file-backed page-cache entries

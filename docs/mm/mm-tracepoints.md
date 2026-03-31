@@ -704,16 +704,31 @@ High `@ownership_stolen` combined with frequent `COMPACT_DEFERRED` results is a 
 | [`mm/compaction.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/compaction.c) | Compaction — calls compaction trace events |
 | [`mm/khugepaged.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/khugepaged.c) | khugepaged daemon — calls huge_memory trace events |
 
-## Further Reading
+## Further reading
 
-### Kernel Documentation
+### Kernel source
 
-- [ftrace documentation](https://docs.kernel.org/trace/ftrace.html) — full reference for the tracing infrastructure
-- [BPF and tracing](https://docs.kernel.org/bpf/index.html) — BPF programs for tracepoints
+- [include/trace/events/mmflags.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/mmflags.h) — GFP flag name strings (`gfp_flag_names[]`) used to decode `gfp_flags` fields in tracepoint output
+- [include/trace/events/kmem.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/kmem.h) — page allocator and slab tracepoint definitions
+- [include/trace/events/vmscan.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/vmscan.h) — reclaim tracepoint definitions
+- [include/trace/events/compaction.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/compaction.h) — compaction tracepoint definitions
+- [include/trace/events/huge_memory.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/huge_memory.h) — THP and khugepaged tracepoint definitions
 
-### Related Pages
+### Kernel documentation
 
-- [Understanding /proc/vmstat](understanding-proc-vmstat.md) — counters that aggregate what tracepoints observe individually
-- [OOM Debugging](oom-debugging.md) — using `mark_victim` and PSI together for OOM investigation
-- [KASAN](kasan.md) — for memory bugs found alongside allocation tracing
-- [Why Is My Process Slow](why-is-my-process-slow.md) — using direct reclaim tracepoints to diagnose application latency from memory pressure
+- [`Documentation/trace/ftrace.rst`](https://docs.kernel.org/trace/ftrace.html) — full reference for the ftrace infrastructure: ring buffer, filter syntax, and function tracing
+- [`Documentation/trace/tracepoints.rst`](https://docs.kernel.org/trace/tracepoints.html) — how tracepoints are defined with `TRACE_EVENT()` and how to add new ones
+- [`Documentation/trace/events.rst`](https://docs.kernel.org/trace/events.html) — enabling and filtering events via `/sys/kernel/debug/tracing/events/`
+- [`Documentation/bpf/index.rst`](https://docs.kernel.org/bpf/index.html) — BPF subsystem documentation including `tracepoint` program type
+
+### Related pages
+
+- [understanding-proc-vmstat.md](understanding-proc-vmstat.md) — aggregate counters that summarize what individual tracepoints observe
+- [oom-debugging.md](oom-debugging.md) — using `oom:mark_victim` and PSI together for post-OOM investigation
+- [why-is-my-process-slow.md](why-is-my-process-slow.md) — using `mm_vmscan_direct_reclaim_begin/end` to attribute latency to memory pressure
+- [kasan.md](kasan.md) — memory bug detection to pair with allocation tracing when hunting use-after-free
+
+### LWN articles
+
+- [LWN: Tracepoints in the Linux kernel](https://lwn.net/Articles/379903/) — original introduction to the `TRACE_EVENT()` macro and the design philosophy behind static tracepoints
+- [LWN: Dynamic tracing with BPF](https://lwn.net/Articles/740157/) — using `bpftrace` and BCC to attach to kernel tracepoints with low overhead

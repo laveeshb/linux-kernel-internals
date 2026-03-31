@@ -172,3 +172,26 @@ The reason: `FAULT_FLAG_RETRY_NOWAIT` assumes the lock is not dropped on `VM_FAU
 
 !!! warning "Per-VMA locks require CONFIG_PER_VMA_LOCK"
     The entire feature is compiled out if `CONFIG_PER_VMA_LOCK` is not set. On such kernels all faults go through `mmap_lock`. Most production distro kernels enable it from 6.4 onward.
+
+## Further reading
+
+### Kernel source
+
+- [include/linux/mmap_lock.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mmap_lock.h) — `vma_start_read()`, `vma_end_read()`, `vma_start_write()`, and the sequence-counter helpers
+- [mm/mmap_lock.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap_lock.c) — `lock_vma_under_rcu()`: the fast-path VMA lookup combining RCU and per-VMA locking
+- [include/linux/mm_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mm_types.h) — `vm_lock_seq`, `vm_refcnt`, and `mm_lock_seq` field definitions with their locking contracts
+
+### Kernel commits
+
+- [5e31275cc997](https://git.kernel.org/linus/5e31275cc997) — Linux 6.4: "mm: add per-VMA lock and helper functions to control it" (Suren Baghdasaryan, Google)
+- [d4af56c5c7c6](https://git.kernel.org/linus/d4af56c5c7c6) — Linux 6.1: maple tree VMA storage, prerequisite for scalable per-VMA locking
+
+### Related pages
+
+- [rcu-mm.md](rcu-mm.md) — how `SLAB_TYPESAFE_BY_RCU` and the maple tree enable the lock-free VMA lookup that per-VMA locks build on
+- [mmap.md](mmap.md) — operations that still require the coarse `mmap_lock` write side
+
+### LWN articles
+
+- [LWN: Per-VMA locks](https://lwn.net/Articles/906852/) — 2022 article covering the design and motivation for per-VMA locking
+- [LWN: Scalable page-fault handling](https://lwn.net/Articles/932298/) — follow-up covering the Linux 6.4 merge and benchmarks

@@ -15,6 +15,26 @@ Without THP:                    With THP:
    512 TLB entries needed         1 TLB entry needed
 ```
 
+## From hugetlbfs to THP
+
+### The original huge page interface (hugetlbfs, Linux 2.6)
+
+Hardware huge pages (2MB on x86-64) have been available since the Pentium Pro. Linux exposed them through `hugetlbfs`: a special filesystem where files backed by huge pages could be `mmap()`'d with `MAP_HUGETLB`.
+
+The problem was operational: huge pages had to be reserved at boot time (or via `sysctl vm.nr_hugepages`) from a dedicated pre-allocated pool. Applications needed to use a different `mmap()` flag (`MAP_HUGETLB`) or open a file on `hugetlbfs`. Databases like Oracle and PostgreSQL supported this, but it required administrator intervention to size the pool and developer effort to use the API.
+
+If the pool was too small, applications fell back to 4KB pages. If it was too large, the pre-reserved memory sat idle. And it was entirely opt-in — the thousands of applications that didn't explicitly request huge pages got no benefit, even if their working sets were large enough to benefit dramatically.
+
+### Transparent Huge Pages (Linux 2.6.38, 2011)
+
+Andrea Arcangeli designed THP to deliver huge page performance to applications without any changes. The kernel itself decides when to allocate a 2MB huge page in place of 512 4KB pages, based on alignment, availability, and the `transparent_hugepage` policy.
+
+The key insight: for anonymous memory (heap, stack), the kernel can allocate a 2MB-aligned huge page at fault time if a 2MB-aligned, physically contiguous range is available. The application sees normal virtual memory; the hardware walks the page table one level fewer.
+
+The compaction challenge made THP complex to tune. Physical memory fragments over time — 2MB contiguous ranges become scarce as pages are allocated and freed. The kernel's `khugepaged` daemon scans for small-page regions that could be collapsed into huge pages, and the memory compaction machinery (`MADV_HUGEPAGE`, background compaction, defrag modes) exists to create contiguous ranges. Getting this right without causing latency spikes from compaction stalls took years of refinement.
+
+The `transparent_hugepage=defer` mode (Linux 4.14+) tries to allocate huge pages at fault time but defers compaction to `khugepaged`, avoiding synchronous compaction latency in the application's hot path. Per-process control via `MADV_HUGEPAGE` / `MADV_NOHUGEPAGE` lets performance-sensitive applications opt in while others use 4KB pages.
+
 ## Why THP?
 
 ### The TLB Problem
@@ -421,3 +441,15 @@ echo never > /sys/kernel/mm/transparent_hugepage/enabled
 - [compaction](compaction.md) - Memory defragmentation for THP
 - [reclaim](reclaim.md) - THP and memory pressure
 - [Bug Index](bugs/README.md) - Index of all mm kernel bugs
+
+## Further reading
+
+- `Documentation/admin-guide/mm/transhuge.rst` — the authoritative kernel admin guide covering all sysfs tunables, defrag modes, and monitoring counters; rendered at [docs.kernel.org](https://docs.kernel.org/admin-guide/mm/transhuge.html)
+- [mm/huge_memory.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/huge_memory.c) — THP core: fault-time allocation, PMD-level mapping, COW splitting, and `MADV_HUGEPAGE` / `MADV_COLLAPSE` handling
+- [mm/khugepaged.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/khugepaged.c) — the `khugepaged` daemon: scan logic, collapse paths, and the locking protocol that has been the source of several race-condition bugs
+- [LWN: Transparent huge pages](https://lwn.net/Articles/423584/) — 2011 coverage of the original THP design by Andrea Arcangeli and the motivation for removing hugetlbfs restrictions
+- [LWN: Improving huge page handling](https://lwn.net/Articles/619738/) — analysis of the deferred compaction (`defer` defrag mode) work and how it addressed the latency-spike problem
+- Commit [71e3aac0724f](https://git.kernel.org/linus/71e3aac0724f) — the initial THP merge in v2.6.38; the commit message documents the original KVM motivation in detail
+- Commit [38d8b4e6bdc8](https://git.kernel.org/linus/38d8b4e6bdc8) — v4.13 THP swap support; huge pages can now be swapped out as a unit without splitting first
+- [mthp.md](mthp.md) — multi-size THP: sub-PMD huge pages (16KB–512KB) introduced in Linux 6.10 for workloads where 2MB is too coarse
+- [hugetlbfs-vs-thp.md](hugetlbfs-vs-thp.md) — side-by-side comparison of THP and explicit hugetlbfs, including when to prefer each

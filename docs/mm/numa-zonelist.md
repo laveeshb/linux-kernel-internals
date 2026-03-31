@@ -396,3 +396,28 @@ for (node = 0; node < nr_nodes; node++)
 | `include/linux/gfp.h` | `node_zonelist()`, `gfp_zonelist()` |
 | `mm/page_alloc.c` | `build_all_zonelists()`, `__build_all_zonelists()`, `build_zonelists()`, `build_zonelists_in_node_order()`, `build_thisnode_zonelists()`, `build_zonerefs_node()`, `find_next_best_node()`, `get_page_from_freelist()`, `zone_watermark_ok()`, `__zone_watermark_ok()` |
 | `mm/mempolicy.c` | `policy_nodemask()`, `alloc_pages_mpol()`, `interleave_nodes()`, `mempolicy_slab_node()` |
+
+## Further reading
+
+### Kernel source
+
+- [mm/page_alloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) — `build_all_zonelists()`, `build_zonelists()`, `find_next_best_node()`, `get_page_from_freelist()`, `zone_watermark_ok()`
+- [mm/mempolicy.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mempolicy.c) — `policy_nodemask()`, `alloc_pages_mpol()`, and all memory policy mode implementations
+- [include/linux/mmzone.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mmzone.h) — `struct zonelist`, `struct zoneref`, `for_each_zone_zonelist_nodemask`, `ZONELIST_FALLBACK`, `ZONELIST_NOFALLBACK`
+
+### Kernel documentation
+
+- `Documentation/admin-guide/mm/numa_memory_policy.rst` — reference for all `MPOL_*` policy modes and how they interact with the zonelist ([rendered](https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html))
+
+### LWN articles
+
+- [NUMA zonelist ordering](https://lwn.net/Articles/251063/) — the history of zonelist ordering modes and why node-order won out over zone-order
+- [Memory policies and the allocator](https://lwn.net/Articles/207848/) — how `MPOL_BIND`, `MPOL_INTERLEAVE`, and `MPOL_PREFERRED` map to zonelist traversal
+- [GFP flags and memory zones](https://lwn.net/Articles/629925/) — how GFP flags select zones and interact with the fallback list
+
+### Related docs
+
+- [NUMA Memory Management](numa.md) — memory policy overview: `set_mempolicy()`, `mbind()`, `numactl`, and automatic NUMA balancing
+- [NUMA Distance and Inter-Socket Latency](numa-distance.md) — how `node_distance()` values drive `find_next_best_node()` scoring
+- [NUMA Effects on Memory Reclaim](numa-reclaim.md) — per-node kswapd, watermarks, and how `MPOL_BIND` interacts with OOM
+- [Page Allocator](page-allocator.md) — the full allocation path from `__alloc_pages()` through the zonelist to the buddy allocator

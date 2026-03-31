@@ -328,3 +328,17 @@ void test_vmalloc_basic(void)
 ### Related
 - [vrealloc](vrealloc.md) - Resizing allocations
 - [overview](overview.md) - Memory management overview
+
+## Further reading
+
+- [vrealloc.md](vrealloc.md) — `vrealloc()`, the vmalloc-based resize primitive added in v6.12
+- [slab.md](slab.md) — `kvmalloc()` tries kmalloc first and falls back to vmalloc for large allocations
+- [page-allocator.md](page-allocator.md) — The buddy allocator that supplies individual pages to vmalloc
+- [page-tables.md](page-tables.md) — Page table mechanics underlying vmalloc's virtual-to-physical mapping
+- [mm/vmalloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) — Full implementation; `__vmalloc_node_range()` is the core allocator, `vmap_area` RBTree at the top
+- [include/linux/vmalloc.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/vmalloc.h) — Public API including `vmalloc()`, `vfree()`, `vmap()`, and variant functions
+- [lib/test_vmalloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/test_vmalloc.c) — In-tree test module covering allocation, mapping, and vrealloc scenarios
+- [LWN: A deep dive into vmalloc](https://lwn.net/Articles/828313/) — Detailed walkthrough of the vmap_area RBTree, lazy TLB flushing, and huge-page support
+- [LWN: vmap() improvements](https://lwn.net/Articles/7473/) — Christoph Hellwig's 2002 rework separating vmap/vunmap from vmalloc internals
+- [db64fe02258f](https://git.kernel.org/linus/db64fe02258f) — Nick Piggin's v2.6.28 rewrite introducing the RBTree and lazy TLB flush batching
+- `Documentation/admin-guide/mm/concepts.rst` — Kernel documentation covering the vmalloc region and its role alongside direct mapping

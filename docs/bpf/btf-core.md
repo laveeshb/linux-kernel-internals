@@ -8,7 +8,7 @@ Kernel data structures change between versions. A BPF program compiled against k
 
 Before BTF/CO-RE, BPF programs were compiled with kernel headers from a specific version and only ran on that version (or required recompilation per kernel).
 
-**CO-RE** (Compile Once, Run Everywhere) lets you compile a BPF program once and have it work on any kernel version ≥ 5.2 that has BTF.
+**CO-RE** (Compile Once, Run Everywhere) lets you compile a BPF program once and have it work on any kernel version ≥ 5.8 that has BTF.
 
 ## BTF: BPF Type Format
 

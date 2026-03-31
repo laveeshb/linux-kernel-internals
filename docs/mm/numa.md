@@ -322,3 +322,35 @@ One node exhausted while others have free memory.
 - [page-allocator](page-allocator.md) - Per-node zones
 - [reclaim](reclaim.md) - Per-node reclaim
 - [glossary](glossary.md) - NUMA terminology
+
+## Further reading
+
+### Kernel source
+
+- [mm/mempolicy.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mempolicy.c) — `set_mempolicy()`, `mbind()`, `MPOL_BIND`, `MPOL_INTERLEAVE`, and the full memory policy implementation
+- [kernel/sched/fair.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/sched/fair.c) — automatic NUMA balancing: `task_numa_work()`, `task_numa_fault()`, `task_numa_migrate()`
+- [mm/migrate.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/migrate.c) — `migrate_misplaced_folio()` and the page migration engine
+
+### Kernel documentation
+
+- `Documentation/admin-guide/mm/numa_memory_policy.rst` — official reference for memory policy modes, `set_mempolicy(2)`, `mbind(2)`, and numactl integration ([rendered](https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html))
+
+### Man pages
+
+- [`numactl(8)`](https://man7.org/linux/man-pages/man8/numactl.8.html) — command-line interface for CPU and memory node binding
+- [`set_mempolicy(2)`](https://man7.org/linux/man-pages/man2/set_mempolicy.2.html) — process-wide NUMA memory policy
+- [`mbind(2)`](https://man7.org/linux/man-pages/man2/mbind.2.html) — per-region NUMA memory policy
+
+### LWN articles
+
+- [NUMA in a hurry](https://lwn.net/Articles/486858/) — overview of NUMA concepts and the Linux memory policy API
+- [Automatic NUMA balancing](https://lwn.net/Articles/568870/) — design and implementation of the kernel's automatic page migration (v3.8)
+- [Memory tiering and CXL](https://lwn.net/Articles/898766/) — how CXL expands the NUMA node model with explicit memory tiers
+
+### Related docs
+
+- [NUMA Topology Discovery: ACPI SRAT and SLIT](numa-acpi-srat.md) — how firmware tables are parsed to build the node topology
+- [NUMA Distance and Inter-Socket Latency](numa-distance.md) — how the kernel quantifies and uses inter-node distances
+- [NUMA Zonelist Construction and Fallback Ordering](numa-zonelist.md) — how the page allocator's fallback list is built from NUMA distances
+- [NUMA Effects on Memory Reclaim](numa-reclaim.md) — per-node kswapd, watermarks, and NUMA balancing interaction
+- [Zone Reclaim Policy](zone-reclaim.md) — `vm.zone_reclaim_mode` and when local reclaim beats remote allocation

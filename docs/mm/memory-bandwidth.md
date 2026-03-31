@@ -408,3 +408,15 @@ Is your workload memory bandwidth-bound?
 - [Transparent huge pages](thp.md) — THP configuration, khugepaged, TLB pressure
 - [CXL Memory Tiering](cxl-memory-tiering.md) — heterogeneous memory tiers
 - [Tuning databases](tuning-databases.md) — huge pages, THP, and latency-sensitive workloads
+
+## Further reading
+
+- [Kernel docs: NUMA memory policy](https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html) — complete reference for `set_mempolicy()`, `mbind()`, and all policy modes including `MPOL_WEIGHTED_INTERLEAVE`
+- [`Documentation/admin-guide/mm/numa_memory_policy.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/admin-guide/mm/numa_memory_policy.rst) — kernel source for the NUMA memory policy admin guide
+- [`mm/mempolicy.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mempolicy.c) — `MPOL_INTERLEAVE` and `MPOL_WEIGHTED_INTERLEAVE` implementation; `interleave_nodes()` and `interleave_nid()`
+- [LWN: NUMA in a hurry](https://lwn.net/Articles/486858/) — practical introduction to NUMA topology and the pitfalls of first-touch allocation (2012)
+- [LWN: Weighted interleave memory policy](https://lwn.net/Articles/948552/) — rationale and design of `MPOL_WEIGHTED_INTERLEAVE` for heterogeneous memory capacity (2023)
+- [STREAM benchmark](https://www.cs.virginia.edu/stream/) — McCalpin's standard for measuring sustainable memory bandwidth; essential for calibrating any bandwidth optimization
+- [numa.md](numa.md) — NUMA balancing implementation, `node_distance`, fallback zone lists, and the full mempolicy API
+- [cxl-memory-tiering.md](cxl-memory-tiering.md) — why CXL nodes are poor interleave targets and how the tier framework assigns bandwidth-appropriate placement
+- [thp.md](thp.md) — transparent huge pages and their interaction with NUMA balancing and bandwidth-bound workloads

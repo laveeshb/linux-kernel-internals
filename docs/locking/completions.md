@@ -28,7 +28,7 @@ complete(&c);
 
 ```c
 /* Timed wait: return 0 on timeout, 1 on completion */
-unsigned long remaining = wait_for_completion_timeout(&c, jiffies + HZ);
+unsigned long remaining = wait_for_completion_timeout(&c, HZ);
 if (!remaining)
     pr_err("Timed out waiting!\n");
 

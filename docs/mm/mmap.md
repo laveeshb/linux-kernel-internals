@@ -412,3 +412,27 @@ Multiple threads fighting for mm->mmap_lock.
 - [page-tables](page-tables.md) - How VMAs are backed by page tables
 - [reclaim](reclaim.md) - Anonymous vs file-backed page handling
 - [thp](thp.md) - Huge pages in VMAs
+
+## Further reading
+
+### Kernel source
+
+- [mm/mmap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap.c) — `do_mmap()`, `mmap_region()`, VMA merging and splitting
+- [mm/vma.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vma.c) — VMA lifecycle helpers: `do_brk_flags()`, `vma_merge()`, `vma_expand()`
+- [include/linux/mm_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mm_types.h) — `struct mm_struct` and `struct vm_area_struct` definitions
+
+### Kernel documentation
+
+- [`Documentation/admin-guide/mm/concepts.rst`](https://docs.kernel.org/admin-guide/mm/concepts.html) — official overview of VMAs, demand paging, and the process address space
+- [`Documentation/arch/x86/x86_64/mm.rst`](https://docs.kernel.org/arch/x86/x86_64/mm.html) — authoritative x86_64 virtual memory map
+
+### Related pages
+
+- [page-fault.md](page-fault.md) — what happens after a VMA is found: page fault handling and PTE installation
+- [per-vma-locks.md](per-vma-locks.md) — how Linux 6.4 reduced mmap_lock contention with per-VMA locking
+- [brk-vs-mmap.md](brk-vs-mmap.md) — when allocators choose `brk()` vs `mmap()` and why
+
+### LWN articles
+
+- [LWN: Virtual Memory I — address spaces](https://lwn.net/Articles/829812/) — introductory series on Linux virtual memory
+- [LWN: The maple tree](https://lwn.net/Articles/894061/) — the RCU-safe B-tree that replaced the VMA red-black tree in v6.1

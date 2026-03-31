@@ -142,3 +142,35 @@ Or start with the key structures:
 - [sk_buff](sk-buff.md) — The packet structure used everywhere
 - [Socket Layer Overview](socket-layer.md) — The socket/sock/proto hierarchy
 - [Network Device and NAPI](napi.md) — The receive hardware interface
+
+## Further reading
+
+### In this repo
+
+- [sk-buff.md](sk-buff.md) — Deep dive into the `sk_buff` structure: headroom, tailroom, clone vs copy, and GRO
+- [socket-layer.md](socket-layer.md) — The `struct socket` / `struct sock` / `struct proto` hierarchy and VFS integration
+- [life-of-packet-rx.md](life-of-packet-rx.md) — Full annotated receive path from NIC interrupt to `recv()` returning
+- [life-of-packet-tx.md](life-of-packet-tx.md) — Full annotated transmit path from `send()` to DMA descriptor hand-off
+- [napi.md](napi.md) — NAPI polling, GRO, and multi-queue RSS/RPS/XPS mechanics
+- [tc-qdisc.md](tc-qdisc.md) — Traffic control: qdiscs, classes, filters, and the HTB/FQ schedulers
+
+### Kernel source
+
+- [`net/core/`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/core) — Socket layer, `sk_buff` management, `dev.c` (the central TX/RX dispatch), and NAPI
+- [`net/ipv4/`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/ipv4) — IPv4 input/output, TCP, UDP, routing, and Netfilter hook sites
+- [`include/linux/skbuff.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/skbuff.h) — Complete `sk_buff` definition and the inline helpers used at every layer
+- [`include/linux/netdevice.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/netdevice.h) — `struct net_device`, `struct napi_struct`, and the `net_device_ops` vtable
+
+### Kernel documentation
+
+- [`Documentation/networking/`](https://www.kernel.org/doc/html/latest/networking/index.html) — Official kernel networking docs: scaling, packet mmap, timestamping, and more
+- [`Documentation/networking/scaling.rst`](https://www.kernel.org/doc/html/latest/networking/scaling.html) — RSS, RPS, RFS, XPS, and aRFS explained with tuning guidance
+- [`Documentation/networking/kapi.rst`](https://www.kernel.org/doc/html/latest/networking/kapi.html) — Kernel networking API reference (socket buffer, device, and protocol APIs)
+
+### LWN articles
+
+- [Reinventing the network stack (2010)](https://lwn.net/Articles/380149/) — Overview of the design pressures that shaped the modern Linux network stack
+- [The NAPI model (2002)](https://lwn.net/Articles/30107/) — Original introduction to NAPI and the move away from pure interrupt-driven receive
+- [Generic Receive Offload (2008)](https://lwn.net/Articles/358910/) — How GRO merges segments in software, analogous to hardware LRO
+- [BPF: the universal in-kernel virtual machine (2014)](https://lwn.net/Articles/599755/) — The role of eBPF in the network stack, from socket filters to XDP
+- [XDP: eXpress Data Path (2016)](https://lwn.net/Articles/702073/) — XDP design goals, the hook-before-skb model, and performance numbers

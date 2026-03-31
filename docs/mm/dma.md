@@ -391,3 +391,15 @@ find /sys/kernel/debug/ -name "*dma*" 2>/dev/null
 - [vmalloc](vmalloc.md) -- virtual memory allocation (not suitable for DMA)
 - [NUMA](numa.md) -- NUMA-aware allocation and its interaction with DMA zones
 - [Overview](overview.md) -- how DMA allocation fits in the memory management hierarchy
+
+## Further reading
+
+- [Kernel docs: DMA API](https://docs.kernel.org/core-api/dma-api.html) — the authoritative reference for every function in the DMA API
+- [Kernel docs: DMA API HOWTO](https://docs.kernel.org/core-api/dma-api-howto.html) — practical guide covering when and how to use each mapping type
+- [`Documentation/core-api/dma-api.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/core-api/dma-api.rst) — kernel source for the DMA API documentation
+- [`kernel/dma/`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma) — the full DMA subsystem source directory: mapping, direct, swiotlb, pool
+- [LWN: A new DMA mapping API](https://lwn.net/Articles/753027/) — restructuring the DMA mapping layer for better IOMMU integration (2018)
+- [LWN: The IOMMU API](https://lwn.net/Articles/610073/) — overview of how the IOMMU framework plugs into the kernel (2014)
+- [LWN: Bounce-buffer problems](https://lwn.net/Articles/808916/) — SWIOTLB challenges with large-memory and confidential computing systems (2020)
+- [Device Memory Coherency](device-coherency.md) — cache maintenance rules that govern every DMA mapping
+- [CMA](cma.md) — how `dma_alloc_coherent()` sources physically contiguous memory via the Contiguous Memory Allocator

@@ -11,6 +11,51 @@ blk-mq (introduced in Linux 3.13) uses:
 - **Multiple hardware queues** (mapped to NVMe queues, SCSI host adapters, etc.)
 - **Per-CPU tag allocation** for request objects
 
+## The evolution: from single queue to blk-mq
+
+### The original block layer (Linux 2.4–2.6)
+
+The original block layer had one `request_queue` per device, protected by a single spinlock (`q->queue_lock`). An elevator scheduler (CFQ, deadline, anticipatory) sat inside that queue, merging and reordering requests to minimize HDD seek time.
+
+This made sense for HDDs: a spinning disk has seek latency (3–10ms), so batching and reordering requests by cylinder address (the "elevator" metaphor) could double throughput. CFQ (Completely Fair Queuing) was the default — it gave each process a fair share of disk bandwidth by interleaving per-process queues.
+
+```
+Per-device request_queue
+  │
+  ├── q->queue_lock (single spinlock — ALL CPUs contend here)
+  ├── elevator (CFQ/deadline/anticipatory)
+  └── hw_queue → one hardware submission path
+```
+
+### SSDs exposed the flaw
+
+When SSDs arrived (~2007–2010), the entire model broke down:
+
+1. **No seek cost** — reordering requests by address was irrelevant. The elevator added CPU overhead and latency without any benefit.
+2. **High parallelism** — an SSD could serve thousands of I/Os simultaneously from multiple internal flash dies, but the kernel serialized them all through one queue.
+3. **Interrupt bottleneck** — completion interrupts landed on one CPU, which then had to wake up requestors on other CPUs.
+
+NVMe (2011+) made this crisis acute. An NVMe controller has up to 65,535 hardware queues, each with 65,535 slots. The kernel could only use one of them because `request_queue` was a single object with a single lock.
+
+Benchmarks on early NVMe drives showed the kernel saturating the `queue_lock` spinlock at around 700K IOPS — far below the hardware's ~1M+ IOPS capability.
+
+### blk-mq (Linux 3.13, 2014)
+
+Jens Axboe redesigned the block layer around two key ideas:
+
+1. **Per-CPU software queues** — each CPU has its own `blk_mq_ctx` with its own lock. CPUs never contend with each other during I/O submission. Requests are batched on the per-CPU queue, then dispatched to a hardware queue.
+
+2. **Multiple hardware queues** — `blk_mq_hw_ctx` maps to actual hardware submission queues. For NVMe, each hardware queue maps to an NVMe SQ/CQ pair. For SCSI adapters with one queue, blk-mq presents one hardware queue.
+
+The elevator schedulers were redesigned as optional plugins that fit *between* the per-CPU queues and the hardware queues. NVMe uses `none` (no scheduler) by default — requests go straight through. HDDs still benefit from `mq-deadline` or `bfq`.
+
+```
+Before blk-mq:    1 CPU → q->queue_lock → 1 hw queue
+After blk-mq:     N CPUs → N per-CPU queues → M hw queues (N ≫ M possible)
+```
+
+The result: modern NVMe drives saturate at 3–7M IOPS on Linux, limited by PCIe bandwidth rather than kernel lock contention.
+
 ## Two-level queue architecture
 
 ```

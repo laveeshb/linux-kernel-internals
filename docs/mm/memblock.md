@@ -480,3 +480,17 @@ enum memblock_flags {
 - [page-allocator](page-allocator.md) - The buddy allocator that memblock hands off to
 - [overview](overview.md) - How memblock fits in the allocator hierarchy
 - [numa](numa.md) - NUMA-aware memblock allocation
+
+## Further reading
+
+- [page-allocator.md](page-allocator.md) — The buddy allocator that takes over from memblock after `memblock_free_all()`
+- [boot-page-tables.md](boot-page-tables.md) — Early page table setup that relies on memblock for its memory allocations
+- [numa.md](numa.md) — NUMA node assignments tracked via `memblock_region.nid` during early boot
+- [memory-hotplug.md](memory-hotplug.md) — `CONFIG_ARCH_KEEP_MEMBLOCK` preserves memblock data for hotplug operations after boot
+- [mm/memblock.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memblock.c) — Core memblock implementation; `memblock_alloc_range_nid()` is the central allocator
+- [include/linux/memblock.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/memblock.h) — Public API, data structures, and iteration macros like `for_each_free_mem_range()`
+- [arch/x86/kernel/e820.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/e820.c) — x86 firmware memory map translation into memblock regions
+- [drivers/of/fdt.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/of/fdt.c) — Device tree memory scanning that feeds `memblock_add()` on ARM and RISC-V
+- [LWN: A quick history of early-boot memory allocators](https://lwn.net/Articles/382559/) — Context on the transition from bootmem bitmaps to the region-list approach
+- [LWN: Improvements to memblock](https://lwn.net/Articles/761215/) — Mike Rapoport's cleanup work and the final removal of bootmem
+- `Documentation/core-api/boot-time-mm.rst` — Kernel documentation on boot-time memory management APIs

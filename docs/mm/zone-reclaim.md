@@ -482,3 +482,30 @@ grep -E "pageoutrun|kswapd" /proc/vmstat
 | OOM with free memory in other zones | DMA zone exhausted | Reduce `GFP_DMA`/`GFP_DMA32` consumers; check driver memory usage |
 | kswapd running without memory pressure | Watermark boost active | Check `boost` field in `/proc/zoneinfo`; consider lowering `watermark_boost_factor` |
 | High-order allocation failures persist | Zone fragmentation | Inspect `/proc/buddyinfo`; consider `vm.compaction_proactiveness` |
+
+## Further reading
+
+### Kernel source
+
+- [mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) — `node_reclaim()`, `balance_pgdat()`, `kswapd()`, and the `node_reclaim_mode` variable
+- [mm/page_alloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) — `get_page_from_freelist()`, `zone_watermark_fast()`, `zone_watermark_ok()`, `zone_allows_reclaim()`, `boost_watermark()`
+- [include/linux/mmzone.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mmzone.h) — `struct zone` watermark fields, `enum zone_watermarks`, `enum zone_type`, and watermark accessor inlines
+- [include/uapi/linux/mempolicy.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/mempolicy.h) — `RECLAIM_ZONE`, `RECLAIM_WRITE`, `RECLAIM_UNMAP` bit definitions
+
+### Kernel documentation
+
+- `Documentation/admin-guide/sysctl/vm.rst` — `zone_reclaim_mode`, `min_free_kbytes`, `watermark_boost_factor`, and `watermark_scale_factor` ([rendered](https://docs.kernel.org/admin-guide/sysctl/vm.html))
+- `/proc/sys/vm/zone_reclaim_mode` — runtime toggle; `0` disables, `1`/`2`/`4` enable progressively more aggressive reclaim
+
+### LWN articles
+
+- [Zone reclaim mode considered harmful](https://lwn.net/Articles/432224/) — analysis of why `zone_reclaim_mode=1` hurts throughput on most workloads and why the default is off
+- [Watermark boosting](https://lwn.net/Articles/750500/) — the motivation for `watermark_boost_factor` and how it mitigates fragmentation-driven kswapd underactivity
+- [DMA zone management](https://lwn.net/Articles/258803/) — why DMA zones are small, how they deplete, and the constraints that prevent fallback across zone boundaries
+
+### Related docs
+
+- [NUMA Effects on Memory Reclaim](numa-reclaim.md) — per-node kswapd threads, NUMA-balancing interaction with reclaim, and `zone_reclaim_mode` in the NUMA context
+- [NUMA Zonelist Construction and Fallback Ordering](numa-zonelist.md) — how the allocator's fallback list determines which zone is tried before `node_reclaim()` is called
+- [Reclaim](reclaim.md) — the full reclaim machinery: LRU lists, `shrink_node()`, direct reclaim, and `try_to_free_pages()`
+- [Compaction](compaction.md) — how `kcompactd` and proactive compaction address the high-order allocation failures that watermark boosting is designed to surface

@@ -273,3 +273,16 @@ Shows which NUMA nodes belong to which tier.
 
 !!! note "This area is actively developed"
     Memory tiering, CXL support, and the interaction between DAMON, kswapd, and NUMA balancing are actively changing across kernel versions. Always check the kernel version's changelog when relying on specific behaviors described here.
+
+## Further reading
+
+- [Kernel docs: CXL](https://docs.kernel.org/driver-api/cxl/index.html) — official kernel documentation for the CXL subsystem including memory region activation and CDAT parsing
+- [`Documentation/driver-api/cxl/`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/driver-api/cxl) — kernel source documentation for CXL memory regions, allocation, and reclaim behavior
+- [`drivers/cxl/`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/cxl) — CXL driver source: region activation, CDAT parsing, and the adistance notifier
+- [`mm/memory-tiers.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memory-tiers.c) — memory tier framework: `find_create_memory_tier()`, `establish_demotion_targets()`, abstract distance logic
+- [LWN: Memory tiering in the kernel](https://lwn.net/Articles/858215/) — the original memory tiering framework design and demotion infrastructure (2021)
+- [LWN: CXL memory management](https://lwn.net/Articles/894816/) — how CXL nodes integrate with the Linux NUMA and tiering subsystems (2022)
+- [LWN: DAMOS_MIGRATE_COLD and proactive reclaim](https://lwn.net/Articles/905967/) — using DAMON schemes to demote cold pages to slower tiers before memory pressure builds (2022)
+- [numa.md](numa.md) — NUMA node topology, HMAT distance tables, and the automatic balancing infrastructure that drives promotion
+- [memory-bandwidth.md](memory-bandwidth.md) — why CXL nodes are unsuitable targets for `MPOL_INTERLEAVE` and how bandwidth tiers affect policy decisions
+- [damon.md](damon.md) — configuring `DAMOS_MIGRATE_COLD` schemes for proactive demotion to CXL

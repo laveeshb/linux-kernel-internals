@@ -334,3 +334,25 @@ AMD EPYC processors expose multiple NUMA nodes per socket (one per die or per qu
 
 !!! warning "numactl may not show memory-only nodes"
     Nodes with no CPUs (e.g. CXL memory nodes, HMAT generic initiator nodes) may not appear in `numactl --hardware` output depending on the numactl version and kernel configuration. Use `ls /sys/devices/system/node/` to enumerate all nodes, including memory-only ones, and read each node's `distance` file directly.
+
+## Further reading
+
+### Kernel source
+
+- [arch/x86/mm/numa.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/numa.c) — `x86_numa_init()` and the ACPI/AMD/OF/dummy init chain that populates the distance matrix
+- [mm/numa_memblks.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/numa_memblks.c) — `__node_distance()`, `numa_set_distance()`, and the `numa_distance[]` flat array storage
+- [drivers/base/node.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/node.c) — `node_read_distance()`: the sysfs handler that exposes `/sys/devices/system/node/nodeN/distance`
+- [mm/page_alloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) — `build_zonelists()` and `find_next_best_node()`: how distances drive fallback zonelist ordering
+- [kernel/sched/fair.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/sched/fair.c) — `task_numa_migrate()` and `should_numa_migrate_memory()`: scheduler use of `node_distance()`
+
+### LWN articles
+
+- [NUMA distance and scheduler topology](https://lwn.net/Articles/392116/) — how the scheduler groups nodes by distance into scheduling domains
+- [Heterogeneous memory management and NUMA](https://lwn.net/Articles/756022/) — how memory tiers with different distance characteristics are handled in modern kernels
+
+### Related docs
+
+- [NUMA Topology Discovery: ACPI SRAT and SLIT](numa-acpi-srat.md) — how firmware SRAT and SLIT tables are parsed to populate `numa_distance[]`
+- [NUMA Zonelist Construction and Fallback Ordering](numa-zonelist.md) — how `node_distance()` drives the page allocator's fallback node order
+- [NUMA Effects on Memory Reclaim](numa-reclaim.md) — how `RECLAIM_DISTANCE` uses distance values to gate local reclaim
+- [CXL Memory and Kernel Memory Tiering](cxl-memory-tiering.md) — how memory tiers beyond DRAM extend the distance model

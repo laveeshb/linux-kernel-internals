@@ -88,6 +88,36 @@ cat /proc/zoneinfo | grep -E "min|low|high"
 sysctl vm.min_free_kbytes=65536
 ```
 
+## LRU Evolution
+
+### Single-list LRU and the streaming problem
+
+The original page cache LRU was a single list: recently accessed pages at the head, oldest pages at the tail. Eviction took from the tail. Simple and correct for workloads with stable working sets.
+
+The problem: a process that reads a large file sequentially ("streaming") accesses thousands of pages exactly once. As each page lands at the head of the LRU, it pushes all the hot working-set pages toward the tail. By the time the streaming read finishes, the kernel has evicted the database buffer pool or the application's code pages to make room for file data that will never be read again.
+
+This was observed early in Linux history. The fix — two lists — was in place by Linux 2.6.
+
+### Two-list LRU (active + inactive)
+
+The two-list model divides the LRU into **active** and **inactive** lists:
+
+- New pages enter the **inactive** list (on first fault/read)
+- A page accessed a second time is promoted to **active**
+- Eviction takes pages from **inactive** only; active pages are protected
+
+A streaming read fills the inactive list, but those pages never get a second access, so they're evicted without ever touching the active list. The hot working set stays in `active` and survives the stream.
+
+This worked well for decades but had a fundamental limitation: a single bit of information ("has this page been accessed since it was put on the inactive list?") is a coarse approximation of "how hot is this page?" A page accessed continuously for the last hour looks identical to a page accessed once, both landing in `active`.
+
+### Multi-Gen LRU (MGLRU, Linux 6.1, 2022)
+
+Yu Zhao (Google) designed MGLRU after observing Android devices (with limited RAM) thrashing between hot and warm pages using the two-list model. The core insight: instead of two categories (active/inactive), use multiple **generations** representing time bands.
+
+Pages are assigned a generation number when faulted. Periodically, the kernel "ages" the generations: recently accessed pages get a newer generation number; pages that haven't been accessed stay in their old generation. Eviction always takes the oldest generation first.
+
+This gives the kernel much finer-grained information about page age: a page in generation 8 is older than generation 12, and the eviction algorithm can make better choices. MGLRU also uses hardware dirty bits and access bits more aggressively to track page activity without explicit software tracking on every access.
+
 ## LRU Lists
 
 The kernel tracks page usage with LRU (Least Recently Used) lists. Pages move between lists based on access patterns.
@@ -371,3 +401,14 @@ Free memory exists but in wrong zone or fragmented.
 - [page-allocator](page-allocator.md) - Watermarks, zones
 - [glossary](glossary.md) - LRU, OOM, swap definitions
 - [memcg](memcg.md) - Per-cgroup memory limits and reclaim
+
+## Further reading
+
+- [mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) — the core reclaim engine: `shrink_node()`, `shrink_lruvec()`, `shrink_folio_list()`, `balance_pgdat()` (kswapd main loop), and `try_to_free_pages()` (direct reclaim entry point)
+- `Documentation/admin-guide/mm/multigen_lru.rst` — MGLRU architecture, the generation model, page table walk optimisation, and the built-in PID controller for balancing scan overhead
+- `Documentation/mm/balance.rst` — high-level design of how the kernel balances memory between reclaim actors, zones, and NUMA nodes
+- [LWN: Multi-generational LRU](https://lwn.net/Articles/910608/) — introduction to MGLRU's design goals, how it improves on the classic two-list model, and why it reduces CPU overhead under mixed workloads
+- [LWN: Better active/inactive list balancing](https://lwn.net/Articles/495543/) — background on the problems with the classic two-list LRU that motivated the split-LRU work and eventually MGLRU
+- [reclaim-throttling](reclaim-throttling.md) — what happens when reclaim cannot keep pace with allocations: `reclaim_throttle()`, the `memory.high` proportional delay, and how kswapd coordinates with direct reclaimers
+- [shrinker](shrinker.md) — how kernel subsystems (dentry/inode caches, driver object pools) register callbacks so reclaim can shrink them alongside page-cache and anonymous pages
+- [memcg](memcg.md) — per-cgroup reclaim triggered by `memory.high` and `memory.max`, and the `memory.reclaim` proactive reclaim interface

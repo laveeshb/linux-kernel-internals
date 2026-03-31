@@ -398,3 +398,15 @@ Enabled `memory.zswap.current` and `memory.zswap.max`, preventing any single cgr
 - [Tuning memory for containers](tuning-containers.md) — practical container memory tuning
 - [Cgroup OOM controller](memcg-oom.md) — what happens when the swap limit contributes to OOM
 - [Hierarchical memory limits](memcg-hierarchy.md) — how limits propagate through the cgroup tree
+
+## Further reading
+
+- [mm/memcontrol.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) — `__mem_cgroup_try_charge_swap()` and `__mem_cgroup_uncharge_swap()` for the swap charge/uncharge paths; `memory.swap.current` and `memory.swap.max` read/write handlers
+- [mm/zswap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/zswap.c) — zswap implementation including per-memcg pool accounting introduced by commit `f4840ccfca25`
+- `Documentation/admin-guide/cgroup-v2.rst` — `memory.swap.*` and `memory.zswap.*` interface file semantics, including the disjoint-counter model (`memory.current + memory.swap.current = total footprint`)
+- `Documentation/admin-guide/mm/zswap.rst` — zswap architecture, enabling instructions, and pool configuration
+- [LWN: The unified cgroup hierarchy in 4.5](https://lwn.net/Articles/679786/) — cgroup v2 design context, including why `memory.max` and `memory.swap.max` were separated from the v1 combined `memsw` model
+- [LWN: Cgroup swap high limit](https://lwn.net/Articles/912708/) — motivation and design for `memory.swap.high`, the soft swap limit that throttles before `memory.swap.max` triggers OOM
+- [memcg](memcg.md) — memcg fundamentals: `memory.max`, `memory.high`, and basic cgroup operations
+- [memcg-oom](memcg-oom.md) — what the OOM kill log looks like when the swap limit is the proximate cause of the kill
+- [reclaim](reclaim.md) — how the kernel reclaims anonymous pages via swap and file pages via writeback during memory pressure

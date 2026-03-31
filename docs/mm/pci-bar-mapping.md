@@ -372,3 +372,16 @@ cat /proc/iomem | grep -A2 "PCI Bus"
 - [vmalloc](vmalloc.md) — kernel virtual address space that `ioremap()` carves from
 - [Page Tables](page-tables.md) — how `ioremap()` mappings appear in the kernel page table
 - [CXL Memory Tiering](cxl-memory-tiering.md) — CXL devices expose large 64-bit BARs for memory expansion
+
+## Further reading
+
+- [Kernel docs: Device I/O](https://docs.kernel.org/driver-api/device-io.html) — authoritative guide to `ioread*`/`iowrite*`, `ioremap` variants, and MMIO access rules
+- [`Documentation/PCI/`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/PCI) — kernel PCI documentation directory covering BAR assignment, error handling, and host bridge enumeration
+- [`Documentation/PCI/pci.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/PCI/pci.rst) — step-by-step guide to writing PCI drivers including the enable/request/map lifecycle
+- [`drivers/pci/iomap.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pci/iomap.c) — `pci_iomap()` and `pci_iomap_wc()` source
+- [`drivers/pci/probe.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pci/probe.c) — `pci_read_bases()` BAR sizing protocol implementation
+- [LWN: PCI resource management](https://lwn.net/Articles/51834/) — early overview of how Linux claims and tracks PCI resources (2003)
+- [LWN: Write-combining and the PAT](https://lwn.net/Articles/252029/) — PAT memory types and write-combining performance on x86 (2008)
+- [../drivers/pci-driver.md](../drivers/pci-driver.md) — PCI driver model: probe/remove lifecycle, device IDs, and power management
+- [Device Memory Coherency](device-coherency.md) — cache attribute selection (`ioremap` vs `ioremap_wc`) for MMIO regions
+- [DMA Memory Allocation](dma.md) — device-to-RAM data paths that complement BAR-based MMIO access

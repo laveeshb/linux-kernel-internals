@@ -146,7 +146,7 @@ Once `next` is selected, `context_switch()` does the actual switch:
 
 ```c
 // kernel/sched/core.c
-static context_switch(struct rq *rq, struct task_struct *prev,
+static __always_inline struct rq *context_switch(struct rq *rq, struct task_struct *prev,
                       struct task_struct *next, struct rq_flags *rf)
 {
     // 1. Pre-switch bookkeeping (tracing, perf, cgroup notifications)

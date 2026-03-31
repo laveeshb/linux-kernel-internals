@@ -201,13 +201,10 @@ static int ip_finish_output2(struct net *net, struct sock *sk, struct sk_buff *s
 
     // Neighbour lookup (ARP table)
     neigh = ip_neigh_for_gw(rt, skb, &is_v6gw);
-    if (!neigh) {
-        // ARP resolution: send ARP request, queue packet
-        neigh_output(neigh, skb, is_v6gw);
-    }
 
-    // neigh->output = neigh_hh_output() if MAC known
+    // neigh->output = neigh_hh_output() if MAC known (fast path)
     // → adds Ethernet header and calls dev_queue_xmit()
+    // If neighbour not resolved, triggers ARP and queues packet
     return neigh_output(neigh, skb, is_v6gw);
 }
 ```

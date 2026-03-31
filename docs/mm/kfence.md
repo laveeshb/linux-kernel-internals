@@ -360,3 +360,20 @@ Added a deferrable timer option to reduce overhead on systems where power consum
 - [slab](slab.md) -- KFENCE hooks into the slab allocator (SLUB/SLAB) to intercept allocations
 - [vmalloc](vmalloc.md) -- KFENCE pool uses page-level protection similar to vmalloc guard pages
 - [oom](oom.md) -- KFENCE's fixed pool size means it does not contribute to OOM pressure
+
+## Further reading
+
+### Kernel documentation
+
+- `Documentation/dev-tools/kfence.rst` — design rationale, configuration options, and tuning guidance for the sampling interval and pool size
+- [mm/kfence/](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kfence) — full KFENCE implementation: pool allocation, guard page management, sampling timer, and report generation
+
+### LWN articles
+
+- [KFENCE: A low-overhead memory safety error detector](https://lwn.net/Articles/832354/) — Marco Elver's overview of the design rationale and production deployment model (2021)
+
+### Related docs
+
+- [kasan.md](kasan.md) — KASAN instruments every allocation; KFENCE complements it by covering production workloads KASAN cannot run on
+- [kmemleak.md](kmemleak.md) — detects memory leaks; combine with KFENCE to cover both access bugs and leaked allocations
+- [fault-injection.md](fault-injection.md) — deliberately failing allocations to test error paths; pairs well with KFENCE in long-running stress tests

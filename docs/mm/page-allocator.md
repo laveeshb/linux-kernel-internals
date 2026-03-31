@@ -328,3 +328,17 @@ Free pages exist but in wrong zone or wrong migratetype.
 - [overview](overview.md) - How page allocator fits with other allocators
 - [slab](slab.md) - SLUB uses pages from buddy allocator
 - [vmalloc](vmalloc.md) - Gets individual pages from buddy
+
+## Further reading
+
+- [slab.md](slab.md) — SLUB sits directly on top of the buddy allocator for sub-page allocations
+- [compaction.md](compaction.md) — How the kernel defragments physical memory to satisfy high-order requests
+- [memblock.md](memblock.md) — The boot-time allocator that hands memory to the buddy system at startup
+- [thp.md](thp.md) — Transparent huge pages: the main consumer of high-order (order-9) buddy allocations
+- [numa.md](numa.md) — NUMA-aware allocation policies built on top of per-node zones
+- [mm/page_alloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) — Core buddy allocator; `__alloc_pages()` is the main entry point
+- [include/linux/gfp.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/gfp.h) — Full GFP flag definitions and zone selection logic
+- [include/linux/mmzone.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mmzone.h) — `struct zone`, `struct free_area`, watermark definitions
+- [LWN: Memory compaction](https://lwn.net/Articles/368869/) — Mel Gorman's explanation of fragmentation and the compaction solution
+- [LWN: Grouping pages by mobility](https://lwn.net/Articles/224254/) — How migrate types were introduced to reduce permanent fragmentation
+- `Documentation/admin-guide/mm/concepts.rst` — Kernel documentation covering zones, watermarks, and the buddy system

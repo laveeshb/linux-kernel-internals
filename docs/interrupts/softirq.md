@@ -2,6 +2,38 @@
 
 > The kernel's high-priority deferred work mechanism
 
+## From bottom halves to softirqs to threaded IRQs
+
+Interrupt deferral in Linux has gone through three generations, each addressing the limitations of the previous.
+
+### Bottom halves (Linux 2.0–2.3)
+
+The original deferred-work mechanism was called "bottom halves" (BH). The model: an interrupt handler (the "top half") does minimal work and marks a BH for later execution. At the next safe moment, the kernel runs the marked BHs.
+
+The fatal flaw: **only one BH could run anywhere in the system at a time**, protected by a global spinlock. On an SMP machine, this meant all CPUs serialized through one lock to run BH handlers. Network receive on CPU 0 blocked timer processing on CPU 1. As SMP systems became common in the late 1990s, the BH model became a scalability bottleneck.
+
+There were also only 32 BH slots, statically defined — no driver could add its own.
+
+### Softirqs (Linux 2.3, SMP rewrite)
+
+Softirqs replaced BHs in Linux 2.3 during the SMP scalability push. The key change: **multiple softirqs can run in parallel on different CPUs**. `NET_RX_SOFTIRQ` on CPU 0 no longer blocks `TIMER_SOFTIRQ` on CPU 1.
+
+The trade-off: because softirqs can run in parallel, softirq handlers themselves must be reentrant and use per-CPU data or spinlocks for any shared state. This was too difficult to ask of every driver author, so softirqs remained limited to statically-defined, heavily-audited subsystem code.
+
+Tasklets (built on `TASKLET_SOFTIRQ`) were added to give drivers a way to defer work into softirq context without needing to be reentrant — a tasklet is guaranteed to run on only one CPU at a time, but different tasklets can run in parallel.
+
+### Threaded IRQs (Linux 2.6.30, 2009)
+
+Tasklets solved the reentrance problem but created new ones: tasklets run in softirq context, which means they cannot sleep, must complete quickly, and run with `bh_disable()` semantics that cause scheduling latency for high-priority processes.
+
+Thomas Gleixner introduced threaded IRQ handlers as a better model for most drivers. With `IRQF_THREAD`, the interrupt handler runs as a kernel thread rather than in hardirq/softirq context:
+
+- The handler **can sleep** (mutex, allocate with GFP_KERNEL, etc.)
+- It has a **schedulable priority** — RT systems can give it the right priority
+- On `CONFIG_PREEMPT_RT`, all softirq processing (including timers) runs in threads, making the system fully preemptible
+
+Tasklets were explicitly deprecated for new use in Linux 5.14 (2021). The recommendation for new driver code is: use threaded IRQs if the handler needs to sleep, or workqueues if it needs to run in process context. Tasklets remain for existing drivers but should not appear in new code.
+
 ## What are softirqs?
 
 Softirqs (software interrupts) are the lowest-level deferred execution mechanism in the kernel. Unlike hardirq handlers that run with interrupts disabled, softirqs run with interrupts **enabled** — they're preemptible by hardirqs but not by other softirqs on the same CPU.

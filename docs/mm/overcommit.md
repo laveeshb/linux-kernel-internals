@@ -302,8 +302,26 @@ done | sort -rn | head -10
 dmesg -w | grep -i oom
 ```
 
-## Further Reading
+## Further reading
 
-- [overcommit-accounting.rst](https://www.kernel.org/doc/Documentation/mm/overcommit-accounting.rst) - Official documentation
-- [LWN: The OOM killer](https://lwn.net/Articles/317814/) - OOM killer deep dive
-- [vm_overcommit_memory sysctl](https://docs.kernel.org/admin-guide/sysctl/vm.html#overcommit-memory) - Sysctl documentation
+### Kernel source
+
+- [mm/mmap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap.c) — calls `__vm_enough_memory()` during `mmap()` and `brk()` to enforce overcommit policy
+- [mm/util.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/util.c) — `__vm_enough_memory()` heuristic (mode 0) and `vm_commit_limit()` calculation (mode 2)
+- [mm/oom_kill.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) — `oom_badness()`: how victims are scored and selected
+
+### Kernel documentation
+
+- [`Documentation/admin-guide/mm/overcommit-accounting.rst`](https://docs.kernel.org/admin-guide/mm/overcommit-accounting.html) — official explanation of the three modes and commit limit formula
+- [`Documentation/admin-guide/sysctl/vm.rst`](https://docs.kernel.org/admin-guide/sysctl/vm.html#overcommit-memory) — sysctl knobs: `overcommit_memory`, `overcommit_ratio`, `overcommit_kbytes`
+
+### Related pages
+
+- [oom.md](oom.md) — OOM killer scoring, `oom_score_adj`, and cgroup-aware OOM
+- [mmap.md](mmap.md) — VMA creation and demand paging: why address space is cheap
+
+### LWN articles
+
+- [LWN: Toward better OOM handling](https://lwn.net/Articles/391222/) — David Rientjes's 2010 OOM killer rewrite at Google
+- [LWN: The OOM killer](https://lwn.net/Articles/317814/) — deep dive into victim selection heuristics
+- [LWN: Smarter out-of-memory handling](https://lwn.net/Articles/761118/) — cgroup-aware OOM and the OOM reaper

@@ -345,3 +345,13 @@ echo 0 > /sys/kernel/mm/ksm/merge_across_nodes
 - [numa](numa.md) - Cross-node merging considerations
 - [thp](thp.md) - KSM doesn't merge huge pages
 - [cow](cow.md) - COW behavior when KSM-merged pages are written
+
+## Further reading
+
+- `Documentation/admin-guide/mm/ksm.rst` — the kernel admin guide covering `ksmd` configuration, sysfs knobs, `MADV_MERGEABLE` / `MADV_UNMERGEABLE`, the stable/unstable tree model, and monitoring counters; rendered at [docs.kernel.org](https://docs.kernel.org/admin-guide/mm/ksm.html)
+- [mm/ksm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/ksm.c) — the full KSM implementation: the two red-black trees, `ksmd` scan loop, page hashing, COW-page replacement, and NUMA-aware tree management
+- [LWN: KSM: kernel samepage merging](https://lwn.net/Articles/330589/) — 2009 article introducing the original KSM design by Izik Eidus and Andrea Arcangeli, focused on the KVM VM-density use case
+- [LWN: KSM comes to anonymous memory](https://lwn.net/Articles/953141/) — coverage of Meta's production KSM deployment and their ~9% memory savings across a diverse server workload
+- Commit [f8af4da3b4c1](https://git.kernel.org/linus/f8af4da3b4c1) — the v2.6.32 KSM introduction; the commit message describes the stable/unstable tree design and the `MADV_MERGEABLE` opt-in interface
+- Commit [90bd6fd31c80](https://git.kernel.org/linus/90bd6fd31c80) — v3.9 `merge_across_nodes=0` support; prevents cross-NUMA-node merging that degrades memory locality
+- Commit [cb4df4cae4f2](https://git.kernel.org/linus/cb4df4cae4f2) — v6.1 per-process KSM statistics via `/proc/<pid>/ksm_stat`

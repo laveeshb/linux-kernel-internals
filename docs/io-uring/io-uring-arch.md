@@ -6,7 +6,7 @@
 
 Traditional I/O interfaces:
 - `read()`/`write()`: one syscall per operation, blocking
-- `aio_read()` (POSIX AIO): only works for O_DIRECT files; complex API
+- `aio_read()` (POSIX AIO): thread-pool based, complex API, poor performance
 - `epoll` + non-blocking: two syscalls per operation (one to check, one to act), no batching
 - Linux `libaio`: low-level, incomplete operation coverage
 

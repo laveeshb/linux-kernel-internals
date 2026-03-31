@@ -281,3 +281,17 @@ Background compaction consuming CPU.
 - [thp](thp.md) - Primary consumer of compaction
 - [reclaim](reclaim.md) - Works alongside compaction
 - [contiguous-memory](contiguous-memory.md) - Why contiguous allocations fail and solutions
+
+## Further reading
+
+- [page-allocator.md](page-allocator.md) — Buddy allocator migrate types (`MIGRATE_MOVABLE`, `MIGRATE_UNMOVABLE`) that determine what compaction can move
+- [thp.md](thp.md) — Transparent huge pages: the primary driver for compaction; requires order-9 contiguous physical pages
+- [reclaim.md](reclaim.md) — kswapd and direct reclaim; compaction and reclaim coordinate under the same watermark logic
+- [cma.md](cma.md) — Contiguous Memory Allocator; uses migration-based compaction to reclaim reserved CMA regions
+- [mm/compaction.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/compaction.c) — Full compaction implementation; `compact_zone()` runs the two-scanner algorithm
+- [mm/page_alloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) — `try_to_compact_pages()` is where direct compaction is triggered on allocation failure
+- [LWN: Memory compaction](https://lwn.net/Articles/368869/) — Mel Gorman's introduction of the two-scanner algorithm and fragmentation index
+- [LWN: Proactive compaction](https://lwn.net/Articles/817905/) — Nitin Gupta's v5.9 proactive compaction and the `compaction_proactiveness` tunable
+- [748446bb6b5a](https://git.kernel.org/linus/748446bb6b5a) — Original compaction core commit by Mel Gorman in v2.6.35
+- [facdaa917c4d](https://git.kernel.org/linus/facdaa917c4d) — Proactive compaction added in v5.9 to reduce direct compaction stalls
+- `Documentation/admin-guide/mm/transhuge.rst` — Covers THP allocation, compaction tuning, and the `compact_memory` sysctl

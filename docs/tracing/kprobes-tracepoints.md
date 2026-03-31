@@ -2,6 +2,44 @@
 
 > Dynamic and static instrumentation points in the kernel
 
+## Why three mechanisms?
+
+kprobes, tracepoints, and BPF are not redundant — they solve different parts of a problem that evolved over a decade.
+
+### kprobes: dynamic but fragile (2000s)
+
+kprobes arrived as a way to instrument production kernels without recompilation. A kprobe on `tcp_sendmsg` fires every time that function is called, giving you register state and the ability to run arbitrary code.
+
+The problem: kprobes are inherently unstable. If `tcp_sendmsg` is renamed, inlined by the compiler, or its calling convention changes, the probe silently does nothing or attaches to the wrong place. A tool written against one kernel version often breaks on the next. This made kprobes useful for ad-hoc debugging but unreliable for production monitoring.
+
+### Tracepoints: stable ABI (Linux 2.6.28, 2008)
+
+Mathieu Desnoyers introduced the `TRACE_EVENT` infrastructure to give tracing tools a stable surface. A tracepoint like `sched_switch` or `block_rq_issue` is a deliberate, named annotation placed by kernel developers in semantically meaningful locations.
+
+The contract: the tracepoint *name* and its *fields* are stable across kernel versions (treated like a userspace-visible ABI). Tools that attach to `sched_switch` and read `prev_pid`/`next_pid` keep working release after release, regardless of how the surrounding code changes.
+
+The zero-overhead design (jump labels that patch out the entire check when no consumers are registered) meant subsystem maintainers were willing to add tracepoints liberally — they cost nothing when idle.
+
+The limitation: tracepoints only exist where developers placed them. There is no tracepoint for every interesting function, and adding one requires a kernel patch.
+
+### BPF: programmable logic at both layers (Linux 3.18+)
+
+BPF programs can attach to both tracepoints *and* kprobes, but they add a critical capability: instead of just logging every event, a BPF program can aggregate, filter, and compute in-kernel — only sending a summary to userspace.
+
+This turned tracepoints from "fire and log" into "fire and compute." A BPF program on `block_rq_complete` can maintain a per-device latency histogram entirely in kernel memory and expose it as a BPF map. Without BPF, collecting that histogram required copying every raw event to userspace and aggregating there — at high I/O rates, this was prohibitive.
+
+`fentry`/`fexit` (Linux 5.5, 2020) added a fourth layer: BPF programs that attach to any kernel function entry/exit using BTF type information to access typed arguments, without the INT3-trap overhead of kprobes and without needing an explicit `TRACE_EVENT` annotation.
+
+```
+kprobes      → attach anywhere, unstable ABI, INT3 overhead
+tracepoints  → stable ABI, zero overhead, limited coverage
+BPF (kprobe) → programmable kprobes, in-kernel aggregation
+BPF (tp)     → programmable tracepoints, structured arguments
+fentry/fexit → typed function tracing, minimal overhead
+```
+
+The result is a layered system: use tracepoints for stable production instrumentation, kprobes/fentry for deep one-off investigation, and BPF programs to avoid flooding userspace with raw events.
+
 ## Kprobes: dynamic probes on any instruction
 
 A kprobe can be attached to any instruction in the kernel (not just function entries). When hit, it calls a handler in your code.
