@@ -552,3 +552,17 @@ The `MHP_MEMMAP_ON_MEMORY` flag and `memory_hotplug.memmap_on_memory` parameter 
 - [cma](cma.md) — CMA and `MIGRATE_CMA`, related movable memory machinery
 - [compaction](compaction.md) — page migration used by `do_migrate_range()` during offline
 - [page-allocator](page-allocator.md) — migrate types and zone layout
+
+## Further reading
+
+- [Kernel docs: Memory hotplug](https://docs.kernel.org/admin-guide/mm/memory-hotplug.html) — official kernel documentation covering sysfs interface, zone selection, and the online/offline state machine
+- [`Documentation/admin-guide/mm/memory-hotplug.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/admin-guide/mm/memory-hotplug.rst) — kernel source for the memory hotplug admin guide
+- [`mm/memory_hotplug.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memory_hotplug.c) — core implementation: `add_memory()`, `remove_memory()`, `online_pages()`, `offline_pages()`
+- [`mm/page_isolation.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_isolation.c) — `start_isolate_page_range()` and `page_is_unmovable()` used during offline
+- [`drivers/virtio/virtio_mem.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/virtio/virtio_mem.c) — virtio-mem driver implementing Sub Block Mode and Big Block Mode hotplug for VMs
+- [LWN: Memory hotplug](https://lwn.net/Articles/197855/) — early design overview of the hot-remove path and ZONE_MOVABLE rationale (2007)
+- [LWN: virtio-mem: paravirtualized memory hot(un)plug](https://lwn.net/Articles/820428/) — virtio-mem design, sub-block granularity, and cloud VM use cases (2020)
+- [LWN: Memory offlining and migration](https://lwn.net/Articles/650996/) — the page isolation and migration machinery behind `offline_pages()` (2015)
+- [numa.md](numa.md) — NUMA topology changes when nodes are added or removed via hotplug
+- [cma.md](cma.md) — `MIGRATE_CMA` pages and their relationship to `ZONE_MOVABLE` movable page guarantees
+- [compaction.md](compaction.md) — page migration machinery reused by `do_migrate_range()` during memory offlining

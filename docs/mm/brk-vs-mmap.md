@@ -348,9 +348,30 @@ cat /proc/<pid>/maps | grep anon
 watch -n 0.5 "grep -E 'VmRSS|VmData' /proc/<pid>/status"
 ```
 
-## Further Reading
+## Further reading
 
-- [glibc malloc internals](https://sourceware.org/glibc/wiki/MallocInternals) - How glibc manages memory
-- [mallopt(3) man page](https://man7.org/linux/man-pages/man3/mallopt.3.html) - Tuning options
-- [brk(2) man page](https://man7.org/linux/man-pages/man2/brk.2.html) - System call documentation
-- [LWN: malloc() tutorial](https://lwn.net/Articles/250967/) - Historical context
+### Kernel source
+
+- [mm/mmap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap.c) — `do_mmap()` and anonymous mapping implementation
+- [mm/vma.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vma.c) — `do_brk_flags()`: the kernel side of heap extension
+- [mm/shmem.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/shmem.c) — tmpfs backing for `MAP_SHARED | MAP_ANONYMOUS` mappings
+
+### Man pages
+
+- [`brk(2)`](https://man7.org/linux/man-pages/man2/brk.2.html) — system call interface; notes its POSIX legacy status
+- [`mmap(2)`](https://man7.org/linux/man-pages/man2/mmap.2.html) — full flag reference including `MAP_ANONYMOUS`, `MAP_POPULATE`, and `MAP_HUGETLB`
+- [`mallopt(3)`](https://man7.org/linux/man-pages/man3/mallopt.3.html) — glibc tuning: `M_MMAP_THRESHOLD`, `M_TRIM_THRESHOLD`
+
+### Related pages
+
+- [mmap.md](mmap.md) — VMA structure, `mm_struct`, and the full address space layout
+- [overcommit.md](overcommit.md) — why `mmap()` can succeed even when physical RAM is insufficient
+
+### LWN articles
+
+- [LWN: Fun with `mmap()`](https://lwn.net/Articles/657338/) — deep dive into anonymous and file-backed mappings
+- [LWN: malloc() internals](https://lwn.net/Articles/250967/) — historical context for the `brk`/`mmap` split in allocators
+
+### External
+
+- [glibc malloc internals](https://sourceware.org/glibc/wiki/MallocInternals) — arena design, per-thread caches, and the dynamic mmap threshold algorithm

@@ -367,3 +367,22 @@ sudo rmdir /sys/fs/cgroup/psi-test
 - [Page Reclaim](reclaim.md) — What causes memory stalls
 - [Running out of memory](oom.md) — The OOM killer that PSI helps avoid
 - [Glossary](glossary.md) — PSI, cgroup, OOM definitions
+
+## Further reading
+
+### Kernel documentation
+
+- `Documentation/accounting/psi.rst` — complete specification of the pressure file format, trigger syntax, window constraints, and cgroup integration
+- [kernel/sched/psi.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/sched/psi.c) — core PSI implementation: per-CPU state tracking, `some`/`full` accounting, exponentially weighted averages, and trigger delivery
+
+### LWN articles
+
+- [Tracking pressure-stall information](https://lwn.net/Articles/759658/) — Tejun Heo's coverage of Johannes Weiner's original PSI patchset, explaining the motivation and the `some`/`full` distinction (2018)
+- [Monitoring memory pressure with PSI](https://lwn.net/Articles/837034/) — how systemd-oomd uses PSI triggers to replace the kernel OOM killer with targeted, early cgroup eviction
+
+### Related docs
+
+- [memcg.md](memcg.md) — per-cgroup memory limits; per-cgroup PSI files (`memory.pressure`, `cpu.pressure`, `io.pressure`) are what systemd-oomd and Android LMKD monitor
+- [oom.md](oom.md) — the kernel OOM killer; PSI-based daemons aim to intervene before the kernel needs to invoke it
+- [reclaim.md](reclaim.md) — page reclaim is the primary driver of memory stalls measured by PSI
+- [damon.md](damon.md) — DAMON_RECLAIM can use PSI memory pressure as auto-tuning feedback for its reclaim quota

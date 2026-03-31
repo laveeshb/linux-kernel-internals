@@ -569,3 +569,12 @@ Prints the current state of an `ma_state` cursor (index, last, node pointer, sta
 - **`dup_mmap()`** uses `__mt_dup()` to bulk-copy the parent maple tree into the child `mm`, then replaces any `VM_DONTCOPY` entries with `vma_iter_clear_gfp()`.
 - **`execve()`** tears down the address space by calling `exit_mmap()`, which calls `__mt_destroy(&mm->mm_mt)` after clearing all page table entries.
 - **vmalloc** uses a red-black tree (`free_vmap_area_root`, a `struct rb_root`) for tracking kernel virtual address space — not a maple tree.
+
+## Further reading
+
+- [LWN: The maple tree, a modern data structure for a complex problem](https://lwn.net/Articles/845507/) — 2022 article by Liam Howlett and Matthew Wilcox explaining the design rationale, node layout, and benchmarks against the rbtree + linked list combination
+- [lib/maple_tree.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/maple_tree.c) — the full implementation: `maple_tree_init()`, `mas_walk()`, `mas_find()`, `mas_store()`, `mas_erase()`, RCU node freeing via `mt_free_walk()`, and the `CONFIG_MAPLE_RCU_DISABLED` debug mode
+- [include/linux/maple_tree.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/maple_tree.h) — public API: `struct maple_tree`, `struct ma_state`, `MA_STATE()`, `mt_for_each()`, node-type constants, and all flag definitions
+- Commit [54a611b60590](https://git.kernel.org/linus/54a611b60590) — the Linux 6.1 merge of the maple tree replacing `mm->mm_rb` and the VMA linked list; the merge message links to the full patch series and benchmark results
+- [per-vma-locks.md](per-vma-locks.md) — the per-VMA lock fast path that depends on `MT_FLAGS_USE_RCU` to perform lockless maple tree walks under `rcu_read_lock()` without holding `mmap_lock`
+- [LWN: Splitting VMAs](https://lwn.net/Articles/937943/) — covers the VMA tree reorganisation work in Linux 6.7 that moved VMA manipulation helpers into `mm/vma.c`, enabled by the cleaner maple tree API

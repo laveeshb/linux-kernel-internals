@@ -392,3 +392,28 @@ The global flush on every `vmalloc()`/`vfree()` pair makes vmalloc unsuitable fo
 | Global ASIDs (INVLPGB) | Hardware broadcast; no IPIs | `use_global_asid()`, `broadcast_tlb_flush()` |
 | Range-vs-full heuristic | Switch to full flush beyond 33 pages | `tlb_single_page_flush_ceiling`, `get_flush_tlb_info()` |
 | Avoid kernel vmalloc | No global TLB flush for slab allocs | Use `kmalloc()` instead of `vmalloc()` in hot paths |
+
+## Further reading
+
+### Kernel source
+
+- [arch/x86/mm/tlb.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/tlb.c) — `flush_tlb_mm_range()`, `native_flush_tlb_multi()`, `enter_lazy_tlb()`, `switch_mm_irqs_off()`, PCID/ASID management
+- [arch/x86/include/asm/tlbflush.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/tlbflush.h) — `flush_tlb_mm()`, `flush_tlb_range()`, `flush_tlb_page()`, `struct tlb_state`
+- [include/asm-generic/tlb.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/tlb.h) — `struct mmu_gather`, `tlb_gather_mmu()`, `tlb_finish_mmu()`
+- [mm/mmu_gather.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmu_gather.c) — mmu_gather implementation: batching, range accumulation, and page freeing
+
+### Kernel documentation
+
+- [`Documentation/arch/x86/tlb.rst`](https://docs.kernel.org/arch/x86/tlb.html) — x86 TLB flushing design notes: why certain shootdown paths are taken
+
+### Related pages
+
+- [page-tables.md](page-tables.md) — the page table hierarchy that TLB entries cache
+- [thp.md](thp.md) — how huge pages reduce TLB pressure by providing 512× larger entries
+- [boot-page-tables.md](boot-page-tables.md) — PCID activation and the early CR3 setup that initializes ASID support
+
+### LWN articles
+
+- [LWN: Improving page-fault scalability](https://lwn.net/Articles/741937/) — covers PCID benefits and context-switch TLB cost reduction
+- [LWN: Meltdown and Spectre, part 2](https://lwn.net/Articles/743287/) — KPTI's impact on TLB performance and the doubled-PCID workaround
+- [LWN: INVLPGB and broadcast TLB flushing](https://lwn.net/Articles/951489/) — AMD INVLPGB support: eliminating cross-CPU IPIs for TLB invalidation

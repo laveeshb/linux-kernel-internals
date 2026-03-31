@@ -371,3 +371,14 @@ Free memory exists but in wrong zone or fragmented.
 - [page-allocator](page-allocator.md) - Watermarks, zones
 - [glossary](glossary.md) - LRU, OOM, swap definitions
 - [memcg](memcg.md) - Per-cgroup memory limits and reclaim
+
+## Further reading
+
+- [mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) — the core reclaim engine: `shrink_node()`, `shrink_lruvec()`, `shrink_folio_list()`, `balance_pgdat()` (kswapd main loop), and `try_to_free_pages()` (direct reclaim entry point)
+- `Documentation/admin-guide/mm/multigen_lru.rst` — MGLRU architecture, the generation model, page table walk optimisation, and the built-in PID controller for balancing scan overhead
+- `Documentation/mm/balance.rst` — high-level design of how the kernel balances memory between reclaim actors, zones, and NUMA nodes
+- [LWN: Multi-generational LRU](https://lwn.net/Articles/910608/) — introduction to MGLRU's design goals, how it improves on the classic two-list model, and why it reduces CPU overhead under mixed workloads
+- [LWN: Better active/inactive list balancing](https://lwn.net/Articles/495543/) — background on the problems with the classic two-list LRU that motivated the split-LRU work and eventually MGLRU
+- [reclaim-throttling](reclaim-throttling.md) — what happens when reclaim cannot keep pace with allocations: `reclaim_throttle()`, the `memory.high` proportional delay, and how kswapd coordinates with direct reclaimers
+- [shrinker](shrinker.md) — how kernel subsystems (dentry/inode caches, driver object pools) register callbacks so reclaim can shrink them alongside page-cache and anonymous pages
+- [memcg](memcg.md) — per-cgroup reclaim triggered by `memory.high` and `memory.max`, and the `memory.reclaim` proactive reclaim interface

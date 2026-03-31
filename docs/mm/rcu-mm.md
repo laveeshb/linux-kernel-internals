@@ -507,3 +507,28 @@ No `mmap_lock` is taken in the common case. The VMA tree walk, the VMA stability
 - [Maple Tree](maple-tree.md) — the RCU-safe B-tree that stores VMAs
 - [Page Tables](page-tables.md) — PTE locking, `pte_offset_map_lock()`, and page table page lifetime
 - [Page Cache](page-cache.md) — XArray-based folio storage and the broader file-backed fault path
+
+## Further reading
+
+### Kernel source
+
+- [mm/mmap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap.c) — `mmap_write_lock()` / `mmap_write_unlock()` and `vma_end_write_all()` that bumps `mm_lock_seq`
+- [mm/mmap_lock.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap_lock.c) — `lock_vma_under_rcu()` and `vma_start_read()` implementations
+- [include/linux/rcupdate.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/rcupdate.h) — `rcu_read_lock()`, `rcu_dereference()`, `call_rcu()`, `kfree_rcu()`, `synchronize_rcu()`
+
+### Kernel documentation
+
+- [`Documentation/RCU/whatisRCU.rst`](https://docs.kernel.org/RCU/whatisRCU.html) — the authoritative introduction to RCU semantics and the read-copy-update contract
+- [`Documentation/RCU/rcu_dereference.rst`](https://docs.kernel.org/RCU/rcu_dereference.html) — rules for safely dereferencing RCU-protected pointers
+- [`Documentation/RCU/SRCU-Usage.rst`](https://docs.kernel.org/RCU/SRCU-Usage.html) — when and why to use sleepable RCU (as used by MMU notifiers)
+
+### Related pages
+
+- [../locking/rcu.md](../locking/rcu.md) — general RCU concepts, quiescent states, and grace period mechanics
+- [per-vma-locks.md](per-vma-locks.md) — the per-VMA locking layer that sits above the RCU VMA lookup
+
+### LWN articles
+
+- [LWN: What is RCU, fundamentally?](https://lwn.net/Articles/262464/) — Paul McKenney's definitive series on RCU design
+- [LWN: RCU usage in the Linux kernel](https://lwn.net/Articles/573424/) — survey of how subsystems use RCU, including memory management patterns
+- [LWN: `SLAB_TYPESAFE_BY_RCU`](https://lwn.net/Articles/878104/) — explains the subtle guarantee (type-safe, not value-stable) and common pitfalls

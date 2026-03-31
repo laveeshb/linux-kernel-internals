@@ -409,3 +409,14 @@ echo 1 > /proc/sys/kernel/dmesg_restrict
 - [overview](overview.md) - Memory management overview
 - [glossary](glossary.md) - PFN, TLB, MMU definitions
 - [Bug Index](bugs/README.md) - Index of all mm kernel bugs
+
+## Further reading
+
+- [arch/x86/mm/pgtable.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/pgtable.c) — x86-specific page table allocation, PTE manipulation helpers, and KPTI page table switching
+- [include/linux/pgtable.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pgtable.h) — architecture-independent page table API: `pgd_offset()`, `pte_present()`, `pte_mkwrite()`, and the full set of PTE flag accessors
+- [mm/memory.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memory.c) — page fault entry point `handle_mm_fault()`, COW handling, and page table teardown on `munmap()`
+- `Documentation/admin-guide/mm/concepts.rst` — kernel documentation overview of virtual memory, page tables, and the TLB
+- [Five-level page tables](https://lwn.net/Articles/717293/) (LWN, 2017) — design and rationale for adding the P4D level to support 57-bit virtual address spaces
+- [KPTI: kernel page-table isolation](https://lwn.net/Articles/741878/) (LWN, 2017) — how the Meltdown mitigation works by maintaining separate page tables for kernel and user mode
+- [page-fault](page-fault.md) — the complete page fault handling path from hardware trap through `handle_pte_fault()` to memory resolution
+- [tlb-optimization](tlb-optimization.md) — TLB batching, lazy flushing, and how the kernel minimises IPI-heavy TLB shootdowns

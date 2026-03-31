@@ -326,3 +326,15 @@ The recurring theme: **an optimization correct in one context becomes harmful in
 - [war-stories-cves.md](war-stories-cves.md) — Security vulnerability narratives (Dirty COW, StackRot, THP COW race)
 - [numa.md](numa.md) — NUMA memory policy and the zone_reclaim design
 - [reclaim.md](reclaim.md) — How kswapd and direct reclaim work
+
+## Further reading
+
+- [Reading an OOM log](reading-oom-log.md) — how to parse the dmesg output from a real OOM event, including the task table and scoring fields discussed in Bug 3
+- [/proc/vmstat reference](proc-vmstat.md) — `zone_reclaim_failed` and other counters relevant to diagnosing Bug 1
+- [Tuning Memory for Databases](tuning-databases.md) — practical `vm.zone_reclaim_mode`, huge pages, and NUMA interleave settings that address the root causes behind Bugs 1 and 2
+- [LWN: NUMA in a hurry](https://lwn.net/Articles/473440/) — background on NUMA memory management and why local-first reclaim was originally introduced
+- [LWN: Transparent huge pages](https://lwn.net/Articles/423584/) — original THP design covering the compound page model that led to Bug 2
+- [`mm/oom_kill.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) — `oom_badness()` scoring, victim selection, and the `get_mm_counter` calls fixed in Bug 3
+- [`mm/vmscan.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) — `node_reclaim()` implementing the zone_reclaim_mode policy from Bug 1
+- [Commit 4f9b16a64753](https://git.kernel.org/linus/4f9b16a64753) — Mel Gorman's commit disabling `zone_reclaim_mode` by default, with detailed rationale
+- [Commit 7cb2ef56e6a8](https://git.kernel.org/linus/7cb2ef56e6a8) — Khalid Aziz's fix adding the `PageHuge()` fast path that resolved Bug 2

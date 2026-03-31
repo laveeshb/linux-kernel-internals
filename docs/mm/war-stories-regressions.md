@@ -393,3 +393,14 @@ Recognizing the pattern is the first step to diagnosing it.
 - [Kernel docs: NUMA balancing](https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html) — NUMA policy reference
 - [mm/khugepaged.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/khugepaged.c) — khugepaged implementation
 - [mm/swap_state.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/swap_state.c) — Swap readahead implementation
+
+## Further reading
+
+- [war-stories-bugs.md](war-stories-bugs.md) — Production bug narratives: `zone_reclaim_mode` NUMA thrashing, THP compound page locking overhead, and RSS percpu counter inaccuracy causing wrong OOM victims
+- [Tuning Memory for Databases](tuning-databases.md) — practical guidance for avoiding the THP compaction stalls (Case 1) and NUMA placement problems (Case 2) covered here
+- [Tuning Memory for Containers](tuning-containers.md) — per-cgroup THP control and memory limits that help isolate the khugepaged CPU storms from Case 3
+- [/proc/vmstat reference](proc-vmstat.md) — `compact_stall`, `thp_collapse_alloc_failed`, `numa_pages_migrated`, and `pswpin` counters for detecting all four regression patterns
+- [LWN: THP defrag modes](https://lwn.net/Articles/629613/) — `defer` and `defer+madvise` defrag modes that fixed the Case 1 synchronous compaction stalls
+- [LWN: Better active/inactive list balancing](https://lwn.net/Articles/495543/) — how the reclaim scanner interacts with NUMA balancing (Case 2)
+- [`Documentation/admin-guide/mm/transhuge.rst`](https://docs.kernel.org/admin-guide/mm/transhuge.html) — authoritative THP documentation covering `defrag` modes, khugepaged tunables, and per-cgroup control
+- [Commit 444eb2a449ef](https://git.kernel.org/linus/444eb2a449ef) — `defer` defrag mode addition that decoupled THP compaction from the fault path

@@ -316,3 +316,13 @@ The cgroup v2 memory controller, including the hierarchical protection model, wa
 - [Memory Cgroups](memcg.md) — memcg fundamentals and v1 vs v2
 - [Tuning memory for containers](tuning-containers.md) — practical limit-setting guide
 - [memory.stat reference](memory-stat.md) — all memory.stat fields explained
+
+## Further reading
+
+- [mm/memcontrol.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) — `mem_cgroup_calculate_protection()` for the proportional protection formula; `try_charge()` for the limit-enforcement walk up the cgroup tree; `mem_cgroup_margin()` for headroom calculation
+- `Documentation/admin-guide/cgroup-v2.rst` — the canonical description of how effective limits and protections are computed when child and parent settings interact, including the proportional distribution model
+- [LWN: Putting cgroup memory protection back together](https://lwn.net/Articles/762472/) — design rationale and discussion behind `memory.low` (best-effort) and `memory.min` (hard) protection, and why proportional scaling was chosen over strict reservation
+- [LWN: The unified cgroup hierarchy in 4.5](https://lwn.net/Articles/679786/) — background on why cgroup v2 moved to a single unified hierarchy and what that means for multi-level limit enforcement
+- [memcg](memcg.md) — memcg fundamentals: the four limit/protection knobs, basic operations, and cgroup v1 vs v2 differences
+- [memcg-oom](memcg-oom.md) — what happens when a cgroup reaches `memory.max` after the hierarchy's headroom is exhausted
+- [reclaim](reclaim.md) — how the kernel reclaims pages once a cgroup's limits are approached

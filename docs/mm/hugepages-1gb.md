@@ -349,3 +349,14 @@ Before this commit, applications had to open a file on a `pagesize=1G` hugetlbfs
 - [Page Tables](page-tables.md) — PUD-level page table entry structure
 - [NUMA](numa.md) — per-node memory allocation and NUMA topology
 - [Page Allocator](page-allocator.md) — why the buddy allocator cannot satisfy 1GB allocations at runtime
+
+## Further reading
+
+- `Documentation/admin-guide/mm/hugetlbpage.rst` — the canonical kernel admin guide for hugetlbfs: boot parameters (`hugepagesz=`, `default_hugepagesz=`), sysfs interface, per-node reservation, and `MAP_HUGETLB` / `MAP_HUGE_1GB` flags; rendered at [docs.kernel.org](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html)
+- [mm/hugetlb.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/hugetlb.c) — hugetlb pool management: `hugepagesz_setup()`, `default_hugepagesz_setup()`, `alloc_gigantic_frozen_folio()`, and `hugetlb_gigantic_pages_alloc_boot()` for the early-param reservation path
+- [arch/x86/mm/hugetlbpage.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/hugetlbpage.c) — `arch_hugetlb_valid_size()` gating 1GB support on `X86_FEATURE_GBPAGES`, and `gigantic_pages_init()` registering the PUD-level hstate
+- [LWN: Huge pages part 1: Introduction](https://lwn.net/Articles/374424/) — background on why huge pages were added to Linux and the original database-vendor motivation
+- [LWN: Huge pages part 3: Administration](https://lwn.net/Articles/376606/) — NUMA pool management and per-node reservation, written at the time 1GB page support was maturing
+- Commit [42d7395feb56](https://git.kernel.org/linus/42d7395feb56) — v3.8 addition of `MAP_HUGE_1GB` and the page-size encoding in mmap flags, removing the requirement for a `pagesize=1G` hugetlbfs mount
+- [hugetlbfs-vs-thp.md](hugetlbfs-vs-thp.md) — when to choose 1GB hugetlbfs over 2MB THP or mTHP, including the operational trade-offs of pre-reserved pools
+- [thp.md](thp.md) — 2MB PMD-level THP: the lower-overhead starting point before committing to 1GB pages

@@ -382,3 +382,15 @@ cgroup v2 removed `memory.oom_control` disable functionality by design. The v2 p
 - [Running out of memory](oom.md) — the global OOM path
 - [Hierarchical memory limits](memcg-hierarchy.md) — how limits propagate in the cgroup tree
 - [Swap accounting in cgroups](memcg-swap.md) — using swap to avoid OOM
+
+## Further reading
+
+- [mm/memcontrol.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) — `mem_cgroup_out_of_memory()` (cgroup OOM entry point), `mem_cgroup_get_oom_group()` (group-kill ancestor walk), `mem_cgroup_print_oom_meminfo()` (per-cgroup log output)
+- [mm/oom_kill.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/oom_kill.c) — `oom_badness()` scoring, `select_bad_process()` with `mem_cgroup_scan_tasks()`, `oom_kill_process()` log generation — shared between global and cgroup OOM paths
+- `Documentation/admin-guide/cgroup-v2.rst` — `memory.oom.group` and `memory.events` semantics, including field definitions for `oom`, `oom_kill`, and `oom_group_kill`
+- `Documentation/admin-guide/oom-kill.rst` — `oom_score_adj` range, semantics, and interaction with process scoring
+- [LWN: Group-kill for memory-cgroup OOM](https://lwn.net/Articles/761118/) — design discussion and motivation for `memory.oom.group`, including the container-restart problem it solves
+- [LWN: Toward better OOM killing](https://lwn.net/Articles/391222/) — background on the OOM scoring model and why `oom_score_adj` was introduced
+- [memcg](memcg.md) — memcg fundamentals, including `memory.max` vs `memory.high` and the OOM group kill flag
+- [memcg-hierarchy](memcg-hierarchy.md) — how ancestor limits can trigger cgroup OOM even when a child's own `memory.max` has not been reached
+- [memcg-swap](memcg-swap.md) — how allowing swap creates a buffer between the `memory.high` throttle zone and `memory.max` OOM

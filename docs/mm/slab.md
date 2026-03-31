@@ -498,3 +498,17 @@ CONFIG_KFENCE=y
 - [page-allocator](page-allocator.md) - Where SLUB gets its pages
 - [overview](overview.md) - How slab fits in the allocator hierarchy
 - [Bug Index](bugs/README.md) - Index of all mm kernel bugs
+
+## Further reading
+
+- [page-allocator.md](page-allocator.md) — The buddy system that SLUB draws pages from
+- [vmalloc.md](vmalloc.md) — `kvmalloc()` falls back to vmalloc for large allocations that kmalloc cannot satisfy
+- [kasan.md](kasan.md) — Kernel Address Sanitizer; uses SLUB debug hooks to detect heap corruption
+- [kfence.md](kfence.md) — Low-overhead sampling-based memory safety detector designed to run in production
+- [slab-internals.md](slab-internals.md) — Deep dive into SLUB internal data structures and fast-path mechanics
+- [mm/slub.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) — SLUB implementation; `slab_alloc_node()` is the allocation fast path
+- [mm/slab_common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slab_common.c) — Cache creation, merging, and kmalloc size-class setup shared across allocators
+- [include/linux/slab.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/slab.h) — Public slab API: `kmalloc`, `kfree`, `kmem_cache_create`
+- [LWN: The SLUB allocator](https://lwn.net/Articles/229984/) — Christoph Lameter's original introduction of SLUB and why it supersedes SLAB
+- [LWN: Toward a better object allocator](https://lwn.net/Articles/546021/) — Discussion of SLUB improvements and the path toward SLAB removal
+- `Documentation/mm/slub.rst` — Kernel documentation on SLUB internals and debugging options

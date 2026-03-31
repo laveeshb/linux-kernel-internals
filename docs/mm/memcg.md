@@ -374,3 +374,14 @@ In cgroup v1, kernel memory wasn't limited by default.
 - [reclaim](reclaim.md) - How memory is reclaimed
 - [page-allocator](page-allocator.md) - Global memory allocation
 - [glossary](glossary.md) - cgroup, OOM definitions
+
+## Further reading
+
+- [mm/memcontrol.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) — the entire memory controller implementation: charge/uncharge paths, limit enforcement, PSI integration, and the `memory.reclaim` interface
+- `Documentation/admin-guide/cgroup-v2.rst` — authoritative kernel reference for every `memory.*` interface file, including semantics, units, and version requirements
+- [LWN: The unified cgroup hierarchy in 4.5](https://lwn.net/Articles/679786/) — covers why cgroup v2 was redesigned and what changed for the memory controller compared to v1
+- [LWN: The new slab memory controller](https://lwn.net/Articles/798605/) — explains how kernel memory (slab, stacks) was brought under unified `memory.current` accounting in v2
+- [LWN: Proactive reclaim for memory cgroups](https://lwn.net/Articles/894849/) — design and motivation behind `memory.reclaim`, the interface for userspace-driven proactive reclaim
+- [memcg-hierarchy](memcg-hierarchy.md) — how `memory.max`, `memory.high`, `memory.min`, and `memory.low` interact when cgroups are nested
+- [memcg-oom](memcg-oom.md) — what happens inside the kernel when a cgroup exhausts its `memory.max` after reclaim fails
+- [memcg-swap](memcg-swap.md) — per-cgroup swap accounting with `memory.swap.max` and `memory.zswap.max`

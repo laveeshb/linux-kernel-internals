@@ -346,3 +346,12 @@ shrinker_register(s->s_shrink);
 | [`fs/dcache.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/dcache.c) | `prune_dcache_sb` — called by `super_cache_scan` to shrink the dentry LRU |
 | [`fs/inode.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/inode.c) | `prune_icache_sb` — called by `super_cache_scan` to shrink the inode LRU |
 | [`include/linux/list_lru.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/list_lru.h) | `list_lru_init_memcg`, `list_lru_shrink_count`, `list_lru_shrink_walk` — NUMA/memcg-aware LRU used with shrinkers |
+
+## Further reading
+
+- [mm/shrinker.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/shrinker.c) — `shrinker_alloc()`, `shrinker_register()`, `shrinker_free()`, `do_shrink_slab()` (priority scaling and batch loop), `shrink_slab()`, and `shrink_slab_memcg()` with the per-memcg bitmap
+- [mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) — `shrink_node()` and `shrink_lruvec()`, the reclaim entry points that call `shrink_slab()` after scanning LRU lists
+- [LWN: Smarter shrinkers](https://lwn.net/Articles/550463/) — motivation and design for the two-phase `count_objects`/`scan_objects` split, replacing the older single-callback model
+- [LWN: Shrinker reorganization](https://lwn.net/Articles/966451/) — the extraction of shrinker code from `mm/vmscan.c` into the dedicated `mm/shrinker.c` file and the RCU-based refcount lifecycle introduced alongside it
+- [reclaim](reclaim.md) — the broader reclaim picture showing where `shrink_slab()` fits alongside LRU scanning, kswapd, and direct reclaim
+- [memcg](memcg.md) — per-cgroup reclaim context: when `sc->memcg` is set and how `SHRINKER_MEMCG_AWARE` shrinkers interact with cgroup memory limits

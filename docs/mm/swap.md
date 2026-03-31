@@ -433,3 +433,14 @@ Excessive swap writes wearing SSD.
 - [reclaim](reclaim.md) - When swap is triggered
 - [page-cache](page-cache.md) - File pages vs anonymous pages
 - [mmap](mmap.md) - Anonymous memory that gets swapped
+
+## Further reading
+
+- [mm/swap_state.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/swap_state.c) — swap cache implementation: adding, looking up, and invalidating pages in the swap cache
+- [mm/swapfile.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/swapfile.c) — swap area management: `swapon`/`swapoff`, slot allocation, priority handling, and the swap map
+- `Documentation/admin-guide/mm/concepts.rst` — kernel documentation overview of anonymous memory, swap, and reclaim concepts
+- [Toward a better swapping policy](https://lwn.net/Articles/645539/) (LWN, 2015) — discussion of swappiness, the reclaim cost model, and how the kernel balances file cache versus anonymous swap
+- [zswap](zswap.md) — compressed swap cache that intercepts pages before they reach the disk swap device
+- [swap-thrashing](swap-thrashing.md) — detecting and recovering from the livelock that results when the working set exceeds RAM
+- [swapping](swapping.md) — page-level mechanics of swap-in and swap-out, including the swap cache lifecycle
+- [reclaim](reclaim.md) — how the kernel selects victim pages for eviction and triggers swap-out under memory pressure

@@ -558,3 +558,12 @@ sysctl -w vm.dirty_bytes=4294967296              # 4 GB
 At step 3 and beyond, PSI `memory.full` pressure rises. Monitoring this
 sequence via `/proc/vmstat` counter deltas and PSI gives an accurate picture
 of which throttle stage the system has reached and how long it spends there.
+
+## Further reading
+
+- [mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) — `reclaim_throttle()`, `throttle_direct_reclaim()`, `consider_reclaim_throttle()`, `balance_pgdat()`, `allow_direct_reclaim()`, and `pgdat_balanced()` — the complete throttling and kswapd balancing implementation
+- [mm/memcontrol.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) — `__mem_cgroup_handle_over_high()`, `reclaim_high()`, `calculate_high_delay()`, `mem_find_max_overage()`, and `swap_find_max_overage()` — the `memory.high` proportional penalty path
+- `Documentation/admin-guide/cgroup-v2.rst` — `memory.high` semantics, throttling behaviour when the soft limit is exceeded, and the relationship to `memory.max`
+- [LWN: Throttling memory-hungry cgroups](https://lwn.net/Articles/758781/) — the original design discussion for the proportional `memory.high` delay, explaining the quadratic penalty formula and why a simple hard stop was rejected
+- [reclaim](reclaim.md) — the broader reclaim picture: kswapd, direct reclaim, watermarks, LRU lists, and swappiness
+- [memcg](memcg.md) — `memory.high` and `memory.max` from the operator perspective: how to set limits and interpret `memory.events`

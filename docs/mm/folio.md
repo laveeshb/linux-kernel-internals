@@ -469,3 +469,12 @@ if (!folio_try_get(folio))
 | `filemap_grab_folio(mapping, index)` | `pagemap.h` | Look up or create a page-cache folio |
 | `filemap_alloc_folio(gfp, order)` | `pagemap.h` | Allocate a page-cache folio |
 | `readahead_folio(ractl)` | `pagemap.h` | Get next folio from a readahead batch |
+
+## Further reading
+
+- [LWN: Folios](https://lwn.net/Articles/849538/) — Matthew Wilcox's 2021 article introducing the folio concept and explaining why `struct page` needed replacing
+- [LWN: Large folios for the page cache](https://lwn.net/Articles/893512/) — follow-up coverage on large folio support for file-backed memory and the page cache
+- [mm/folio-compat.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/folio-compat.c) — the compatibility shim layer; every function here is a page-API call that delegates to its `folio_*` counterpart and is awaiting conversion
+- [mm/filemap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/filemap.c) — page cache core; `__filemap_get_folio()` and `filemap_add_folio()` are the primary folio-native entry points
+- [include/linux/mm_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mm_types.h) — canonical `struct folio` definition with the `FOLIO_MATCH` layout assertions
+- [mthp.md](mthp.md) — multi-size THP: the anonymous-memory counterpart to large file-backed folios; both share the same order-N folio representation

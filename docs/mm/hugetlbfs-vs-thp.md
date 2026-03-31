@@ -462,3 +462,15 @@ grep thp_collapse /proc/vmstat
 - [Page Allocator](page-allocator.md) - The buddy allocator that serves both mechanisms
 - [NUMA](numa.md) - Per-node huge page pools and THP NUMA interactions
 - [Page Tables](page-tables.md) - PMD-level and PUD-level huge page mappings
+
+## Further reading
+
+- [thp.md](thp.md) — deep dive on THP internals: the `khugepaged` daemon, fault-based allocation, defrag modes, COW race bugs, and NUMA interaction
+- [hugepages-1gb.md](hugepages-1gb.md) — 1GB PUD-level huge pages: why runtime allocation almost always fails, per-node reservation, and workloads (databases, DPDK, HPC) where the extra 512x TLB gain is worth the operational cost
+- [mthp.md](mthp.md) — multi-size THP (Linux 6.10): sub-PMD sizes from 16KB to 512KB that fill the gap between 4KB fallback and 2MB overhead, particularly valuable on ARM64
+- `Documentation/admin-guide/mm/hugetlbpage.rst` — official admin guide for hugetlbfs: pool reservation, sysfs knobs, mmap flags, and per-node NUMA controls; rendered at [docs.kernel.org](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html)
+- `Documentation/admin-guide/mm/transhuge.rst` — official admin guide for THP: `enabled` and `defrag` modes, khugepaged tuning, and per-size mTHP controls; rendered at [docs.kernel.org](https://docs.kernel.org/admin-guide/mm/transhuge.html)
+- [LWN: Transparent huge pages](https://lwn.net/Articles/423584/) — the 2011 article covering THP's introduction and its original motivation as a transparent alternative to hugetlbfs
+- [LWN: Huge pages part 1: Introduction](https://lwn.net/Articles/374424/) — overview of huge page history in Linux and the database-vendor origins of hugetlbfs
+- [LWN: Multi-size THP](https://lwn.net/Articles/937239/) — motivation for mTHP and how it narrows the remaining operational gap between the two mechanisms
+- Commit [71e3aac0724f](https://git.kernel.org/linus/71e3aac0724f) — the initial THP commit (v2.6.38); the message explicitly frames THP as a solution to "the usual restrictions of hugetlbfs"

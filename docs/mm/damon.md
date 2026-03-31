@@ -723,3 +723,22 @@ Typical configurations achieve well under 1% CPU overhead. The `DAMON_RECLAIM` d
 | `mm/damon/stat.c` | `DAMON_STAT` built-in module: observability-only DAMOS_STAT scheme |
 | `mm/damon/modules-common.c` | Shared helpers for the built-in modules |
 | `mm/damon/Kconfig` | All `CONFIG_DAMON_*` options |
+
+## Further reading
+
+### Kernel documentation
+
+- `Documentation/admin-guide/mm/damon/` — administrator guide covering DAMON concepts, the sysfs interface, DAMOS scheme configuration, and the built-in modules (`DAMON_RECLAIM`, `DAMON_LRU_SORT`, `DAMON_STAT`)
+- `Documentation/mm/damon/design.rst` — design document describing the adaptive region-based sampling algorithm, the monitoring operations abstraction, and the DAMOS engine
+- [mm/damon/](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/damon) — full DAMON implementation: core sampling loop, virtual and physical address ops, sysfs interface, and built-in scheme modules
+
+### LWN articles
+
+- [DAMON: Data Access MONitor](https://lwn.net/Articles/870594/) — overview of DAMON's design and its introduction to the mainline in Linux 5.15 (2021)
+- [DAMON-based proactive reclaim](https://lwn.net/Articles/863753/) — how `DAMON_RECLAIM` was developed and evaluated against `kswapd`-only reclaim
+
+### Related docs
+
+- [reclaim.md](reclaim.md) — page reclaim; DAMON_RECLAIM targets cold pages identified by DAMON rather than relying solely on LRU age
+- [psi.md](psi.md) — pressure stall information; DAMON_RECLAIM can auto-tune its quota using PSI memory pressure as feedback
+- [mglru.md](mglru.md) — Multi-Generational LRU; complements DAMON at page granularity for reclaim ordering within the LRU lists

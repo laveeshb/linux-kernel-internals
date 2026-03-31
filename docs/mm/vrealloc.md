@@ -162,3 +162,14 @@ virtme-ng --append 'test_vmalloc.run_test_mask=4096'
 
 ### Related
 - [vmalloc](vmalloc.md) - Parent allocator
+
+## Further reading
+
+- [vmalloc.md](vmalloc.md) — The parent allocator; covers vmap_area RBTree, lazy TLB flushing, and huge-page backing
+- [slab.md](slab.md) — `krealloc()` is the analogous resize primitive for slab/kmalloc allocations
+- [kasan.md](kasan.md) — KASAN poisoning interactions that caused the v6.12 bug fixed by [d699440f58ce](https://git.kernel.org/linus/d699440f58ce)
+- [mm/vmalloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmalloc.c) — `vrealloc()` implementation; search for `vrealloc` and `vm_struct::requested_size`
+- [lib/test_vmalloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/test_vmalloc.c) — `vrealloc_shrink_test` (test mask id 4096) exercises grow, shrink, and in-place reuse paths
+- [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3) — Initial `vrealloc()` implementation by Danilo Krummrich in v6.12
+- [a0309faf1cb0](https://git.kernel.org/linus/a0309faf1cb0) — Kees Cook's v6.13 addition of `vm_struct::requested_size` enabling in-place growing
+- [e64f42036ef4](https://git.kernel.org/linus/e64f42036ef4) — Shrink optimization that actually frees physical pages on size reduction
