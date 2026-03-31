@@ -228,7 +228,7 @@ cat /sys/bus/pci/devices/0000:03:00.0/msi_irqs/
 
 ## Further reading
 
-- [PCI Drivers](pci-driver.md) — PCIe driver basics including MSI setup
+- [PCI Drivers](../drivers/pci-driver.md) — PCIe driver basics including MSI setup
 - [IRQ Affinity](../interrupts/irq-affinity.md) — configuring IRQ CPU affinity
 - [NVMe Driver](../block/nvme.md) — uses one MSI-X vector per queue
 - [IRQ Descriptor](../interrupts/irq-desc.md) — struct irq_desc and irq_chip

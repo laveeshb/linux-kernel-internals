@@ -264,8 +264,8 @@ kprobe:setup_net
 
 ## Further reading
 
-- [Container Isolation](container-isolation.md) — namespaces in containers
-- [Namespaces](namespaces.md) — all Linux namespaces overview
+- [Container Isolation](../cgroups/container-isolation.md) — namespaces in containers
+- [Namespaces](../cgroups/namespaces.md) — all Linux namespaces overview
 - [Container Networking](container-networking.md) — veth, bridge, overlay
 - [Netfilter](netfilter.md) — per-namespace iptables
 - [sk_buff](sk-buff.md) — network buffers tagged with namespace
