@@ -127,13 +127,12 @@ struct module {
     enum module_state state;       /* MODULE_STATE_LIVE/COMING/GOING/UNFORMED */
     struct list_head  list;        /* linked into modules list */
     char              name[MODULE_NAME_LEN];
-    const char       *srcversion;  /* source hash for module signing */
 
     struct module_kobject mkobj;   /* /sys/module/name/ */
     struct module_attribute *modinfo_attrs;
 
     const char       *version;
-    const char       *srcversion;
+    const char       *srcversion;  /* source hash */
     struct kobject   *holders_dir; /* /sys/module/name/holders/ */
 
     /* Exported symbols: */
