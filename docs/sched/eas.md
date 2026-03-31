@@ -4,7 +4,7 @@
 
 ## Motivation
 
-On ARM big.LITTLE and Intel hybrid (P+E core) CPUs, different cores have different performance *and* energy characteristics:
+On ARM big.LITTLE and Intel hybrid (P+E core) CPUs, different cores have different performance *and* energy characteristics. EAS was originally merged in Linux 5.0 for ARM big.LITTLE by Quentin Perret (ARM) — [`732cd75b8c92`](https://git.kernel.org/linus/732cd75b8c920d3727e69957b14faa7c2d7c3b75) ([patch series](https://lore.kernel.org/lkml/20181203095628.11858-1-quentin.perret@arm.com/), [LWN](https://lwn.net/Articles/772475/)). Intel hybrid (P+E core) support was added in Linux 6.16 by Rafael J. Wysocki — [`7b010f9b9061`](https://git.kernel.org/linus/7b010f9b906107ae4e5ac626329ab818b3f0a6b6).
 
 ```
 ARM big.LITTLE:

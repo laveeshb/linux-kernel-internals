@@ -143,7 +143,7 @@ The network task has an early deadline (small requested slice) and is eligible (
 
 ## Time slice and sched_base_slice_ns
 
-When EEVDF was merged in 6.6, the old `sched_latency_ns` / `sched_min_granularity_ns` tunables were deprecated in favor of `sched_base_slice_ns`; the sysctls still exist but `sched_base_slice_ns` is now the primary knob. The base time slice is now controlled by a single knob:
+When EEVDF was merged in 6.6, the old `sched_latency_ns` / `sched_min_granularity_ns` tunables were deprecated in favor of `sched_base_slice_ns` ([`e4ec3318a17f`](https://git.kernel.org/linus/e4ec3318a17f5dcf11bc23b2d2c1da4c1c5bb507), Peter Zijlstra); the sysctls still exist but `sched_base_slice_ns` is now the primary knob. The base time slice is now controlled by a single knob:
 
 ```bash
 # Base time slice (default: 3ms = 3000000ns)

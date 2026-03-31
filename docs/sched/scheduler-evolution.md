@@ -18,7 +18,7 @@ No scheduler solves all four perfectly. Each generation of Linux scheduler made 
 
 ## The original scheduler (1991–2001)
 
-Linux 1.0 used a simple O(n) scheduler: to pick the next task, it scanned every runnable task and picked the one with the highest "goodness" score.
+Linux 1.0 used a simple O(n) scheduler: to pick the next task, it scanned every runnable task and picked the one with the highest "goodness" score. (O(n) means the time to pick a task grows linearly with the number of runnable tasks — 100 tasks takes ~100× longer than 1 task.)
 
 This worked fine with a handful of processes. With hundreds, it didn't — every scheduling decision took time proportional to the number of runnable tasks. The failings are described in Ingo Molnár's own O(1) announcement: [LWN, January 2002](https://lwn.net/2002/0110/a/scheduler.php3).
 
