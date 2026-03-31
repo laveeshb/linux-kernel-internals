@@ -4,7 +4,7 @@
 
 ## NVMe overview
 
-NVMe (Non-Volatile Memory Express) is the protocol for PCIe-attached SSDs. It's designed for low latency and high parallelism:
+NVMe (Non-Volatile Memory Express) is the protocol for PCIe-attached SSDs. The NVMe 1.0 specification was ratified in March 2011; the Linux kernel driver first appeared in Linux 3.3 (March 2012), written by Matthew Wilcox (Intel) — [`b60503ba432b`](https://git.kernel.org/linus/b60503ba432b16fc84442a84e29a7aad2c0c363d). It's designed for low latency and high parallelism:
 
 ```
 CPU → PCIe bus → NVMe controller → NAND flash

@@ -169,7 +169,7 @@ The problem with using a counting semaphore as a mutex: because `up()` can be ca
 - Debugging tools that check "is the lock held when the task exits?"
 - Static analysis of lock ordering
 
-Ingo Molnár introduced `struct mutex` in Linux 2.6.16 (2006) with explicit single-owner semantics. Mutexes are semantically stricter than semaphores, which enables all the above. Kernel code was gradually migrated from `struct semaphore` to `struct mutex` over the following years. New code should always use `struct mutex` unless a counting semaphore is genuinely needed.
+Ingo Molnár introduced `struct mutex` in Linux 2.6.16 (2006) with explicit single-owner semantics — [`6053ee3b32e3`](https://git.kernel.org/linus/6053ee3b32e3437e8c1e72687850f436e779bd49), announced at [LWN](https://lwn.net/Articles/164802/). Mutexes are semantically stricter than semaphores, which enables all the above. Kernel code was gradually migrated from `struct semaphore` to `struct mutex` over the following years. New code should always use `struct mutex` unless a counting semaphore is genuinely needed.
 
 ### The Big Kernel Lock (BKL)
 
@@ -181,7 +181,7 @@ Subsystem by subsystem, developers replaced BKL sections with proper per-subsyst
 - VFS: converted ~2004–2007 (big_kernel_lock → i_mutex, etc.)
 - TTY layer: converted ~2009
 - Remaining network drivers, sound: converted ~2011–2013
-- BKL removed entirely in Linux 3.19 (2015)
+- BKL removed entirely in Linux 2.6.39 (May 2011) — [`4ba8216cd905`](https://git.kernel.org/linus/4ba8216cd90560bc402f52076f64d8546e8aefcb) by Arnd Bergmann ("BKL: That's all, folks") — [LWN background](https://lwn.net/Articles/384855/)
 
 ### PREEMPT_RT and rt_mutex
 

@@ -29,7 +29,7 @@ Process → syscall instruction
 
 ### The original seccomp (Linux 2.6.12, 2005)
 
-Andrea Arcangeli introduced seccomp to address a specific threat: untrusted code running in a computational sandbox (e.g., a commercial "safe browsing" or grid computing service). The design was maximally restrictive: once a process called `prctl(PR_SET_SECCOMP, SECCOMP_MODE_STRICT)`, it could only use four syscalls: `read`, `write`, `exit`, and `sigreturn`. Any other syscall killed it with SIGKILL.
+Andrea Arcangeli introduced seccomp — [`d949d0ec9c60`](https://git.kernel.org/linus/d949d0ec9c601f2b148bed3cdb5f87c052968554) — to address a specific threat: untrusted code running in a computational sandbox (e.g., a commercial "safe browsing" or grid computing service). The design was maximally restrictive: once a process called `prctl(PR_SET_SECCOMP, SECCOMP_MODE_STRICT)`, it could only use four syscalls: `read`, `write`, `exit`, and `sigreturn`. Any other syscall killed it with SIGKILL.
 
 This was safe but completely unusable for real applications. An application that needs to open files, allocate memory, or interact with the network couldn't use strict mode at all.
 
@@ -39,13 +39,13 @@ The limitation was policy expression. "Allow only `read` and `write`" is simple.
 
 ### seccomp-BPF (Linux 3.5, 2012)
 
-Will Drewry (Google Chrome team) wrote the seccomp-BPF extension, driven by Chrome's sandbox requirements. Chrome needed to isolate its renderer process from the kernel — allow only the syscalls the renderer legitimately needs, with argument filtering to prevent abuse even of allowed syscalls.
+Will Drewry (Google Chrome team) wrote the seccomp-BPF extension — [`e2cfabdfd075`](https://git.kernel.org/linus/e2cfabdfd075648216f99c2c03821cf3f47c1727), [LWN](https://lwn.net/Articles/475043/) — driven by Chrome's sandbox requirements. Chrome needed to isolate its renderer process from the kernel — allow only the syscalls the renderer legitimately needs, with argument filtering to prevent abuse even of allowed syscalls.
 
 The key insight: Classic BPF (the existing socket filter VM) was already a general-purpose policy language for inspecting kernel data. `struct seccomp_data` — the syscall number plus six arguments — is just a 64-byte struct. A cBPF program can inspect any field of that struct and return ALLOW or DENY.
 
 Instead of building a new policy language, seccomp-BPF reused cBPF as-is. The kernel runs the BPF program on every syscall entry; the program returns an action code. This required almost no new kernel machinery — the BPF interpreter/JIT was already there.
 
-Chrome shipped with seccomp-BPF in Chrome 23 (2012), becoming the first major application to sandbox itself this way. systemd, Docker, Firefox, and Android all adopted seccomp-BPF filters. Android's `SECCOMP_RET_USER_NOTIF` extension (Linux 5.0, 2019) allowed supervisors to intercept and handle syscalls on behalf of sandboxed processes, enabling user-namespace container emulation without root.
+Chrome shipped with seccomp-BPF in Chrome 23 (2012), becoming the first major application to sandbox itself this way. systemd, Docker, Firefox, and Android all adopted seccomp-BPF filters. The `SECCOMP_RET_USER_NOTIF` extension (Linux 5.0, 2019 — [`6a21cc50f0c7`](https://git.kernel.org/linus/6a21cc50f0c7f87dae5259f6cfefe024412313f6) by Tycho Andersen) allowed supervisors to intercept and handle syscalls on behalf of sandboxed processes, enabling user-namespace container emulation without root.
 
 ## Classic (strict) mode
 

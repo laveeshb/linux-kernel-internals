@@ -6,9 +6,9 @@
 
 Before futexes, every POSIX mutex operation went through the kernel. `pthread_mutex_lock()` called `sem_wait()` or a similar syscall; `pthread_mutex_unlock()` called `sem_post()`. A syscall costs ~100–300 ns on modern hardware. A program that holds fine-grained mutexes for short durations (a hash table lock held for a few cache accesses, for example) could spend more time in the kernel than doing actual work.
 
-Ulrich Drepper (glibc), Ingo Molnár, and Rusty Russell designed futexes in 2002–2003 to eliminate this overhead. The key observation: **locking is only expensive when there's contention**. When no other thread is waiting, the entire lock/unlock operation can be two atomic instructions in userspace. The kernel only needs to be called to park and unpark threads.
+Hubertus Franke (IBM), Rusty Russell, and Matthew Kirkwood designed futexes in 2002 to eliminate this overhead — presented at the Ottawa Linux Symposium 2002 in ["Fuss, Futexes and Furwocks: Fast Userlevel Locking in Linux"](https://www.kernel.org/doc/ols/2002/ols2002-pages-479-495.pdf). (Ulrich Drepper later designed glibc's `pthread_mutex_t` *on top of* futexes; Ingo Molnár contributed early race-condition fixes.) The key observation: **locking is only expensive when there's contention**. When no other thread is waiting, the entire lock/unlock operation can be two atomic instructions in userspace. The kernel only needs to be called to park and unpark threads.
 
-futex(2) entered Linux 2.6.0 (December 2003). Today, glibc's `pthread_mutex_t`, `pthread_cond_t`, `pthread_rwlock_t`, `sem_t`, and C++ `std::mutex` are all implemented on top of futexes.
+futex(2) entered Linux 2.6.0 (December 2003) — see [`man 2 futex`](https://www.man7.org/linux/man-pages/man2/futex.2.html). Today, glibc's `pthread_mutex_t`, `pthread_cond_t`, `pthread_rwlock_t`, `sem_t`, and C++ `std::mutex` are all implemented on top of futexes.
 
 ## What is a futex?
 
@@ -211,7 +211,7 @@ void pi_mutex_lock(int *uaddr)
 
 The naive implementation of `pthread_cond_broadcast` is `FUTEX_WAKE` with a large count — wake all waiters. The problem: all N waiters wake up simultaneously, all try to re-acquire the associated mutex, and N-1 of them immediately go back to sleep. This is a **thundering herd**.
 
-`FUTEX_CMP_REQUEUE` (added in Linux 2.6.7, 2004) moves sleeping threads from the condvar queue to the mutex queue *without waking them*. One waiter is woken (to acquire the mutex), and the rest are requeued. When the first waiter releases the mutex, the next requeued waiter wakes up, and so on. N waiters are processed sequentially rather than all competing at once.
+`FUTEX_CMP_REQUEUE` (added in Linux 2.6.7, 2004 — [`man 2 futex`](https://www.man7.org/linux/man-pages/man2/futex.2.html)) moves sleeping threads from the condvar queue to the mutex queue *without waking them*. One waiter is woken (to acquire the mutex), and the rest are requeued. When the first waiter releases the mutex, the next requeued waiter wakes up, and so on. N waiters are processed sequentially rather than all competing at once.
 
 ## Further reading
 

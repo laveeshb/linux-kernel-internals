@@ -38,7 +38,7 @@ echo none > /sys/block/nvme0n1/queue/scheduler
 
 ### mq-deadline
 
-**Default for most block devices.** Prevents request starvation by giving each request a deadline. Uses two separate queues: read and write.
+**Default for most block devices.** Prevents request starvation by giving each request a deadline. Uses two separate queues: read and write. Introduced in Linux 4.11 by Jens Axboe — [`945ffb60c11d`](https://git.kernel.org/linus/945ffb60c11dfb228130f3f2bdde961cecb76671).
 
 Algorithm:
 1. Requests are sorted in an elevator (rb-tree sorted by sector)
@@ -75,7 +75,7 @@ cat /sys/block/sda/queue/iosched/fifo_batch  # default 16
 
 ### BFQ (Budget Fair Queueing)
 
-**Best for desktop/interactive workloads.** Provides proportional-share I/O scheduling with a focus on low latency for interactive applications (browser, desktop UI) even under heavy background I/O.
+**Best for desktop/interactive workloads.** Introduced in Linux 4.12 by Paolo Valente — [`aee69d78dec0`](https://git.kernel.org/linus/aee69d78dec0ffdf82e35d57c626e80dddc314d5), [LWN](https://lwn.net/Articles/720675/). Provides proportional-share I/O scheduling with a focus on low latency for interactive applications (browser, desktop UI) even under heavy background I/O.
 
 BFQ assigns each process or group a **budget** of sectors to serve. When the budget is exhausted, the scheduler moves to the next process. Budget is dynamically sized based on workload characteristics.
 
@@ -98,7 +98,7 @@ ionice -c 3 rsync source/ dest/         # idle class
 
 ### kyber
 
-**For multi-queue, low-latency devices (NVMe, SSDs).** Uses per-operation-type queues (read, write, discard) with token-based latency targeting.
+**For multi-queue, low-latency devices (NVMe, SSDs).** Introduced in Linux 4.12 by Omar Sandoval — [`00e043936e9a`](https://git.kernel.org/linus/00e043936e9a1c274c29366c7ecd9e17c79418e6), [LWN](https://lwn.net/Articles/720675/). Uses per-operation-type queues (read, write, discard) with token-based latency targeting.
 
 Rather than reordering, kyber:
 - Limits in-flight requests per category to hit target latencies

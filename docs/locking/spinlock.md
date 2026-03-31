@@ -111,7 +111,7 @@ If the lock is only used within a single IRQ handler (or only in process context
 
 ## How it works: queued spinlocks
 
-Modern x86 uses **queued spinlocks** (MCS-based, introduced in Linux 4.2). Instead of all waiters spinning on the same variable (causing cache line bouncing), each CPU spins on its own per-CPU node:
+Modern x86 uses **queued spinlocks** (MCS-based, introduced in Linux 4.2 by Waiman Long — [`a33fda35e3a7`](https://git.kernel.org/linus/a33fda35e3a7655fb7df756ed67822afb5ed5e8d), [LWN](https://lwn.net/Articles/590243/)). Instead of all waiters spinning on the same variable (causing cache line bouncing), each CPU spins on its own per-CPU node:
 
 ```
 Lock structure:
