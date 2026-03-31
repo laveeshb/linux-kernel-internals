@@ -654,7 +654,7 @@ DAMON and Multi-Generational LRU (MGLRU) both track memory access patterns, but 
 |---|---|---|
 | **Granularity** | `damon_region` (pages to megabytes, adaptively sized) | Individual page (folio) generation |
 | **Mechanism** | Samples a random address per region per interval | Walks page tables, updates folio generations |
-| **Output** | `nr_accesses`, `age` per region | Generation number per folio (0=youngest) |
+| **Output** | `nr_accesses`, `age` per region | Generation number per folio (0=oldest) |
 | **Actionable via** | DAMOS schemes (policy-agnostic) | kswapd generation-based eviction |
 | **Overhead** | Configurable via intervals; sub-1% typical | Amortized across page table walks |
 | **Use case** | Custom policies, tiering, prefetch, working set sizing | General-purpose reclaim ordering |

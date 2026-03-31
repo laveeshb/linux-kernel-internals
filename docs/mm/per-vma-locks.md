@@ -34,10 +34,10 @@ The per-`mm_struct` counterpart is:
 
 ```c
 /* In mm_struct */
-seqcount_t mm_lock_seq;        /* bumped every time mmap_lock is write-locked */
+int mm_lock_seq;               /* bumped every time mmap_lock is write-locked */
 ```
 
-A VMA is considered **unlocked** when `vma->vm_lock_seq != mm->mm_lock_seq.sequence`. Whenever the mm is write-locked (e.g. for `mmap()`), `mm_lock_seq` is incremented, which invalidates all existing per-VMA read locks simultaneously — without touching each VMA.
+A VMA is considered **unlocked** when `vma->vm_lock_seq != mm->mm_lock_seq`. Whenever the mm is write-locked (e.g. for `mmap()`), `mm_lock_seq` is incremented, which invalidates all existing per-VMA read locks simultaneously — without touching each VMA.
 
 The `vm_refcnt` field encodes the reader count plus a special `VM_REFCNT_EXCLUDE_READERS_FLAG` bit used during write-locking and VMA detach. The detailed state machine is documented in the `vm_area_struct` definition in `include/linux/mm_types.h`.
 
@@ -48,7 +48,7 @@ The `vm_refcnt` field encodes the reader count plus a special `VM_REFCNT_EXCLUDE
 
 VMA lookups during the fast fault path use the maple tree (`mm->mm_mt`, type `struct maple_tree`) under RCU protection. The maple tree is an RCU-safe B-tree that stores VMAs keyed by address range.
 
-`lock_vma_under_rcu()` in `mm/mmap_lock.c` is the entry point:
+`lock_vma_under_rcu()` in `mm/memory.c` is the entry point:
 
 ```c
 struct vm_area_struct *lock_vma_under_rcu(struct mm_struct *mm,
@@ -62,11 +62,8 @@ retry:
     vma = mas_walk(&mas);           /* RCU-protected maple tree walk */
     if (!vma) { ... goto inval; }
 
-    vma = vma_start_read(mm, vma);  /* attempt per-VMA read lock */
-    if (IS_ERR_OR_NULL(vma)) {
-        if (PTR_ERR(vma) == -EAGAIN) goto retry;  /* VMA was detached, retry */
-        goto inval;
-    }
+    if (!vma_start_read(vma))       /* attempt per-VMA read lock */
+        goto inval;                 /* lock failed (VMA changed), fall back */
 
     rcu_read_unlock();
 
@@ -80,7 +77,7 @@ retry:
 }
 ```
 
-`vma_start_read()` checks `vma->vm_lock_seq == mm->mm_lock_seq.sequence`. If they match the VMA is currently write-locked and the function returns NULL (falls back to mmap_lock). If they don't match it increments `vm_refcnt` using an acquire fence and re-checks, establishing the read lock.
+`vma_start_read()` checks `vma->vm_lock_seq == mm->mm_lock_seq`. If they match the VMA is currently write-locked and the function returns NULL (falls back to mmap_lock). If they don't match it increments `vm_refcnt` using an acquire fence and re-checks, establishing the read lock.
 
 ## The fault path
 
@@ -116,7 +113,7 @@ When a VMA must be modified (e.g. during `mprotect()`, split/merge during `mmap(
 vma_start_write(vma);
 ```
 
-`vma_start_write()` (in `mm/mmap_lock.c`) requires that `mmap_lock` is already held for write. It sets `vma->vm_lock_seq = mm->mm_lock_seq.sequence`, which makes `vma_start_read()` fail for this VMA until the write-lock is released and `mm_lock_seq` is bumped again.
+`vma_start_write()` (in `mm/mmap_lock.c`) requires that `mmap_lock` is already held for write. It sets `vma->vm_lock_seq = mm->mm_lock_seq`, which makes `vma_start_read()` fail for this VMA until the write-lock is released and `mm_lock_seq` is bumped again.
 
 The protocol ensures correctness: any operation that modifies a VMA must first hold `mmap_lock` write, then call `vma_start_write()`. Fault handlers that hold a per-VMA read lock are thereby excluded from seeing partial modifications.
 

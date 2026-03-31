@@ -328,7 +328,7 @@ When all reclaim efforts fail, the OOM (Out Of Memory) killer terminates a proce
 static struct page *__alloc_pages_may_oom(...)
 {
     // Check if we should invoke OOM killer
-    if (should_oom_retry(...))
+    if (should_reclaim_retry(...))
         return NULL;  // Keep retrying
 
     // Invoke OOM killer
@@ -750,9 +750,9 @@ Tetsuo Handa, a persistent kernel debugger, [demonstrated workloads](https://lwn
 The problem: a process chosen as OOM victim might be holding `mmap_sem` (now `mmap_lock`) for write - perhaps in the middle of `mmap()` or `munmap()`. When the process receives `SIGKILL`:
 
 1. The signal is pending, but the process is in uninterruptible sleep (e.g., waiting for disk I/O)
-2. When it finally wakes, `exit_mmap()` tries to tear down its address space
-3. But `exit_mmap()` needs `mmap_sem` - which the dying process already holds
-4. Classic self-deadlock
+2. Because it cannot be woken by SIGKILL while in uninterruptible sleep, the process is stuck and never calls `exit_mmap()` to free its memory
+3. Other allocators waiting for the OOM victim to release memory are also stuck
+4. The system hangs — not a deadlock within one task, but a livelock where no progress is possible
 
 ```mermaid
 flowchart TD
@@ -792,7 +792,7 @@ The reaper is a dedicated kernel thread that:
 
 #### Additional safeguards (v4.8)
 
-Hocko added `MMF_OOM_NOT_REAPABLE` flag: if the reaper can't acquire `mmap_sem` after multiple attempts, it marks the mm as "reaped" anyway, allowing the OOM killer to select another victim.
+Hocko added `MMF_OOM_SKIP` flag: if the reaper can't acquire `mmap_sem` after multiple attempts, it marks the mm as "reaped" anyway, allowing the OOM killer to select another victim.
 
 **Commit**: [11a410d516e8](https://git.kernel.org/linus/11a410d516e8) ("mm, oom_reaper: do not attempt to reap a task more than twice")
 

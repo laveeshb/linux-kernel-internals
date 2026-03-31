@@ -50,7 +50,7 @@ swapon --show
 Regular file used as swap:
 
 ```bash
-# Create a 4GB swap file (modern method)
+# Create a 4GB swap file (works on ext4 and similar filesystems)
 fallocate -l 4G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
@@ -59,6 +59,8 @@ swapon /swapfile
 # Make permanent in /etc/fstab:
 # /swapfile none swap sw 0 0
 ```
+
+**Note:** `fallocate` creates swap files reliably on ext4. On XFS and some other filesystems it may create extents the kernel cannot use for swap; use `dd if=/dev/zero of=/swapfile bs=1M count=4096` for a universally safe alternative.
 
 **Note for btrfs (COW filesystems):** The `+C` (no-copy-on-write) attribute [must be set before the file has data](https://btrfs.readthedocs.io/en/latest/Swapfile.html) (see [`chattr(1)`](https://man7.org/linux/man-pages/man1/chattr.1.html)):
 

@@ -310,14 +310,6 @@ Fires when the OOM killer selects a process to kill.
 | Field | Type | Description |
 |-------|------|-------------|
 | `pid` | `int` | PID of the victim process |
-| `uid` | `uid_t` | UID of the victim |
-| `comm` | `char[]` | Process name |
-| `oom_score_adj` | `short` | The victim's oom_score_adj |
-| `total_vm` | `unsigned long` | Victim's total virtual memory (kB) |
-| `anon_rss` | `unsigned long` | Anonymous RSS (kB) |
-| `file_rss` | `unsigned long` | File-backed RSS (kB) |
-| `shmem_rss` | `unsigned long` | Shared memory RSS (kB) |
-| `pgtables` | `unsigned long` | Page table memory (kB) |
 
 **Diagnostic use**: This is the single most useful OOM tracepoint for production monitoring. Subscribe to `mark_victim` to get a structured event every time the OOM killer fires, including which process was selected and why.
 

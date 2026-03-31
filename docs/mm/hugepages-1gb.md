@@ -310,7 +310,7 @@ grep -A5 "KernelPageSize" /proc/<pid>/smaps | grep -B1 "1048576"
 | File | Description |
 |------|-------------|
 | [`mm/hugetlb.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/hugetlb.c) | hugetlb pool management: `hugepagesz_setup`, `default_hugepagesz_setup`, `alloc_gigantic_frozen_folio`, `hugetlb_gigantic_pages_alloc_boot` |
-| [`include/linux/hugetlb.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hugetlb.h) | `hstate_is_gigantic()`, `order_is_gigantic()`, `hugepage_movable_supported()` |
+| [`include/linux/hugetlb.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hugetlb.h) | `hstate_is_gigantic()`, `hugepage_migration_supported()` |
 | [`arch/x86/mm/hugetlbpage.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/hugetlbpage.c) | `arch_hugetlb_valid_size()` — gates 1GB support on `X86_FEATURE_GBPAGES`; `gigantic_pages_init()` — registers the PUD-level hstate when `CONFIG_CONTIG_ALLOC` is set |
 | [`arch/x86/include/asm/cpufeatures.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/cpufeatures.h) | `X86_FEATURE_GBPAGES` (`"pdpe1gb"`) — CPU capability flag |
 | [`include/uapi/linux/mman.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/mman.h) | `MAP_HUGE_1GB` — mmap flag for 1GB pages |

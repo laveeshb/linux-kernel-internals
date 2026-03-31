@@ -226,7 +226,7 @@ void __init init_mem_mapping(void)
 }
 ```
 
-The choice between top-down and bottom-up depends on `memblock_bottom_up()`, which reflects how memblock is configured to allocate page table memory itself. KASLR forces bottom-up mode so page table allocations end up above the kernel image.
+The choice between top-down and bottom-up depends on `memblock_bottom_up()`, which reflects how memblock is configured to allocate page table memory itself. KASLR forces bottom-up mode so page table allocations come from low physical addresses, avoiding collisions with the randomly-placed kernel image.
 
 The inner workhorse is `init_range_memory_mapping()`, which calls `init_memory_mapping()` in chunks. `init_memory_mapping()` walks down the page table hierarchy — allocating PUD, PMD, and PTE tables as needed from memblock — and uses large pages (2 MB PMD entries or 1 GB PUD entries) wherever the physical range and alignment permit.
 
@@ -391,7 +391,7 @@ After `x86_init.paging.pagetable_init()` returns, `setup_arch()` continues with 
 
 - Sets `after_bootmem = 1`, marking the point of no return for early-boot allocations
 - Calls `register_page_bootmem_info()` to register memmap pages for memory hotplug tracking
-- Calls `preallocate_vmalloc_pages()` to pre-fault vmalloc page table entries for performance
+- Marks `after_bootmem` to end early-boot allocations
 
 ### Permanent vs. Early Tables
 
