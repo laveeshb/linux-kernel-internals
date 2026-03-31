@@ -113,6 +113,8 @@ nav:
       - TLB Optimization: mm/tlb-optimization.md
       - CXL Memory Tiering: mm/cxl-memory-tiering.md
       - Memory Tiering: mm/memory-tiering.md
+      - HMM (Heterogeneous Memory Management): mm/hmm.md
+      - userfaultfd: mm/userfaultfd.md
       - vrealloc: mm/vrealloc.md
     - Memory Cgroups:
       - Container Memory Limits: mm/container-memory-limits.md
@@ -268,6 +270,7 @@ nav:
       - Softirqs: interrupts/softirq.md
       - Tasklets: interrupts/tasklets.md
       - Workqueues: interrupts/workqueues.md
+      - Workqueue Internals (cmwq): interrupts/workqueue-internals.md
       - Timers and hrtimers: interrupts/timers.md
   - VFS:
     - Getting Started: vfs/README.md
@@ -364,6 +367,7 @@ nav:
     - seccomp BPF: security/seccomp.md
     - Linux Audit: security/audit.md
     - Credentials and User Namespaces: security/credentials.md
+    - User Namespaces and uid Mapping: security/user-namespaces.md
     - dm-crypt (Block Encryption): security/dm-crypt.md
     - fscrypt (Per-File Encryption): security/fscrypt.md
     - SELinux: security/selinux.md
@@ -410,3 +414,5 @@ nav:
       - Getting Started: arch/arm64/README.md
       - Exception Model: arch/arm64/exception-model.md
       - Memory Model: arch/arm64/memory-model.md
+    - x86:
+      - Exception and Interrupt Handling: arch/x86/exceptions.md
