@@ -3,15 +3,15 @@
   display: none;
 }
 
-/* Logo in header */
+/* Logo in header — always visible, even in mobile/zoomed layout */
 .md-header__button.md-logo {
-  display: inline-flex;
+  display: inline-flex !important;
   align-items: center;
 }
 
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
-  height: 2.5rem;
+  height: 2rem;
   width: auto;
 }
 
