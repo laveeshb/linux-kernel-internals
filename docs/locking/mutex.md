@@ -157,6 +157,38 @@ Use spinlock when:
   ✓ You need IRQ protection (spin_lock_irqsave)
 ```
 
+## Design history
+
+### Semaphores (pre-2.6.16)
+
+Before `struct mutex` existed, the standard sleeping lock in the kernel was `struct semaphore`. A semaphore has a count — `down()` decrements it and sleeps if the count reaches zero; `up()` increments it and wakes a waiter.
+
+The problem with using a counting semaphore as a mutex: because `up()` can be called by *any* task (not just the one that called `down()`), the kernel couldn't enforce ownership. This ruled out:
+- Detecting recursive locking (which could deadlock)
+- Priority inheritance (who holds the lock? unknown)
+- Debugging tools that check "is the lock held when the task exits?"
+- Static analysis of lock ordering
+
+Ingo Molnár introduced `struct mutex` in Linux 2.6.16 (2006) with explicit single-owner semantics. Mutexes are semantically stricter than semaphores, which enables all the above. Kernel code was gradually migrated from `struct semaphore` to `struct mutex` over the following years. New code should always use `struct mutex` unless a counting semaphore is genuinely needed.
+
+### The Big Kernel Lock (BKL)
+
+The BKL (`lock_kernel()` / `unlock_kernel()`) was a single global recursive spinlock introduced in Linux 2.0 to make the kernel SMP-safe quickly. The approach: wrap large subsystems in one coarse lock rather than converting every data structure to fine-grained locking.
+
+The BKL had unusual properties: it was released automatically on `schedule()` (so the holder could sleep without deadlocking other holders) and it was recursive. These properties made it easy to adopt but hard to remove, because removing it required proving that the protected code was safe without it.
+
+Subsystem by subsystem, developers replaced BKL sections with proper per-subsystem mutexes and spinlocks. The process took over a decade:
+- VFS: converted ~2004–2007 (big_kernel_lock → i_mutex, etc.)
+- TTY layer: converted ~2009
+- Remaining network drivers, sound: converted ~2011–2013
+- BKL removed entirely in Linux 3.19 (2015)
+
+### PREEMPT_RT and rt_mutex
+
+On `CONFIG_PREEMPT_RT` kernels (used in real-time Linux deployments), `spinlock_t` itself is implemented on top of `rt_mutex`. Spinlocks become sleeping locks that can be preempted by higher-priority RT tasks, with full priority inheritance. The priority ceiling is correct even in nested lock scenarios through PI chain walking.
+
+This means: on a PREEMPT_RT system, nearly all kernel locking uses the same priority-inheritance machinery, making priority inversion virtually impossible — at the cost of some throughput compared to the bare-spinlock model.
+
 ## Further reading
 
 - [Spinlock and raw_spinlock](spinlock.md) — The busy-wait alternative

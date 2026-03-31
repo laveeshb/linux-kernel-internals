@@ -140,6 +140,19 @@ blk_finish_plug(&plug);
 
 This is analogous to TCP's Nagle algorithm: batching small operations into larger ones.
 
+## I/O schedulers and the NVMe problem
+
+The `elevator_queue` in `request_queue` is optional. The I/O scheduler sits between bio submission and hardware dispatch, reordering and merging requests. For HDDs this was essential — an elevator scheduler could turn random writes into sequential I/O, doubling throughput by reducing seek time.
+
+NVMe changes the calculus:
+- No seek latency: request order is irrelevant to performance.
+- Hardware does its own internal scheduling across NAND dies.
+- Adding a software scheduler introduces latency (requests wait in the scheduler queue) with zero benefit.
+
+NVMe devices therefore use the `none` scheduler by default. The scheduler infrastructure is still present in `request_queue` for SATA SSDs and HDDs, but it's bypassed entirely on NVMe paths.
+
+The full story of how this led to the blk-mq redesign is in [blk-mq](blk-mq.md).
+
 ## Further reading
 
 - [bio and request structures](bio-request.md) — The I/O descriptor objects

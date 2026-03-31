@@ -2,6 +2,24 @@
 
 > The unified resource control hierarchy
 
+## Why cgroup v2 exists
+
+### Cgroup v1: one hierarchy per controller
+
+Cgroups v1 (Linux 2.6.24, 2008) let each resource controller (`cpu`, `memory`, `blkio`, `cpuset`, etc.) have its own independent hierarchy. You could put process 1234 in `/sys/fs/cgroup/cpu/webserver/` for CPU accounting and `/sys/fs/cgroup/memory/tier-a/` for memory limits — they were completely independent trees.
+
+This sounded flexible but created a fundamental problem: **the controllers had no shared definition of "what group a process belongs to."** The `cpu` controller thought about tasks one way; `memory` thought about them differently; `blkio` had its own view. When systemd or a container runtime wanted to create a coherent "unit" (a container, a service) with CPU *and* memory *and* I/O limits, it had to maintain parallel positions in multiple hierarchies and keep them synchronized manually.
+
+The writeback attribution problem crystallized the issue: when a process writes to a file, the actual I/O to disk happens later from a kernel worker thread (`kworker`). In v1, the `blkio` controller charged this I/O to the `kworker`, not the process that dirtied the page. There was no way to fix this without a unified notion of group membership — the `memory` controller and `blkio` controller needed to agree on which cgroup owns a dirty page.
+
+### Cgroup v2: unified hierarchy
+
+Tejun Heo designed cgroup v2 (merged in Linux 4.5, 2016) around a single tree. All controllers operate on the same hierarchy. A process is in exactly one cgroup, and all controllers apply to that cgroup.
+
+This made proper writeback attribution possible: since both `memory` and `io` controllers share the same hierarchy, a dirty page can be attributed to the correct cgroup even when flushed by a `kworker`.
+
+The "no internal process" rule (a cgroup cannot hold both processes and child cgroups) enforces clean delegation semantics. A container runtime owns a subtree; it can create child cgroups within that subtree. A process in the parent cgroup can't accidentally interfere with the resource accounting of children.
+
 ## Cgroup v1 vs v2
 
 | Feature | v1 | v2 |
