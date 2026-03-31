@@ -54,7 +54,7 @@ const int sched_prio_to_weight[40] = {
 };
 ```
 
-Each step is ~1.25x. A task at nice -1 gets ~25% more CPU than nice 0. At nice -20 vs nice +19, the ratio is 88761/15 ≈ 5917x — nearly a 6000:1 difference.
+Each step is ~1.25x. A task at nice -1 gets ~25% more CPU than nice 0. At nice -20 vs nice +19, the ratio is 88761/15 ≈ 5917x — nearly a 6000:1 difference. The 1.25x ratio was chosen so that a `nice +1` change causes a ~10% throughput difference — see the [table definition commit](https://git.kernel.org/linus/20f9cd8e0e3b2c11b3fb576a88e8e5aef3c91a13) and comments in `kernel/sched/core.c`.
 
 ## Data structures
 
@@ -154,7 +154,7 @@ static bool dequeue_entity(struct cfs_rq *cfs_rq,
 
 ### pick_next_entity()
 
-Selects the next task to run — since 6.6, this delegates to EEVDF:
+Selects the next task to run — since 6.6 ([`147f3efaa241`](https://git.kernel.org/linus/147f3efaa24182a21706bca15eab2f3f4630b5fe), [`5e963f2bd465`](https://git.kernel.org/linus/5e963f2bd4654a202a8a05aa3a86cb0300b10e6c)), this delegates to EEVDF:
 
 ```c
 // kernel/sched/fair.c

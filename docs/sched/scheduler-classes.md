@@ -8,17 +8,29 @@
 
 The Linux 2.4 scheduler and the early 2.6 O(1) scheduler (Ingo Molnár, 2003) handled real-time and normal tasks in one function with conditional logic: if the task has a real-time priority, put it in a priority-indexed bitmap; otherwise, calculate a dynamic priority from the nice value and recent sleep/run history.
 
+**O(1) scheduler announcement**: [LWN, January 2002](https://lwn.net/2002/0110/a/scheduler.php3) — Ingo Molnár, shipped in Linux 2.6.0 (December 2003).
+
 This worked but coupled fundamentally different scheduling algorithms into one blob. SCHED_FIFO and SCHED_RR have simple rules: run until block or preemption by higher-priority RT. Normal tasks need complex fairness heuristics. The more the scheduler tried to handle both, the harder it was to reason about either.
 
 ### CFS and the vtable design (Linux 2.6.23, 2007)
 
 When Ingo Molnár replaced the O(1) scheduler with CFS, he also introduced `struct sched_class` as an abstraction layer. The motivation was explicit: CFS uses a red-black tree ordered by virtual runtime — a data structure that makes no sense for RT tasks. RT tasks use a priority bitmap — a data structure irrelevant to fair scheduling. The two algorithms needed different data structures, different enqueue/dequeue logic, and different pick-next semantics.
 
+**CFS announcement**: [LKML, April 13 2007](https://lkml.org/lkml/2007/4/13/180) — Ingo Molnár, "[Announce] [patch] Modular Scheduler Core and Completely Fair Scheduler [CFS]"
+
+**CFS merge commits** (July 9, 2007, Ingo Molnár):
+- [`bf0f6f24a1ec`](https://git.kernel.org/linus/bf0f6f24a1ece8988b243aefe84ee613099a9245) — `sched: cfs core, kernel/sched_fair.c`
+- [`dd41f596cda0`](https://git.kernel.org/linus/dd41f596cda0d7d6e4a8b139ffdfabcefdd46528) — `sched: cfs core code` (wires `struct sched_class` into the core scheduler)
+
 Rather than weaving these together with `if (rt_task(p)) { ... } else { ... }` throughout the scheduler, a vtable gives each algorithm its own clean implementation. The core scheduler loop becomes simple: iterate classes from highest to lowest priority, ask each one `pick_next_task()`, return the first non-NULL result.
 
 This design paid dividends immediately. `SCHED_DEADLINE` (EDF scheduling with bandwidth accounting, merged in 3.14) was added as a new class by implementing the `sched_class` interface. Without the vtable, adding a third scheduling algorithm into the existing code would have been invasive. With it, `kernel/sched/deadline.c` is self-contained.
 
+**SCHED_DEADLINE merge** ([patch series v9, LKML Nov 2013](https://lore.kernel.org/all/1360608656-7969-1-git-send-email-juri.lelli@gmail.com/) — Juri Lelli, Dario Faggioli et al.): [`aab03e05e8f7`](https://git.kernel.org/linus/aab03e05e8f7e26f51dee792beddcb5cca9215a5) — `sched/deadline: Add SCHED_DEADLINE structures & implementation`, merged into v3.14-rc1 (January 2014).
+
 The `stop` class (for CPU migration threads) shows another benefit: it needs to preempt *everything* — including `SCHED_FIFO` priority-99 tasks. With the class hierarchy, this is a matter of placing `stop` first in the iteration order. There is no special-case code in the core scheduler.
+
+**stop class commit**: [`34f971f6f798`](https://git.kernel.org/linus/34f971f6f7988be4d014eec3e3526bee6d007ffa) — `sched: Create special class for stop/migrate work` (Peter Zijlstra, merged into v2.6.37, October 2010).
 
 ### The fast path optimization
 
@@ -117,7 +129,7 @@ Classes are ordered in the section from highest to lowest priority. The `for_eac
 
 ### 1. stop (`stop_sched_class`)
 
-**File**: `kernel/sched/stop_task.c`
+**File**: `kernel/sched/stop_task.c` | **Introduced**: [`34f971f6f798`](https://git.kernel.org/linus/34f971f6f7988be4d014eec3e3526bee6d007ffa) (Peter Zijlstra, v2.6.37)
 
 The stop class has the highest priority of all. It's used for per-CPU "stopper" threads that implement CPU migration and hotplug operations.
 
@@ -135,7 +147,7 @@ DEFINE_SCHED_CLASS(stop) = {
 
 ### 2. deadline (`dl_sched_class`)
 
-**File**: `kernel/sched/deadline.c`
+**File**: `kernel/sched/deadline.c` | **Introduced**: [`aab03e05e8f7`](https://git.kernel.org/linus/aab03e05e8f7e26f51dee792beddcb5cca9215a5) (Dario Faggioli, Juri Lelli et al., v3.14)
 
 `SCHED_DEADLINE` implements Constant Bandwidth Server (CBS) scheduling. Each task declares its worst-case execution time (`runtime`) and period. The kernel runs it within that budget and uses an EDF (Earliest Deadline First) red-black tree to select which deadline task runs next.
 

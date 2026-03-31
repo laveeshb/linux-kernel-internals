@@ -18,15 +18,15 @@ No scheduler solves all four perfectly. Each generation of Linux scheduler made 
 
 ## The original scheduler (1991–2001)
 
-Linux 1.0 used a simple O(n) scheduler: to pick the next task, it scanned every runnable task and picked the one with the highest "goodness" score.
+Linux 1.0 used a simple O(n) scheduler: to pick the next task, it scanned every runnable task and picked the one with the highest "goodness" score. (O(n) means the time to pick a task grows linearly with the number of runnable tasks — 100 tasks takes ~100× longer than 1 task.)
 
-This worked fine with a handful of processes. With hundreds, it didn't — every scheduling decision took time proportional to the number of runnable tasks.
+This worked fine with a handful of processes. With hundreds, it didn't — every scheduling decision took time proportional to the number of runnable tasks. The failings are described in Ingo Molnár's own O(1) announcement: [LWN, January 2002](https://lwn.net/2002/0110/a/scheduler.php3).
 
 ---
 
 ## The O(1) scheduler (2.6.0, 2003)
 
-**Author**: Ingo Molnar
+**Author**: Ingo Molnar | **Announcement**: [LWN, January 2002](https://lwn.net/2002/0110/a/scheduler.php3)
 
 Linux 2.6.0 introduced the O(1) scheduler. The key insight: **precompute priorities into fixed-size bitmaps**.
 
@@ -60,13 +60,13 @@ The O(1) scheduler calculated "interactivity" scores to boost interactive tasks 
 - A sleeping task could wake up with an enormous priority boost, starving others
 - The heuristics were opaque — understanding why a task ran (or didn't) required reading hundreds of lines of complex estimation code
 
-Con Kolivas, a Linux contributor and anesthesiologist, spent years writing patches to fix these fairness problems. His work highlighted the fundamental issue: **interactive detection is the wrong approach**. The scheduler should be provably fair, not approximately fair.
+Con Kolivas, a Linux contributor and anesthesiologist, spent years writing patches to fix these fairness problems. His RSDL (Rotating Staircase Deadline) scheduler ([LKML, March 2007](https://lkml.kernel.org/lkml/200703041800.53360.kernel@kolivas.org/), covered by [LWN](https://lwn.net/Articles/224654/)) highlighted the fundamental issue: **interactive detection is the wrong approach**. The scheduler should be provably fair, not approximately fair.
 
 ---
 
 ## CFS: Completely Fair Scheduler (2.6.23, October 2007)
 
-**Author**: Ingo Molnar (inspired by Con Kolivas's work)
+**Author**: Ingo Molnar (inspired by Con Kolivas's work) | **Announcement**: [LKML, April 2007](https://lkml.org/lkml/2007/4/13/180) | [LWN coverage](https://lwn.net/Articles/230574/)
 
 **Commit**: [2bd8e7d04a0a](https://git.kernel.org/linus/2bd8e7d04a0a) (initial CFS merge)
 
@@ -183,11 +183,11 @@ Real-time and latency-sensitive workloads (network I/O, audio, gaming) need a sc
 
 ## EEVDF: Earliest Eligible Virtual Deadline First (6.6, October 2023)
 
-**Author**: Peter Zijlstra (Intel)
+**Author**: Peter Zijlstra (Intel) | **Patch series**: [lore.kernel.org, May 2023](https://lore.kernel.org/lkml/20230531115839.089944915@infradead.org/)
 
-**Commit**: [147f3efaa241](https://git.kernel.org/linus/147f3efaa241) ("sched/fair: Implement an EEVDF-like scheduling algorithm")
+**Commits**: [`147f3efaa241`](https://git.kernel.org/linus/147f3efaa24182a21706bca15eab2f3f4630b5fe) (introduce EEVDF), [`5e963f2bd465`](https://git.kernel.org/linus/5e963f2bd4654a202a8a05aa3a86cb0300b10e6c) (commit to EEVDF unconditionally)
 
-EEVDF is based on a 1995 academic paper by Ion Stoica and Hussein Abdel-Wahab. It adds **virtual deadlines** to the fairness model.
+EEVDF is based on a 1995 academic paper by Ion Stoica and Hussein Abdel-Wahab ([CiteSeerX](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=805acf7726282721504c8f00575d91ebfd750564)). It adds **virtual deadlines** to the fairness model.
 
 ### The key insight
 

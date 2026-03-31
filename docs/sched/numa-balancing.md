@@ -18,7 +18,7 @@ Task running on CPU 2 reading pages on Node 0:
   → every cache miss → remote memory access → 2× latency!
 ```
 
-**Automatic NUMA balancing** (CONFIG_NUMA_BALANCING) detects this situation and migrates pages to the node where they're being used.
+**Automatic NUMA balancing** (CONFIG_NUMA_BALANCING) detects this situation and migrates pages to the node where they're being used. Introduced in Linux 3.13 by Mel Gorman (SUSE) et al. — [`10fc05d0e551`](https://git.kernel.org/linus/10fc05d0e551146ad6feb0ab8902d28a2d3c5624).
 
 ## How it works
 

@@ -12,11 +12,13 @@ EEVDF fixes this by replacing CFS's "minimum vruntime" selection with **"earlies
 
 ## Background
 
-EEVDF is based on the 1995 paper ["Earliest Eligible Virtual Deadline First: A Flexible and Accurate Mechanism for Proportional Share Resource Allocation"](https://dl.acm.org/doi/10.1145/248052.248064) by Ion Stoica and Hussein Abdel-Wahab.
+EEVDF is based on the 1995 technical report ["Earliest Eligible Virtual Deadline First: A Flexible and Accurate Mechanism for Proportional Share Resource Allocation"](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=805acf7726282721504c8f00575d91ebfd750564) by Ion Stoica and Hussein Abdel-Wahab (William & Mary).
 
-It was implemented for Linux by Peter Zijlstra (Intel) and merged in kernel 6.6 (October 2023).
+It was implemented for Linux by Peter Zijlstra (Intel) and merged in kernel 6.6 (October 2023). **Patch series**: [lore.kernel.org, May 2023](https://lore.kernel.org/lkml/20230531115839.089944915@infradead.org/)
 
-**Commit**: [147f3efaa241](https://git.kernel.org/linus/147f3efaa241) ("sched/fair: Implement an EEVDF-like scheduling algorithm")
+**Commits**:
+- [`147f3efaa241`](https://git.kernel.org/linus/147f3efaa24182a21706bca15eab2f3f4630b5fe) — `sched/fair: Implement an EEVDF-like scheduling algorithm`
+- [`5e963f2bd465`](https://git.kernel.org/linus/5e963f2bd4654a202a8a05aa3a86cb0300b10e6c) — `sched/fair: Commit to EEVDF` (makes EEVDF unconditional in `pick_next_entity`)
 
 ## Two concepts: eligibility and virtual deadline
 
@@ -141,7 +143,7 @@ The network task has an early deadline (small requested slice) and is eligible (
 
 ## Time slice and sched_base_slice_ns
 
-When EEVDF was merged in 6.6, the old `sched_latency_ns` / `sched_min_granularity_ns` tunables were deprecated in favor of `sched_base_slice_ns`; the sysctls still exist but `sched_base_slice_ns` is now the primary knob. The base time slice is now controlled by a single knob:
+When EEVDF was merged in 6.6, the old `sched_latency_ns` / `sched_min_granularity_ns` tunables were deprecated in favor of `sched_base_slice_ns` ([`e4ec3318a17f`](https://git.kernel.org/linus/e4ec3318a17f5dcf11bc23b2d2c1da4c1c5bb507), Peter Zijlstra); the sysctls still exist but `sched_base_slice_ns` is now the primary knob. The base time slice is now controlled by a single knob:
 
 ```bash
 # Base time slice (default: 3ms = 3000000ns)
