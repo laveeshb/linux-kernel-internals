@@ -115,6 +115,7 @@ nav:
       - Memory Tiering: mm/memory-tiering.md
       - HMM (Heterogeneous Memory Management): mm/hmm.md
       - userfaultfd: mm/userfaultfd.md
+      - Page Table Walking API: mm/page-walk.md
       - vrealloc: mm/vrealloc.md
     - Memory Cgroups:
       - Container Memory Limits: mm/container-memory-limits.md
@@ -200,6 +201,7 @@ nav:
       - CPU Affinity: sched/cpu-affinity.md
     - Advanced:
       - Load Balancing: sched/load-balancing.md
+      - NUMA Automatic Balancing: sched/numa-balancing.md
       - Energy-Aware Scheduling: sched/eas.md
       - Preemption Model: sched/preemption.md
       - The Scheduling Tick: sched/sched-tick.md
@@ -222,6 +224,7 @@ nav:
     - TCP/IP:
       - TCP Implementation: net/tcp.md
       - TCP Congestion Control: net/tcp-congestion.md
+      - UDP Internals: net/udp.md
       - IP Routing: net/ip-routing.md
     - Filtering:
       - Netfilter Architecture: net/netfilter.md
@@ -234,6 +237,7 @@ nav:
     - Advanced:
       - Container Networking: net/container-networking.md
       - Network Namespaces: net/net-namespaces.md
+      - TUN/TAP Virtual Devices: net/tun-tap.md
       - Kernel TLS (kTLS): net/ktls.md
       - Netlink: net/netlink.md
     - Debugging & Observability:
