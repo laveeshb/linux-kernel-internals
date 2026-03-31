@@ -239,6 +239,7 @@ nav:
       - Container Networking: net/container-networking.md
       - Network Namespaces: net/net-namespaces.md
       - TUN/TAP Virtual Devices: net/tun-tap.md
+      - AF_PACKET Raw Sockets: net/packet-socket.md
       - Kernel TLS (kTLS): net/ktls.md
       - Netlink: net/netlink.md
     - Debugging & Observability:
@@ -413,6 +414,8 @@ nav:
     - Getting Started: crypto/README.md
     - Kernel Crypto API: crypto/crypto-api.md
     - dm-crypt and fscrypt: crypto/encryption.md
+  - Kernel Internals:
+    - printk and Kernel Logging: kernel/printk.md
   - Live Patching:
     - Getting Started: livepatch/README.md
     - Kernel Live Patching: livepatch/klp.md
@@ -420,6 +423,7 @@ nav:
   - Architecture:
     - ARM64:
       - Getting Started: arch/arm64/README.md
+      - Boot Sequence: arch/arm64/boot.md
       - Exception Model: arch/arm64/exception-model.md
       - Memory Model: arch/arm64/memory-model.md
     - x86:
