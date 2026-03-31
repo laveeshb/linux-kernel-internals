@@ -15,6 +15,26 @@ Without THP:                    With THP:
    512 TLB entries needed         1 TLB entry needed
 ```
 
+## From hugetlbfs to THP
+
+### The original huge page interface (hugetlbfs, Linux 2.6)
+
+Hardware huge pages (2MB on x86-64) have been available since the Pentium Pro. Linux exposed them through `hugetlbfs`: a special filesystem where files backed by huge pages could be `mmap()`'d with `MAP_HUGETLB`.
+
+The problem was operational: huge pages had to be reserved at boot time (or via `sysctl vm.nr_hugepages`) from a dedicated pre-allocated pool. Applications needed to use a different `mmap()` flag (`MAP_HUGETLB`) or open a file on `hugetlbfs`. Databases like Oracle and PostgreSQL supported this, but it required administrator intervention to size the pool and developer effort to use the API.
+
+If the pool was too small, applications fell back to 4KB pages. If it was too large, the pre-reserved memory sat idle. And it was entirely opt-in — the thousands of applications that didn't explicitly request huge pages got no benefit, even if their working sets were large enough to benefit dramatically.
+
+### Transparent Huge Pages (Linux 2.6.38, 2011)
+
+Andrea Arcangeli designed THP to deliver huge page performance to applications without any changes. The kernel itself decides when to allocate a 2MB huge page in place of 512 4KB pages, based on alignment, availability, and the `transparent_hugepage` policy.
+
+The key insight: for anonymous memory (heap, stack), the kernel can allocate a 2MB-aligned huge page at fault time if a 2MB-aligned, physically contiguous range is available. The application sees normal virtual memory; the hardware walks the page table one level fewer.
+
+The compaction challenge made THP complex to tune. Physical memory fragments over time — 2MB contiguous ranges become scarce as pages are allocated and freed. The kernel's `khugepaged` daemon scans for small-page regions that could be collapsed into huge pages, and the memory compaction machinery (`MADV_HUGEPAGE`, background compaction, defrag modes) exists to create contiguous ranges. Getting this right without causing latency spikes from compaction stalls took years of refinement.
+
+The `transparent_hugepage=defer` mode (Linux 4.14+) tries to allocate huge pages at fault time but defers compaction to `khugepaged`, avoiding synchronous compaction latency in the application's hot path. Per-process control via `MADV_HUGEPAGE` / `MADV_NOHUGEPAGE` lets performance-sensitive applications opt in while others use 4KB pages.
+
 ## Why THP?
 
 ### The TLB Problem

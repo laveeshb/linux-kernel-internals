@@ -217,6 +217,45 @@ void consume_skb(struct sk_buff *skb);
 
 `truesize` is charged to the socket's receive buffer (`sk->sk_rmem_alloc`). If the socket buffer fills up, new packets are dropped.
 
+## Why this design?
+
+### The linear + paged split
+
+Early sk_buff implementations stored packet data in a single contiguous `kmalloc()` buffer. This worked fine until NICs gained scatter-gather DMA capability in the early 2000s.
+
+A NIC with scatter-gather can DMA-write a received packet into non-contiguous physical pages — the payload goes into page cache pages, the header goes into a small slab allocation. Copying everything into one contiguous buffer would waste memory and CPU cycles. The kernel needed a representation that could hold both.
+
+The solution was the linear + fragment model:
+- The **linear portion** (`head`…`tail`) holds packet headers — small, always contiguous, fast to access.
+- The **paged fragments** (`skb_shinfo(skb)->frags[]`) hold payload — large, may be non-contiguous pages that came directly from DMA.
+
+TCP Segmentation Offload (TSO, ~2002) solidified this: a NIC capable of TSO can take a single large buffer (e.g., 64KB) and split it into MTU-sized Ethernet frames. The kernel sends one sk_buff with the full TCP payload in the paged fragment area; the NIC handles fragmentation. Without paged fragments, the kernel would have had to pre-fragment everything in software.
+
+### Why `skb_shared_info` lives at `skb->end`
+
+```c
+/* net/core/skbuff.c: skb data layout */
+/*
+ *  head
+ *   ↓
+ *  [headroom][  packet data  ][ skb_shared_info ]
+ *            ↑               ↑                  ↑
+ *           data            tail               end
+ */
+static inline struct skb_shared_info *skb_shinfo(const struct sk_buff *skb)
+{
+    return (struct skb_shared_info *)skb_end_pointer(skb);
+}
+```
+
+Placing `skb_shared_info` immediately after the linear data buffer (at `skb->end`) avoids a separate heap allocation for the fragment array. The linear buffer and the fragment metadata are allocated together in one `kmalloc()` call. This matters for the hot path: every received packet allocates an sk_buff, and reducing that to one allocation saves significant overhead at high packet rates.
+
+### Cloning and the reference-counted design
+
+`skb_clone()` creates a new sk_buff header that shares the same data buffer. This enables sending the same packet to multiple consumers — a packet socket listener and the normal forwarding path can both "have" the same sk_buff without copying the packet data.
+
+The `cloned` bit signals that the data buffer is shared; any layer that wants to modify headers must call `skb_unshare()` or `pskb_expand_head()` to get its own copy first. This copy-on-write discipline prevents one subsystem from corrupting data that another is reading.
+
 ## Further reading
 
 - [Socket Layer Overview](socket-layer.md) — How sk_buff connects to sockets

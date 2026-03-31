@@ -332,7 +332,7 @@ bpftrace -e 'kprobe:btrfs_file_write_iter { @[comm] = count(); }'
 
 - [ext4 Journaling (JBD2)](ext4-journal.md) — journal-based contrast
 - [Page Cache](../mm/page-cache.md) — page cache that Btrfs CoW writes through
-- [Copy-on-Write](../mm/copy-on-write.md) — process CoW vs filesystem CoW
+- [Copy-on-Write](../mm/cow.md) — process CoW vs filesystem CoW
 - [xattr](../vfs/xattr.md) — Btrfs stores xattrs in the subvolume tree
 - `fs/btrfs/` — Btrfs implementation
 - `Documentation/filesystems/btrfs.rst`

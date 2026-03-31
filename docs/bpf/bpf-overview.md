@@ -2,6 +2,46 @@
 
 > How eBPF programs are loaded, verified, and attached to kernel hooks
 
+## From cBPF to eBPF
+
+### Classic BPF (1992–2014)
+
+BPF was not originally a Linux invention. It came from a 1992 paper by Steven McCanne and Van Jacobson at Lawrence Berkeley Laboratory: *"The BSD Packet Filter: A New Architecture for User-level Packet Capture."*
+
+The original BPF was a small virtual machine with two 32-bit registers (`A` and `X`), a small scratch memory array, and a simple instruction set designed for one purpose: filtering network packets in the kernel before copying them to userspace. Linux adopted it as `SO_ATTACH_FILTER` — attach a filter to a socket to drop packets you don't care about before they reach `recvmsg()`.
+
+That was its entire purpose. The implementation lived almost entirely in `net/core/filter.c`.
+
+### The problem with cBPF
+
+As Linux kernel development accelerated in the 2000s and 2010s, multiple subsystems needed a way to let userspace express policies in the kernel without giving userspace arbitrary kernel code execution:
+
+- **seccomp** (2005): wanted to filter system calls. Used cBPF as-is, but the 2-register model was awkward for real policies.
+- **tc** (traffic control): needed programmable packet classification and mangling, not just filtering.
+- **perf/tracing**: wanted to attach custom aggregation logic to probe points to avoid copying raw events to userspace.
+
+Kernel modules could do all this, but they're dangerous: a buggy module panics the kernel, they require CAP_SYS_MODULE, and they're tied to a specific kernel version. There was no way to safely run "untrusted" kernel code.
+
+### eBPF (Linux 3.18, 2014)
+
+Alexei Starovoitov and Daniel Borkmann rewrote the BPF virtual machine from scratch. The new design — retroactively called eBPF (extended BPF) — kept backward compatibility with cBPF socket filters (they are auto-translated) but was otherwise a new architecture:
+
+| | cBPF | eBPF |
+|--|------|------|
+| Registers | 2 (32-bit A, X) | 11 (64-bit r0–r10) |
+| Instruction width | Variable | Fixed 64-bit |
+| Shared state | None | Maps (hash, array, ring buffer…) |
+| Attachment points | Socket filter only | 30+ program types |
+| Verifier | None (simple validator) | Full safety proof |
+| JIT | Partial | All major architectures |
+| Userspace/kernel sharing | No | Yes (maps, BTF) |
+
+The **verifier** is what makes eBPF safe: it walks every possible execution path in the BPF program and proves that it terminates, does not dereference invalid pointers, and does not access memory outside the permitted regions. A program the verifier rejects never runs.
+
+The **map** abstraction solved the shared-state problem: BPF programs could accumulate statistics (per-IP counters, latency histograms) in a kernel-side data structure, and userspace could read that structure via the `bpf()` syscall — no raw kernel memory access needed.
+
+The answer to "why not a kernel module?" is now concrete: a BPF program that passes the verifier cannot crash the kernel, can be loaded without `CAP_SYS_MODULE`, and is JIT-compiled to near-native speed.
+
 ## The bpf() syscall
 
 Everything in eBPF flows through a single syscall:

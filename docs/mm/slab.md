@@ -58,11 +58,17 @@ Linux has had three slab implementations:
 | SLUB | **Default** ([since v2.6.23](https://git.kernel.org/linus/a0acd820)) | Simpler, lower overhead, no queues |
 | SLOB | [Removed (v6.4)](https://git.kernel.org/linus/c9929f0e344a) | Minimal, for embedded systems |
 
-**SLUB** (the "unqueued slab allocator") won because:
-- Simpler code (easier to maintain, debug)
-- Lower memory overhead
-- Better NUMA awareness
-- Comparable performance
+### Why SLUB replaced SLAB
+
+The original SLAB allocator (Jeff Bonwick, ported to Linux by Christoph Lameter in 2.0) maintained *three* lists of slabs per CPU per cache: a per-CPU queue, a shared queue, and a per-NUMA-node list. This three-level structure minimized cross-CPU object movement (a freed object went to the per-CPU list first, avoiding contention), but it came at a cost:
+
+- **Memory overhead** at scale: thousands of caches × NUMA nodes × three lists = large metadata footprint. On a 256-CPU NUMA machine with many `kmem_cache` instances, SLAB metadata consumed hundreds of megabytes.
+- **Complexity**: the queue-draining logic between the three levels had subtle bugs and was difficult to reason about under memory pressure.
+- **Shared queue lock contention**: when the per-CPU list ran out, multiple CPUs could contend on the per-node shared queue lock.
+
+Christoph Lameter designed SLUB (merged in Linux 2.6.23, 2007) by removing the queues entirely. Instead of moving objects between three lists, SLUB keeps objects on their original page (slab) and uses `cmpxchg` atomics on the per-CPU freelist pointer to make the fast path lockless. The partial slab list (slabs with some free, some used slots) is per-node, not per-CPU — a simpler two-level model.
+
+The result: SLUB had less metadata, fewer locks, and comparable or better performance. It became the default in 2.6.23. SLAB was kept as a `Kconfig` option for compatibility and finally removed in Linux 6.8 (2024). SLOB (a tiny first-fit allocator for embedded systems with no MMU) was removed in Linux 6.4 (2023) as embedded platforms gained enough RAM to use SLUB.
 
 ## How SLUB Works
 

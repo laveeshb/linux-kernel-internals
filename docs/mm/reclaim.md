@@ -88,6 +88,36 @@ cat /proc/zoneinfo | grep -E "min|low|high"
 sysctl vm.min_free_kbytes=65536
 ```
 
+## LRU Evolution
+
+### Single-list LRU and the streaming problem
+
+The original page cache LRU was a single list: recently accessed pages at the head, oldest pages at the tail. Eviction took from the tail. Simple and correct for workloads with stable working sets.
+
+The problem: a process that reads a large file sequentially ("streaming") accesses thousands of pages exactly once. As each page lands at the head of the LRU, it pushes all the hot working-set pages toward the tail. By the time the streaming read finishes, the kernel has evicted the database buffer pool or the application's code pages to make room for file data that will never be read again.
+
+This was observed early in Linux history. The fix — two lists — was in place by Linux 2.6.
+
+### Two-list LRU (active + inactive)
+
+The two-list model divides the LRU into **active** and **inactive** lists:
+
+- New pages enter the **inactive** list (on first fault/read)
+- A page accessed a second time is promoted to **active**
+- Eviction takes pages from **inactive** only; active pages are protected
+
+A streaming read fills the inactive list, but those pages never get a second access, so they're evicted without ever touching the active list. The hot working set stays in `active` and survives the stream.
+
+This worked well for decades but had a fundamental limitation: a single bit of information ("has this page been accessed since it was put on the inactive list?") is a coarse approximation of "how hot is this page?" A page accessed continuously for the last hour looks identical to a page accessed once, both landing in `active`.
+
+### Multi-Gen LRU (MGLRU, Linux 6.1, 2022)
+
+Yu Zhao (Google) designed MGLRU after observing Android devices (with limited RAM) thrashing between hot and warm pages using the two-list model. The core insight: instead of two categories (active/inactive), use multiple **generations** representing time bands.
+
+Pages are assigned a generation number when faulted. Periodically, the kernel "ages" the generations: recently accessed pages get a newer generation number; pages that haven't been accessed stay in their old generation. Eviction always takes the oldest generation first.
+
+This gives the kernel much finer-grained information about page age: a page in generation 8 is older than generation 12, and the eviction algorithm can make better choices. MGLRU also uses hardware dirty bits and access bits more aggressively to track page activity without explicit software tracking on every access.
+
 ## LRU Lists
 
 The kernel tracks page usage with LRU (Least Recently Used) lists. Pages move between lists based on access patterns.

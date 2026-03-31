@@ -90,7 +90,7 @@ nav:
       - Page Tables: mm/page-tables.md
       - Process Address Space: mm/mmap.md
       - Page Fault Handler: mm/page-fault.md
-      - vDSO: Fast Syscalls Without the Kernel: mm/vdso.md
+      - "vDSO: Fast Syscalls Without the Kernel": mm/vdso.md
     - Caching & Reclaim:
       - Page Cache: mm/page-cache.md
       - Page Reclaim: mm/reclaim.md

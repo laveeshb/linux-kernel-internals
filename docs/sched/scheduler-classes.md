@@ -2,6 +2,36 @@
 
 > How Linux layers five scheduling policies into a single framework
 
+## Why a vtable hierarchy?
+
+### Before sched_class: one monolithic scheduler
+
+The Linux 2.4 scheduler and the early 2.6 O(1) scheduler (Ingo Molnár, 2003) handled real-time and normal tasks in one function with conditional logic: if the task has a real-time priority, put it in a priority-indexed bitmap; otherwise, calculate a dynamic priority from the nice value and recent sleep/run history.
+
+This worked but coupled fundamentally different scheduling algorithms into one blob. SCHED_FIFO and SCHED_RR have simple rules: run until block or preemption by higher-priority RT. Normal tasks need complex fairness heuristics. The more the scheduler tried to handle both, the harder it was to reason about either.
+
+### CFS and the vtable design (Linux 2.6.23, 2007)
+
+When Ingo Molnár replaced the O(1) scheduler with CFS, he also introduced `struct sched_class` as an abstraction layer. The motivation was explicit: CFS uses a red-black tree ordered by virtual runtime — a data structure that makes no sense for RT tasks. RT tasks use a priority bitmap — a data structure irrelevant to fair scheduling. The two algorithms needed different data structures, different enqueue/dequeue logic, and different pick-next semantics.
+
+Rather than weaving these together with `if (rt_task(p)) { ... } else { ... }` throughout the scheduler, a vtable gives each algorithm its own clean implementation. The core scheduler loop becomes simple: iterate classes from highest to lowest priority, ask each one `pick_next_task()`, return the first non-NULL result.
+
+This design paid dividends immediately. `SCHED_DEADLINE` (EDF scheduling with bandwidth accounting, merged in 3.14) was added as a new class by implementing the `sched_class` interface. Without the vtable, adding a third scheduling algorithm into the existing code would have been invasive. With it, `kernel/sched/deadline.c` is self-contained.
+
+The `stop` class (for CPU migration threads) shows another benefit: it needs to preempt *everything* — including `SCHED_FIFO` priority-99 tasks. With the class hierarchy, this is a matter of placing `stop` first in the iteration order. There is no special-case code in the core scheduler.
+
+### The fast path optimization
+
+The one concession to performance is that the `for_each_class()` loop is bypassed when all tasks are in the `fair` class (the common case on desktop/server systems):
+
+```c
+if (likely(!sched_class_above(prev->sched_class, &fair_sched_class) &&
+           rq->nr_running == rq->cfs.h_nr_running))
+    return pick_next_task_fair(rq, prev, rf);
+```
+
+On systems with no RT or deadline tasks, the overhead of calling three vtable functions that return NULL is eliminated.
+
 ## The layered model
 
 Linux doesn't have one scheduler — it has five, each handling a different class of tasks. They're stacked by priority: when the kernel picks the next task to run, it asks each class in turn, from highest to lowest, until one has a task ready.
