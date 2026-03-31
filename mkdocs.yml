@@ -78,6 +78,7 @@ nav:
     - Fundamentals:
       - Page Allocator: mm/page-allocator.md
       - kmalloc (SLUB): mm/slab.md
+      - SLUB Allocator Internals: mm/slab-internals.md
       - vmalloc: mm/vmalloc.md
       - NUMA: mm/numa.md
     - NUMA Advanced:
@@ -327,6 +328,7 @@ nav:
     - Character and Misc Devices: drivers/chardev.md
     - PCI Drivers: drivers/pci-driver.md
     - Device Tree: drivers/device-tree.md
+    - I2C and SPI Drivers: drivers/i2c-spi.md
   - IPC:
     - Getting Started: ipc/README.md
     - Signals: ipc/signals.md
@@ -376,6 +378,7 @@ nav:
     - fscrypt (Per-File Encryption): security/fscrypt.md
     - SELinux: security/selinux.md
     - Kernel Hardening: security/kernel-hardening.md
+    - Landlock Sandboxing: security/landlock.md
   - Virtualization:
     - Getting Started: virtualization/README.md
     - KVM Architecture: virtualization/kvm-arch.md
@@ -392,6 +395,7 @@ nav:
   - Time:
     - Getting Started: time/README.md
     - Timekeeping and Clocksources: time/timekeeping.md
+    - Clocksource and Clockevent Drivers: time/clocksource.md
     - hrtimers: time/hrtimers.md
     - POSIX Timers and timerfd: time/posix-timers.md
   - IOMMU and DMA:
