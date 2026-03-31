@@ -216,7 +216,7 @@ static blk_status_t nvme_process_cq(struct nvme_queue *nvmeq)
     u8  phase = nvmeq->cq_phase;
 
     /* Poll CQ entries with matching phase bit */
-    while (nvmeq->cqes[head].status & 1 == phase) {
+    while ((nvmeq->cqes[head].status & 1) == phase) {
         struct nvme_completion *cqe = &nvmeq->cqes[head];
         u16 status = le16_to_cpu(cqe->status) >> 1;
 
