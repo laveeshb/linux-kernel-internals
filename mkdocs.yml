@@ -78,6 +78,7 @@ nav:
     - Fundamentals:
       - Page Allocator: mm/page-allocator.md
       - kmalloc (SLUB): mm/slab.md
+      - SLUB Allocator Internals: mm/slab-internals.md
       - vmalloc: mm/vmalloc.md
       - NUMA: mm/numa.md
     - NUMA Advanced:
@@ -88,9 +89,12 @@ nav:
     - Address Translation:
       - Page Tables: mm/page-tables.md
       - Process Address Space: mm/mmap.md
+      - Page Fault Handler: mm/page-fault.md
+      - vDSO: Fast Syscalls Without the Kernel: mm/vdso.md
     - Caching & Reclaim:
       - Page Cache: mm/page-cache.md
       - Page Reclaim: mm/reclaim.md
+      - MGLRU: mm/mglru.md
       - Reclaim Throttling: mm/reclaim-throttling.md
       - Zone Reclaim Policy: mm/zone-reclaim.md
       - Shrinker API: mm/shrinker.md
@@ -109,6 +113,10 @@ nav:
       - RCU in Memory Management: mm/rcu-mm.md
       - TLB Optimization: mm/tlb-optimization.md
       - CXL Memory Tiering: mm/cxl-memory-tiering.md
+      - Memory Tiering: mm/memory-tiering.md
+      - HMM (Heterogeneous Memory Management): mm/hmm.md
+      - userfaultfd: mm/userfaultfd.md
+      - Page Table Walking API: mm/page-walk.md
       - vrealloc: mm/vrealloc.md
     - Memory Cgroups:
       - Container Memory Limits: mm/container-memory-limits.md
@@ -120,8 +128,10 @@ nav:
       - Life of a malloc: mm/life-of-malloc.md
       - Life of a page: mm/life-of-page.md
       - What happens when you fork: mm/fork.md
+      - What happens during exec(): mm/exec.md
       - Running out of memory: mm/oom.md
       - Life of a file read: mm/life-of-read.md
+      - File-backed mmap and page faults: mm/file-mmap.md
       - What happens during swapping: mm/swapping.md
     - Explainers:
       - Virtual vs Physical vs Resident: mm/virtual-physical-resident.md
@@ -168,3 +178,253 @@ nav:
       - "War Stories: Bug Incident Narratives": mm/war-stories-bugs.md
     - Reference:
       - Glossary: mm/glossary.md
+  - Scheduler:
+    - Getting Started: sched/README.md
+    - Fundamentals:
+      - Scheduler Evolution: sched/scheduler-evolution.md
+      - Scheduler Classes: sched/scheduler-classes.md
+      - CFS: sched/cfs.md
+      - EEVDF: sched/eevdf.md
+      - Runqueues & Task Selection: sched/runqueues.md
+    - Lifecycle:
+      - Life of a Context Switch: sched/context-switch.md
+      - What Happens When a Process Wakes Up: sched/wakeup.md
+      - "What Happens When You fork()": sched/sched-fork.md
+    - Real-Time:
+      - RT Scheduler: sched/rt-scheduler.md
+      - SCHED_DEADLINE: sched/deadline.md
+      - Priority Inversion & PI Mutexes: sched/pi-mutexes.md
+    - Resource Control & Topology:
+      - CPU cgroup (v1 vs v2): sched/cpu-cgroup.md
+      - CPU Bandwidth Control: sched/cpu-bandwidth.md
+      - cpuset: sched/cpuset.md
+      - Scheduling Domains: sched/sched-domains.md
+      - CPU Affinity: sched/cpu-affinity.md
+    - Advanced:
+      - Load Balancing: sched/load-balancing.md
+      - NUMA Automatic Balancing: sched/numa-balancing.md
+      - Energy-Aware Scheduling: sched/eas.md
+      - Preemption Model: sched/preemption.md
+      - The Scheduling Tick: sched/sched-tick.md
+      - Real-Time Linux Tuning: sched/rt-tuning.md
+    - Debugging & Observability:
+      - Scheduler Statistics: sched/schedstat.md
+      - Scheduler Tracing: sched/sched-tracing.md
+      - Scheduler Tuning: sched/sched-tuning.md
+  - Networking:
+    - Fundamentals:
+      - "Why Is the Network Stack So Complex?": net/network-stack-overview.md
+      - "sk_buff: The Network Buffer": net/sk-buff.md
+      - Socket Layer Overview: net/socket-layer.md
+      - epoll Internals: net/epoll.md
+      - Network Device and NAPI: net/napi.md
+    - Lifecycle:
+      - Life of a Packet (receive): net/life-of-packet-rx.md
+      - Life of a Packet (transmit): net/life-of-packet-tx.md
+      - What Happens When You connect(): net/connect.md
+    - TCP/IP:
+      - TCP Implementation: net/tcp.md
+      - TCP Congestion Control: net/tcp-congestion.md
+      - UDP Internals: net/udp.md
+      - IP Routing: net/ip-routing.md
+    - Filtering:
+      - Netfilter Architecture: net/netfilter.md
+      - nftables vs iptables: net/nftables-iptables.md
+      - Connection Tracking: net/conntrack.md
+    - XDP & TC:
+      - XDP (eXpress Data Path): net/xdp.md
+      - AF_XDP Sockets: net/af-xdp.md
+      - TC and qdisc: net/tc-qdisc.md
+    - Advanced:
+      - Container Networking: net/container-networking.md
+      - Network Namespaces: net/net-namespaces.md
+      - TUN/TAP Virtual Devices: net/tun-tap.md
+      - AF_PACKET Raw Sockets: net/packet-socket.md
+      - Kernel TLS (kTLS): net/ktls.md
+      - Netlink: net/netlink.md
+    - Debugging & Observability:
+      - Network Debugging with ss and ip: net/net-debugging.md
+      - Network Tracing: net/net-tracing.md
+      - Understanding /proc/net/snmp: net/proc-snmp.md
+      - Network Buffer Tuning: net/net-buffer-tuning.md
+  - Locking:
+    - Getting Started: locking/README.md
+    - Fundamentals:
+      - Spinlock and raw_spinlock: locking/spinlock.md
+      - Mutex and rt_mutex: locking/mutex.md
+      - rwlock and rwsem: locking/rwlock-rwsem.md
+      - RCU (Read-Copy-Update): locking/rcu.md
+      - Seqlock: locking/seqlock.md
+    - Advanced:
+      - Atomic Operations and Memory Barriers: locking/atomics.md
+      - Per-CPU Variables: locking/percpu.md
+      - Lockdep: locking/lockdep.md
+      - Lock Contention Debugging: locking/lock-debugging.md
+      - Futex Internals: locking/futex.md
+      - SRCU: locking/srcu.md
+      - Completions and Wait Queues: locking/completions.md
+  - Interrupts:
+    - Getting Started: interrupts/README.md
+    - Fundamentals:
+      - Interrupt Handling Overview: interrupts/interrupts.md
+      - IRQ Descriptor and irq_chip: interrupts/irq-desc.md
+      - request_irq and free_irq: interrupts/request-irq.md
+      - Threaded IRQs: interrupts/threaded-irq.md
+      - IRQ Affinity and CPU Isolation: interrupts/irq-affinity.md
+      - MSI and MSI-X: interrupts/msi-msix.md
+    - Deferred Work:
+      - Softirqs: interrupts/softirq.md
+      - Tasklets: interrupts/tasklets.md
+      - Workqueues: interrupts/workqueues.md
+      - Workqueue Internals (cmwq): interrupts/workqueue-internals.md
+      - Timers and hrtimers: interrupts/timers.md
+  - VFS:
+    - Getting Started: vfs/README.md
+    - Fundamentals:
+      - "VFS Objects: superblock, inode, dentry, file": vfs/vfs-objects.md
+      - Path Resolution: vfs/namei.md
+      - File Operations: vfs/file-ops.md
+      - Filesystem Registration and Mounting: vfs/mounting.md
+    - Lifecycle:
+      - Life of a write() Syscall: vfs/life-of-write.md
+      - Dentry and Inode Caches: vfs/dcache-icache.md
+    - Advanced:
+      - splice, sendfile, copy_file_range: vfs/splice-sendfile.md
+      - inotify and fanotify: vfs/inotify.md
+      - Extended Attributes (xattr): vfs/xattr.md
+      - procfs and sysfs: vfs/procfs-sysfs.md
+  - Block Layer:
+    - Getting Started: block/README.md
+    - Block Layer Overview: block/block-overview.md
+    - bio and request structures: block/bio-request.md
+    - blk-mq (Multi-Queue): block/blk-mq.md
+    - I/O Schedulers: block/io-schedulers.md
+    - NVMe Driver: block/nvme.md
+    - dm-verity (Integrity): block/dm-verity.md
+  - BPF/eBPF:
+    - Getting Started: bpf/README.md
+    - Architecture & Program Types: bpf/bpf-overview.md
+    - BPF Maps: bpf/bpf-maps.md
+    - BPF Verifier: bpf/bpf-verifier.md
+    - BTF and CO-RE: bpf/btf-core.md
+    - libbpf and Skeletons: bpf/libbpf.md
+    - BPF Ring Buffer: bpf/bpf-ringbuf.md
+    - BPF Networking (TC, cgroup, sockmap): bpf/bpf-networking.md
+  - Cgroups & Namespaces:
+    - Getting Started: cgroups/README.md
+    - Cgroup v2 Architecture: cgroups/cgroup-v2.md
+    - Resource Controllers: cgroups/cgroup-controllers.md
+    - Namespaces: cgroups/namespaces.md
+    - Container Isolation: cgroups/container-isolation.md
+    - io Controller: cgroups/io-cgroup.md
+  - System Calls:
+    - Getting Started: syscalls/README.md
+    - Syscall Entry Path: syscalls/syscall-entry.md
+    - SYSCALL_DEFINE and Dispatch: syscalls/syscall-define.md
+    - Adding a New Syscall: syscalls/adding-syscall.md
+  - Device Drivers:
+    - Getting Started: drivers/README.md
+    - Linux Device Model: drivers/device-model.md
+    - Platform Drivers: drivers/platform-driver.md
+    - Character and Misc Devices: drivers/chardev.md
+    - PCI Drivers: drivers/pci-driver.md
+    - Device Tree: drivers/device-tree.md
+    - I2C and SPI Drivers: drivers/i2c-spi.md
+  - IPC:
+    - Getting Started: ipc/README.md
+    - Signals: ipc/signals.md
+    - Pipes and FIFOs: ipc/pipes.md
+    - Shared Memory and Semaphores: ipc/shared-memory.md
+    - eventfd and signalfd: ipc/eventfd-signalfd.md
+    - POSIX Message Queues: ipc/mqueue.md
+  - I/O Patterns:
+    - Getting Started: io/README.md
+    - Direct I/O: io/direct-io.md
+    - Async I/O Evolution: io/async-io.md
+  - io_uring:
+    - Getting Started: io-uring/README.md
+    - Architecture and Rings: io-uring/io-uring-arch.md
+    - Operations and Advanced Features: io-uring/io-uring-ops.md
+  - Tracing:
+    - Getting Started: tracing/README.md
+    - ftrace: tracing/ftrace.md
+    - ftrace Advanced: tracing/ftrace-advanced.md
+    - Kprobes and Tracepoints: tracing/kprobes-tracepoints.md
+    - perf Events: tracing/perf-events.md
+    - perf Profiling Advanced: tracing/perf-profiling.md
+    - uprobes and USDT: tracing/uprobes-usdt.md
+  - Kernel Modules:
+    - Getting Started: modules/README.md
+    - Writing and Loading Modules: modules/module-basics.md
+    - Parameters, Symbols, and Kconfig: modules/module-params.md
+    - Module Signing: modules/module-signing.md
+    - Kbuild Build System: modules/kbuild.md
+  - Filesystems:
+    - Getting Started: filesystems/README.md
+    - ext4: filesystems/ext4.md
+    - ext4 Journaling (JBD2): filesystems/ext4-journal.md
+    - tmpfs and ramfs: filesystems/tmpfs.md
+    - btrfs: filesystems/btrfs.md
+    - XFS: filesystems/xfs.md
+    - OverlayFS: filesystems/overlayfs.md
+  - Security:
+    - Getting Started: security/README.md
+    - LSM Framework: security/lsm.md
+    - Capabilities: security/capabilities.md
+    - seccomp BPF: security/seccomp.md
+    - Linux Audit: security/audit.md
+    - Credentials and User Namespaces: security/credentials.md
+    - User Namespaces and uid Mapping: security/user-namespaces.md
+    - dm-crypt (Block Encryption): security/dm-crypt.md
+    - fscrypt (Per-File Encryption): security/fscrypt.md
+    - SELinux: security/selinux.md
+    - Kernel Hardening: security/kernel-hardening.md
+    - Landlock Sandboxing: security/landlock.md
+  - Virtualization:
+    - Getting Started: virtualization/README.md
+    - KVM Architecture: virtualization/kvm-arch.md
+    - Memory Virtualization: virtualization/kvm-memory.md
+    - virtio: virtualization/virtio.md
+    - VFIO Device Passthrough: virtualization/vfio.md
+  - Power Management:
+    - Getting Started: power/README.md
+    - cpufreq and P-states: power/cpufreq.md
+    - cpuidle and C-states: power/cpuidle.md
+    - Thermal Management: power/thermal.md
+    - Runtime PM: power/runtime-pm.md
+    - System Suspend: power/suspend.md
+  - Time:
+    - Getting Started: time/README.md
+    - Timekeeping and Clocksources: time/timekeeping.md
+    - Clocksource and Clockevent Drivers: time/clocksource.md
+    - hrtimers: time/hrtimers.md
+    - POSIX Timers and timerfd: time/posix-timers.md
+  - IOMMU and DMA:
+    - Getting Started: iommu/README.md
+    - IOMMU Architecture: iommu/iommu-arch.md
+    - DMA API: iommu/dma-api.md
+  - Kernel Debugging:
+    - Getting Started: debugging/README.md
+    - KGDB: debugging/kgdb.md
+    - kdump and crash: debugging/kdump.md
+    - Oops Analysis: debugging/oops-analysis.md
+    - KCSAN (Data Race Detector): debugging/kcsan.md
+    - syzkaller Fuzzing: debugging/syzkaller.md
+  - Crypto:
+    - Getting Started: crypto/README.md
+    - Kernel Crypto API: crypto/crypto-api.md
+    - dm-crypt and fscrypt: crypto/encryption.md
+  - Kernel Internals:
+    - printk and Kernel Logging: kernel/printk.md
+  - Live Patching:
+    - Getting Started: livepatch/README.md
+    - Kernel Live Patching: livepatch/klp.md
+    - kexec: livepatch/kexec.md
+  - Architecture:
+    - ARM64:
+      - Getting Started: arch/arm64/README.md
+      - Boot Sequence: arch/arm64/boot.md
+      - Exception Model: arch/arm64/exception-model.md
+      - Memory Model: arch/arm64/memory-model.md
+    - x86:
+      - Exception and Interrupt Handling: arch/x86/exceptions.md
