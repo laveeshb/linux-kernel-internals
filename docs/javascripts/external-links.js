@@ -7,4 +7,15 @@ document.addEventListener('DOMContentLoaded', function() {
       link.setAttribute('rel', 'noopener noreferrer');
     }
   });
+
+  // Make the header site title a link to the home page
+  var logoLink = document.querySelector('.md-header__button.md-logo');
+  var titleEl = document.querySelector('.md-header__title');
+  if (titleEl && logoLink && !titleEl.closest('a')) {
+    var homeHref = logoLink.getAttribute('href') || '.';
+    titleEl.style.cursor = 'pointer';
+    titleEl.addEventListener('click', function() {
+      window.location.href = homeHref;
+    });
+  }
 });
