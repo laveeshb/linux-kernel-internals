@@ -348,6 +348,7 @@ nav:
     - Writing and Loading Modules: modules/module-basics.md
     - Parameters, Symbols, and Kconfig: modules/module-params.md
     - Module Signing: modules/module-signing.md
+    - Kbuild Build System: modules/kbuild.md
   - Filesystems:
     - Getting Started: filesystems/README.md
     - ext4: filesystems/ext4.md
