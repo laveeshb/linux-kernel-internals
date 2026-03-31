@@ -443,3 +443,29 @@ The `node_reclaim_distance` variable in `mm/page_alloc.c` defaults to `RECLAIM_D
 | `include/linux/vm_event_item.h` | `PGSTEAL_KSWAPD`, `PGSCAN_KSWAPD`, `NUMA_HINT_FAULTS`, `NUMA_PAGE_MIGRATE` enum values |
 | `mm/vmstat.c` | Counter string names (`pgsteal_kswapd`, `numa_hit`, `numa_miss`, `zone_reclaim_success`, etc.) |
 | `kernel/sched/fair.c` | `task_numa_work()` — NUMA hint PTE scanner |
+
+## Further reading
+
+### Kernel source
+
+- [mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vmscan.c) — `kswapd()`, `kswapd_run()`, `balance_pgdat()`, `pgdat_balanced()`, `wakeup_kswapd()`, `node_reclaim()`, `node_reclaim_mode`
+- [mm/page_alloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) — `get_page_from_freelist()`, `zone_allows_reclaim()`, `node_reclaim_distance`, and fallback zonelist traversal
+- [mm/memory.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memory.c) — `do_numa_page()` and `numa_migrate_check()`: the NUMA hint fault path that drives page migration
+- [mm/migrate.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/migrate.c) — `migrate_misplaced_folio()` and `migrate_misplaced_folio_prepare()`
+
+### Kernel documentation
+
+- `Documentation/admin-guide/sysctl/vm.rst` — documents `zone_reclaim_mode`, `min_free_kbytes`, and related reclaim knobs ([rendered](https://docs.kernel.org/admin-guide/sysctl/vm.html))
+
+### LWN articles
+
+- [Per-node reclaim and kswapd](https://lwn.net/Articles/461294/) — analysis of per-node kswapd wakeup logic and the interaction between nodes under memory pressure
+- [NUMA balancing and page migration](https://lwn.net/Articles/568870/) — how hint faults, migration decisions, and the promotion path work in automatic NUMA balancing
+- [Zone reclaim mode considered harmful](https://lwn.net/Articles/432224/) — the case for disabling `zone_reclaim_mode` on general-purpose workloads
+
+### Related docs
+
+- [NUMA Memory Management](numa.md) — NUMA overview, memory policies, automatic balancing, and monitoring
+- [Zone Reclaim Policy](zone-reclaim.md) — `vm.zone_reclaim_mode`, watermark boosting, and DMA zone pressure in detail
+- [NUMA Zonelist Construction and Fallback Ordering](numa-zonelist.md) — how fallback to remote nodes is ordered and how `MPOL_BIND` prevents it
+- [Reclaim](reclaim.md) — the full reclaim machinery: LRU lists, `shrink_node()`, and direct reclaim

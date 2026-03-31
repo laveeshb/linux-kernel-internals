@@ -421,3 +421,15 @@ echo never > /sys/kernel/mm/transparent_hugepage/enabled
 - [compaction](compaction.md) - Memory defragmentation for THP
 - [reclaim](reclaim.md) - THP and memory pressure
 - [Bug Index](bugs/README.md) - Index of all mm kernel bugs
+
+## Further reading
+
+- `Documentation/admin-guide/mm/transhuge.rst` — the authoritative kernel admin guide covering all sysfs tunables, defrag modes, and monitoring counters; rendered at [docs.kernel.org](https://docs.kernel.org/admin-guide/mm/transhuge.html)
+- [mm/huge_memory.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/huge_memory.c) — THP core: fault-time allocation, PMD-level mapping, COW splitting, and `MADV_HUGEPAGE` / `MADV_COLLAPSE` handling
+- [mm/khugepaged.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/khugepaged.c) — the `khugepaged` daemon: scan logic, collapse paths, and the locking protocol that has been the source of several race-condition bugs
+- [LWN: Transparent huge pages](https://lwn.net/Articles/423584/) — 2011 coverage of the original THP design by Andrea Arcangeli and the motivation for removing hugetlbfs restrictions
+- [LWN: Improving huge page handling](https://lwn.net/Articles/619738/) — analysis of the deferred compaction (`defer` defrag mode) work and how it addressed the latency-spike problem
+- Commit [71e3aac0724f](https://git.kernel.org/linus/71e3aac0724f) — the initial THP merge in v2.6.38; the commit message documents the original KVM motivation in detail
+- Commit [38d8b4e6bdc8](https://git.kernel.org/linus/38d8b4e6bdc8) — v4.13 THP swap support; huge pages can now be swapped out as a unit without splitting first
+- [mthp.md](mthp.md) — multi-size THP: sub-PMD huge pages (16KB–512KB) introduced in Linux 6.10 for workloads where 2MB is too coarse
+- [hugetlbfs-vs-thp.md](hugetlbfs-vs-thp.md) — side-by-side comparison of THP and explicit hugetlbfs, including when to prefer each

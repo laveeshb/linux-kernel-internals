@@ -588,3 +588,13 @@ When a swap device is enabled (`swapon`), `zswap_swapon()` allocates the xarray 
 | `include/linux/vm_event_item.h` | vmstat events: `ZSWPIN`, `ZSWPOUT`, `ZSWPWB` |
 | `include/linux/memcontrol.h` | `MEMCG_ZSWAP_B`, `MEMCG_ZSWAPPED`, `obj_cgroup_may_zswap()`, `mem_cgroup_zswap_writeback_enabled()`; `zswap_max` field in `struct mem_cgroup` |
 | `Documentation/admin-guide/mm/zswap.rst` | Upstream admin guide (may lag the source) |
+
+## Further reading
+
+- [mm/zswap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/zswap.c) — complete zswap implementation: store, load, writeback, shrinker, pool management, and debugfs counters
+- `Documentation/admin-guide/mm/zswap.rst` — upstream admin guide covering tunables, cgroup controls, and observability
+- [swap](swap.md) — swap architecture overview including how zswap fits into the broader swap stack alongside zram and disk swap
+- [swap-thrashing](swap-thrashing.md) — how enabling zswap or zram can reduce I/O-driven thrashing by keeping compressed pages in RAM
+- [slab](slab.md) — the zsmalloc allocator used internally by zswap to store variable-size compressed objects with high density
+- [zswap: compressed swap caching](https://lwn.net/Articles/537422/) (LWN, 2013) — original LWN coverage of Seth Jennings's zswap patch at the time of its v3.11 merge
+- [Cleancache and frontswap](https://lwn.net/Articles/454795/) (LWN, 2011) — background on the frontswap interface that zswap originally used (since removed in favor of direct integration)

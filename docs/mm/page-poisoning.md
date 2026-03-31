@@ -349,20 +349,14 @@ Motivated by a class of information disclosure vulnerabilities where kernel memo
 
 SLUB was introduced in v2.6.23 (2007) as a replacement for SLAB. The `P` (poisoning) flag and `0x6b`/`0xa5` patterns were part of SLUB's debug infrastructure from the beginning, carrying forward conventions from the older SLAB allocator. The sysfs interface at `/sys/kernel/slab/<cache>/poison` enables per-cache control without rebooting.
 
-## Further Reading
+## Further reading
 
-### Kernel Documentation
-
-- [Documentation/mm/slub.rst](https://docs.kernel.org/mm/slub.html) — SLUB allocator documentation including `slub_debug` flag reference
-- [Documentation/admin-guide/kernel-parameters.txt](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/admin-guide/kernel-parameters.txt) — `page_poison`, `init_on_alloc`, `init_on_free`, `slub_debug` boot parameters
-
-### LWN Articles
-
-- [Initializing memory on allocation and release](https://lwn.net/Articles/791380/) — design rationale for `init_on_alloc/free` (2019)
-
-### Related
-
-- [KASAN](kasan.md) — compiler-instrumented memory error detection; catches use-after-free at the moment of the write, with a precise stack trace
-- [KFENCE](kfence.md) — sampling-based memory error detection safe for production use
-- [OOM debugging](oom-debugging.md) — diagnosing and preventing out-of-memory kills
-- [slab](slab.md) — the SLUB allocator internals and how slab caches are managed
+- [mm/page_poison.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_poison.c) — `CONFIG_PAGE_POISONING` implementation: `kernel_poison_pages()` fills freed pages with `0xAA` and `kernel_unpoison_pages()` verifies the pattern on allocation
+- [mm/page_alloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) — page allocator hooks that invoke both page poisoning and the `init_on_alloc`/`init_on_free` security zeroing paths
+- [mm/slub.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) — SLUB allocator: `set_freepointer()` and `check_object()` implement the `0x6b`/`0xa5` slab poison patterns
+- [include/linux/poison.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/poison.h) — canonical definitions for `POISON_FREE` (`0x6b`) and `POISON_END` (`0xa5`)
+- `Documentation/admin-guide/kernel-parameters.txt` — reference entries for the `page_poison`, `init_on_alloc`, `init_on_free`, and `slub_debug` boot parameters
+- [Initializing memory on allocation and release](https://lwn.net/Articles/791380/) (LWN, 2019) — design rationale for `init_on_alloc=1` and `init_on_free=1` and their security versus debug tradeoffs
+- [kasan](kasan.md) — compiler-instrumented memory error detection; catches use-after-free at the moment of the write with a precise stack trace, complementing the deferred detection of page poisoning
+- [kfence](kfence.md) — sampling-based memory error detection that is safe to enable in production, unlike the heavier page poisoning or KASAN approaches
+- [slab](slab.md) — SLUB allocator internals: slab cache layout, object lifecycle, and the debug flag infrastructure that `slub_debug=P` builds on

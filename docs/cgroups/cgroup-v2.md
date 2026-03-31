@@ -169,7 +169,7 @@ echo "+cpu +memory" > /sys/fs/cgroup/myapp/cgroup.subtree_control
 echo $$ > /sys/fs/cgroup/myapp/cgroup.procs
 ```
 
-**No Internal Process Constraint**: in v2, a cgroup with enabled controllers cannot have processes directly. Only leaf cgroups (or the root) can hold processes.
+**No Internal Process Constraint**: in v2, a cgroup cannot hold both processes and child cgroups. Only leaf cgroups (cgroups with no children) and the root cgroup can hold processes directly.
 
 ## css_set: the task-to-cgroup link
 

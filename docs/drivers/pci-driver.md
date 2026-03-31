@@ -326,7 +326,7 @@ int width = (lnksta & PCI_EXP_LNKSTA_NLW) >> 4;  /* link width */
 dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
 
 /* IOMAP */
-dev->bar0 = devm_pci_iomap(&pdev->dev, pdev, 0, 0);
+dev->bar0 = devm_pci_iomap(pdev, 0, 0);
 
 /* IRQ */
 ret = devm_request_irq(&pdev->dev, irq, handler, 0, "mydev", dev);

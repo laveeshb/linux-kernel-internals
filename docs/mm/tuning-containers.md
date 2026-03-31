@@ -503,3 +503,15 @@ Proactive reclaim: allows userspace to trigger reclaim within a cgroup without w
 - [Page Reclaim](reclaim.md) - How the kernel reclaims memory
 - [Swap](swap.md) - Swap subsystem internals
 - [Glossary](glossary.md) - cgroup, OOM, PSI definitions
+
+## Further reading
+
+- [Container Memory Limits](container-memory-limits.md) — the full sequence from `memory.high` throttling through cgroup OOM kill and recovery
+- [memory.stat Field Reference](memory-stat.md) — every field in `/sys/fs/cgroup/*/memory.stat` explained, with diagnostic recipes
+- [Memory Cgroups](memcg.md) — how the memcg charge model works and v1 vs v2 differences
+- [Reading an OOM log](reading-oom-log.md) — how to parse the dmesg output when a container is OOM-killed
+- [`Documentation/admin-guide/cgroup-v2.rst`](https://docs.kernel.org/admin-guide/cgroup-v2.html) — authoritative kernel reference for all cgroup v2 interface files including `memory.high`, `memory.max`, `memory.min`, and `memory.events`
+- [LWN: Controlling memory with cgroup v2](https://lwn.net/Articles/662925/) — design rationale for `memory.high` and the soft-limit throttling model
+- [LWN: PSI — Pressure Stall Information](https://lwn.net/Articles/759658/) — how per-cgroup `memory.pressure` is computed and how to act on it
+- [LWN: User-space OOM handling](https://lwn.net/Articles/894849/) — `memory.reclaim` and proactive memory management from orchestrators
+- [`mm/memcontrol.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memcontrol.c) — memory controller implementation: charge, throttle, and OOM paths

@@ -368,3 +368,15 @@ Sequential readahead hurts random workloads.
 - [reclaim](reclaim.md) - How cache pages are reclaimed
 - [mmap](mmap.md) - Memory-mapped file I/O
 - [swap](swap.md) - When anonymous pages go to disk
+
+## Further reading
+
+- [mm/filemap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/filemap.c) — page cache core: `filemap_read()`, `filemap_fault()`, `add_to_page_cache_lru()`, and the address_space operations
+- [mm/readahead.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/readahead.c) — readahead logic: sequential detection, window sizing, and `page_cache_async_ra()`
+- [mm/page-writeback.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page-writeback.c) — dirty page accounting and writeback throttling: `balance_dirty_pages()`, dirty ratio enforcement
+- `Documentation/admin-guide/mm/concepts.rst` — kernel documentation overview of the page cache, dirty pages, and their role in the memory lifecycle
+- [reclaim](reclaim.md) — how the kernel reclaims clean and dirty page cache pages under memory pressure
+- [mmap](mmap.md) — how file-backed mmap regions map page cache pages directly into process address space
+- [folio](folio.md) — the folio abstraction that replaced raw pages in the page cache to better support large contiguous file extents
+- [The page cache](https://lwn.net/Articles/712467/) (LWN, 2016) — detailed walkthrough of page cache internals, the address_space structure, and writeback mechanics
+- [Folios](https://lwn.net/Articles/849538/) (LWN, 2021) — rationale and design of the folio abstraction that underpins the modern page cache API

@@ -17,7 +17,7 @@ Examples: UARTs, I2C controllers, GPIO controllers, clocks — hardware that's w
 /* include/linux/platform_device.h */
 struct platform_driver {
     int (*probe)(struct platform_device *);   /* device found, bind driver */
-    int (*remove)(struct platform_device *);  /* device removed, unbind */
+    void (*remove)(struct platform_device *);  /* device removed, unbind */
     void (*shutdown)(struct platform_device *);
     int (*suspend)(struct platform_device *, pm_message_t state);
     int (*resume)(struct platform_device *);
@@ -113,13 +113,12 @@ static int mydev_probe(struct platform_device *pdev)
     return 0;
 }
 
-static int mydev_remove(struct platform_device *pdev)
+static void mydev_remove(struct platform_device *pdev)
 {
     struct mydev *dev = platform_get_drvdata(pdev);
 
     /* devm resources freed automatically; only need to disable clock */
     clk_disable_unprepare(dev->clk);
-    return 0;
 }
 
 /* Device tree match table */

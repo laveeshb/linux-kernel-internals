@@ -499,3 +499,27 @@ mem_init() → memblock_free_all()
   └─ All free memory handed to the buddy allocator
      Boot page table setup complete
 ```
+
+## Further reading
+
+### Kernel source
+
+- [arch/x86/kernel/head_64.S](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/head_64.S) — `startup_64` entry point; static `early_top_pgt`, `init_top_pgt`, and `level3_kernel_pgt` declarations
+- [arch/x86/boot/startup/map_kernel.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/boot/startup/map_kernel.c) — `__startup_64()`: first C code; fixes physical addresses and builds identity map
+- [arch/x86/mm/init.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/init.c) — `init_mem_mapping()`, `memory_map_top_down()`, `memory_map_bottom_up()`
+- [arch/x86/mm/kaslr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/kaslr.c) — `kernel_randomize_memory()`: randomizes direct map, vmalloc, and vmemmap base addresses
+
+### Kernel documentation
+
+- [`Documentation/arch/x86/boot.rst`](https://docs.kernel.org/arch/x86/boot.html) — x86 boot protocol: what state the bootloader must establish before jumping to the kernel
+- [`Documentation/arch/x86/x86_64/mm.rst`](https://docs.kernel.org/arch/x86/x86_64/mm.html) — authoritative virtual memory map for 4-level and 5-level paging with exact address ranges
+
+### Related pages
+
+- [page-tables.md](page-tables.md) — the generic Linux page-table abstraction (PGD/P4D/PUD/PMD/PTE) that the boot tables slot into
+- [memblock.md](memblock.md) — the early allocator that provides memory for page table pages before the buddy allocator is ready
+
+### LWN articles
+
+- [LWN: Five-level page tables](https://lwn.net/Articles/717293/) — introduction to LA57 and the 57-bit address space extension
+- [LWN: KASLR for the kernel's virtual address space](https://lwn.net/Articles/569635/) — memory-layout KASLR: motivation, entropy sources, and trade-offs

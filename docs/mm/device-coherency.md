@@ -439,3 +439,13 @@ For IOMMU address translation and memory protection, see [DMA Memory Allocation]
         return -ENOMEM;
     }
     ```
+
+## Further reading
+
+- [Kernel docs: DMA API](https://docs.kernel.org/core-api/dma-api.html) — the canonical reference for `dma_alloc_coherent()`, `dma_map_*()`, and `dma_sync_*()` semantics
+- [`Documentation/core-api/dma-api.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/core-api/dma-api.rst) — kernel source for the DMA API documentation including ownership rules and direction values
+- [`arch/arm64/mm/dma-mapping.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/mm/dma-mapping.c) — ARM64 `arch_sync_dma_for_device()` and `arch_sync_dma_for_cpu()` implementations
+- [`arch/x86/mm/pat/memtype.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/pat/memtype.c) — x86 PAT memory type management for `ioremap_wc()` and `ioremap_uc()` mappings
+- [LWN: DMA and cache coherency](https://lwn.net/Articles/501591/) — deep dive into why non-coherent platforms require explicit cache management (2012)
+- [DMA Memory Allocation](dma.md) — IOMMU integration, SWIOTLB bounce buffering, and DMA zone layout
+- [PCI BAR Mapping](pci-bar-mapping.md) — MMIO cache attributes (`ioremap`, `ioremap_wc`) for device register access

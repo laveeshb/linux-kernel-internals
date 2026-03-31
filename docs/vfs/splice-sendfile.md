@@ -155,7 +155,7 @@ SYSCALL_DEFINE4(sendfile64, int, out_fd, int, in_fd,
 }
 
 /* fs/read_write.c */
-static ssize_t do_sendfile(int out_fd, int in_fd, loff_t *ppos, size_t count, loff_t max)
+static ssize_t do_sendfile(struct file *out_file, struct file *in_file, loff_t *ppos, size_t count, loff_t max)
 {
     /* Uses file->f_op->splice_read to get pages from in_file */
     /* Uses sock_sendpage (or generic_file_splice_write) for out_file */

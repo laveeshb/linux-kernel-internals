@@ -117,7 +117,7 @@ struct sched_attr attr = {
     .sched_deadline = 10000000,  // must finish within 10ms
     .sched_period   = 10000000,  // period is 10ms
 };
-sched_setattr(0, &attr);
+sched_setattr(0, &attr, 0);
 ```
 
 The kernel enforces admission control: it rejects `SCHED_DEADLINE` tasks if accepting them would make the system infeasible (total utilization would exceed 1.0 per CPU).

@@ -391,3 +391,28 @@ static int __init dummy_numa_init(void)
     return 0;
 }
 ```
+
+## Further reading
+
+### Kernel source
+
+- [drivers/acpi/numa/srat.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/acpi/numa/srat.c) — `acpi_numa_init()`, `acpi_parse_slit()`, PXM-to-node mapping tables
+- [arch/x86/mm/srat.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/srat.c) — x86 entry point `x86_acpi_numa_init()` and APIC-affinity callbacks
+- [arch/x86/mm/numa.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/numa.c) — `x86_numa_init()` orchestration, `dummy_numa_init()`, NUMA init fallback chain
+- [mm/numa_memblks.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/numa_memblks.c) — `numa_add_memblk()`, `numa_set_distance()`, and the runtime `numa_distance[]` matrix
+- [include/acpi/actbl3.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/acpi/actbl3.h) — C struct definitions for `acpi_table_srat`, `acpi_srat_mem_affinity`, `acpi_table_slit`
+
+### ACPI specification
+
+- [ACPI Specification (latest)](https://uefi.org/specifications) — Chapter 5 (ACPI Software Programming Model) covers the SRAT (section 5.2.16) and SLIT (section 5.2.17) table formats in authoritative detail
+
+### LWN articles
+
+- [NUMA topology initialization](https://lwn.net/Articles/568950/) — how ACPI tables feed into the kernel's NUMA node model at boot
+- [Memory hotplug and NUMA](https://lwn.net/Articles/523874/) — how hotplug memory regions from SRAT interact with the memory hotplug subsystem
+
+### Related docs
+
+- [NUMA Memory Management](numa.md) — overview of NUMA policies, automatic balancing, and memory tiering
+- [NUMA Distance and Inter-Socket Latency](numa-distance.md) — how the `numa_distance[]` matrix built from SLIT is used at runtime by the scheduler and allocator
+- [memblock: The Boot-Time Memory Allocator](memblock.md) — how `memblock_set_node()` consumes the node ranges registered by SRAT parsing
