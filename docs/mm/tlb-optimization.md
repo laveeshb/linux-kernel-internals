@@ -283,6 +283,22 @@ If the generation has advanced (a TLB flush happened while this CPU was running 
 
 ### KPTI and Doubled PCIDs
 
+#### Why KPTI exists
+
+On January 3, 2018, the Meltdown vulnerability (CVE-2017-5754) was disclosed. The root cause: for performance, Linux had always mapped the kernel's virtual address space into every process's page table. Switching from user to kernel mode (syscall, interrupt) required no CR3 reload — the kernel's virtual addresses were already reachable. This saved a TLB flush on every kernel entry and exit.
+
+Meltdown showed that a user process could speculatively read kernel memory through this shared mapping using a side channel (cache timing), bypassing the hardware permission bits. The fix — **Kernel Page Table Isolation (KPTI)** — was conceptually simple: give each process two separate sets of page tables. The "user" page table has almost no kernel mappings (just a tiny trampoline needed to handle the mode switch). The "kernel" page table is only active while in kernel mode.
+
+The cost was severe: every syscall and interrupt required two CR3 writes (one to switch to kernel page tables on entry, one to switch back on return). On a pre-PCID processor, each CR3 write flushes the entire TLB. Benchmarks showed 5–30% performance regression on syscall-heavy workloads.
+
+#### PCID made KPTI bearable
+
+PCID (Process Context Identifiers) had been introduced in Linux 4.7 but barely used — there was little reason to avoid TLB flushes on context switches when all process page tables were already in memory. Meltdown changed that calculation completely.
+
+With PCID active, the two CR3 writes per syscall no longer flush the TLB: the kernel and user page tables each get a distinct PCID tag, and the CPU keeps both in the TLB simultaneously. An entry to the kernel switches to the kernel PCID; a return to userspace switches back to the user PCID. Warm TLB entries survive the transition.
+
+Linux 4.14 enabled both KPTI and PCID together. On PCID-capable hardware (Westmere and newer), the KPTI overhead dropped from ~30% to ~5–10% for syscall-heavy workloads. On older hardware without PCID (which still needed to flush on every CR3 write), KPTI remained expensive and was sometimes disabled by administrators on trusted workloads.
+
 When Kernel Page Table Isolation (KPTI) is active, each mm needs two PCIDs: one for user-space page tables and one for kernel-space. This halves the available PCID space to 2048 effective ASIDs (`PTI_CONSUMED_PCID_BITS = 1`).
 
 ### Global ASIDs (INVLPGB)

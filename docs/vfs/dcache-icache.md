@@ -2,7 +2,29 @@
 
 > How VFS caches filesystem lookups for performance
 
-## Why caches are essential
+## Why three separate caches?
+
+Linux maintains three distinct caches for filesystem data: the **dentry cache** (path lookups), the **inode cache** (file metadata), and the **page cache** (file contents). Understanding why they're separate — rather than one unified cache — explains many VFS design decisions.
+
+### Different data, different access patterns
+
+| Cache | What it stores | Typical size | Access pattern |
+|-------|---------------|-------------|----------------|
+| dcache | `(parent_dir, name) → inode number` | ~200 bytes per entry | Every `open()`, `stat()`, `exec()` — extremely high frequency |
+| icache | Inode metadata (size, permissions, timestamps, block locations) | ~600 bytes per entry | Accessed when a file is open or its metadata is needed |
+| page cache | File contents (4KB pages) | Variable (up to GBs for a hot file) | Accessed on `read()`/`write()`/`mmap()` |
+
+A `stat()` call needs dentry + inode but no page cache pages. A `read()` needs all three. An `ls -l` in a large directory needs many dentries and inodes but few or no page cache pages. Unifying the caches would require storing vastly different-sized objects in one structure, defeating slab allocation efficiency.
+
+### Why cache "file not found"?
+
+The dcache stores **negative dentries**: entries where the lookup returned ENOENT. This seems wasteful — why cache a failure?
+
+Compilers generate negative lookups constantly. A C compiler searching for `<stdio.h>` tries each directory in the include path: `/usr/local/include/stdio.h`, `/usr/include/stdio.h`, etc. Without negative caching, each failed lookup would hit the filesystem. With it, the kernel returns ENOENT from the dcache without a disk read. On build servers compiling thousands of files, this is a significant win.
+
+Negative dentries are evicted under memory pressure just like positive ones, and they're invalidated immediately when the file is created (`d_instantiate()` replaces the negative dentry).
+
+### Why caches are essential
 
 Without caching, every path component lookup would require a disk read to find the directory entry. On a system doing thousands of `open()` calls per second, that would be catastrophically slow. VFS caches path lookups in the **dentry cache (dcache)** and stores open inodes in the **inode cache (icache)**.
 
