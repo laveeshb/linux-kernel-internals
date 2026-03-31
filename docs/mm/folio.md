@@ -11,7 +11,7 @@
 | `include/linux/mm.h` | `folio_order()`, `folio_nr_pages()`, `folio_size()`, `folio_pfn()`, `folio_address()`, `folio_get()`, `folio_put()` |
 | `include/linux/page_ref.h` | `folio_ref_count()`, `folio_try_get()` |
 | `include/linux/pagemap.h` | `filemap_alloc_folio()`, `filemap_grab_folio()`, `readahead_folio()`, `filemap_add_folio()` |
-| `include/linux/swap.h` | `folio_add_lru()`, `folio_add_lru_vma()` |
+| `include/linux/swap.h` | `folio_add_lru()` |
 | `mm/folio-compat.c` | Page-API shims that delegate to folio functions |
 
 ---
@@ -284,7 +284,6 @@ The comment at the top of `folio-compat.c` is explicit: *"All of the callers of 
 ```c
 /* include/linux/swap.h */
 void folio_add_lru(struct folio *folio);
-void folio_add_lru_vma(struct folio *folio, struct vm_area_struct *vma);
 ```
 
 LRU accounting is per-folio. A large folio counts as `folio_nr_pages()` pages on the LRU, but it is a single eviction unit — the kernel cannot partially evict a folio.
@@ -310,8 +309,8 @@ For page-cache use, allocate via `filemap_alloc_folio()`:
 
 ```c
 /* include/linux/pagemap.h */
-#define filemap_alloc_folio(gfp, order, policy) \
-    alloc_hooks(filemap_alloc_folio_noprof(gfp, order, policy))
+#define filemap_alloc_folio(gfp, order) \
+    alloc_hooks(filemap_alloc_folio_noprof(gfp, order))
 ```
 
 For generic kernel use, `folio_alloc()` (in `include/linux/gfp.h`) wraps the buddy allocator:
@@ -468,5 +467,5 @@ if (!folio_try_get(folio))
 | `folio_test_large(folio)` | `page-flags.h` | True for order ≥ 1 folios |
 | `folio_add_lru(folio)` | `swap.h` | Add folio to the LRU list |
 | `filemap_grab_folio(mapping, index)` | `pagemap.h` | Look up or create a page-cache folio |
-| `filemap_alloc_folio(gfp, order, policy)` | `pagemap.h` | Allocate a page-cache folio |
+| `filemap_alloc_folio(gfp, order)` | `pagemap.h` | Allocate a page-cache folio |
 | `readahead_folio(ractl)` | `pagemap.h` | Get next folio from a readahead batch |

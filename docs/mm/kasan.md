@@ -54,11 +54,11 @@ Shadow byte values (defined in [`mm/kasan/kasan.h`](https://git.kernel.org/pub/s
 |-------------|--------------|---------|
 | `0x00` | — | All 8 bytes are valid (accessible) |
 | `0x01`-`0x07` | — | Only the first N bytes are valid (partial granule) |
-| `0xFF` | `KASAN_PAGE_FREE` | Freed page |
+| `0xFF` | `KASAN_SHADOW_INIT` | Inaccessible / uninitialized shadow |
 | `0xFE` | `KASAN_PAGE_REDZONE` | Redzone for kmalloc_large allocation |
 | `0xFC` | `KASAN_SLAB_REDZONE` | Redzone for slab object |
 | `0xFB` | `KASAN_SLAB_FREE` | Freed slab object |
-| `0xFA` | `KASAN_SLAB_FREE_META` | Freed slab object with free metadata |
+| `0xFA` | `KASAN_KMALLOC_FREETRACK` | Freed kmalloc object with free-track metadata |
 | `0xF9` | `KASAN_GLOBAL_REDZONE` | Redzone for global variable |
 | `0xF8` | `KASAN_VMALLOC_INVALID` | Inaccessible space in vmap area |
 | `0xF1` | `KASAN_STACK_LEFT` | Stack left redzone |
