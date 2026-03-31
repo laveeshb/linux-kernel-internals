@@ -194,7 +194,7 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 
     // Fast path: all tasks are fair class
     if (likely(!sched_class_above(prev->sched_class, &fair_sched_class) &&
-               rq->nr_running == rq->cfs.h_nr_queued)) {
+               rq->nr_running == rq->cfs.h_nr_running)) {
         p = pick_next_task_fair(rq, prev, rf);
         if (unlikely(p == RETRY_TASK))
             goto restart;

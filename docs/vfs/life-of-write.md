@@ -168,7 +168,7 @@ void wb_workfn(struct bdi_writeback *wb)
                 → ext4_writepages()
                     → mpage_writepages()
                         → for each dirty page:
-                            submit_bio(READ/WRITE, bio)
+                            submit_bio(bio)
                             → block layer → disk
     }
 }
