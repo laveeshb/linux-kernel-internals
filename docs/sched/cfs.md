@@ -154,7 +154,7 @@ static bool dequeue_entity(struct cfs_rq *cfs_rq,
 
 ### pick_next_entity()
 
-Selects the next task to run — since 6.6, this delegates to EEVDF:
+Selects the next task to run — since 6.6 ([`147f3efaa241`](https://git.kernel.org/linus/147f3efaa24182a21706bca15eab2f3f4630b5fe), [`5e963f2bd465`](https://git.kernel.org/linus/5e963f2bd4654a202a8a05aa3a86cb0300b10e6c)), this delegates to EEVDF:
 
 ```c
 // kernel/sched/fair.c

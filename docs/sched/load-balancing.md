@@ -104,7 +104,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 
 ## Load metric: PELT
 
-The scheduler uses **PELT** (Per-Entity Load Tracking) to measure each task's load contribution. PELT tracks an exponentially weighted moving average of CPU utilization:
+The scheduler uses **PELT** (Per-Entity Load Tracking) to measure each task's load contribution. Introduced in Linux 3.8 by Paul Turner (Google) — [`9d85f21c94f7`](https://git.kernel.org/linus/9d85f21c94f7f7a84d0ba686c58aa6d9da58fdbb). PELT tracks an exponentially weighted moving average of CPU utilization:
 
 ```
 util_avg = util_avg * decay + new_util * (1 - decay)

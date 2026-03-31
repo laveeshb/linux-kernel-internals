@@ -22,7 +22,7 @@ Timeline:
         H < M effectively, even though H > M nominally!
 ```
 
-This is not theoretical. The Mars Pathfinder mission (1997) experienced priority inversion that caused periodic system resets until engineers uploaded a fix to enable priority inheritance on the affected mutex.
+This is not theoretical. The Mars Pathfinder mission (1997) experienced priority inversion that caused periodic system resets until engineers uploaded a fix to enable priority inheritance on the affected mutex. ([Mike Jones, "What Really Happened on Mars?", 1997](https://www.cs.cornell.edu/courses/cs614/1999sp/papers/pathfinder.html))
 
 ## Priority inheritance: the solution
 
