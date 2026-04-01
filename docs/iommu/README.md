@@ -26,6 +26,22 @@ Beyond security, the IOMMU enables:
 |------|----------------|
 | [IOMMU Architecture](iommu-arch.md) | Intel VT-d, AMD-Vi, iommu_domain, IOMMU groups, VFIO |
 | [DMA API](dma-api.md) | dma_alloc_coherent, dma_map_single/sg, swiotlb, IOVA allocation |
+| [IOVA Allocator](iova-allocator.md) | iova_domain, rbtree, per-CPU rcache magazines, flush queues |
+| [Shared Virtual Addressing](sva.md) | PASID, ATS, PRI, iommu_sva API, Intel DSA, ARM SMMU v3 |
+| [VFIO Internals](vfio-internals.md) | Container/group/device hierarchy, mdev, MSI irqfd, KVM passthrough |
+| [IOMMU War Stories](war-stories.md) | DMAR faults, IOVA perf bottleneck, group isolation, swiotlb exhaustion |
+
+## Reading order
+
+New to IOMMU internals? Work through the pages in this order:
+
+1. **[README](README.md)** — this page; why IOMMU exists, quick reference
+2. **[IOMMU Architecture](iommu-arch.md)** — hardware (VT-d, AMD-Vi, ARM SMMU), the kernel abstraction (`iommu_domain`, groups), IOTLB
+3. **[DMA API](dma-api.md)** — how drivers actually use DMA: coherent, streaming, scatter-gather, swiotlb
+4. **[IOVA Allocator](iova-allocator.md)** — the address allocator underneath DMA mapping; rcache and flush queue internals; performance impact
+5. **[Shared Virtual Addressing](sva.md)** — advanced: PASID-based VA sharing for accelerators; requires understanding of IOMMU domains
+6. **[VFIO Internals](vfio-internals.md)** — device passthrough architecture; page pinning, interrupt delivery, mdev
+7. **[IOMMU War Stories](war-stories.md)** — real incidents tying all the above together; good for consolidating understanding
 
 ## Quick reference
 

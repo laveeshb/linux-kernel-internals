@@ -421,6 +421,10 @@ nav:
     - Getting Started: iommu/README.md
     - IOMMU Architecture: iommu/iommu-arch.md
     - DMA API: iommu/dma-api.md
+    - IOVA Allocator: iommu/iova-allocator.md
+    - Shared Virtual Addressing: iommu/sva.md
+    - VFIO Internals: iommu/vfio-internals.md
+    - IOMMU War Stories: iommu/war-stories.md
   - Kernel Debugging:
     - Getting Started: debugging/README.md
     - KGDB: debugging/kgdb.md
@@ -432,6 +436,10 @@ nav:
     - Getting Started: crypto/README.md
     - Kernel Crypto API: crypto/crypto-api.md
     - dm-crypt and fscrypt: crypto/encryption.md
+    - "crypto_engine: Hardware Offload": crypto/crypto-engine.md
+    - Kernel Keyring: crypto/keyring.md
+    - Random Number Generation: crypto/rng.md
+    - Crypto War Stories: crypto/war-stories.md
   - Kernel Internals:
     - printk and Kernel Logging: kernel/printk.md
   - Live Patching:
