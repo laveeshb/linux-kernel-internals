@@ -39,7 +39,7 @@ GRUB2 (Grand Unified Bootloader version 2) is the most common Linux bootloader o
 1. GRUB2's second stage loads the kernel image (`/boot/vmlinuz-*`) into memory
 2. It reads or constructs `struct boot_params` (defined in `arch/x86/include/uapi/asm/bootparam.h`)
 3. It populates the e820 memory map entries in `boot_params.e820_table`
-4. It jumps to the kernel's real-mode entry point (the setup code at offset 0 of the bzImage)
+4. It uses the 32-bit boot protocol and jumps directly to `startup_32` in the compressed stub, bypassing the real-mode setup code entirely (the 512-byte boot sector occupies offset 0–511; the real-mode setup code begins at offset 512/0x200, but modern GRUB2 skips it via the 32-bit entry point)
 
 ```c
 /* arch/x86/include/uapi/asm/bootparam.h */
@@ -48,7 +48,7 @@ struct boot_params {
     struct apm_bios_info     apm_bios_info;      /* 0x040 */
     /* ... */
     __u8                     e820_entries;        /* 0x1e8 */
-    struct setup_header      hdr;                 /* 0x1f1 — must be last! */
+    struct setup_header      hdr;                 /* 0x1f1 */
     /* ... */
     struct boot_e820_entry   e820_table[E820_MAX_ENTRIES_ZEROPAGE]; /* 0x2d0 */
 };
@@ -342,7 +342,7 @@ asmlinkage __visible void __init x86_64_start_kernel(char *real_mode_data)
      */
 
     /* Build the final early page tables */
-    clear_bss();
+    /* BSS already cleared in startup_64 assembly */
 
     /*
      * Copy the boot_params from real mode data area to its

@@ -115,9 +115,9 @@ extern struct cpuinfo_x86 boot_cpu_data;
 #define X86_FEATURE_MSR         ( 0*32+ 5)  /* Model-Specific Registers */
 #define X86_FEATURE_PAE         ( 0*32+ 6)  /* Physical Address Extensions */
 /* ... many more ... */
-#define X86_FEATURE_FSGSBASE    ( 9*32+ 0)  /* RDFSBASE, WRFSBASE, RDGSBASE, WRGSBASE */
+#define X86_FEATURE_FSGSBASE    ( 6*32+ 0)  /* RDFSBASE, WRFSBASE, RDGSBASE, WRGSBASE */
 #define X86_FEATURE_PCID        ( 1*32+17)  /* Process Context IDs */
-#define X86_FEATURE_INVPCID     ( 9*32+10)  /* INVPCID instruction */
+#define X86_FEATURE_INVPCID     ( 6*32+10)  /* INVPCID instruction */
 #define X86_FEATURE_PKU         (16*32+ 3)  /* Protection Keys for Userspace */
 #define X86_FEATURE_UMIP        (16*32+ 2)  /* User-Mode Instruction Prevention */
 #define X86_FEATURE_AVX512F     ( 9*32+16)  /* AVX-512 Foundation */
@@ -247,8 +247,8 @@ void __init_or_module apply_alternatives(struct alt_instr *start,
 ### Real examples of alternative use
 
 ```c
-/* LOCK prefix: NOP on UP, LOCK on SMP */
-ALTERNATIVE("nop", "lock; ", X86_FEATURE_SMP_ALTERNATIVES)
+/* LOCK prefix: present on SMP, patched out to NOP on uniprocessor (UP) kernels */
+ALTERNATIVE("lock; ", "nop", X86_FEATURE_UP)
 
 /* Fast string operations (ERMS: Enhanced REP MOVSB/STOSB) */
 ALTERNATIVE("rep movsq", "rep movsb", X86_FEATURE_ERMS)
@@ -265,22 +265,27 @@ In addition to feature flags, the kernel maintains a set of **bug flags** in the
 
 ```c
 /* arch/x86/include/asm/cpufeatures.h */
-/* Bug flags — separate from feature flags */
-#define X86_BUG_F00F            (NR_BUGINTS* 0+ 0)  /* Intel F0 0F bug */
-#define X86_BUG_FDIV            (NR_BUGINTS* 0+ 1)  /* FPU FDIV */
-#define X86_BUG_AMD_APM_ERRATUM (NR_BUGINTS* 0+ 2)  /* AMD APM bug */
-#define X86_BUG_CPU_MELTDOWN    (NR_BUGINTS* 0+ 14) /* CPU is vulnerable to Meltdown */
-#define X86_BUG_SPECTRE_V1      (NR_BUGINTS* 0+ 15) /* CPU is vulnerable to Spectre v1 */
-#define X86_BUG_SPECTRE_V2      (NR_BUGINTS* 0+ 16) /* CPU is vulnerable to Spectre v2 */
-#define X86_BUG_SPEC_STORE_BYPASS (NR_BUGINTS* 0+17) /* Speculative store bypass */
-#define X86_BUG_L1TF           (NR_BUGINTS* 0+ 18) /* L1 Terminal Fault */
-#define X86_BUG_MDS            (NR_BUGINTS* 0+ 19) /* Microarchitectural Data Sampling */
-#define X86_BUG_MSBDS_ONLY     (NR_BUGINTS* 0+ 20)
-#define X86_BUG_SWAPGS         (NR_BUGINTS* 0+ 21)
-#define X86_BUG_TAA            (NR_BUGINTS* 0+ 22) /* TSX Async Abort */
-#define X86_BUG_ITLB_MULTIHIT  (NR_BUGINTS* 0+ 23)
-#define X86_BUG_SRBDS          (NR_BUGINTS* 0+ 24)
-#define X86_BUG_MMIO_STALE_DATA (NR_BUGINTS*0+ 25)
+/*
+ * Bug flags — stored in the upper NBUGINTS words of x86_capability[].
+ * The macro X86_BUG(x) places bug flags above all feature words:
+ *   #define X86_BUG(x)  (NCAPINTS*32 + (x))
+ * So X86_BUG_CPU_MELTDOWN = X86_BUG(14) = NCAPINTS*32 + 14.
+ */
+#define X86_BUG_F00F            X86_BUG( 0)  /* Intel F0 0F bug */
+#define X86_BUG_FDIV            X86_BUG( 1)  /* FPU FDIV */
+#define X86_BUG_AMD_APM_ERRATUM X86_BUG( 2)  /* AMD APM bug */
+#define X86_BUG_CPU_MELTDOWN    X86_BUG(14)  /* CPU is vulnerable to Meltdown */
+#define X86_BUG_SPECTRE_V1      X86_BUG(15)  /* CPU is vulnerable to Spectre v1 */
+#define X86_BUG_SPECTRE_V2      X86_BUG(16)  /* CPU is vulnerable to Spectre v2 */
+#define X86_BUG_SPEC_STORE_BYPASS X86_BUG(17) /* Speculative store bypass */
+#define X86_BUG_L1TF            X86_BUG(18)  /* L1 Terminal Fault */
+#define X86_BUG_MDS             X86_BUG(19)  /* Microarchitectural Data Sampling */
+#define X86_BUG_MSBDS_ONLY      X86_BUG(20)
+#define X86_BUG_SWAPGS          X86_BUG(21)
+#define X86_BUG_TAA             X86_BUG(22)  /* TSX Async Abort */
+#define X86_BUG_ITLB_MULTIHIT   X86_BUG(23)
+#define X86_BUG_SRBDS           X86_BUG(24)
+#define X86_BUG_MMIO_STALE_DATA X86_BUG(25)
 /* ... more added with each new hardware vulnerability ... */
 ```
 
@@ -389,7 +394,7 @@ dmesg | grep -i pcid
 |---------|--------------|-------|
 | `static_cpu_has()` | 2.6.39 | Compile-time patchable feature check |
 | `ALTERNATIVE` macro | Early; formalized ~3.x | Assembly-level patching |
-| PKU support | 4.6 | `CONFIG_X86_INTEL_MPX` area |
+| PKU support | 4.6 | `CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS` |
 | UMIP enforcement | 4.19 | Automatically enabled if supported |
 | FSGSBASE instructions in kernel | 5.9 | `CR4.FSGSBASE` enabled |
 | `X86_BUG_*` flags for speculative execution | 4.15 | Meltdown/Spectre era |

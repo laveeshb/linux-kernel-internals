@@ -113,10 +113,12 @@ static inline pte_t pte_wrprotect(pte_t pte) { return pte_clear_flags(pte, _PAGE
 57-bit virtual address (5-level paging):
  63        57 56    48 47    39 38    30 29    21 20    12 11      0
  ┌───────────┬────────┬────────┬────────┬────────┬────────┬────────┐
- │ sign ext  │  P4D   │  PGD   │  PUD   │  PMD   │  PTE   │ offset │
+ │ sign ext  │  PGD   │  P4D   │  PUD   │  PMD   │  PTE   │ offset │
  │  (7 bit)  │ (9 bit)│ (9 bit)│ (9 bit)│ (9 bit)│ (9 bit)│(12 bit)│
  └───────────┴────────┴────────┴────────┴────────┴────────┴────────┘
 ```
+
+In Linux, `pgd_t` is always the top level (bits 56:48 in 5-level paging) and `p4d_t` is the next level (bits 47:39). The walk order is: PGD (bits 56:48) → P4D (bits 47:39) → PUD → PMD → PTE.
 
 This provides 128 PB of virtual address space per process (versus 128 TB with 4-level paging).
 
@@ -220,7 +222,7 @@ PCID requires the `INVPCID` instruction to invalidate individual PCID-tagged TLB
 
 ### The problem KPTI solves
 
-Before KPTI, the kernel's page tables were always mapped — including when running user code. This meant a user process's page table always included kernel virtual addresses (marked non-accessible via U/S=0). Meltdown exploited speculative execution to read kernel memory through these mappings before the CPU's permission check raised a #GP.
+Before KPTI, the kernel's page tables were always mapped — including when running user code. This meant a user process's page table always included kernel virtual addresses (marked non-accessible via U/S=0). Meltdown exploited speculative execution to read kernel memory through these mappings before the CPU's permission check raised a #PF (Page Fault, vector 14).
 
 ### The two-PGD solution
 
@@ -282,7 +284,7 @@ The naive KPTI implementation would flush the entire TLB on every user↔kernel 
 
 ```
 Process A, user PGD:   PCID = asid (e.g., 5)
-Process A, kernel PGD: PCID = asid + 512 (e.g., 517)
+Process A, kernel PGD: PCID = asid | 0x80 (e.g., 5 | 0x80 = 133)
 ```
 
 With PCID, switching between the user and kernel PGDs preserves TLB entries for both. The CR3 is still reloaded, but with `bit 63 = 1` (no flush). This reduces the KPTI overhead from ~30% to roughly 5% on syscall-heavy workloads.

@@ -48,12 +48,11 @@ start_kernel()
     tick_init()                            [24]
     timekeeping_init()                     [25]
     time_init()                            [26]
-    printk_safe_init()                     [27]
-    kmem_cache_init()                      [28]
+    kmem_cache_init()                      [27]
     ...
-    console_init()                         [29]
+    console_init()                         [28]
     ...
-    rest_init()                            [30]
+    rest_init()                            [29]
 ```
 
 ### Key steps explained
@@ -125,7 +124,7 @@ On x86, sets up the Interrupt Descriptor Table (IDT) with handlers for all CPU e
 
 **[15] `mm_core_init()`** (`mm/mm_init.c`)
 
-Initializes the core memory management infrastructure: `mem_init()` (converts memblock to the buddy allocator), `kmem_cache_init_late()`, page table caches, and more. After this, the general-purpose page allocator (`alloc_pages()`) is operational.
+Initializes the core memory management infrastructure: `mem_init()` (converts memblock to the buddy allocator), `kmem_cache_init()` (bootstraps the slab allocator), page table caches, and more. After this, the general-purpose page allocator (`alloc_pages()`) is operational. Note: `kmem_cache_init_late()` is invoked later as a separate `core_initcall`, not from within `mm_core_init()`.
 
 **[16] `poking_init()`**
 
@@ -165,25 +164,21 @@ Initializes the tick framework (NO_HZ, HRTICK, broadcast clock event). Must prec
 
 **[25] `timekeeping_init()`** (`kernel/time/timekeeping.c`)
 
-Reads the hardware clock source and initializes `timekeeper`. After this, `ktime_get()` and `do_gettimeofday()` work. This is the kernel's internal clock, not the wall clock.
+Reads the hardware clock source and initializes `timekeeper`. After this, `ktime_get()` and `ktime_get_real_ts64()` work. This is the kernel's internal clock, not the wall clock.
 
 **[26] `time_init()`** (`arch/x86/kernel/time.c`)
 
 Architecture-specific time initialization. On x86 this calibrates the TSC against the PIT or HPET and sets up the clock event device for the timer interrupt.
 
-**[27] `printk_safe_init()`**
-
-Initializes per-CPU buffers used by `printk_safe` (the NMI-safe printk path). Before this, calling `printk` from an NMI handler is unsafe due to lock recursion.
-
-**[28] `kmem_cache_init()`** (`mm/slab.c` or `mm/slub.c`)
+**[27] `kmem_cache_init()`** (`mm/slab.c` or `mm/slub.c`)
 
 Bootstraps the slab allocator. This is a multi-stage process because the slab allocator needs to allocate memory for its own metadata, but it needs the slab allocator to do so. The bootstrap uses static arrays then migrates. After this call, `kmalloc()` works.
 
-**[29] `console_init()`** (`drivers/tty/tty_io.c`)
+**[28] `console_init()`** (`kernel/printk/printk.c`)
 
 Initializes the console subsystem and calls registered console drivers. After this call, `printk` output goes to the serial console or VGA — this is when the boot messages that were buffered in the log ring actually appear on screen.
 
-**[30] `rest_init()`** (`init/main.c`)
+**[29] `rest_init()`** (`init/main.c`)
 
 The last call in `start_kernel()`. Creates kernel threads and enters the idle loop (see below).
 
@@ -205,7 +200,7 @@ static noinline void __ref rest_init(void)
      * and kthreadd second so that it obtains pid 2. We require
      * pid 1 to be running before kthreadd starts.
      */
-    pid = kernel_thread(kernel_init, NULL, CLONE_FS);
+    pid = kernel_thread(kernel_init, NULL, "init", CLONE_FS);
 
     rcu_read_lock();
     tsk = find_task_by_pid_ns(pid, &init_pid_ns);
@@ -214,7 +209,7 @@ static noinline void __ref rest_init(void)
     rcu_read_unlock();
 
     numa_default_policy();
-    pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
+    pid = kernel_thread(kthreadd, NULL, "kthreadd", CLONE_FS | CLONE_FILES);
     rcu_read_lock();
     kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
     rcu_read_unlock();
@@ -242,19 +237,19 @@ Built-in kernel subsystems register initialization functions using initcall macr
 
 | Macro | Level | Typical use |
 |-------|-------|-------------|
-| `early_initcall(fn)` | 0 | Very early, before pure |
-| `pure_initcall(fn)` | 1 | Pure infrastructure, no hardware |
-| `core_initcall(fn)` | 2 | Core kernel infrastructure (workqueues, etc.) |
-| `core_initcall_sync(fn)` | 2s | Synchronization point after core |
-| `postcore_initcall(fn)` | 3 | After core subsystems |
-| `arch_initcall(fn)` | 4 | Architecture-specific init |
-| `subsys_initcall(fn)` | 5 | Subsystem init (PCI, USB core, networking) |
-| `subsys_initcall_sync(fn)` | 5s | |
-| `fs_initcall(fn)` | 6 | Filesystem registration |
-| `rootfs_initcall(fn)` | 7 | Root filesystem (initramfs population) |
-| `device_initcall(fn)` | 8 | Most drivers; `module_init()` is an alias |
-| `device_initcall_sync(fn)` | 8s | |
-| `late_initcall(fn)` | 9 | After all devices initialized |
+| `early_initcall(fn)` | early | Very early, before pure |
+| `pure_initcall(fn)` | 0 | Pure infrastructure, no hardware |
+| `core_initcall(fn)` | 1 | Core kernel infrastructure (workqueues, etc.) |
+| `core_initcall_sync(fn)` | 1s | Synchronization point after core |
+| `postcore_initcall(fn)` | 2 | After core subsystems |
+| `arch_initcall(fn)` | 3 | Architecture-specific init |
+| `subsys_initcall(fn)` | 4 | Subsystem init (PCI, USB core, networking) |
+| `subsys_initcall_sync(fn)` | 4s | |
+| `fs_initcall(fn)` | 5 | Filesystem registration |
+| `rootfs_initcall(fn)` | rootfs | Root filesystem (initramfs population) |
+| `device_initcall(fn)` | 6 | Most drivers; `module_init()` is an alias |
+| `device_initcall_sync(fn)` | 6s | |
+| `late_initcall(fn)` | 7 | After all devices initialized |
 
 ### How it works
 
@@ -264,11 +259,10 @@ Each macro expands to `__define_initcall(fn, level)`:
 /* include/linux/init.h */
 #define __define_initcall(fn, id) \
     static initcall_t __initcall_##fn##id \
-    __used __attribute__((__section__(".initcall" #id ".init"))) \
-    __aligned(__alignof__(initcall_t)) = fn
+    __used __attribute__((__section__(".initcall" #id ".init"))) = fn
 
-#define core_initcall(fn)       __define_initcall(fn, 2)
-#define device_initcall(fn)     __define_initcall(fn, 8)
+#define core_initcall(fn)       __define_initcall(fn, 1)
+#define device_initcall(fn)     __define_initcall(fn, 6)
 #define module_init(fn)         device_initcall(fn)
 ```
 

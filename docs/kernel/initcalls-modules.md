@@ -48,7 +48,7 @@ For a **built-in module** (`y` in Kconfig), `module_init()` becomes:
 #define module_init(initfn)     device_initcall(initfn)
 ```
 
-which places the function pointer in the `.initcall8.init` ELF section, called by `do_initcalls()` during boot. See [Early Boot and start_kernel()](early-boot.md) for the full initcall level table.
+which places the function pointer in the `.initcall6.init` ELF section, called by `do_initcalls()` during boot. See [Early Boot and start_kernel()](early-boot.md) for the full initcall level table.
 
 `module_exit()` for built-in code expands to nothing — built-in code can never be unloaded, so the exit function is not needed (and is discarded by the linker from `.exit.text`).
 
@@ -85,8 +85,8 @@ struct module {
     atomic_t refcnt;
 
     /* Module dependencies */
-    struct list_head requires;      /* modules this module depends on */
-    struct list_head users;         /* modules that depend on this one */
+    struct list_head source_list;   /* modules that use this one (dependents) */
+    struct list_head target_list;   /* modules this one depends on */
 
     /* Source section information (for /sys/module/<name>/sections/) */
     struct module_sect_attrs *sect_attrs;
@@ -197,7 +197,7 @@ rmmod mydriver
     7. module_free(): return memory to vmalloc allocator
 ```
 
-Modules cannot be unloaded while any code is executing in them (tracked by `refcnt`) or while any other module depends on them (tracked by the `users` list).
+Modules cannot be unloaded while any code is executing in them (tracked by `refcnt`) or while any other module depends on them (tracked by the `source_list`).
 
 ---
 

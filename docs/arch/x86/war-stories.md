@@ -38,13 +38,13 @@ The fundamental issue: without PCID, every CR3 load on entry/exit discards all T
 
 KPTI was designed with the PCID optimization in mind but it could only be used on CPUs that also support `INVPCID`. The initial KPTI implementation fell back to the slower (full TLB flush) path on CPUs that have PCID but lack `INVPCID` — which included some production Haswell server CPUs.
 
-Even on CPUs with full PCID+INVPCID support, the KPTI PCID optimization (the dual-ASID scheme using kernel PCID = user PCID + 512) was not enabled by default in the very first KPTI patches and had to be explicitly enabled and then auto-detected.
+Even on CPUs with full PCID+INVPCID support, the KPTI PCID optimization (the dual-ASID scheme using kernel PCID = user ASID | 0x80, i.e., bit 7 set) was not enabled by default in the very first KPTI patches and had to be explicitly enabled and then auto-detected.
 
 ### Fix
 
 The PCID optimization was refined and verified across CPU generations. For CPUs with PCID+INVPCID support, the kernel:
 
-1. Assigns each process two PCIDs: one for the user PGD (e.g., PCID 5) and one for the kernel PGD (e.g., PCID 5 + 512 = 517)
+1. Assigns each process two PCIDs: one for the user PGD (e.g., PCID 5) and one for the kernel PGD (e.g., PCID 5 | 0x80 = 133)
 2. Loads CR3 with `bit 63 = 1` (no TLB flush) when switching between the two PGDs for the same process — because the TLB entries tagged with the old PCID remain valid
 3. Uses `INVPCID` to selectively invalidate entries when required (e.g., after `munmap`)
 
@@ -188,11 +188,11 @@ TSC unreliability on multi-socket systems is well-known but the failure mode (ti
 
 ### The vulnerability
 
-On AMD processors, if the `RCX` register (which holds the user-space return address) contains a **non-canonical address** (an address where bits 63:48 are not a sign extension of bit 47), the `SYSRET` instruction generates a `#GP` (General Protection fault). The `#GP` is delivered with the CPU in ring 0 (because SYSRET had not yet completed the transition) but using the `RSP` value from the current context — which at that point is the **user-supplied RSP**.
+On AMD processors, if the `RCX` register (which holds the user-space return address) contains a **non-canonical address** (an address where bits 63:48 are not a sign extension of bit 47), AMD's `SYSRET` checks RIP canonicality **after** switching the privilege level to ring 3. The resulting `#GP` therefore fires from ring 3, not ring 0. Normal exception delivery from ring 3 then uses the TSS to switch back to ring 0 — and the TSS stack pointer becomes the attack vector if it can be influenced.
 
-An attacker who controls the stack pointer (through the non-canonical SYSRET trick) can cause the `#GP` handler to run with a kernel-mode `RSP` pointing at attacker-controlled memory. This allows full kernel code execution.
+On Intel processors, the non-canonical check happens **before** the privilege level change, so `#GP` is raised while still in ring 0 with the kernel stack, which is safe.
 
-Intel processors handle the non-canonical check differently (they raise #GP before the privilege level change), so the vulnerability was AMD-specific in its exploitable form. However, Xen (the hypervisor) and early Linux code shared the same vulnerable pattern.
+The vulnerability was AMD-specific in its exploitable form. However, Xen (the hypervisor) and early Linux code shared the same vulnerable pattern.
 
 ### Discovery and impact
 
@@ -288,8 +288,8 @@ static void emit_indirect_call(u8 **pprog, int reg)
 
     if (cpu_feature_enabled(X86_FEATURE_RETPOLINE_LFENCE)) {
         /* AMD retpoline variant: LFENCE; JMP *reg */
-        EMIT2(0x0F, 0xAE);   /* LFENCE */
-        EMIT2(0xE8 + ..., ...); /* JMP *reg */
+        EMIT3(0x0F, 0xAE, 0xE8);   /* LFENCE (3-byte: 0F AE E8) */
+        EMIT2(0xFF, 0xE0 + reg); /* JMP *reg (opcode FF /4, e.g. FF E0 = JMP rax) */
     } else {
         /* Intel retpoline: call into thunk */
         /* emit: call __x86_indirect_thunk_rax (or appropriate reg) */
@@ -351,7 +351,7 @@ CPU: 0 PID: 0 Comm: swapper/0 Not tainted 4.15.0
 RIP: 0010:invpcid_flush_one
 ```
 
-The instruction that faulted was the `INVPCID` instruction itself (opcode `0F 01 CA`).
+The instruction that faulted was the `INVPCID` instruction itself (opcode `66 0F 38 82 /r`).
 
 ### Root cause
 

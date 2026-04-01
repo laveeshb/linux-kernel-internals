@@ -24,7 +24,7 @@ This is called a **Flush+Reload** or **Prime+Probe** attack. All major speculati
 
 ### The vulnerability
 
-Meltdown exploits a race between speculative execution and permission checks. On vulnerable Intel CPUs (and some ARM), the CPU speculatively executes memory reads from kernel addresses even in user mode, **before** the permission check that would generate a #GP or #PF fault.
+Meltdown exploits a race between speculative execution and permission checks. On vulnerable Intel CPUs (and some ARM), the CPU speculatively executes memory reads from kernel addresses even in user mode, **before** the permission check that would generate a #PF (Page Fault, vector 14) fault.
 
 ```
 Attack sequence:
@@ -32,7 +32,7 @@ Attack sequence:
 2. CPU speculatively reads the kernel byte into rax
    (permission check not yet complete)
 3. Attacker uses the value in rax as an index: mov rbx, [probe_array + rax*4096]
-4. CPU raises a #GP fault (permission check completes) — speculatively loaded value is discarded
+4. CPU raises a #PF (Page Fault, vector 14 — permission check completes) — speculatively loaded value is discarded
 5. But the cache line for probe_array[secret_byte * 4096] is now warm
 6. Attacker measures access times to probe_array — finds which byte was accessed
 7. Secret kernel byte recovered
@@ -155,10 +155,10 @@ This works across processes (same CPU core) and in some configurations across pr
 ```asm
 /* Retpoline sequence for an indirect call through *rax */
 
-call    retpoline_rax_thunk
+call    __x86_indirect_thunk_rax
 
-.global retpoline_rax_thunk
-retpoline_rax_thunk:
+.global __x86_indirect_thunk_rax
+__x86_indirect_thunk_rax:
     /* Step 1: Push the real target onto the stack */
     call    1f
     /* Step 2: Speculative execution ends up in a loop here */
@@ -433,7 +433,7 @@ grep . /sys/devices/system/cpu/vulnerabilities/*
 | Jan 2, 2018 | Linux 4.15 released with KPTI (Meltdown fix) |
 | Jan 2018 | Retpoline technique published by Google; kernel 4.15 gains retpoline |
 | May 2018 | Spectre v4 (SSBD) disclosed; kernel 4.17 adds SSBD prctl |
-| May 2018 | L1TF (Foreshadow) disclosed; kernel 4.19 adds mitigations |
+| Aug 14, 2018 | L1TF (Foreshadow) disclosed; kernel 4.18 adds mitigations |
 | May 2019 | MDS (Zombieload) disclosed; kernel 5.1 adds VERW flush |
 | Nov 2019 | TAA (TSX Async Abort); kernel 5.4 adds mitigation |
 | 2020+ | Continued stream of microarchitectural vulnerabilities; mitigations added per release |

@@ -300,7 +300,7 @@ The vDSO is compiled as a special shared library:
 - `arch/x86/vdso/vdso64.lds.S` — linker script
 - `arch/x86/vdso/vclock_gettime.c` — `clock_gettime` implementation
 
-The vvar page is described by `struct vdso_data` (in `arch/x86/include/asm/vvar.h`), which contains time fields that the kernel updates using seqlock semantics to ensure the vDSO reader sees a consistent snapshot.
+The vvar page is described by `struct vdso_data` (defined in `include/vdso/datapage.h`, the generic architecture-independent header), which contains time fields that the kernel updates using seqlock semantics to ensure the vDSO reader sees a consistent snapshot. `arch/x86/include/asm/vvar.h` defines the `VVAR()` access macro used to reference the vvar page, not the struct itself.
 
 ---
 

@@ -14,7 +14,7 @@ This page presents five incidents drawn from real patterns in kernel development
 
 A team was integrating a new Ethernet driver into their embedded product. The driver registered a netdev and immediately called into the network core to set up some statistics infrastructure during its initialization function. On their development kernel the driver worked fine. On the production kernel — built with a slightly different Kconfig — the system hung at boot with a NULL pointer dereference in `net_device_ops`.
 
-The oops appeared during the `calling ... returned ...` initcall debug output, partway through the `core_initcall` level, before any `device_initcall` drivers had run.
+The oops appeared during the `calling ... returned ...` initcall debug output, partway through the `core_initcall` level (level 1), before any `device_initcall` drivers had run.
 
 ### Diagnosis
 
@@ -29,9 +29,9 @@ Call Trace:
  do_one_initcall+0x58/0x190
 ```
 
-The driver's init function was calling `mydriver_net_stats_init()`, which called into the network subsystem. But the oops showed the driver was running at `core_initcall` level (level 2). The networking core initializes at `subsys_initcall` level (level 5) via `net_dev_init()` in `net/core/dev.c`.
+The driver's init function was calling `mydriver_net_stats_init()`, which called into the network subsystem. But the oops showed the driver was running at `core_initcall` level (level 1). The networking core initializes at `subsys_initcall` level (level 4) via `net_dev_init()` in `net/core/dev.c`.
 
-Level 2 runs before level 5. The network subsystem's internal state — in particular the per-CPU softnet_data structures — had not been allocated yet. The driver was reaching into uninitialized memory.
+Level 1 runs before level 4. The network subsystem's internal state — in particular the per-CPU softnet_data structures — had not been allocated yet. The driver was reaching into uninitialized memory.
 
 ### Root cause
 
@@ -47,12 +47,12 @@ It had been written as `core_initcall` because the developer confused "core" to 
 ### Fix
 
 ```c
-/* CORRECT: runs at level 8, after all subsystem init */
+/* CORRECT: runs at level 6, after all subsystem init */
 module_init(mydriver_core_init);
 /* or equivalently: device_initcall(mydriver_core_init); */
 ```
 
-Moving to `device_initcall` (or equivalently `module_init`) places the driver at initcall level 8, after `subsys_initcall` level 5 where `net_dev_init()` runs. The initialization succeeded immediately.
+Moving to `device_initcall` (or equivalently `module_init`) places the driver at initcall level 6, after `subsys_initcall` level 4 where `net_dev_init()` runs. The initialization succeeded immediately.
 
 ### Lesson
 
@@ -142,7 +142,7 @@ Alternatively, if the function truly is only needed during init, do not store it
 
 ### Lesson
 
-The `__init` annotation has a deceptively simple appearance. It is not just a hint to the compiler — it changes the physical page that contains the function, and that page is freed after boot. Any stored function pointer to `__init` code is a time bomb. KASAN will not catch this if the page gets reallocated to something other than slab memory. The cleanest detection strategy is `KASAN_VMALLOC` or manually auditing for `__init` functions whose addresses escape to non-`__initdata` storage.
+The `__init` annotation has a deceptively simple appearance. It is not just a hint to the compiler — it changes the physical page that contains the function, and that page is freed after boot. Any stored function pointer to `__init` code is a time bomb. KASAN will not catch this if the page gets reallocated to something other than slab memory. The correct detection strategies are: enabling generic KASAN (`CONFIG_KASAN_GENERIC`), which will report the invalid access if the freed init page is reclaimed as slab memory; or a compile-time/load-time audit using `init_section_contains()` to verify that no function pointer stored in persistent data points into the `.init.text` range. (`CONFIG_KASAN_VMALLOC` is not applicable here — `__init` text lives in the direct-mapped kernel image, not in vmalloc space.)
 
 ---
 

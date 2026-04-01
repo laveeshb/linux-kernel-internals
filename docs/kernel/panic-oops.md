@@ -6,7 +6,7 @@
 
 An "oops" is the kernel's report of a fault it cannot safely recover from in the current context. Common triggers on x86-64:
 
-- **NULL pointer dereference** — accessing address `0x0` through `0x7f` (the first page is unmapped)
+- **NULL pointer dereference** — accessing address `0x0` through `0xfff` (the first page, 4 KB, is unmapped)
 - **Use-after-free** — accessing memory that has been returned to the allocator and possibly reallocated
 - **Stack corruption** — stack smash overwrites the return address; detected by the stack canary or ORC unwinder
 - **Invalid opcode (#UD)** — executing `ud2` (used by `BUG()`) or a truly invalid instruction
@@ -20,8 +20,7 @@ The CPU raises an exception, the IDT handler runs, and control reaches `do_page_
 ## `die()` and the oops path
 
 ```c
-/* arch/x86/kernel/diewarn.c (die() wrapper),
-   arch/x86/kernel/traps.c  (die() implementation) */
+/* arch/x86/kernel/traps.c (die() implementation) */
 
 void die(const char *str, struct pt_regs *regs, long err)
 {
@@ -31,7 +30,7 @@ void die(const char *str, struct pt_regs *regs, long err)
     if (!user_mode(regs))
         report_bug(regs->ip, regs);
 
-    if (die_chain_notify(str, regs, err))
+    if (notify_die(DIE_OOPS, str, regs, err, 0, SIGSEGV) == NOTIFY_STOP)
         sig = 0;
 
     __die(str, regs, err);      /* formats and prints the oops message */
@@ -139,7 +138,7 @@ struct orc_entry {
 
 These entries are stored in `.orc_unwind` and `.orc_unwind_ip` ELF sections. The unwinder (`arch/x86/kernel/unwind_orc.c`) looks up the ORC entry for the current RIP and uses it to unwind one frame at a time, producing the `Call Trace` in the oops message.
 
-On arm64, the equivalent is the DWARF-based unwinder using `.eh_frame` sections.
+On arm64, the kernel uses a frame-pointer-based unwinder. arm64 requires `CONFIG_FRAME_POINTER`, ensuring the frame pointer chain is always intact, so the unwinder can walk frames without architecture-specific unwind tables.
 
 ---
 
@@ -157,9 +156,6 @@ WARN_ON_ONCE(condition)
 /* Trigger an oops (invalid opcode on x86; kills task or panics). */
 BUG()
 BUG_ON(condition)
-
-/* Like BUG_ON but returns from the function with a value. */
-WARN_ON_RETURN(condition)   /* not standard; use WARN_ON instead */
 ```
 
 `BUG()` on x86 expands to the `ud2` instruction (undefined instruction opcode `0x0f 0x0b`). This raises a `#UD` exception, which reaches the kernel's `invalid_op` handler, which calls `die()`.
@@ -338,7 +334,7 @@ The buggy address belongs to the object at ffff888012345600
  which belongs to the cache kmalloc-256 of size 256
 ```
 
-KASAN adds approximately 2x memory overhead (for the shadow region) and significant CPU overhead. It is used in development and CI, not production. Two variants exist:
+Generic KASAN uses one shadow byte per 8 bytes of real memory, adding approximately 12.5% memory overhead (for the shadow region), plus 2–3x CPU/execution overhead from the compiler-inserted instrumentation. It is used in development and CI, not production. Two variants exist:
 
 - **Generic KASAN** (`CONFIG_KASAN_GENERIC`): full shadow memory, highest overhead
 - **SW tag KASAN** (`CONFIG_KASAN_SW_TAGS`): uses ARM64 top-byte ignore for lower overhead
