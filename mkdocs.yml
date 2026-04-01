@@ -322,6 +322,10 @@ nav:
     - Syscall Entry Path: syscalls/syscall-entry.md
     - SYSCALL_DEFINE and Dispatch: syscalls/syscall-define.md
     - Adding a New Syscall: syscalls/adding-syscall.md
+    - 32-bit Compat Syscalls: syscalls/compat.md
+    - ptrace and Syscall Interception: syscalls/ptrace-interception.md
+    - vDSO and Virtual System Calls: syscalls/vdso.md
+    - War Stories: syscalls/war-stories.md
   - Device Drivers:
     - Getting Started: drivers/README.md
     - Linux Device Model: drivers/device-model.md
@@ -451,7 +455,10 @@ nav:
   - Live Patching:
     - Getting Started: livepatch/README.md
     - Kernel Live Patching: livepatch/klp.md
+    - KLP Consistency Model: livepatch/klp-consistency.md
+    - Cumulative Patches and Atomic Replace: livepatch/klp-cumulative.md
     - kexec: livepatch/kexec.md
+    - War Stories: livepatch/war-stories.md
   - Architecture:
     - ARM64:
       - Getting Started: arch/arm64/README.md

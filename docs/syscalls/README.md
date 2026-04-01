@@ -40,6 +40,10 @@ glibc: write(fd, buf, len)
 | [Syscall Entry Path](syscall-entry.md) | x86-64 entry, privilege switch, argument passing, vDSO |
 | [SYSCALL_DEFINE and dispatch](syscall-define.md) | How syscalls are defined, the dispatch table, ABI |
 | [Adding a new syscall](adding-syscall.md) | Step-by-step walkthrough for kernel contributors |
+| [32-bit Compat Syscalls](compat.md) | Supporting 32-bit userspace on 64-bit kernels; compat types and helpers |
+| [ptrace and Syscall Interception](ptrace-interception.md) | How strace, debuggers, and seccomp-notify intercept syscalls |
+| [vDSO and Virtual System Calls](vdso.md) | Kernel-accelerated clock reads without ring transitions |
+| [Syscall War Stories](war-stories.md) | Real bugs, ABI breaks, and lessons from the syscall interface |
 
 ## Quick reference
 
