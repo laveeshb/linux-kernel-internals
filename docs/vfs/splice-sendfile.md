@@ -16,7 +16,7 @@ For large data transfers (serving files over HTTP, piping data between processes
 
 ## sendfile: file-to-socket zero-copy
 
-`sendfile()` sends a file directly to a socket without copying through userspace:
+`sendfile()` was introduced in Linux 2.2 [(man page)](https://www.man7.org/linux/man-pages/man2/sendfile.2.html) and sends a file directly to a socket without copying through userspace:
 
 ```c
 #include <sys/sendfile.h>
@@ -48,7 +48,7 @@ Disk → page cache → [DMA] → NIC (with scatter-gather DMA)
 
 ## splice: pipe-based zero-copy
 
-`splice()` moves data between a pipe and a file descriptor using page references — no data copying:
+`splice()` was introduced in Linux 2.6.17 by Jens Axboe [(commit)](https://git.kernel.org/linus/5274f052e7b3dbd81935772eb551dfd0325dfa9d) [(LWN)](https://lwn.net/Articles/178199/), based on an earlier concept by Larry McVoy. It moves data between a pipe and a file descriptor using page references — no data copying:
 
 ```c
 #define _GNU_SOURCE

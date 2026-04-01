@@ -147,6 +147,8 @@ echo 0 > /sys/fs/cgroup/realtime/cpuset.mems
 
 ### nohz_full: tickless operation
 
+The NO_HZ (tickless idle) feature was introduced in Linux 2.6.21 by Ingo Molnár and Thomas Gleixner [(LWN)](https://lwn.net/Articles/223185/); `nohz_full` for full dynticks came later in Linux 3.10.
+
 ```bash
 # Remove CPUs from the scheduling tick (reduces timer interrupts to ~0)
 GRUB_CMDLINE_LINUX="isolcpus=2,3 nohz_full=2,3 rcu_nocbs=2,3"

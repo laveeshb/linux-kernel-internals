@@ -4,7 +4,7 @@
 
 ## I2C overview
 
-I2C (Inter-Integrated Circuit) is a two-wire serial protocol for connecting low-speed peripherals (sensors, EEPROMs, touch controllers) to a microprocessor.
+I2C (Inter-Integrated Circuit) is a two-wire serial protocol for connecting low-speed peripherals (sensors, EEPROMs, touch controllers) to a microprocessor. The Linux I2C subsystem was carried into the mainline kernel through Greg Kroah-Hartman's driver-model work and later co-maintained by Jean Delvare (formerly of the lm-sensors project), who took sole maintainership in September 2005 [(LWN: I2C patches for 2.6.12-rc1)](https://lwn.net/Articles/130158/).
 
 ```
 Physical wires:
@@ -220,7 +220,7 @@ regmap_bulk_read(sensor->regmap, REG_DATA_START, buf, 6);
 
 ## SPI overview
 
-SPI (Serial Peripheral Interface) is a synchronous 4-wire protocol:
+SPI (Serial Peripheral Interface) is a synchronous 4-wire protocol. The Linux SPI subsystem was written by David Brownell and merged in Linux 2.6.16 [(commit 8ae12a0d)](https://git.kernel.org/linus/8ae12a0d85987dc138f8c944cb78a92bf466cea0):
 
 ```
 SCLK  ──────────────────── clock (master-driven)

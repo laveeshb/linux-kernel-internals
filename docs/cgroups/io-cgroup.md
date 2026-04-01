@@ -7,7 +7,7 @@
 The cgroup v2 `io` controller manages block I/O resources for processes. It provides:
 - **io.max**: hard rate limits (bytes/sec, IOPS)
 - **io.weight**: proportional share scheduling (WFQ)
-- **io.latency**: latency SLA enforcement (evict excess I/O to protect latency)
+- **io.latency**: latency SLA enforcement (evict excess I/O to protect latency) [(commit)](https://git.kernel.org/linus/d70675121546c35feaceebf7ed9caed8716640f3) [(LWN)](https://lwn.net/Articles/758963/)
 
 ```bash
 # Enable the io controller on a cgroup:
@@ -113,7 +113,7 @@ static void bfq_pd_init(struct blkg_policy_data *pd)
 
 ## io.latency: Latency SLA
 
-`io.latency` provides latency-based I/O protection. When a cgroup's latency exceeds the target, the controller throttles competing cgroups:
+`io.latency` provides latency-based I/O protection. Introduced in Linux 4.19 by Josef Bacik [(commit)](https://git.kernel.org/linus/d70675121546c35feaceebf7ed9caed8716640f3) [(LWN)](https://lwn.net/Articles/758963/). When a cgroup's latency exceeds the target, the controller throttles competing cgroups:
 
 ```bash
 # Set target latency for a cgroup:

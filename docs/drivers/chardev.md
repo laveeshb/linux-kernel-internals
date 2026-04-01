@@ -4,7 +4,7 @@
 
 ## Character devices
 
-A character device (cdev) is a special file in `/dev` that provides a byte-stream interface to a driver. Unlike block devices, character devices do not buffer data in the page cache — I/O goes directly to the driver.
+A character device (cdev) is a special file in `/dev` that provides a byte-stream interface to a driver. Unlike block devices, character devices do not buffer data in the page cache — I/O goes directly to the driver. The two-step `alloc_chrdev_region` / `cdev_add` interface was introduced by Al Viro just before Linux 2.6.0 to support an expanded `dev_t` type; the old `register_chrdev()` remains as a compatibility shim [(LWN)](https://lwn.net/Articles/195805/).
 
 ```
 /dev/mydevice (major=240, minor=0)
@@ -258,7 +258,7 @@ static void __exit mymisc_exit(void)
 }
 ```
 
-All misc devices share major number 10. They appear under `/sys/class/misc/`.
+All misc devices share major number 10 — a value reserved in the kernel's official device list since at least Linux 1.3. They appear under `/sys/class/misc/`.
 
 ## ioctl: control operations
 

@@ -56,6 +56,8 @@ cat /proc/filesystems
 
 ## The mount syscall
 
+The `mount(2)` system call attaches a filesystem to the directory tree [(man page)](https://man7.org/linux/man-pages/man2/mount.2.html).
+
 ```c
 /* User calls: mount("/dev/sda1", "/mnt/data", "ext4", 0, "") */
 SYSCALL_DEFINE5(mount, ...)
@@ -79,7 +81,7 @@ SYSCALL_DEFINE5(mount, ...)
 
 ## Mount namespace and vfsmount
 
-Each process has a **mount namespace** (`struct mnt_namespace`) containing a tree of `vfsmount` objects. Each `vfsmount` represents one mount point:
+Each process has a **mount namespace** (`struct mnt_namespace`) containing a tree of `vfsmount` objects. Mount namespaces were introduced in Linux 2.4.19 [(man page)](https://man7.org/linux/man-pages/man7/mount_namespaces.7.html); before that, all processes shared a single global mount table. Each `vfsmount` represents one mount point:
 
 ```c
 struct vfsmount {
@@ -208,7 +210,7 @@ mount --bind /original/path /new/path
 mount --move /old/mountpoint /new/mountpoint
 ```
 
-Bind mounts are widely used in containers to share host directories into a container's namespace.
+Bind mounts are widely used in containers to share host directories into a container's namespace [(man page)](https://man7.org/linux/man-pages/man8/mount.8.html).
 
 ## Further reading
 

@@ -4,7 +4,7 @@
 
 ## The file_operations vtable
 
-Every open file has a `struct file` with an `f_op` pointer to the filesystem's `file_operations`. VFS calls through this vtable for all I/O operations:
+Every open file has a `struct file` with an `f_op` pointer to the filesystem's `file_operations`. VFS calls through this vtable for all I/O operations [(kernel docs)](https://www.kernel.org/doc/html/latest/filesystems/vfs.html):
 
 ```c
 /* include/linux/fs.h */
@@ -27,6 +27,8 @@ struct file_operations {
 Filesystems typically only implement a subset. For fields left NULL, VFS uses generic fallbacks (e.g., `generic_file_read_iter`, `noop_llseek`).
 
 ## open(): from syscall to struct file
+
+The `open(2)` system call is documented in the Linux man pages [(man page)](https://man7.org/linux/man-pages/man2/open.2.html). `O_DIRECT`, which bypasses the page cache, was added in Linux 2.4.10 [(man page)](https://man7.org/linux/man-pages/man2/open.2.html).
 
 ```c
 /* Simplified: open("/path/to/file", O_RDWR) */
@@ -100,8 +102,8 @@ vfs_write() → file->f_op->write_iter()
 ```
 
 Data is only guaranteed on disk after:
-- `fsync(fd)` or `fdatasync(fd)` — explicit flush
-- The writeback daemon flushes (typically after 30 seconds or when memory pressure is high)
+- `fsync(fd)` or `fdatasync(fd)` — explicit flush [(man page)](https://man7.org/linux/man-pages/man2/fsync.2.html)
+- The writeback daemon flushes (typically after 30 seconds or when memory pressure is high; controlled by `dirty_expire_centisecs`)
 - The filesystem's `sync_fs()` is called
 
 ## llseek(): updating the file position

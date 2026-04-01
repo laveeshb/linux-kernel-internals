@@ -26,13 +26,13 @@ Tasklets (built on `TASKLET_SOFTIRQ`) were added to give drivers a way to defer 
 
 Tasklets solved the reentrance problem but created new ones: tasklets run in softirq context, which means they cannot sleep, must complete quickly, and run with `bh_disable()` semantics that cause scheduling latency for high-priority processes.
 
-Thomas Gleixner introduced threaded IRQ handlers as a better model for most drivers. With `IRQF_THREAD`, the interrupt handler runs as a kernel thread rather than in hardirq/softirq context:
+Thomas Gleixner introduced threaded IRQ handlers as a better model for most drivers [(commit)](https://git.kernel.org/linus/3aa551c9b4c40018f0e261a178e3d25478dc04a9) [(LWN)](https://lwn.net/Articles/302043/). With `IRQF_THREAD`, the interrupt handler runs as a kernel thread rather than in hardirq/softirq context:
 
 - The handler **can sleep** (mutex, allocate with GFP_KERNEL, etc.)
 - It has a **schedulable priority** — RT systems can give it the right priority
 - On `CONFIG_PREEMPT_RT`, all softirq processing (including timers) runs in threads, making the system fully preemptible
 
-Tasklets were explicitly deprecated for new use in Linux 5.14 (2021). The recommendation for new driver code is: use threaded IRQs if the handler needs to sleep, or workqueues if it needs to run in process context. Tasklets remain for existing drivers but should not appear in new code.
+Tasklets were explicitly deprecated for new use in Linux 5.14 (2021) [(LWN)](https://lwn.net/Articles/830964/). The recommendation for new driver code is: use threaded IRQs if the handler needs to sleep, or workqueues if it needs to run in process context. Tasklets remain for existing drivers but should not appear in new code.
 
 ## What are softirqs?
 

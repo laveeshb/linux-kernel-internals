@@ -175,7 +175,7 @@ podman run --rm -it ubuntu bash
 # It cannot access /etc/shadow, load modules, etc.
 ```
 
-The user namespace also enables unprivileged namespace creation for all other types.
+The user namespace also enables unprivileged namespace creation for all other types. User namespaces were made fully functional for unprivileged users in Linux 3.9 [(LWN)](https://lwn.net/Articles/532593/).
 
 ## seccomp: syscall filtering
 

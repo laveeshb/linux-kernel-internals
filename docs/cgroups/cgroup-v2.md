@@ -6,7 +6,7 @@
 
 ### Cgroup v1: one hierarchy per controller
 
-Cgroups v1 (Linux 2.6.24, 2008) let each resource controller (`cpu`, `memory`, `blkio`, `cpuset`, etc.) have its own independent hierarchy. You could put process 1234 in `/sys/fs/cgroup/cpu/webserver/` for CPU accounting and `/sys/fs/cgroup/memory/tier-a/` for memory limits — they were completely independent trees.
+Cgroups v1 (Linux 2.6.24, 2008) [(LWN)](https://lwn.net/Articles/236437/) let each resource controller (`cpu`, `memory`, `blkio`, `cpuset`, etc.) have its own independent hierarchy. You could put process 1234 in `/sys/fs/cgroup/cpu/webserver/` for CPU accounting and `/sys/fs/cgroup/memory/tier-a/` for memory limits — they were completely independent trees.
 
 This sounded flexible but created a fundamental problem: **the controllers had no shared definition of "what group a process belongs to."** The `cpu` controller thought about tasks one way; `memory` thought about them differently; `blkio` had its own view. When systemd or a container runtime wanted to create a coherent "unit" (a container, a service) with CPU *and* memory *and* I/O limits, it had to maintain parallel positions in multiple hierarchies and keep them synchronized manually.
 
@@ -14,7 +14,7 @@ The writeback attribution problem crystallized the issue: when a process writes 
 
 ### Cgroup v2: unified hierarchy
 
-Tejun Heo designed cgroup v2 (merged in Linux 4.5, 2016) around a single tree. All controllers operate on the same hierarchy. A process is in exactly one cgroup, and all controllers apply to that cgroup.
+Tejun Heo designed cgroup v2 (merged in Linux 4.5, 2016) [(commit)](https://git.kernel.org/linus/34a9304a96d6351c2d35dcdc9293258378fc0bd8) [(LWN)](https://lwn.net/Articles/679786/) around a single tree. All controllers operate on the same hierarchy. A process is in exactly one cgroup, and all controllers apply to that cgroup.
 
 This made proper writeback attribution possible: since both `memory` and `io` controllers share the same hierarchy, a dirty page can be attributed to the correct cgroup even when flushed by a `kworker`.
 
@@ -30,7 +30,7 @@ The "no internal process" rule (a cgroup cannot hold both processes and child cg
 | Delegation | Complex ACLs | Clean subtree delegation |
 | BPF integration | Limited | cgroup BPF programs |
 
-Cgroup v2 (unified hierarchy) was merged in 4.5 and is now the default on modern distros. Most subsystems support only v2.
+Cgroup v2 (unified hierarchy) was merged in 4.5 [(commit)](https://git.kernel.org/linus/34a9304a96d6351c2d35dcdc9293258378fc0bd8) and is now the default on modern distros. Most subsystems support only v2.
 
 ## The single hierarchy
 

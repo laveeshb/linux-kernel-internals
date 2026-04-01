@@ -64,8 +64,10 @@ Negative (d_inode == NULL):
 
 ### dcache operations
 
+Linux 2.6.38 added an RCU-based lock-free fast path for dcache lookups, contributed by Nick Piggin [(LWN)](https://lwn.net/Articles/419811/). Most path lookups now complete without acquiring any lock or modifying any reference count; a seqlock on each dentry detects concurrent modifications and triggers a fallback to the slower reference-counted walk only when needed.
+
 ```c
-/* Look up in dcache (RCU, lock-free fast path) */
+/* Look up in dcache (RCU, lock-free fast path; introduced in Linux 2.6.38 by Nick Piggin) */
 struct dentry *__d_lookup_rcu(const struct dentry *parent,
                                const struct qstr *name, unsigned *seqp);
 

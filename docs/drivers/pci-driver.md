@@ -4,7 +4,7 @@
 
 ## PCI bus overview
 
-PCI (Peripheral Component Interconnect) is the standard bus for connecting devices to a CPU. PCIe (PCI Express) is the modern serial version, but the driver API is largely the same.
+PCI (Peripheral Component Interconnect) is the standard bus for connecting devices to a CPU. PCIe (PCI Express) is the modern serial version, but the driver API is largely the same. The `pci_register_driver()` API and `struct pci_driver` were introduced in Linux 2.4, replacing the ad-hoc probing style of 2.2 and earlier [(Linux Device Drivers, 3rd ed., ch. 12)](https://lwn.net/Kernel/LDD3/).
 
 ```
 CPU ← PCIe root complex → PCIe switch → endpoint devices
@@ -184,7 +184,7 @@ setpci -s <bus:dev.fn> STATUS.w      # read status register
 
 ## MSI and MSI-X interrupts
 
-Modern devices use MSI (Message Signaled Interrupts) instead of legacy edge/level INTx signals:
+Modern devices use MSI (Message Signaled Interrupts) instead of legacy edge/level INTx signals. MSI was introduced in the PCI 2.2 specification (1999); MSI-X, which allows up to 2048 independent vectors, was added in PCI 3.0 [(Wikipedia: Message Signaled Interrupts)](https://en.wikipedia.org/wiki/Message_Signaled_Interrupts):
 
 - **Legacy INTx**: shared pin, slow, requires IOAPIC programming
 - **MSI**: single interrupt vector, device writes to a magic memory address

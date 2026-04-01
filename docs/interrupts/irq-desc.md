@@ -4,7 +4,7 @@
 
 ## The three-layer interrupt abstraction
 
-The Linux interrupt subsystem uses three structures to abstract over wildly different interrupt controllers (APIC, GIC, IOAPIC, MSI, GPIO controllers...):
+The Linux interrupt subsystem — the genirq framework introduced in Linux 2.6.16 by Thomas Gleixner and Ingo Molnár [(LWN)](https://lwn.net/Articles/184750/) — uses three structures to abstract over wildly different interrupt controllers (APIC, GIC, IOAPIC, MSI, GPIO controllers...):
 
 ```
 Linux IRQ number

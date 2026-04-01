@@ -4,11 +4,11 @@
 
 ## Why the device model exists
 
-Before 2.6, each bus subsystem (PCI, USB, SCSI) independently managed power, hotplug, and sysfs. The device model (introduced in 2.5) unified this into a single framework:
+Before 2.6, each bus subsystem (PCI, USB, SCSI) independently managed power, hotplug, and sysfs. The device model (introduced in 2.5 by Patrick Mochel [(LWN)](https://lwn.net/Articles/31185/)) unified this into a single framework:
 
 - **Power management**: suspend/resume traverse the device tree in order
 - **Hotplug**: consistent uevent notifications for adding/removing devices
-- **sysfs**: every device and driver automatically appears in `/sys/`
+- **sysfs**: every device and driver automatically appears in `/sys/` (sysfs was written by Patrick Mochel during the 2.5 cycle and shipped with Linux 2.6.0 [(kernel docs)](https://www.kernel.org/doc/html/latest/filesystems/sysfs.html))
 - **Reference counting**: devices live exactly as long as they're needed
 
 ## kobject: the base object

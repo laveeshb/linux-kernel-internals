@@ -119,7 +119,7 @@ destroy_workqueue(wq);
 
 ## Concurrency-managed workqueues (cmwq)
 
-Since Linux 2.6.36, the kernel uses **concurrency-managed workqueues** (cmwq). Instead of one thread per CPU, the kernel maintains a pool of workers and dynamically creates/destroys threads based on demand.
+Since Linux 2.6.36, the kernel uses **concurrency-managed workqueues** (cmwq), introduced by Tejun Heo [(LWN)](https://lwn.net/Articles/394084/). Instead of one thread per CPU, the kernel maintains a pool of workers and dynamically creates/destroys threads based on demand.
 
 The key property: **the kernel tries to keep exactly one runnable worker per CPU**. If a worker sleeps (waiting on I/O or a mutex), the kernel may create another worker to keep the CPU busy.
 

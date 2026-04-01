@@ -4,7 +4,7 @@
 
 ## Overview
 
-VFS defines four objects that together represent any filesystem resource:
+VFS defines four objects that together represent any filesystem resource [(kernel docs)](https://www.kernel.org/doc/html/latest/filesystems/vfs.html):
 
 ```
 Mounted filesystem
@@ -105,13 +105,13 @@ The `i_mapping` field points to the `address_space` structure that links this in
 
 ## struct dentry: a path component
 
-A `dentry` (directory entry) caches the mapping from a name to an inode. The **dentry cache** (dcache) is VFS's primary lookup cache — before going to disk, the kernel checks if the path component is already in the dcache.
+A `dentry` (directory entry) caches the mapping from a name to an inode. The **dentry cache** (dcache) is VFS's primary lookup cache — before going to disk, the kernel checks if the path component is already in the dcache. Since Linux 2.6.38, most dcache lookups use an RCU-based lock-free fast path introduced by Nick Piggin [(LWN)](https://lwn.net/Articles/419811/); the `d_seq` seqlock detects concurrent modifications without ever taking a spinlock on the common (cache-hit) path.
 
 ```c
 /* include/linux/dcache.h */
 struct dentry {
     unsigned int              d_flags;    /* state flags */
-    seqcount_spinlock_t       d_seq;      /* seqlock for RCU walks */
+    seqcount_spinlock_t       d_seq;      /* seqlock for RCU walks (added Linux 2.6.38) */
     struct hlist_bl_node      d_hash;     /* hash table for lookup */
     struct dentry            *d_parent;   /* parent directory dentry */
     struct qstr               d_name;     /* name (quick string with hash) */
