@@ -4,7 +4,12 @@
 
 ## The problem with pr_debug
 
-`pr_debug()` is defined as a no-op when `CONFIG_DEBUG` is not set and as a printk call when it is. This is an all-or-nothing compile-time switch that floods the log with messages from every subsystem simultaneously.
+`pr_debug()` is controlled in two ways:
+
+- With `CONFIG_DYNAMIC_DEBUG=y`: each `pr_debug()` becomes a dynamically-controllable site (NOP by default, enabled at runtime).
+- Without `CONFIG_DYNAMIC_DEBUG`: `pr_debug()` expands to `printk(KERN_DEBUG ...)` if the `DEBUG` C preprocessor macro is defined for that compilation unit (via `CFLAGS_file.o += -DDEBUG` in the Makefile), or to `no_printk()` (a compile-time no-op) if `DEBUG` is not defined.
+
+Without `CONFIG_DYNAMIC_DEBUG`, this is an all-or-nothing compile-time switch that floods the log with messages from every subsystem simultaneously.
 
 `CONFIG_DYNAMIC_DEBUG` replaces this with a per-call-site on/off switch controlled at runtime through debugfs. The cost when disabled is a single NOP instruction. There is no need to recompile or reboot to enable debug messages for a specific driver or function.
 
@@ -13,9 +18,9 @@
 For every `pr_debug()` and `dev_dbg()` call site in the kernel, the compiler emits:
 
 1. A `static struct _ddebug` descriptor in the `__dyndbg` section of the object file, containing metadata about that call site.
-2. A NOP instruction at the call site in `.text`.
+2. A NOP instruction at the call site in `.text`, via the jump label (static key) infrastructure.
 
-When a call site is enabled at runtime, the kernel patches the NOP to a `call` instruction using `text_poke()` — the same mechanism used by ftrace and the alternatives framework. When disabled, the call site reverts to a NOP with zero runtime overhead.
+Dynamic debug uses the jump label (static key) infrastructure (`CONFIG_JUMP_LABEL`). Each `pr_debug()` call site has an associated `struct static_key` embedded in its `_ddebug` descriptor. When disabled, the site is a NOP (via a `jump_label` that doesn't branch). When enabled, `static_key_enable()` / `jump_label_update()` patches the NOP to a short jump. The patching is done by the jump label subsystem — dynamic debug itself just calls `static_key_enable()` or `static_key_disable()`. When disabled, the call site is a NOP with zero runtime overhead.
 
 ## struct _ddebug
 
@@ -29,7 +34,13 @@ struct _ddebug {
     const char *format;     /* the format string literal */
     unsigned int lineno:18; /* source line number */
     unsigned int class_id:6;
-    unsigned int flags:8;   /* DYNAMIC_DEBUG_FLAGS_* bitmask */
+    unsigned int flags:8;   /* _DPRINTK_FLAGS_* bitmask */
+#ifdef CONFIG_JUMP_LABEL
+    union {
+        struct static_key_true dd_key_true;
+        struct static_key_false dd_key_false;
+    } key;
+#endif
 } __attribute__((aligned(8)));
 ```
 
@@ -171,15 +182,15 @@ cat /sys/kernel/debug/tracing/trace_pipe &
 # Run your workload — pr_debug output and ftrace appear on the same timeline
 ```
 
-## Implementation: text_poke patching
+## Implementation: jump label patching
 
 When a `_ddebug` entry's `p` flag is set, the kernel:
 
-1. Looks up the call site's address from the ELF debug info embedded at build time.
-2. Calls `text_poke_bp()` to safely patch the NOP with a `call` to `__dynamic_pr_debug()` (or `__dynamic_dev_dbg()`), handling concurrent execution on other CPUs via an INT3 breakpoint.
-3. Updates the `flags` field in the `_ddebug` structure.
+1. Updates the `flags` field in the `_ddebug` structure.
+2. Calls `static_key_enable()` on the `struct static_key` embedded in the `_ddebug` descriptor's `key` field.
+3. The jump label subsystem (`jump_label_update()`) patches the NOP at the call site to a short branch, directing execution to `__dynamic_pr_debug()` (or `__dynamic_dev_dbg()`).
 
-When disabled, the same mechanism patches the `call` back to a NOP. Because the patch is in the `.text` section, it is global and affects all CPUs immediately after the patching sequence completes.
+The call site address and all metadata are stored directly in the `_ddebug` descriptor at compile time — no runtime ELF debug info lookup occurs. When disabled, `static_key_disable()` causes `jump_label_update()` to patch the branch back to a NOP. Because the patch is applied by the jump label subsystem, it is safe with respect to concurrent execution on other CPUs.
 
 ## Checking what is enabled
 

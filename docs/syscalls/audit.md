@@ -57,7 +57,7 @@ syscall boundary code:
 /* include/linux/audit.h */
 void audit_syscall_entry(int major, unsigned long a1, unsigned long a2,
                           unsigned long a3, unsigned long a4);
-void audit_syscall_exit(int success, long return_code);
+static inline void audit_syscall_exit(void *pt_regs);
 ```
 
 These are called from `syscall_enter_from_user_mode()` and
@@ -75,27 +75,34 @@ a syscall. The context accumulates all information about the syscall and the
 kernel objects it touched:
 
 ```c
-/* include/linux/audit.h */
+/* kernel/audit.h (internal) */
 struct audit_context {
-    int                in_syscall;    /* 1 while inside an audited syscall */
-    enum audit_state   state;         /* AUDIT_DISABLED / BUILD_CONTEXT / RECORD_CONTEXT */
-    unsigned int       serial;        /* unique sequence number for this record */
-    struct timespec64  ctime;         /* time of syscall entry */
+    int                dummy;       /* 1 if this is a dummy context */
+    enum {
+        AUDIT_CTX_UNUSED,
+        AUDIT_CTX_SYSCALL,
+        AUDIT_CTX_URING,
+    }                  context;
+    enum audit_state   current_state; /* AUDIT_STATE_DISABLED / AUDIT_STATE_BUILD / AUDIT_STATE_RECORD */
 
-    int                major;         /* syscall number */
-    unsigned long      argv[4];       /* first four syscall arguments */
-    long               return_code;   /* syscall return value */
-    int                return_valid;  /* 1 once return_code is populated */
+    int                major;        /* syscall number */
+    unsigned long      argv[4];      /* first four syscall arguments */
+    long               return_code;  /* syscall return value */
+    int                return_valid; /* 1 once return_code is populated */
 
     int                name_count;
-    struct audit_names *names_list;   /* linked list of file paths touched */
+    struct list_head   names_list;   /* list of struct audit_names */
 
-    uid_t              loginuid;      /* auid: login uid, survives setuid() */
-    unsigned int       sessionid;     /* PAM session id */
+    struct audit_stamp stamp;        /* contains serial and ctime */
 
     /* ... further fields for IPC, network, LSM-specific data ... */
 };
 ```
+
+Note: `serial` and `ctime` are accessed as `ctx->stamp.serial` and
+`ctx->stamp.ctime` via the nested `struct audit_stamp`. `loginuid` and
+`sessionid` are not fields of `struct audit_context` — they live directly on
+`struct task_struct` (`tsk->loginuid`, `tsk->sessionid`).
 
 The context is attached to `current->audit_context`. It is allocated (or
 re-initialised) in `audit_syscall_entry()` and released (and flushed to the
@@ -108,8 +115,8 @@ matches the current task and syscall:
 
 ```c
 /* kernel/auditsc.c */
-enum audit_state audit_filter_syscall(struct task_struct *tsk,
-                                       struct audit_context *ctx);
+static void audit_filter_syscall(struct task_struct *tsk,
+                                  struct audit_context *ctx);
 ```
 
 Rules are matched on combinations of:
@@ -122,9 +129,12 @@ Rules are matched on combinations of:
 - File path (watch rules, `-w /etc/passwd`)
 - Custom key (`-k mykey`)
 
-If no rule matches, `audit_filter_syscall()` returns `AUDIT_DISABLED` and the
-syscall proceeds without any audit overhead. If a rule matches with action
-`always`, it returns `AUDIT_RECORD_CONTEXT` and context allocation proceeds.
+`audit_filter_syscall()` is `static void` — it does not return a value.
+Instead, it modifies `ctx->current_state` in place. If no rule matches,
+`ctx->current_state` is set to `AUDIT_STATE_DISABLED` and the syscall
+proceeds without any audit overhead. If a rule matches with action `always`,
+`ctx->current_state` is set to `AUDIT_STATE_RECORD` and context allocation
+proceeds.
 
 This is the fast path: the filter runs on every syscall entry for audited
 tasks, but the check itself is a scan of a short list of pre-compiled rule
@@ -260,10 +270,13 @@ disk space limits, and what to do when the disk is full (`suspend`, `halt`, or
 Audit is designed to have near-zero cost for tasks and syscalls that are not
 being audited.
 
-The `audit_dummy_context()` helper returns true when the current task's audit
-context is a lightweight "dummy" — indicating no active rule matched and no
-full context was allocated. Code that would otherwise build expensive path or
-inode records checks `audit_dummy_context()` first and skips the work:
+`audit_dummy_context()` returns true when the current task's audit context is
+NULL or when `ctx->dummy` is non-zero. A "dummy" context is one that was
+allocated (to avoid the overhead of checking for a context on every syscall
+once auditing is enabled) but marked dummy because no rule matched at syscall
+entry. It does NOT mean "no context was allocated." Code that would otherwise
+build expensive path or inode records checks `audit_dummy_context()` first and
+skips the work:
 
 ```c
 /* fs/namei.c */

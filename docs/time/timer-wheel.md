@@ -134,7 +134,7 @@ Linux 4.8 replaced the old five-level cascade wheel with a hierarchical wheel de
 ```c
 /* kernel/time/timer.c (internal) */
 struct timer_base {
-    spinlock_t          lock;
+    raw_spinlock_t      lock;
     struct timer_list  *running_timer;   /* callback executing now */
     unsigned long       clk;            /* last processed jiffies value */
     unsigned long       next_expiry;    /* earliest pending expiry */
@@ -150,7 +150,12 @@ Each CPU has two `timer_base` instances: one for standard timers and one for def
 
 ### Wheel geometry
 
-The wheel has 8 levels (`LVL_DEPTH = 8`), each with 64 buckets (`LVL_SIZE = 64`):
+The number of levels depends on the configured `HZ`:
+
+- **HZ > 100** (e.g., HZ=250 or HZ=1000, the default for desktop/server kernels): `LVL_DEPTH = 9`, giving **9 × 64 = 576 buckets**.
+- **HZ ≤ 100** (e.g., embedded/low-power kernels): `LVL_DEPTH = 8`, giving **8 × 64 = 512 buckets**.
+
+The table below shows the geometry for HZ=250 (`LVL_DEPTH = 9`), each with 64 buckets (`LVL_SIZE = 64`):
 
 | Level | Granularity | Range covered |
 |-------|-------------|---------------|
@@ -161,11 +166,12 @@ The wheel has 8 levels (`LVL_DEPTH = 8`), each with 64 buckets (`LVL_SIZE = 64`)
 | 4 | 4,096 jiffies | 32,768 – 262,143 jiffies |
 | 5 | 32,768 jiffies | 262,144 – 2,097,151 jiffies |
 | 6 | 262,144 jiffies | 2,097,152 – 16,777,215 jiffies |
-| 7 | 2,097,152 jiffies | up to ~687 seconds at HZ=250 |
+| 7 | 2,097,152 jiffies | 16,777,216 – 134,217,727 jiffies |
+| 8 | 16,777,216 jiffies | up to ~67,108 seconds at HZ=250 |
 
 Each level is 8× coarser than the previous. When a timer is inserted, the kernel computes which level and bucket it belongs to based on the delta between now and `expires`. This is a pure bitmask operation — O(1) insert at any range.
 
-Total wheel capacity: 512 buckets (`8 × 64`). The `pending_map` bitmap lets the kernel quickly find the next non-empty bucket without scanning all 512 entries.
+Total wheel capacity: 576 buckets (9 × 64) for HZ=250. The `pending_map` bitmap lets the kernel quickly find the next non-empty bucket without scanning all entries.
 
 ### __run_timers()
 
@@ -173,7 +179,7 @@ Total wheel capacity: 512 buckets (`8 × 64`). The `pending_map` bitmap lets the
 static void __run_timers(struct timer_base *base);
 ```
 
-Called from `run_timer_softirq()` (the TIMER_SOFTIRQ handler) on each tick. It advances `base->clk` to the current jiffies value, identifies all buckets that have become due, and executes their callbacks. Expired timers in higher-level buckets are redistributed into lower-level buckets as the wheel advances — this is the "cascade" step, but it is amortized across ticks rather than happening all at once.
+Called indirectly from `run_timer_softirq()` (the TIMER_SOFTIRQ handler) via the call chain `run_timer_softirq()` → `run_timer_base()` → `__run_timer_base()` → `__run_timers()` on each tick. It advances `base->clk` to the current jiffies value, identifies all buckets that have become due, and executes their callbacks. Expired timers in higher-level buckets are redistributed into lower-level buckets as the wheel advances — this is the "cascade" step, but it is amortized across ticks rather than happening all at once.
 
 The softirq is raised by the tick interrupt handler. On a NOHZ (tickless) system, the tick may be skipped entirely when the CPU is idle, and `__run_timers()` catches up when the CPU wakes.
 
@@ -245,7 +251,18 @@ if (time_before(jiffies, deadline)) { ... }
 if (time_after_eq(jiffies, start + HZ)) { ... }
 ```
 
-`time_after(a, b)` is defined as `(long)(b) - (long)(a) < 0`, which handles unsigned wraparound correctly by interpreting the difference as a signed value.
+`time_after(a, b)` is defined as shown below. The subtraction happens at `unsigned long` width first, then the result is cast to `long` — this is not the same as casting each operand individually:
+
+```c
+/* include/linux/jiffies.h */
+/* The subtraction is done at unsigned long width; the result is cast to long */
+#define time_after(a,b)     \
+    (typecheck(unsigned long, a) && \
+     typecheck(unsigned long, b) && \
+     ((long)((b) - (a)) < 0))
+```
+
+This handles unsigned wraparound correctly by interpreting the result of the unsigned subtraction as a signed value.
 
 ### Sleeping in a timer callback
 

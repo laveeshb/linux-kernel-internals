@@ -62,12 +62,16 @@ static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
      * If the syscall was interrupted, decide whether to restart:
      * regs->orig_ax holds the syscall number; regs->ax holds the
      * interrupted syscall's return value (one of the ERESTART* codes).
+     *
+     * When handle_signal() runs, a signal handler IS being delivered.
+     * ERESTART_RESTARTBLOCK is converted to -EINTR here, same as
+     * ERESTARTNOHAND — the syscall is NOT restarted.
      */
     if (regs->orig_ax != -1) {
         switch ((int)regs->ax) {
         case -ERESTART_RESTARTBLOCK:
         case -ERESTARTNOHAND:
-            regs->ax = -EINTR;
+            regs->ax = -EINTR;   /* return EINTR to userspace */
             break;
         case -ERESTARTSYS:
             if (!(ksig->ka.sa.sa_flags & SA_RESTART)) {
@@ -85,18 +89,20 @@ static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 }
 ```
 
-For `ERESTART_RESTARTBLOCK`, the signal path does something different: instead
-of rewinding `rip` to re-execute the original syscall, it rewrites `regs->ax`
-to `__NR_restart_syscall` and rewinds `rip`. This causes the CPU to execute
-`restart_syscall()` when it returns to userspace, not the original syscall.
+`ERESTART_RESTARTBLOCK` causes `restart_syscall()` to run **only when no
+signal handler runs** (the no-handler path inside `arch_do_signal_or_restart()`):
 
 ```c
-/* arch/x86/kernel/signal.c */
+/* Only in the no-handler path (arch_do_signal_or_restart): */
 case -ERESTART_RESTARTBLOCK:
     regs->ax  = __NR_restart_syscall;
     regs->ip -= 2;
+    /* rip is already pointing at the syscall instruction */
     break;
 ```
+
+When a signal handler IS delivered, `handle_signal()` converts
+`ERESTART_RESTARTBLOCK` to `-EINTR` instead (see the switch above).
 
 ## struct restart_block
 
@@ -105,42 +111,36 @@ case -ERESTART_RESTARTBLOCK:
 needed to resume the syscall:
 
 ```c
-/* include/linux/sched.h */
+/* include/linux/restart_block.h */
 struct restart_block {
-    u32  arch_data;   /* arch-specific flags, e.g., x86 TS_COMPAT */
+    unsigned long arch_data;   /* arch-specific flags, e.g., x86 TS_COMPAT */
     long (*fn)(struct restart_block *);
 
     union {
-        /* select/pselect */
-        struct {
-            __kernel_fd_set __user *inp, *outp, *exp;
-            struct __kernel_timespec __user *tvp;
-            u32 tv_sec32, tv_nsec32;
-            unsigned long fd_array[2];
-        } select;
-
         /* futex_wait / futex_wait_bitset */
         struct {
-            u32 __user *uaddr;
-            u32 val, flags;
-            u32 bitset;
-            u64 time;
-            u32 __user *uaddr2;
+            u32 __user    *uaddr;
+            u32            val;
+            u32            flags;
+            u32            bitset;
+            ktime_t        time;
+            u32 __user    *uaddr2;
         } futex;
 
         /* nanosleep / clock_nanosleep */
         struct {
-            clockid_t clockid;
+            clockid_t                       clockid;
+            enum timespec_type              type;
             struct __kernel_timespec __user *rmtp;
-            u64 expires;
+            ktime_t                         expires;
         } nanosleep;
 
         /* poll / ppoll */
         struct {
             struct pollfd __user *ufds;
-            int nfds;
-            int has_timeout;
-            unsigned long tv_sec, tv_nsec;
+            int                   nfds;
+            int                   has_timeout;
+            struct timespec64     end_time;
         } poll;
     };
 };
@@ -193,13 +193,14 @@ Userspace never sees `__NR_restart_syscall` in normal operation. It appears in
 
 5.  Returns -ERESTART_RESTARTBLOCK
 
-6.  Signal path:
-        - Delivers the signal to the handler
+6.  Signal path (no handler installed / no-handler restart path):
         - Sees -ERESTART_RESTARTBLOCK in regs->ax
         - Rewrites regs->ax = __NR_restart_syscall (219)
         - Rewinds rip by 2 bytes
+        (If a handler IS installed and runs, handle_signal() converts
+         -ERESTART_RESTARTBLOCK to -EINTR instead — no restart occurs.)
 
-7.  Handler returns; CPU re-executes syscall instruction with rax=219
+7.  CPU re-executes syscall instruction with rax=219
 
 8.  Kernel dispatches restart_syscall()
     → current->restart_block.fn(&current->restart_block)
@@ -218,19 +219,21 @@ remaining at each interruption, in case the program inspects it.
 
 ## Which syscalls use which mechanism
 
-| Restart code | Examples | Behavior when `SA_RESTART` is set |
-|---|---|---|
-| `ERESTARTSYS` | `read`, `write`, `accept`, `connect`, `waitpid`, `select` (short wait) | Restarts transparently |
-| `ERESTARTNOINTR` | Wait states entered during page faults, some internal waits | Always restarts; `SA_RESTART` irrelevant |
-| `ERESTARTNOHAND` | `pause`, `sigsuspend`, `epoll_wait` (with signal mask change) | Never restarts when a handler ran |
-| `ERESTART_RESTARTBLOCK` | `nanosleep`, `clock_nanosleep`, `poll`, `ppoll`, `select` (with timeout), `futex` (FUTEX_WAIT) | Always restarts via `restart_syscall()`; `SA_RESTART` irrelevant |
+| Restart code | Examples | When handler runs | When no handler runs |
+|---|---|---|---|
+| `ERESTARTSYS` | `read`, `write`, `accept`, `connect`, `waitpid`, `select` (short wait) | EINTR (unless SA_RESTART → restart) | Always restarts |
+| `ERESTARTNOINTR` | Wait states entered during page faults, some internal waits | Always restarts | Always restarts |
+| `ERESTARTNOHAND` | `pause`, `sigsuspend`, `epoll_wait` (with signal mask change) | Always EINTR | Always restarts |
+| `ERESTART_RESTARTBLOCK` | `nanosleep`, `clock_nanosleep`, `poll`, `ppoll`, `select` (with timeout), `futex` (FUTEX_WAIT) | Always EINTR | Restarts via `restart_syscall()` |
 
-`SA_RESTART` only controls the behavior of `ERESTARTSYS`. It has no effect on
-`ERESTART_RESTARTBLOCK` (those always restart) or `ERESTARTNOHAND` (those never
-restart when a handler ran). A common mistake is installing a signal handler
-with `SA_RESTART` and expecting that `nanosleep()` will restart with the
-original full duration — it will restart, but via `restart_syscall()` with the
-remaining time, not the original duration.
+`SA_RESTART` only controls the behavior of `ERESTARTSYS`. `ERESTART_RESTARTBLOCK`
+restarts via `restart_syscall()` **only when no signal handler runs**. When a
+signal handler IS delivered, `ERESTART_RESTARTBLOCK` is converted to `-EINTR`,
+the same as `ERESTARTNOHAND`. The distinction is whether a handler actually ran,
+not whether `SA_RESTART` is set. A common mistake is installing a signal handler
+with `SA_RESTART` and expecting that `nanosleep()` will restart — it will not;
+it will return `-EINTR`. Without a handler, it restarts via `restart_syscall()`
+with the remaining time, not the original duration.
 
 ## Debugging restarts
 

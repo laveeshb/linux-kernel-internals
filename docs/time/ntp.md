@@ -104,10 +104,10 @@ STA_PPSFREQ | STA_PPSTIME   ← PPS-disciplined (highest accuracy)
 On every tick, `timekeeping_update()` calls into the NTP code to retrieve the correction to apply:
 
 ```c
-u64 ntp_tick_length(void);
+u64 ntp_tick_length(unsigned int tkid);
 ```
 
-This function returns the number of nanoseconds to add for this tick, incorporating the current PLL/FLL frequency correction. The base value is `NSEC_PER_SEC / HZ`; the PLL correction shifts it slightly up or down. `timekeeping_adjust()` applies the accumulated correction when updating `struct timekeeper`.
+This function takes a timekeeper ID (`tkid`) and returns the number of nanoseconds to add for this tick, incorporating the current PLL/FLL frequency correction. The base value is `NSEC_PER_SEC / HZ`; the PLL correction shifts it slightly up or down. `timekeeping_adjust()` applies the accumulated correction when updating `struct timekeeper`.
 
 ## Leap seconds
 
@@ -153,7 +153,7 @@ adjtimex(&txc);
 
 ## The 11-minute mode (RTC sync)
 
-When the clock is synchronized (`STA_UNSYNC` is clear and `STA_PLL` is set), the kernel periodically writes the current time to the hardware RTC every 11 minutes. This is implemented in `sync_cmos_clock()` (called from a work queue) and ensures that the RTC — which has no NTP correction — stays close to UTC across reboots.
+When the clock is synchronized (`STA_UNSYNC` is clear and `STA_PLL` is set), the kernel periodically writes the current time to the hardware RTC every 11 minutes. This is implemented in `sync_hw_clock()` (called from a work queue) and ensures that the RTC — which has no NTP correction — stays close to UTC across reboots. The function was renamed from `sync_cmos_clock()` to `sync_hw_clock()` to reflect that it supports modern RTC class devices as well as legacy CMOS/RTC hardware.
 
 The 11-minute interval is hardcoded and not configurable. The write is skipped if the system is a virtual machine without a real CMOS clock.
 

@@ -25,11 +25,16 @@ long finit_module(int fd, const char __user *uargs, int flags);
 ### 1. Copy the ELF image from userspace
 
 ```c
-/* Allocates a kernel buffer and copies from userspace */
-info.hdr = copy_module_from_user(umod, len, &info);
+/* Step 1: Copy ELF image from userspace into a kernel buffer */
+/* vmalloc a buffer of 'len' bytes, then: */
+if (copy_from_user(info->hdr, umod, len))
+    return -EFAULT;
+
+/* Validate ELF and populate struct load_info: */
+err = setup_load_info(info, len);
 ```
 
-For `finit_module()`, the kernel reads the file via `kernel_read_file_from_fd()` instead. The resulting buffer is a complete ELF relocatable object (`.ko` file).
+The ELF image is copied from userspace via `copy_from_user()` into a vmalloc'd buffer. `load_module()` then calls `setup_load_info()` to populate a `struct load_info` (containing pointers into the buffer for each ELF section). For `finit_module()`, the kernel reads the file via `kernel_read_file_from_fd()` instead. The resulting buffer is a complete ELF relocatable object (`.ko` file).
 
 ### 2. Sanity-check the ELF header
 
@@ -107,10 +112,18 @@ For each relocation entry, the kernel: looks up the target symbol's final addres
 static int simplify_symbols(struct module *mod, const struct load_info *info);
 ```
 
-For each symbol with `STB_UNDEFINED` binding, `simplify_symbols()` calls `resolve_symbol()`, which searches:
+```c
+/* simplify_symbols() identifies unresolved symbols by section index: */
+if (sym->st_shndx == SHN_UNDEF) {
+    /* symbol is undefined — look it up in the kernel's symbol table */
+    ...
+}
+```
 
-1. The kernel's built-in symbol table (`kernel_symbol_hash`) — populated at compile time from `__ksymtab` entries of vmlinux and built-in modules.
-2. The `__ksymtab` sections of all already-loaded modules, via `find_symbol()`.
+For each symbol whose `st_shndx == SHN_UNDEF` (section index 0, meaning the symbol is undefined), `simplify_symbols()` calls `resolve_symbol()`, which searches:
+
+1. The kernel's built-in exported symbols in the `__ksymtab` and `__ksymtab_gpl` ELF sections of vmlinux itself, stored as an array of `struct kernel_symbol`. Symbol lookup is done via `find_symbol()`, which binary-searches this sorted array using the `__start___ksymtab` and `__stop___ksymtab` linker symbols. There is no hash table named `kernel_symbol_hash`.
+2. The `__ksymtab` sections of all already-loaded modules, also via `find_symbol()`.
 
 If a symbol is found but is GPL-only and the module is not GPL-licensed, the load fails with `ENOEXEC`. If a symbol is not found at all, the load fails with `ENOENT` and prints `Unknown symbol <name>` to the kernel log.
 
@@ -147,10 +160,13 @@ Subsystems like ftrace, kprobes, and the live-patching infrastructure use these 
 The module's init function is called:
 
 ```c
-ret = do_one_initcall(mod->init);
+/* Step 10: Run the module's init function */
+/* do_init_module() calls mod->init() directly: */
+ret = do_init_module(mod);
+/* which internally does: ret = mod->init(); */
 ```
 
-A return value of `0` means success — the module transitions to `MODULE_STATE_LIVE`. A negative errno means failure — the kernel calls `module_put()`, notifies `MODULE_STATE_GOING`, runs the exit function if one was registered, and frees both memory regions.
+`do_one_initcall()` is used for built-in initcalls registered at compile time and is not the mechanism for module init functions. A return value of `0` means success — the module transitions to `MODULE_STATE_LIVE`. A negative errno means failure — the kernel calls `module_put()`, notifies `MODULE_STATE_GOING`, runs the exit function if one was registered, and frees both memory regions.
 
 ## struct module
 
@@ -181,15 +197,15 @@ struct module {
     void (*exit)(void);
 
     /* Dependency tracking */
-    struct list_head source_list;  /* modules that use symbols from us */
-    struct list_head target_list;  /* modules whose symbols we use */
+    struct list_head source_list;  /* modules we use symbols from (our dependencies) */
+    struct list_head target_list;  /* modules that use our symbols (our dependents) */
 
     /* Reference counting */
     struct module_ref __percpu *refptr;
 };
 ```
 
-`source_list` and `target_list` together form the dependency graph that `rmmod` walks to verify nothing depends on the module being removed.
+`source_list` lists the modules that **this module** uses symbols from (our dependencies — modules we load after). `target_list` lists the modules that use **this module's** symbols (our dependents — modules that depend on us). Together they form the dependency graph that `rmmod` walks to verify nothing depends on the module being removed.
 
 ## MODULE_STATE_* lifecycle
 

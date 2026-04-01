@@ -18,7 +18,7 @@ unshare(CLONE_NEWTIME);
 clone(child_fn, stack, CLONE_NEWTIME | SIGCHLD, NULL);
 ```
 
-`CLONE_NEWTIME` was introduced in Linux 5.6. It is unique among namespace types in one important way: **the namespace must be created before the process that will use it reads any namespaced clock**. Unlike other namespaces where you can `unshare()` and immediately see the new namespace, time namespace offsets must be written to `/proc/<pid>/timens_offsets` before the target process makes its first `clock_gettime()` call in the new namespace. Once the namespace is "sealed" (by the first read), the offsets are frozen.
+`CLONE_NEWTIME` was introduced in Linux 5.6. It is unique among namespace types in one important way: **the offsets in `/proc/<pid>/timens_offsets` must be written before the process calls `exec()` in the new time namespace**. The namespace is sealed when the vDSO is mapped into the new namespace's process on `exec()` — `timens_on_fork()` sets up the per-namespace vvar page at that point. A process can call `clock_gettime()` after `unshare(CLONE_NEWTIME)` but before `exec()`: it will use the slow syscall path and the namespace offsets are still mutable. The sealing trigger is `exec()`, not the first clock read.
 
 ## What is and is not namespaced
 
@@ -43,7 +43,7 @@ struct time_namespace {
     struct ns_common         ns;
     struct timens_offsets    offsets;   /* the clock adjustments */
     struct page             *vvar_page; /* per-namespace vDSO data page */
-    bool                     frozen_offsets; /* true after first clock read */
+    bool                     frozen_offsets; /* true after exec() in the namespace */
 };
 ```
 
@@ -83,14 +83,14 @@ Example — give a container the illusion that it started 1000 seconds ago:
 unshare --time --fork bash &
 CHILD_PID=$!
 
-# Set the offset BEFORE the child reads any clock
+# Set the offset BEFORE the child calls exec()
 echo "monotonic 1000 0" > /proc/$CHILD_PID/timens_offsets
 echo "boottime 1000 0"  > /proc/$CHILD_PID/timens_offsets
 
-# Now let the child run — it sees CLOCK_MONOTONIC + 1000s
+# Now let the child exec its program — it sees CLOCK_MONOTONIC + 1000s
 ```
 
-Once the child calls `clock_gettime()` or any other namespaced clock function, the offsets are frozen and further writes to `timens_offsets` return `EACCES`.
+Once the child calls `exec()`, the per-namespace vvar page is mapped and the offsets are frozen. Further writes to `timens_offsets` after `exec()` return `EACCES`. A process may call `clock_gettime()` before `exec()` — it will use the slow syscall path and the offsets remain writable until `exec()` is called.
 
 The offsets can be negative (the container sees time as earlier than the host's monotonic clock — useful for CRIU restore when the container was created before the host's monotonic baseline).
 
@@ -99,8 +99,8 @@ The offsets can be negative (the container sees time as earlier than the host's 
 CRIU (Checkpoint/Restore In Userspace) is the primary consumer of time namespaces. When CRIU restores a checkpoint:
 
 1. It forks the container process with `CLONE_NEWTIME`.
-2. Before the process reads any clock, CRIU writes the appropriate offsets to `timens_offsets`. The offsets encode the difference between the container's monotonic time at checkpoint and the host's current monotonic time.
-3. The restored process sees a continuous `CLOCK_MONOTONIC` — the jump in wall time that occurred during suspension is hidden.
+2. Before the process calls `exec()`, CRIU writes the appropriate offsets to `timens_offsets`. The offsets encode the difference between the container's monotonic time at checkpoint and the host's current monotonic time.
+3. When the process executes (`exec()`), the per-namespace vvar page is mapped with the adjusted offsets baked in. The restored process sees a continuous `CLOCK_MONOTONIC` — the jump in wall time that occurred during suspension is hidden.
 
 Without time namespaces, any timer, timeout, or deadline the container computed against `CLOCK_MONOTONIC` before checkpoint would expire immediately or have a wildly wrong remaining duration after restore.
 

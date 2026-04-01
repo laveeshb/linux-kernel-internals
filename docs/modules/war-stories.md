@@ -92,7 +92,7 @@ Tainted: P OE
 
 Three days later, a completely unrelated bug in the block layer caused the crash. The bug was real, reproducible, and not caused by the GPU driver. But the taint flag `P` was set and would not clear.
 
-**Why it matters:** The `tainted` field in `struct kernel_info` is set per-kernel-session. Once set, taint bits are never cleared, even if the offending module is unloaded. From the upstream developers' perspective, a tainted kernel cannot be used to confirm a clean bug report because they cannot rule out that the proprietary module corrupted kernel data structures during its 30-second run.
+**Why it matters:** Global taint flags are stored in the global `unsigned long tainted_mask` variable (in `kernel/panic.c`), manipulated via `add_taint(flag, lockdep_ok)` and read via `get_taint()`. Per-module taint is tracked in `struct module::taints`. Once a taint bit is set in `tainted_mask`, it is never cleared, even if the offending module is unloaded — there is no `struct kernel_info` holding this field. From the upstream developers' perspective, a tainted kernel cannot be used to confirm a clean bug report because they cannot rule out that the proprietary module corrupted kernel data structures during its 30-second run.
 
 ```bash
 # Check current taint flags
@@ -149,7 +149,7 @@ static void __init mydriver_init_error_handler(struct my_device *dev)
 }
 ```
 
-`mydriver_init_error_handler` was marked `__init`, so it lived in the `.init.text` section. After all initcalls completed, the kernel called `free_initmem()` (or `do_free_init()` for module init sections), freeing the pages that held `.init.text`. The function pointer in `dev->error_handler` now pointed to freed memory.
+`mydriver_init_error_handler` was marked `__init`, so it lived in the `.init.text` section. For modules, the init section is freed via `do_free_init()` (a work item) immediately after **that specific module's** `mod->init()` returns successfully — not after all initcalls complete. The function pointer in `dev->error_handler` now pointed to freed memory.
 
 Under normal operation, those pages were not immediately reused. Under I/O load, the allocator reused them for something else. When a device event triggered `dev->error_handler`, the CPU jumped to whatever bytes happened to be at that address — producing an unpredictable crash.
 

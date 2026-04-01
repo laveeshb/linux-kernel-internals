@@ -47,12 +47,12 @@ Here is what happened:
 
 The result: Reddit, Mozilla, LinkedIn, Qantas, and hundreds of other Linux-based services reported CPU spikes to 100% at exactly the same moment, worldwide.
 
-Root cause: the leap second handling corrupted the `HRTIMER_MODE_ABS` comparison logic, causing a spin condition. The fix was merged shortly after (commit `6b43ae8a619d17c4935c3320d2ef9e92bdeed05d`).
+Root cause: the leap second handling corrupted the `HRTIMER_MODE_ABS` comparison logic, causing a spin condition. The kernel was subsequently patched with backports that corrected `hrtimer` behavior during leap second insertion.
 
 **Workarounds used at the time:**
-- `adjtimex --clkdj` ("clock jump") — tells ntpd to step the clock rather than slew it through the leap second.
-- Manual `date` command to force a step after midnight, which cleared the confused state.
-- "Leap smearing": spreading the one-second adjustment over a longer window (12–24 hours) so no single second has a discontinuity. Many NTP server operators and cloud providers now smear by default. The kernel does not implement smearing natively; it is done by the time daemon.
+- Set the system clock slightly ahead before midnight so the leap second was absorbed as a normal tick, avoiding the confused state entirely.
+- Use `ntpd`'s `leapsmear` option (chrony, NTPD 4.2.6+) to spread the one-second adjustment over a longer window (12–24 hours) so no single second has a discontinuity — preventing the sharp discontinuity that triggered the spin. Many NTP server operators and cloud providers now smear by default. The kernel does not implement smearing natively; it is done by the time daemon.
+- Apply the kernel fix: backported patches that corrected `hrtimer` behavior during leap second insertion were available for affected kernel versions.
 
 This incident led to widespread adoption of `CLOCK_TAI` for applications that need a monotonically increasing real-time clock — TAI has no leap seconds and never jumps.
 
@@ -183,10 +183,12 @@ if (time_after(jiffies, cmd->submit_jiffies + msecs_to_jiffies(TIMEOUT_MS))) {
     report_timeout(cmd);
 }
 
-/* time_after(a, b) is defined as: (long)(b) - (long)(a) < 0
- * By casting to signed long, wraparound differences up to LONG_MAX
- * are handled correctly. The macro assumes the interval is < LONG_MAX/HZ
- * seconds (about 24 days on a 32-bit HZ=1000 system). */
+/* time_after(a, b) performs the subtraction at unsigned long width,
+ * then casts the result to long: (long)((b) - (a)) < 0
+ * By interpreting the unsigned result as signed long, wraparound
+ * differences up to LONG_MAX are handled correctly. The macro assumes
+ * the interval is < LONG_MAX/HZ seconds (about 24 days on a 32-bit
+ * HZ=1000 system). */
 ```
 
 The full family of macros in `include/linux/jiffies.h`:

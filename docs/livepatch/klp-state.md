@@ -35,8 +35,6 @@ struct klp_state {
     unsigned long  id;        /* non-zero, unique identifier for this state */
     unsigned int   version;   /* for cumulative patch compatibility */
     void          *data;      /* patch-private pointer, owned by the patch */
-    void         (*cleanup)(struct klp_state *state);
-                              /* called when the state is freed (patch removed) */
 };
 ```
 
@@ -53,9 +51,7 @@ static struct klp_state my_states[] = {
 ```
 
 The `data` pointer is available for the patch author to store any per-state
-information needed during the transition. The `cleanup` callback is invoked by
-`klp_free_patch_start()` when the patch is removed, giving the author a chance
-to free resources allocated during the transition.
+information needed during the transition.
 
 ## Attaching states to a patch
 
@@ -91,16 +87,18 @@ The hooks where custom consistency logic runs are declared per-object in
 ```c
 /* include/linux/livepatch.h */
 struct klp_object {
-    const char      *name;         /* NULL for vmlinux */
-    struct klp_func *funcs;
-    struct klp_state *states;      /* object-level states (rarely used) */
+    const char           *name;      /* NULL for vmlinux */
+    struct klp_func      *funcs;
+    struct klp_callbacks  callbacks; /* contains pre/post patch/unpatch hooks */
+    /* ... internal fields ... */
+};
 
+struct klp_callbacks {
     int  (*pre_patch)(struct klp_object *obj);
     void (*post_patch)(struct klp_object *obj);
     void (*pre_unpatch)(struct klp_object *obj);
     void (*post_unpatch)(struct klp_object *obj);
-
-    /* ... internal fields ... */
+    bool post_unpatch_enabled;
 };
 ```
 
@@ -163,7 +161,7 @@ static int pre_patch_subsys(struct klp_object *obj)
 {
     struct klp_state *state;
 
-    state = klp_get_state(obj->patch_for_state, SUBSYS_LOCK_STATE_ID);
+    state = klp_get_state(&subsys_patch, SUBSYS_LOCK_STATE_ID);
     if (!state)
         return -EINVAL;
 
@@ -221,12 +219,14 @@ static struct klp_func subsys_funcs[] = {
 
 static struct klp_object subsys_objs[] = {
     {
-        .name         = NULL,   /* vmlinux */
-        .funcs        = subsys_funcs,
-        .pre_patch    = pre_patch_subsys,
-        .post_patch   = post_patch_subsys,
-        .pre_unpatch  = pre_unpatch_subsys,
-        .post_unpatch = post_unpatch_subsys,
+        .name  = NULL,   /* vmlinux */
+        .funcs = subsys_funcs,
+        .callbacks = {
+            .pre_patch    = pre_patch_subsys,
+            .post_patch   = post_patch_subsys,
+            .pre_unpatch  = pre_unpatch_subsys,
+            .post_unpatch = post_unpatch_subsys,
+        },
     },
     { }
 };
@@ -256,7 +256,7 @@ static int pre_patch_v2(struct klp_object *obj)
     struct klp_state *prev, *cur;
 
     prev = klp_get_prev_state(SUBSYS_LOCK_STATE_ID);
-    cur  = klp_get_state(obj->patch_for_state, SUBSYS_LOCK_STATE_ID);
+    cur  = klp_get_state(&my_patch, SUBSYS_LOCK_STATE_ID);
 
     if (prev && prev->data) {
         /*
