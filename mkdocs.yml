@@ -339,18 +339,30 @@ nav:
     - POSIX Message Queues: ipc/mqueue.md
   - I/O Patterns:
     - Getting Started: io/README.md
+    - Life of a Write: io/life-of-a-write.md
     - Buffered I/O and the Page Cache: io/buffered-io.md
     - Readahead: io/readahead.md
     - Page Cache Writeback: io/page-cache-writeback.md
+    - Memory-Mapped I/O: io/mmap-io.md
     - Direct I/O: io/direct-io.md
+    - Vectored I/O (Scatter-Gather): io/vectored-io.md
+    - splice, sendfile, and Zero-Copy: io/splice-sendfile.md
+    - fallocate and File Space Management: io/fallocate.md
     - Async I/O Evolution: io/async-io.md
+    - Observability: io/observability.md
+    - Tuning Storage I/O: io/tuning-storage.md
+    - War Stories: io/war-stories.md
   - io_uring:
     - Getting Started: io-uring/README.md
+    - Life of an io_uring Request: io-uring/life-of-request.md
     - Architecture and Rings: io-uring/io-uring-arch.md
     - Operations and Advanced Features: io-uring/io-uring-ops.md
     - Fixed Buffers and Files: io-uring/fixed-buffers.md
     - Multishot, Linked Requests, and Probing: io-uring/multishot-ops.md
+    - Networking with io_uring: io-uring/networking.md
+    - io_uring vs epoll: io-uring/io-uring-vs-epoll.md
     - Security Model: io-uring/security.md
+    - War Stories: io-uring/war-stories.md
   - Tracing:
     - Getting Started: tracing/README.md
     - ftrace: tracing/ftrace.md
