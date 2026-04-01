@@ -322,7 +322,7 @@ bpftool prog show id 42 | grep run_cnt
 
 ## Further reading
 
-- [XDP (eXpress Data Path)](../net/xdp.md) — BPF at driver level
+- [XDP (eXpress Data Path)](../net/xdp.md) — BPF at driver level, introduced in Linux 4.8 [(LWN)](https://lwn.net/Articles/682538/)
 - [AF_XDP Sockets](../net/af-xdp.md) — zero-copy packet processing
 - [TC and qdisc](../net/tc-qdisc.md) — TC architecture
 - [BPF Architecture](bpf-overview.md) — program type overview

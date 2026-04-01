@@ -4,7 +4,7 @@
 
 ## Why XFS?
 
-XFS was designed at SGI in 1993 for high-performance workloads. It excels at:
+XFS was originally developed at SGI for IRIX in 1993, then ported to Linux by Steve Lord and the SGI team; it was merged into the mainline kernel in Linux 2.5.36 (2002). It excels at:
 - **Large files and filesystems**: up to 8 EiB volumes, 8 EiB files
 - **High concurrency**: per-allocation-group locking, minimal global contention
 - **Metadata performance**: B-tree indexes for extents, inodes, and free space
@@ -223,7 +223,7 @@ On crash recovery:
 
 ### Committed Item List (CIL)
 
-The CIL is XFS's equivalent of JBD2's running transaction, but with delayed flushing:
+The CIL is XFS's equivalent of JBD2's running transaction, but with delayed flushing. Delayed logging (log intent items) was designed and implemented by Dave Chinner:
 
 ```c
 /* Multiple transactions are batched into one CIL push: */

@@ -4,7 +4,7 @@
 
 ## What libbpf does
 
-libbpf is the official userspace library for BPF (`tools/lib/bpf/` in the kernel tree). It handles:
+libbpf is the official userspace library for BPF (`tools/lib/bpf/` in the kernel tree), originally introduced in Linux 4.3 by Wang Nan. [(commit)](https://git.kernel.org/linus/1b76c13e4b36f978ea45af079f38ad423a229630) It handles:
 
 - Loading BPF ELF objects (`.bpf.o` files)
 - CO-RE relocation patching at load time

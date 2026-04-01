@@ -4,7 +4,7 @@
 
 ## What perf events are
 
-`perf_event_open` is the Linux syscall for accessing performance monitoring hardware:
+The perf events subsystem was created by Ingo Molnár and Peter Zijlstra and introduced in Linux 2.6.31 [(LWN)](https://lwn.net/Articles/337493/). `perf_event_open` is the Linux syscall for accessing performance monitoring hardware:
 
 - **Hardware counters** (PMU): CPU cycles, instructions, cache misses, branch mispredictions
 - **Software counters**: page faults, context switches, CPU migrations

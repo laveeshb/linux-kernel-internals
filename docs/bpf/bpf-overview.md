@@ -4,9 +4,9 @@
 
 ## From cBPF to eBPF
 
-### Classic BPF (1992–2014)
+### Classic BPF (1993–2014)
 
-BPF was not originally a Linux invention. It came from a 1992 paper by Steven McCanne and Van Jacobson at Lawrence Berkeley Laboratory: *"The BSD Packet Filter: A New Architecture for User-level Packet Capture."*
+BPF was not originally a Linux invention. It came from a paper by Steven McCanne and Van Jacobson at Lawrence Berkeley Laboratory presented at USENIX Winter 1993: *"The BSD Packet Filter: A New Architecture for User-level Packet Capture."* [(paper)](https://www.tcpdump.org/papers/bpf-usenix93.pdf)
 
 The original BPF was a small virtual machine with two 32-bit registers (`A` and `X`), a small scratch memory array, and a simple instruction set designed for one purpose: filtering network packets in the kernel before copying them to userspace. Linux adopted it as `SO_ATTACH_FILTER` — attach a filter to a socket to drop packets you don't care about before they reach `recvmsg()`.
 
@@ -24,7 +24,7 @@ Kernel modules could do all this, but they're dangerous: a buggy module panics t
 
 ### eBPF (Linux 3.18, 2014)
 
-Alexei Starovoitov and Daniel Borkmann rewrote the BPF virtual machine from scratch. The new design — retroactively called eBPF (extended BPF) — kept backward compatibility with cBPF socket filters (they are auto-translated) but was otherwise a new architecture:
+Alexei Starovoitov and Daniel Borkmann rewrote the BPF virtual machine from scratch. The new design — retroactively called eBPF (extended BPF) [(commit)](https://git.kernel.org/linus/99c55f7d47c0dc6fc64729f37bf435abf43f4c60) [(LWN)](https://lwn.net/Articles/603983/) — kept backward compatibility with cBPF socket filters (they are auto-translated) but was otherwise a new architecture:
 
 | | cBPF | eBPF |
 |--|------|------|

@@ -4,7 +4,7 @@
 
 ## What tmpfs is
 
-tmpfs is a filesystem that lives entirely in RAM (and optionally swap). It's backed by the page cache — each file's data is anonymous memory, evictable to swap under memory pressure.
+tmpfs is a filesystem that lives entirely in RAM (and optionally swap). It's backed by the page cache — each file's data is anonymous memory, evictable to swap under memory pressure [(kernel docs)](https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html). The current implementation was created by Christoph Rohland around 2001, replacing the older shm filesystem.
 
 ```bash
 # Mount a tmpfs
