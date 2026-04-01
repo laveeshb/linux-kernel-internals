@@ -33,9 +33,11 @@ static int net_kthread(void *arg)
 
 Because the kthread never yielded the CPU voluntarily and never entered sleep,
 the scheduler had no opportunity to call `klp_update_patch_state()` for it.
-The `klp_send_signals()` path sends `SIGURG` to unblock `D`-state tasks, but
-this kthread was in `R` state (runnable) — `SIGURG` is silently ignored by
-kthreads.
+`klp_send_signals()` calls `wake_up_state(task, TASK_INTERRUPTIBLE)` for
+kthreads — this can only wake tasks in interruptible sleep, not tasks actively
+running in a tight loop. The kthread's tight loop without `cond_resched()`
+prevented both scheduling and the `TASK_INTERRUPTIBLE` wakeup from taking
+effect.
 
 The kthread's stack confirmed it:
 
@@ -74,24 +76,14 @@ function:
 
 - Add `cond_resched()` or a brief `msleep()` to the kthread if you control
   its source (via a separate preparatory patch).
-- Or use a `nop` patch: patch the function with a no-op replacement to
-  instantly drain the stack, then apply the real fix as a second patch.
-  The `nop` field in `struct klp_func` exists for exactly this use case:
+- Or patch the non-inlined callers instead, or restructure the kernel code to
+  prevent inlining by adding `noinline` and submitting a patch upstream.
 
-  ```c
-  /* First patch: nop to drain the old function from stacks */
-  static struct klp_func drain_funcs[] = {
-      {
-          .old_name = "old_net_processor",
-          .new_func = NULL,
-          .nop      = true,    /* call through to original, just establishes hook */
-      },
-      {}
-  };
-  ```
-
-  Once the nop patch is fully transitioned (no stacks have the old function),
-  the real patch can be loaded as a cumulative replacement.
+  Note: the `nop` field in `struct klp_func` is used by the cumulative replace
+  mechanism (`klp_add_nops()`) to create placeholder entries that call through
+  to the original function for functions covered by older patches but not
+  explicitly patched by the new cumulative patch. It is not a tool for draining
+  stacks in this scenario.
 
 ## 2. Shadow variable lifecycle bug
 
@@ -111,7 +103,7 @@ grep klp_shadow /proc/slabinfo
 
 ### Root cause
 
-Shadow variables are stored in a global hash table, `klp_shadow_htable`,
+Shadow variables are stored in a global hash table, `klp_shadow_hash`,
 keyed by (object pointer, ID). The patch allocated a shadow for each new
 socket but never freed it when the socket was closed:
 
@@ -410,4 +402,4 @@ transition state machine.
 - [Cumulative Patches and Atomic Replace](klp-cumulative.md) — stacking and .replace=true
 - [Kernel Live Patching](klp.md) — shadow variables, observing patches
 - `kernel/livepatch/transition.c` — klp_try_complete_transition, klp_send_signals
-- `kernel/livepatch/shadow.c` — klp_shadow_htable implementation
+- `kernel/livepatch/shadow.c` — klp_shadow_hash implementation

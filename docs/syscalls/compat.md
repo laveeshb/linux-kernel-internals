@@ -29,8 +29,10 @@ COMPAT_SYSCALL_DEFINE3(read, unsigned int, fd,
                        compat_size_t, count)
 ```
 
-This macro expands to a function named `__ia32_compat_sys_read` (on x86) with `asmlinkage` linkage. The naming
-convention mirrors the 64-bit case (`__x64_sys_read`) but for the ia32 compat path. The macro also generates
+`COMPAT_SYSCALL_DEFINE` generates a C function named `compat_sys_xxx` (e.g., `compat_sys_read`). On x86, the
+architecture-specific `__IA32_COMPAT_SYS_STUBx` macros in `arch/x86/include/asm/syscall_wrapper.h` then
+generate a separate `__ia32_compat_sys_xxx` entry-point stub that decodes 32-bit registers and calls
+`compat_sys_xxx`. The macro itself produces `compat_sys_xxx`, not the ia32 stub. The macro also generates
 the necessary tracepoint metadata so compat syscalls appear in `ftrace` and `perf` output the same way native
 syscalls do.
 
@@ -77,7 +79,7 @@ typedef s32                 compat_int_t;
 typedef s64 __attribute__((aligned(4))) compat_s64;
 typedef u64 __attribute__((aligned(4))) compat_u64;
 
-/* compat_timespec64: two u32s instead of two long/int64 */
+/* compat_timespec64: two s32s instead of two long/int64 */
 struct compat_timespec64 {
     s32     tv_sec;
     s32     tv_nsec;
@@ -114,17 +116,25 @@ static inline compat_uptr_t ptr_to_compat(void __user *uptr)
 ## in_compat_syscall()
 
 Code that needs to behave differently for 32-bit callers (e.g., to pick the right struct size) uses
-`in_compat_syscall()`:
+`in_compat_syscall()`. On x86-64, `in_compat_syscall()` checks `current_thread_info()->status & TS_COMPAT`
+— a per-syscall status bit set in the syscall entry path, not a thread flag. Some other architectures
+(ARM64, MIPS) use `TIF_32BIT`. The generic declaration is in `include/linux/compat.h`:
 
 ```c
 /* include/linux/compat.h */
 static inline bool in_compat_syscall(void)
 {
-    return test_thread_flag(TIF_32BIT);
+    return is_compat_task();  /* arch-specific */
+}
+
+/* x86-64: arch/x86/include/asm/compat.h */
+static inline bool in_compat_syscall(void)
+{
+    return current_thread_info()->status & TS_COMPAT;
 }
 ```
 
-`TIF_32BIT` is set when a task is executing in 32-bit compatibility mode. It is checked at various points in
+`TS_COMPAT` is set when a task is executing in 32-bit compatibility mode. It is checked at various points in
 the VFS and networking stack so that a single in-kernel code path can serve both 32-bit and 64-bit callers
 where only minor differences exist.
 
@@ -281,20 +291,23 @@ a traced task.
 ## compat_alloc_user_space()
 
 For compat handlers that need to construct a native struct on the user stack (a legacy pattern), the kernel
-provides `compat_alloc_user_space()`:
+provides `compat_alloc_user_space()`.
+
+`compat_alloc_user_space()` carves space below the user stack pointer, but must also: (1) align the result
+to 16 bytes, (2) verify the result is within the 32-bit address range for compat tasks, and (3) check with
+`access_ok()`. Showing the bare `sp - len` form is misleading — the real implementation in
+`arch/x86/include/asm/compat.h` includes these checks.
 
 ```c
 /* arch/x86/include/asm/compat.h */
-void __user *compat_alloc_user_space(unsigned long len)
-{
-    struct pt_regs *regs = current_pt_regs();
-    return (void __user *)(regs->sp - len);
-}
+/* Allocate len bytes on the user stack of a 32-bit process.
+ * Aligns result, verifies within 32-bit range, calls access_ok(). */
+void __user *compat_alloc_user_space(unsigned long len);
 ```
 
-This allocates space on the current user stack by decrementing the user stack pointer. It is used by older
-compat wrappers (e.g., `compat_sys_socketcall`) that reconstruct the native argument layout and then call
-the 64-bit handler. New code should avoid this pattern and use explicit kernel-space structs instead.
+It is used by older compat wrappers (e.g., `compat_sys_socketcall`) that reconstruct the native argument
+layout and then call the 64-bit handler. New code should avoid this pattern and use explicit kernel-space
+structs instead.
 
 ## Summary: when to write a compat handler
 

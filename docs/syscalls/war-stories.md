@@ -228,16 +228,26 @@ struct sigaction sa = {
 ```
 
 With `SA_RESTART`, the kernel automatically restarts certain slow syscalls after the signal handler
-returns, without returning `EINTR`. However, **`poll()` and `select()` are not automatically restarted on
-Linux** even with `SA_RESTART` — they always return `EINTR` when interrupted. This is a deliberate kernel
-behavior: because poll/select have a timeout, the kernel cannot know whether to restart with the original
-timeout or with the remaining time. POSIX leaves this unspecified; Linux chose to always return `EINTR`.
+returns, without returning `EINTR`. The interaction with `poll()` is subtler than it appears:
+
+Since Linux 2.6.24, `poll()` returns `ERESTART_RESTARTBLOCK` when interrupted by a signal (not
+`ERESTARTSYS`). The `ERESTART_RESTARTBLOCK` mechanism causes the kernel to restart the syscall via
+`restart_syscall()`, adjusting the timeout to reflect elapsed time. This is transparent to userspace —
+`poll()` does not return `EINTR` to the process; it restarts automatically. `SA_RESTART` does not control
+this path (it only controls `ERESTARTSYS`), but the net effect is the same: `poll()` is restarted.
+
+The syscalls that genuinely always return `EINTR` are those that use `ERESTARTNOHAND` (like `epoll_wait()`)
+— these return `EINTR` when any signal handler runs, even with `SA_RESTART`. In the incident above, the
+EINTR issue would arise from `epoll_wait()` or a pre-2.6.24 kernel's `poll()`, not modern `poll()`.
 
 Syscalls that **are** restarted by `SA_RESTART`: `read()`, `write()`, `wait()`, `ioctl()` (device),
-`flock()`, `nanosleep()` (via `ERESTART_RESTARTBLOCK`).
+`flock()`.
 
-Syscalls that are **not** restarted even with `SA_RESTART`: `poll()`, `select()`, `epoll_wait()`,
-`usleep()`, `nanosleep()` when interrupted by a non-restart-safe signal.
+Syscalls that use `ERESTART_RESTARTBLOCK` (restart via `restart_syscall()`, not controlled by
+`SA_RESTART`): `poll()`, `select()`, `nanosleep()`.
+
+Syscalls that are **not** restarted even with `SA_RESTART`: `epoll_wait()` and others using
+`ERESTARTNOHAND`, which always return `EINTR` when any signal handler runs.
 
 The correct production pattern for daemons: use `signalfd()` or `pselect()`/`ppoll()` with a signal mask.
 `ppoll()` and `pselect6()` atomically install a signal mask and then wait, closing the race window between

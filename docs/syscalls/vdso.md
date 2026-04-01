@@ -93,32 +93,55 @@ moment of the last kernel update.
 Because the kernel updates `vdso_data` from timer interrupt context (and possibly from multiple CPUs), the
 vDSO must handle concurrent reads. It uses a **seqlock** — a lockless read-side protocol:
 
+In current kernels (after the vdso_clock refactoring), the seqlock helpers take `const struct vdso_clock *`
+rather than `const struct vdso_data *`. The vDSO code accesses clock data via a `vdso_clock` sub-struct:
+
+```c
+/* include/vdso/helpers.h */
+static __always_inline u32 vdso_read_begin(const struct vdso_clock *vc)
+{
+    return seqcount_latch_read_begin(&vc->seq);
+}
+
+static __always_inline bool vdso_read_retry(const struct vdso_clock *vc, u32 start)
+{
+    return seqcount_latch_read_retry(&vc->seq, start);
+}
+
+/* In the vDSO clocktime function: */
+const struct vdso_data *vd = __arch_get_vdso_data();
+const struct vdso_clock *vc = &vd->clock_data[clock_mode];
+```
+
+A typical clock read loop then looks like:
+
 ```c
 /* arch/x86/entry/vdso/vclock_gettime.c */
 static __always_inline int do_hres(const struct vdso_data *vd, clockid_t clk,
                                     struct __kernel_timespec *ts)
 {
-    const struct vdso_timestamp *vdso_ts = &vd->basetime[clk];
+    const struct vdso_clock *vc = &vd->clock_data[clk];
+    const struct vdso_timestamp *vdso_ts = &vc->basetime[clk];
     u64 cycles, last, sec, ns;
     u32 seq;
 
     do {
-        seq = vdso_read_begin(vd);   /* read seq; if odd, writer in progress — spin */
+        seq = vdso_read_begin(vc);   /* read seq; if odd, writer in progress — spin */
 
         /* Read clock mode; if not TSC, fall back to real syscall */
-        if (unlikely(vd->clock_mode == VDSO_CLOCKMODE_NONE))
+        if (unlikely(vc->clock_mode == VDSO_CLOCKMODE_NONE))
             return clock_gettime_fallback(clk, ts);
 
-        cycles = __arch_get_hw_counter(vd->clock_mode, vd);
-        last   = vd->cycle_last;
+        cycles = __arch_get_hw_counter(vc->clock_mode, vd);
+        last   = vc->cycle_last;
         ns     = vdso_ts->nsec;
         sec    = vdso_ts->sec;
 
         /* Convert TSC delta to nanoseconds */
-        ns += vdso_calc_delta(cycles, last, vd->mask, vd->mult);
-        ns >>= vd->shift;
+        ns += vdso_calc_delta(cycles, last, vc->mask, vc->mult);
+        ns >>= vc->shift;
 
-    } while (unlikely(vdso_read_retry(vd, seq)));  /* retry if seq changed */
+    } while (unlikely(vdso_read_retry(vc, seq)));  /* retry if seq changed */
 
     ts->tv_sec  = sec + __iter_div_u64_rem(ns, NSEC_PER_SEC, &ns);
     ts->tv_nsec = ns;
@@ -185,21 +208,25 @@ This fallback is transparent to the caller — the function signature and return
 
 ## getcpu() in the vDSO
 
-`getcpu(cpu, node, NULL)` returns the current CPU and NUMA node without a syscall. On x86-64, the vDSO
-reads the CPU number from the GS segment base (the per-CPU area pointer) — a single `mov` instruction
-that reads the `cpu_number` field from `struct pcpu_hot`:
+`getcpu(cpu, node, NULL)` returns the current CPU and NUMA node without a syscall. On x86-64, `__vdso_getcpu()`
+uses either `RDPID` (if available, reads `MSR_TSC_AUX` directly) or `RDTSCP` (reads the TSC and stores
+the CPU+NUMA node in ECX via `MSR_TSC_AUX`). The kernel sets `MSR_TSC_AUX` per-CPU via
+`set_cpu_rdtscp_id()` during CPU bringup. No GS-relative memory access is involved — GS is a kernel-mode
+register and userspace cannot access the kernel's GS base.
 
 ```c
 /* arch/x86/entry/vdso/vgetcpu.c */
-notrace static long
-__vdso_getcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *unused)
+static __always_inline int __vdso_getcpu(unsigned *cpu, unsigned *node,
+                                          struct getcpu_cache *unused)
 {
     unsigned int p;
 
-    p = __getcpu();           /* reads CPUID from GS-based per-CPU var */
+    /* RDPID: reads MSR_TSC_AUX into p (cpu | (node << 12)) */
+    /* Falls back to RDTSCP if RDPID unavailable */
+    p = __rdpid();    /* or RDTSCP ecx */
 
     if (cpu)
-        *cpu  = p & VGETCPU_CPU_MASK;
+        *cpu = p & 0xfff;
     if (node)
         *node = p >> 12;
     return 0;

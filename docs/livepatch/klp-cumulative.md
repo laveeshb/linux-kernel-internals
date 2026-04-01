@@ -20,21 +20,26 @@ patches in a single atomic operation rather than layering on top of them.
 
 ## struct klp_patch: the .replace flag
 
-The `.replace` field, added to `struct klp_patch` in Linux 4.12, marks a
+The `.replace` field, added to `struct klp_patch` in Linux 5.1, marks a
 patch as cumulative:
 
 ```c
 /* include/linux/livepatch.h */
 struct klp_patch {
-    struct module    *mod;
-    struct klp_object *objs;
-    bool              enabled;
-    bool              forced;
-    bool              replace;    /* true: atomically replace all prior patches */
-    struct work_struct free_work;
-    struct completion  finish;
-    struct kobject    kobj;
-    struct list_head  list;
+    /* external (set by patch module author): */
+    struct module       *mod;       /* the live patch module */
+    struct klp_object   *objs;      /* array of patched objects */
+    struct klp_state    *states;    /* optional consistency states (5.8+) */
+    bool                 replace;   /* true = cumulative replace (5.1+) */
+
+    /* internal (managed by the livepatch core): */
+    struct list_head     list;
+    struct kobject       kobj;
+    struct list_head     obj_list;
+    bool                 enabled;
+    bool                 forced;
+    struct work_struct   free_work;
+    struct completion    finish;
 };
 ```
 
@@ -91,40 +96,23 @@ static int __init cumulative_patch_init(void)
 }
 ```
 
-When `klp_enable_patch()` is called with `.replace = true`, the KLP core
-calls `klp_atomic_replace()` instead of the normal enable path.
+There is no `klp_atomic_replace()` function. The mechanism for cumulative replace is:
 
-## Atomic replace: klp_atomic_replace()
+When `patch->replace == true`, `klp_init_patch()` calls `klp_add_nops(patch)` to dynamically allocate `klp_func` "nop" entries for every function that currently-active patches cover but the new cumulative patch does not explicitly patch. These nop entries, when active, call through to the original function. This ensures that when the transition completes and old patches are removed from the func_stack, all previously-patched functions are still covered (by a nop).
 
-`klp_atomic_replace()` in `kernel/livepatch/core.c` performs the replacement:
+The "atomic" part is that the entire switch — enabling the new patch and removing old patches — happens atomically from userspace's perspective: old patches are removed inside `klp_complete_transition()` after the transition finishes.
 
 ```c
-/* kernel/livepatch/core.c */
-static int klp_atomic_replace(struct klp_patch *patch)
-{
-    struct klp_patch *old_patch;
+/* The cumulative replace flow (simplified): */
 
-    /*
-     * For each previously enabled patch, mark it as being replaced.
-     * We do not disable them one by one (that would require separate
-     * transitions).  Instead, the new patch takes over immediately.
-     */
-    list_for_each_entry(old_patch, &klp_patches, list) {
-        if (!old_patch->enabled)
-            continue;
-        /* Old patch will be disabled as part of this transition */
-        old_patch->replace_active = true;
-    }
-
-    /* Now enable the new cumulative patch normally */
-    return klp_enable_patch_core(patch);
-}
+/* 1. Patch author sets .replace = true in klp_patch */
+/* 2. klp_enable_patch() → klp_init_patch() → klp_add_nops()
+ *    allocates nop funcs for any functions in active patches
+ *    not covered by the new patch */
+/* 3. Normal transition begins (same as any patch) */
+/* 4. klp_complete_transition() → klp_unpatch_objects() removes
+ *    all replaced patches from the func_stack */
 ```
-
-During the transition, the ftrace handler consults the `func_stack` per
-`klp_ops`. Replaced patches have their `klp_func` entries effectively shadowed
-by the new patch's entries. Once the transition completes, the old patches are
-fully disabled and their modules can be unloaded.
 
 ## struct klp_ops: the per-function hook
 
@@ -188,32 +176,21 @@ cat /sys/kernel/livepatch/mypatch/enabled
 # 0 = fully disabled
 ```
 
-## Removing a patch: klp_unregister_patch()
+## Removing a patch
 
-Once a patch is disabled, its module can be unloaded. The `module_exit`
-function calls `klp_unregister_patch()`:
+Once a patch is disabled, its module can be unloaded. The only public livepatch API exported via `EXPORT_SYMBOL_GPL` is `klp_enable_patch()`. A livepatch module's `module_exit` should be empty or omitted entirely — the livepatch core handles cleanup via the module notifier `klp_module_going()`:
 
 ```c
-/* kernel/livepatch/core.c */
-void klp_unregister_patch(struct klp_patch *patch)
-{
-    mutex_lock(&klp_mutex);
-
-    /* Patch must be disabled before unregistering */
-    WARN_ON(patch->enabled);
-
-    klp_unpatch_objects(patch);
-    list_del(&patch->list);
-    kobject_put(&patch->kobj);
-
-    mutex_unlock(&klp_mutex);
-}
+/* Livepatch module exit: no explicit unregister needed.
+ * The livepatch core registers a module notifier (klp_module_going)
+ * that handles cleanup when the module is unloaded.
+ * Before unloading, disable the patch via sysfs:
+ *   echo 0 > /sys/kernel/livepatch/<patch>/enabled
+ * Then: rmmod <patch_module>
+ */
+static void __exit livepatch_exit(void) { }
+module_exit(livepatch_exit);
 ```
-
-`klp_unpatch_objects()` walks each `klp_object` and calls
-`klp_unpatch_object()`, which removes each function's `klp_func` from
-`func_stack` (via `klp_unpatch_func()`) and, if the stack is now empty,
-unregisters the `ftrace_ops`.
 
 A live patch module cannot be unloaded while enabled — the module loader
 checks this:
@@ -231,34 +208,30 @@ rmmod mypatch
 
 ## klp_patch lifecycle
 
+`struct klp_patch` has no state enum. State is tracked via boolean fields: `patch->enabled` (bool) and `patch->forced` (bool). The lifecycle in terms of sysfs-observable state is: unloaded → `enabled=0` (loaded, not yet active) → `enabled=1, transition=1` (transitioning) → `enabled=1, transition=0` (fully active) → `enabled=0` (disabled, can unload).
+
 ```
 insmod mypatch.ko
   │
   ▼
 klp_enable_patch()
-  │
-  ▼
-KLP_PATCH_INIT
   │  (registration, symbol resolution, ftrace hook install)
   ▼
-Transition in progress (transition=1)
+enabled=0, transition=1 (transition in progress)
   │
   ▼
-KLP_PATCH_ENABLED  (transition=0, enabled=1)
+enabled=1, transition=0 (fully active)
   │
   │  echo 0 > enabled
   ▼
-Reverse transition in progress (transition=1, enabled=0)
+enabled=0, transition=1 (reverse transition in progress)
   │
   ▼
-KLP_PATCH_DISABLED (transition=0, enabled=0)
+enabled=0, transition=0 (disabled, can unload)
   │
   │  rmmod mypatch.ko
   ▼
-klp_unregister_patch()
-  │
-  ▼
-(patch removed, ftrace hooks cleaned up)
+(patch removed, ftrace hooks cleaned up via klp_module_going)
 ```
 
 ## Observing the func_stack
@@ -267,20 +240,17 @@ The sysfs hierarchy exposes the state of each patched function, including
 its position in the func_stack relative to other patches:
 
 ```bash
-# List patched functions for a patch
-ls /sys/kernel/livepatch/mypatch/vmlinux/
+# Check if a specific function is patched
+cat /sys/kernel/livepatch/mypatch/objs/vmlinux/funcs/tcp_sendmsg/patched
+# 1 = hook is active for this function
 
-# Check if a specific function is currently active (head of stack)
-cat /sys/kernel/livepatch/mypatch/vmlinux/tcp_sendmsg/patched
-# 1 = this patch's version is active
-
-# Check old function address (for verification)
-cat /sys/kernel/livepatch/mypatch/vmlinux/tcp_sendmsg/old_addr
-# 0xffffffff81a3bc40
+# old_addr is NOT exposed via sysfs
+# To find the original function address, use /proc/kallsyms:
+grep " tcp_sendmsg$" /proc/kallsyms
 
 # If two patches cover the same function:
-cat /sys/kernel/livepatch/p1/vmlinux/tcp_sendmsg/patched  # 0 (shadowed by p2)
-cat /sys/kernel/livepatch/p2/vmlinux/tcp_sendmsg/patched  # 1 (active)
+cat /sys/kernel/livepatch/p1/objs/vmlinux/funcs/tcp_sendmsg/patched  # 0 (shadowed by p2)
+cat /sys/kernel/livepatch/p2/objs/vmlinux/funcs/tcp_sendmsg/patched  # 1 (active)
 ```
 
 ## Practical workflow with kpatch
@@ -339,6 +309,6 @@ violated.
 - [KLP Consistency Model](klp-consistency.md) — per-task states, stack checking, forced transitions
 - [Kernel Live Patching](klp.md) — struct klp_func/klp_patch, ftrace redirection, shadow variables
 - [Kernel Modules](../modules/module-basics.md) — KLP modules use the standard module infrastructure
-- `kernel/livepatch/core.c` — klp_atomic_replace(), klp_unregister_patch()
+- `kernel/livepatch/core.c` — klp_enable_patch(), klp_add_nops(), klp_module_going()
 - `kernel/livepatch/patch.c` — struct klp_ops, func_stack management
 - `Documentation/livepatch/cumulative-patches.rst` — upstream cumulative patch guide
