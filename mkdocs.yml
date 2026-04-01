@@ -441,7 +441,13 @@ nav:
     - Random Number Generation: crypto/rng.md
     - Crypto War Stories: crypto/war-stories.md
   - Kernel Internals:
+    - Getting Started: kernel/README.md
     - printk and Kernel Logging: kernel/printk.md
+    - Early Boot and start_kernel(): kernel/early-boot.md
+    - Kernel Boot Parameters: kernel/boot-params.md
+    - Kernel Panic and Oops: kernel/panic-oops.md
+    - Module Init and Initcalls: kernel/initcalls-modules.md
+    - War Stories: kernel/war-stories.md
   - Live Patching:
     - Getting Started: livepatch/README.md
     - Kernel Live Patching: livepatch/klp.md
@@ -453,4 +459,11 @@ nav:
       - Exception Model: arch/arm64/exception-model.md
       - Memory Model: arch/arm64/memory-model.md
     - x86:
+      - Getting Started: arch/x86/README.md
+      - Boot Sequence: arch/x86/boot.md
+      - Page Tables: arch/x86/page-tables.md
+      - Syscall Entry: arch/x86/syscall-entry.md
       - Exception and Interrupt Handling: arch/x86/exceptions.md
+      - CPU Features and Alternatives: arch/x86/cpu-features.md
+      - Spectre and Meltdown: arch/x86/spectre-meltdown.md
+      - War Stories: arch/x86/war-stories.md
