@@ -103,7 +103,7 @@ This is the key advantage over raw softirqs, where the same handler can run on m
 
 ## Tasklets are deprecated for new code
 
-Since Linux 5.10+, tasklets are considered deprecated for new code. The reasons:
+Since Linux 5.14 (2021), tasklets are explicitly deprecated for new code [(LWN)](https://lwn.net/Articles/830964/). The reasons:
 - Softirq context means no sleeping, limited functionality
 - Serialization is too coarse for modern hardware
 - Workqueues provide similar functionality with more flexibility

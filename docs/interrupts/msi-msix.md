@@ -9,7 +9,7 @@ Legacy PCI interrupts (INTx, INTA-INTD) have fundamental limitations:
 - **Level-triggered**: interrupt line held until acknowledged → cannot miss (line stays asserted until cleared); edge-triggered interrupts can be missed if the transition occurs while masked
 - **Limited**: only 4 lines per PCI bus
 
-MSI (Message-Signaled Interrupts) solves these by using memory writes instead of dedicated wires:
+MSI (Message-Signaled Interrupts) support was added to Linux in 2.6.8 (2004) by Tom Long Nguyen (Intel) and solves these by using memory writes instead of dedicated wires:
 
 ```
 Legacy INTx:

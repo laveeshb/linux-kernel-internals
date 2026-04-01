@@ -4,7 +4,7 @@
 
 ## What is a Device Tree?
 
-On x86, the kernel discovers hardware at runtime (ACPI, PCI enumeration). On ARM and other embedded platforms, hardware is not self-describing — a **Device Tree** (DT) is a static description passed from the bootloader to the kernel:
+On x86, the kernel discovers hardware at runtime (ACPI, PCI enumeration). On ARM and other embedded platforms, hardware is not self-describing — a **Device Tree** (DT) is a static description passed from the bootloader to the kernel. The Device Tree format originated in Sun's OpenFirmware and was adapted for Linux/PowerPC before Grant Likely championed its adoption for ARM [(LWN)](https://lwn.net/Articles/414016/); ARM device tree support landed in Linux 3.0 (July 2011) [(commit)](https://git.kernel.org/linus/9eb8f6743b076b67f00776cda4330c802e157b41):
 
 ```
 Bootloader (U-Boot)

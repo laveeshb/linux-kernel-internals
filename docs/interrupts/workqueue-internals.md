@@ -18,7 +18,7 @@ Interrupt fires:
 
 ## Concurrency-Managed Workqueues (cmwq)
 
-Since Linux 2.6.36, workqueues use **cmwq** — a unified worker pool that automatically manages concurrency:
+Since Linux 2.6.36, workqueues use **cmwq** — introduced by Tejun Heo [(LWN)](https://lwn.net/Articles/394084/) — a unified worker pool that automatically manages concurrency:
 
 ```
 Before cmwq (per-CPU dedicated threads):

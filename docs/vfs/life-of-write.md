@@ -30,6 +30,8 @@ Block layer → disk
 
 ## Phase 1: Syscall entry
 
+The `write(2)` system call is documented in the Linux man pages [(man page)](https://man7.org/linux/man-pages/man2/write.2.html). The VFS layer dispatches it through a chain of generic helpers before it reaches the filesystem-specific code.
+
 ```c
 /* arch/x86/entry/syscalls/syscall_64.tbl → sys_write */
 SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf, size_t, count)
@@ -199,6 +201,8 @@ cat /sys/class/bdi/8:0/read_ahead_kb
 ```
 
 ## fsync() vs fdatasync() vs sync()
+
+`fsync()` [(man page)](https://man7.org/linux/man-pages/man2/fsync.2.html) guarantees that all data and metadata for a file are on stable storage. `fdatasync()` is the lighter variant: it flushes data and any metadata needed to read the data back (e.g., file size) but skips non-essential metadata such as access time. `sync()` [(man page)](https://man7.org/linux/man-pages/man2/sync.2.html) flushes everything system-wide.
 
 ```c
 /* fsync: flush data + metadata for this file */

@@ -4,7 +4,7 @@
 
 ## What platform devices are
 
-Platform devices are devices that are not discoverable by hardware (unlike PCI or USB). They are instantiated via:
+Platform devices are devices that are not discoverable by hardware (unlike PCI or USB). The `platform_device` / `platform_driver` abstraction is part of the Linux driver model that shipped with Linux 2.6.0; a good overview is Jonathan Corbet's 2011 LWN article [(LWN)](https://lwn.net/Articles/448499/). Devices are instantiated via:
 - **Device tree** (ARM, RISC-V, embedded)
 - **ACPI** (x86, modern ARM servers)
 - **Board files** (old ARM, legacy)

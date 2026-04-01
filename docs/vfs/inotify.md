@@ -4,7 +4,7 @@
 
 ## inotify: file/directory watch API
 
-`inotify` provides notifications when files or directories change. It's used by file managers, build systems, editors, and container runtimes.
+`inotify` provides notifications when files or directories change. It was introduced in Linux 2.6.13 by John McCutchan with contributions from Robert Love [(commit)](https://git.kernel.org/linus/0eeca28300df110bd6ed54b31193c83b87921443) [(LWN)](https://lwn.net/Articles/104343/), replacing the older **dnotify** mechanism which had a directory-only, signal-based interface. It's used by file managers, build systems, editors, and container runtimes.
 
 ```c
 #include <sys/inotify.h>
@@ -114,7 +114,7 @@ echo 524288 | sudo tee /proc/sys/fs/inotify/max_user_watches
 
 ## fanotify: filesystem-wide event notification
 
-`fanotify` is a superset of inotify with additional capabilities:
+`fanotify` was introduced in Linux 2.6.36 by Eric Paris at Red Hat [(commit)](https://git.kernel.org/linus/ff0b16a9850e8a240ad59e10b0a1291a8fcf7cbc) and fully enabled in Linux 2.6.37. It is a superset of inotify with additional capabilities:
 - Watch entire mount points, not just individual files/dirs
 - Receive the file descriptor of the changed file (open for reading)
 - **Permission events**: intercept access and deny it (used by AV scanners)

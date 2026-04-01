@@ -92,7 +92,7 @@ On each timer tick, the wheel advances. Timers in the current slot are fired. Ti
 
 ## hrtimer: high-resolution timers
 
-hrtimers use `ktime_t` (nanosecond resolution) and a red-black tree ordered by expiry time. The closest expiry sets the hardware timer interrupt.
+hrtimers were introduced in Linux 2.6.16 by Thomas Gleixner [(LWN)](https://lwn.net/Articles/167897/). They use `ktime_t` (nanosecond resolution) and a red-black tree ordered by expiry time. The closest expiry sets the hardware timer interrupt.
 
 ```c
 /* include/linux/hrtimer.h */

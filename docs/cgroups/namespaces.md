@@ -4,16 +4,16 @@
 
 ## The eight namespace types
 
-| Namespace | Flag | Isolates |
-|-----------|------|----------|
-| Mount | `CLONE_NEWNS` | Mount points, filesystem view |
-| UTS | `CLONE_NEWUTS` | Hostname, NIS domain name |
-| IPC | `CLONE_NEWIPC` | SysV IPC, POSIX message queues |
-| PID | `CLONE_NEWPID` | Process IDs |
-| Network | `CLONE_NEWNET` | Network interfaces, routing, sockets |
-| User | `CLONE_NEWUSER` | User/group IDs |
-| Cgroup | `CLONE_NEWCGROUP` | Cgroup root view |
-| Time | `CLONE_NEWTIME` | CLOCK_MONOTONIC, CLOCK_BOOTTIME offsets |
+| Namespace | Flag | Isolates | Kernel |
+|-----------|------|----------|--------|
+| Mount | `CLONE_NEWNS` | Mount points, filesystem view | 2.4.19 (2002) |
+| UTS | `CLONE_NEWUTS` | Hostname, NIS domain name | 2.6.19 |
+| IPC | `CLONE_NEWIPC` | SysV IPC, POSIX message queues | 2.6.19 |
+| PID | `CLONE_NEWPID` | Process IDs | 2.6.24 [(LWN)](https://lwn.net/Articles/259217/) |
+| Network | `CLONE_NEWNET` | Network interfaces, routing, sockets | 2.6.24 |
+| User | `CLONE_NEWUSER` | User/group IDs | 3.8 (complete) [(LWN)](https://lwn.net/Articles/532593/) |
+| Cgroup | `CLONE_NEWCGROUP` | Cgroup root view | 4.6 |
+| Time | `CLONE_NEWTIME` | CLOCK_MONOTONIC, CLOCK_BOOTTIME offsets | 5.6 |
 
 ## Creating namespaces
 
@@ -105,7 +105,7 @@ Processes that share all namespaces point to the same `nsproxy` (refcount). When
 
 ## PID namespace
 
-Each PID namespace has its own numbering starting from 1. A process has different PIDs in different namespaces:
+PID namespaces were introduced in Linux 2.6.24 [(LWN)](https://lwn.net/Articles/259217/). Each PID namespace has its own numbering starting from 1. A process has different PIDs in different namespaces:
 
 ```
 Host PID namespace:        pid=1234 (systemd), pid=5678 (container init)
@@ -139,7 +139,7 @@ cat /proc/1234/status | grep NSpid
 
 ## Mount namespace
 
-Each mount namespace has its own copy of the mount tree. Changes in one don't affect others.
+Mount namespaces (Linux 2.4.19, 2002) were the first namespace type added to the kernel — which is why the flag is the generic `CLONE_NEWNS` rather than something like `CLONE_NEWMNT`. Each mount namespace has its own copy of the mount tree. Changes in one don't affect others.
 
 ```c
 /* fs/namespace.c */
@@ -244,7 +244,7 @@ ls /var/run/netns/
 
 ## User namespace
 
-User namespaces map UIDs/GIDs between inside and outside:
+User namespaces were made functionally complete and usable by unprivileged users in Linux 3.8 by Eric W. Biederman [(commit)](https://git.kernel.org/linus/94f2f14234178f118545a0be60a6371ddeb229b7) [(LWN)](https://lwn.net/Articles/532593/). User namespaces map UIDs/GIDs between inside and outside:
 
 ```c
 /* kernel/user_namespace.c */

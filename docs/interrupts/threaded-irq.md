@@ -12,7 +12,7 @@ Hardware interrupt handlers (hardirq) run with interrupts disabled on the curren
 
 For complex devices (I2C buses, SPI controllers, touchscreens), the interrupt handler needs to do I2C/SPI register reads that can take milliseconds. That's far too long for a hardirq handler.
 
-**Threaded IRQs** solve this by moving the heavy lifting to a dedicated kernel thread that runs in process context.
+**Threaded IRQs** were introduced in Linux 2.6.30 by Thomas Gleixner [(commit)](https://git.kernel.org/linus/3aa551c9b4c40018f0e261a178e3d25478dc04a9) [(LWN)](https://lwn.net/Articles/302043/) and solve this by moving the heavy lifting to a dedicated kernel thread that runs in process context.
 
 ## request_threaded_irq
 

@@ -4,7 +4,7 @@
 
 ## What are extended attributes?
 
-Extended attributes (xattr) allow attaching name-value pairs to files and directories. They extend the traditional POSIX metadata (owner, permissions, timestamps) with arbitrary key-value data.
+Extended attributes (xattr) allow attaching name-value pairs to files and directories. They extend the traditional POSIX metadata (owner, permissions, timestamps) with arbitrary key-value data. Xattr support was introduced in Linux 2.4 [(man page)](https://www.man7.org/linux/man-pages/man2/getxattr.2.html).
 
 ```c
 #include <sys/xattr.h>

@@ -4,7 +4,7 @@
 
 ## /proc: the process filesystem
 
-`/proc` is a virtual filesystem that exposes kernel and process information. Files in `/proc` have no on-disk representation — content is generated on-the-fly when read.
+`/proc` is a virtual filesystem that exposes kernel and process information. Files in `/proc` have no on-disk representation — content is generated on-the-fly when read. The `proc` filesystem has been part of Linux since its earliest versions, inherited from Unix tradition [(man page)](https://www.man7.org/linux/man-pages/man5/proc.5.html).
 
 ```bash
 # Common /proc files:
@@ -174,7 +174,7 @@ The `/proc` filesystem is implemented as a regular VFS filesystem (`proc_fs_type
 
 ## sysfs: the device and driver hierarchy
 
-`sysfs` is mounted at `/sys` and exposes the kernel's device model as a directory tree:
+`sysfs` was introduced in Linux 2.6.0 by Patrick Mochel as a RAM-based filesystem for exporting kernel objects (kobjects) and their attributes to userspace [(kernel docs)](https://www.kernel.org/doc/html/latest/filesystems/sysfs.html). It is mounted at `/sys` and exposes the kernel's device model as a directory tree:
 
 ```
 /sys/

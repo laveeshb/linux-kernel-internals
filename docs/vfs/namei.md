@@ -93,6 +93,8 @@ Each component is looked up in two stages:
 
 ### Stage 1: RCU walk (lock-free, optimistic)
 
+Linux 2.6.38 introduced RCU-walk by Nick Piggin [(LWN)](https://lwn.net/Articles/419811/), which lets most path lookups complete without taking any lock or incrementing any reference count.
+
 ```c
 static struct dentry *lookup_fast(struct nameidata *nd)
 {
