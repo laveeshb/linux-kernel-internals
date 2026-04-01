@@ -300,7 +300,7 @@ When the buffer pool is exhausted, the multishot SQE is automatically disarmed a
 
 Tuning `NUM_BUFS` to match your expected concurrency avoids `ENOBUFS` entirely. A useful heuristic: at least one buffer per active connection, plus slack for burst traffic.
 
-## `IORING_OP_SEND_ZC` — zero-copy send (Linux 6.0)
+## `IORING_OP_SEND_ZC` — zero-copy send (Linux 6.1)
 
 ### Background: MSG_ZEROCOPY before io_uring
 
@@ -516,7 +516,7 @@ int install_fixed_file(struct io_uring *ring, int client_fd, int slot)
 }
 ```
 
-Alternatively, `io_uring_prep_accept_direct` submits a multishot accept that installs each new client fd directly into the fixed file table without any userspace `IORING_REGISTER_FILES_UPDATE` call. The CQE `res` field then carries the fixed file slot index, not an OS file descriptor.
+Alternatively, `io_uring_prep_multishot_accept_direct()` submits a multishot accept that installs each new client fd directly into the fixed file table without any userspace `IORING_REGISTER_FILES_UPDATE` call. The CQE `res` field then carries the fixed file slot index, not an OS file descriptor. Note that `io_uring_prep_accept_direct()` is a one-shot accept that installs the result into a fixed file slot; for multishot operation with direct fd installation, use `io_uring_prep_multishot_accept_direct()`.
 
 ### Using fixed files in subsequent operations
 
@@ -529,7 +529,7 @@ io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE | IOSQE_BUFFER_SELECT);
 io_uring_sqe_set_data64(sqe, TAG_RECV(fixed_slot));
 ```
 
-When closing a fixed file slot, use `IORING_OP_CLOSE_FIXED` (or `io_uring_prep_close_direct`) to remove the entry from the registered table and close the underlying socket atomically.
+When closing a fixed file slot, use `IORING_OP_CLOSE` with `IOSQE_FIXED_FILE` set in `sqe->flags`, or the liburing wrapper `io_uring_prep_close_direct()`, to remove the entry from the registered table and close the underlying socket atomically.
 
 ## Multishot accept + recv flow
 

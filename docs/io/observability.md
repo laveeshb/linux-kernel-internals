@@ -19,7 +19,7 @@ $ cat /proc/diskstats
 259   0 nvme0n1 1284731 84203 98471824 712341 3827164 921842 241837952 14382910 0 3071428 15096084 84291 0 7831204 62831 0 0
 ```
 
-The format is: major minor name [field1 ... field17].
+The format is: major minor name [field1 ... fieldN], where N is kernel-version dependent: 11 fields pre-4.18, 15 fields from 4.18 (discard stats added), 17 fields from 5.5 (flush stats added).
 
 ### Field-by-field reference
 
@@ -44,7 +44,7 @@ The format is: major minor name [field1 ... field17].
 | 17 | time flushing (ms) | counter | Milliseconds spent in flush requests. |
 
 !!! note "Kernel version availability"
-    Fields 12–15 (discard) were added in Linux 4.18. Fields 16–17 (flush) were added in Linux 5.5. Older kernels will show fewer columns. Tools that parse diskstats should handle variable column counts.
+    The field count is kernel-version dependent: 17 fields on Linux 5.5+; 15 fields on 4.18–5.4 (fields 16–17 flush stats not yet present); 11 fields pre-4.18 (fields 12–17 discard and flush stats not yet present). Tools that parse diskstats must handle variable column counts.
 
 ### Interpreting "I/Os in progress" (field 9)
 
@@ -254,7 +254,11 @@ echo 30 > /sys/class/bdi/8:0/max_ratio
 
 **`stable_pages_required`** — if 1, the block device requires stable pages: the kernel must not modify a page while it is under writeback. Some drivers (particularly certain network filesystems and RDMA NICs) set this. It disables the copy-on-write optimisation for dirty pages, adding CPU overhead.
 
+!!! warning "Removed in Linux 5.18"
+    `stable_pages_required` was removed in Linux 5.18 when stable-page requirements were eliminated from the block layer. This file does not exist on kernels 5.18+.
+
 ```bash
+# Linux 5.17 and earlier only:
 cat /sys/class/bdi/*/stable_pages_required
 ```
 
@@ -301,14 +305,14 @@ Each trace event has an action code indicating where in the block stack the even
 |------|------|-------------|
 | `Q` | Queue | I/O request submitted to the block layer by the filesystem or application. |
 | `G` | Get request | A `struct request` was allocated from the request pool. |
-| `M` | Merge | Request was merged with an existing request in the I/O scheduler queue. |
+| `M` | Back merge | Request was back-merged with an existing request in the I/O scheduler queue (merged at the tail of an existing in-queue request). |
 | `I` | Insert | Request inserted into the I/O scheduler queue. |
 | `S` | Sleep | No request struct was available; the submitter had to sleep waiting for one. |
 | `D` | Dispatch | Request dispatched (sent) to the device driver. |
 | `C` | Complete | Device driver reported completion — the I/O is done. |
 | `P` | Plug | The request queue was plugged (coalescing window started). |
 | `U` | Unplug | The request queue was unplugged (coalescing window ended, I/O flushed to driver). |
-| `F` | Front merge | Request was merged at the front of an existing request. |
+| `F` | Front merge | Request was front-merged with an existing request (merged at the head of an existing in-queue request). |
 | `X` | Split | A large bio was split into smaller requests. |
 | `A` | Remap | Request was remapped (e.g., from a device mapper device to the underlying device). |
 | `R` | Requeue | Request was requeued (returned from driver to block layer for retry). |
@@ -498,14 +502,14 @@ cat /sys/kernel/debug/tracing/trace_pipe
 
 This tracepoint is invaluable for understanding whether `dirty_ratio`/`dirty_background_ratio` tuning is having the intended effect. Watch `nr_dirty` relative to `dirty_thresh` — if they are consistently close, processes are being throttled.
 
-### writeback:wbc_writepage
+### writeback:writeback_writepage
 
 Fires for each page written via `write_cache_pages()`. Very high frequency — enable only briefly on targeted inodes using a filter:
 
 ```bash
 # Filter to a specific device
-echo 'name == "sda"' > /sys/kernel/debug/tracing/events/writeback/wbc_writepage/filter
-echo 1 > /sys/kernel/debug/tracing/events/writeback/wbc_writepage/enable
+echo 'name == "sda"' > /sys/kernel/debug/tracing/events/writeback/writeback_writepage/filter
+echo 1 > /sys/kernel/debug/tracing/events/writeback/writeback_writepage/enable
 ```
 
 ### filemap:mm_filemap_add_to_page_cache

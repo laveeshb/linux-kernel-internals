@@ -31,7 +31,7 @@ Each block device has an associated **backing device info** (`struct bdi_writeba
 struct bdi_writeback {
     struct backing_dev_info *bdi;   /* parent BDI */
     unsigned long state;            /* WB_writeback_running, etc. */
-    unsigned long last_old_flush;   /* last time we held off flushing */
+    unsigned long last_old_flush;   /* timestamp of last old-data (time-expired) writeback run */
 
     struct list_head b_dirty;       /* dirty inodes */
     struct list_head b_io;          /* inodes ready for writeback */
@@ -105,7 +105,7 @@ The **soft limit**. When dirty pages exceed this fraction of memory, the backgro
 
 ### `dirty_ratio` (default: 20%)
 
-The **hard limit**. When dirty pages hit this fraction of memory, the kernel throttles the writing process directly: `balance_dirty_pages()` stalls the process (via `usleep_range()`) until enough dirty pages have been flushed. This is sometimes called **direct reclaim throttling** or **dirty throttling**.
+The **hard limit**. When dirty pages hit this fraction of memory, the kernel throttles the writing process directly: `balance_dirty_pages()` stalls the process (via `io_schedule_timeout()`, putting it in `TASK_UNINTERRUPTIBLE` D-state) until enough dirty pages have been flushed. This is sometimes called **direct reclaim throttling** or **dirty throttling**. Throttled writers appear in D-state (uninterruptible sleep waiting for I/O), which is why `vmstat` reports them under `b` (blocked).
 
 ```
           0%        10%         20%
@@ -157,11 +157,11 @@ static void balance_dirty_pages(struct bdi_writeback *wb,
         /* Kick background writeback */
         wb_start_background_writeback(wb);
 
-        /* Throttle the writing process */
+        /* Throttle the writing process (task enters D-state / TASK_UNINTERRUPTIBLE) */
         nr_reclaimable = nr_dirty - dirty_thresh;
         pause = msecs_to_jiffies(
             balance_dirty_pages_ratelimited_interval(wb, nr_reclaimable));
-        usleep_range(pause, pause + pause / 8);
+        io_schedule_timeout(pause);
     }
 }
 ```
@@ -278,7 +278,7 @@ close(dir_fd);
 close(fd);
 ```
 
-`fdatasync()` skips the inode's metadata (mtime, atime) when they are not required for a correct read of the data — saving one journal commit on filesystems like ext4. It still flushes the file size if the write extended the file.
+`fdatasync()` skips all non-critical metadata (mtime, atime, ctime) and the associated journal commit for the inode — unless the file size changed, in which case the size update is still flushed because it is required for correct data reads. On ext4 this can save one full journal transaction per `fdatasync` when no size change occurred.
 
 The kernel path for `fsync()`:
 
@@ -357,7 +357,11 @@ fsync():
   fsync() → writeback of all dirty pages → FLUSH CACHE → return
 
 fdatasync():
-  same as fsync() but skips inode timestamp update to journal
+  same as fsync() but skips all non-critical metadata (mtime, atime, ctime)
+  and the associated journal commit for the inode — unless the file size
+  changed, in which case the size update is still flushed because it is
+  required for correct data reads. On ext4 this can save one full journal
+  transaction per fdatasync when no size change occurred.
 ```
 
 If a drive has a volatile write cache and write cache is enabled, data written without `O_SYNC`/`fsync()` can be lost on power failure even after `write()` returns — it may still be sitting in the drive's DRAM.

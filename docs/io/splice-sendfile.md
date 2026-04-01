@@ -118,18 +118,19 @@ Internally `sendfile` calls `do_sendfile` in `fs/read_write.c`, which:
 
 Without NIC scatter-gather support, the kernel falls back to a single copy from page cache into a contiguous `sk_buff` — still one copy fewer than the `read+write` path.
 
-### The `SF_NODISKIO` hint
+### Non-blocking sendfile
 
-On Linux, `sendfile` on a file that is not in the page cache will block waiting for disk I/O. To avoid blocking in a synchronous server, use the `SF_NODISKIO` flag (defined in `<linux/socket.h>`):
+Linux's `sendfile(2)` takes no flags argument. To get non-blocking behavior, set `O_NONBLOCK` on the output socket. When the socket buffer is full, `sendfile` returns `EAGAIN`.
 
 ```c
-/* SF_NODISKIO: fail with EWOULDBLOCK if page is not in cache */
-/* Combine with non-blocking socket for async file serving */
-ssize_t sent = sendfile(sock_fd, file_fd, &offset, count);
-/* if errno == EWOULDBLOCK: schedule an async readahead and retry later */
+/* Set output socket non-blocking for async sendfile */
+fcntl(sock_fd, F_SETFL, O_NONBLOCK);
+/* sendfile returns EAGAIN if socket buffer full */
+ret = sendfile(sock_fd, file_fd, &offset, len);
+if (ret == -1 && errno == EAGAIN) {
+    /* wait for socket writability with poll/epoll */
+}
 ```
-
-This is primarily useful when building non-blocking file servers; nginx uses `sendfile` unconditionally and relies on worker thread pools to hide the latency.
 
 ### nginx and sendfile
 
@@ -462,7 +463,7 @@ ssize_t n = vmsplice(pipe_wr, &iov, 1, SPLICE_F_GIFT);
 splice(pipe_rd, NULL, sock_fd, NULL, n, SPLICE_F_MOVE);
 ```
 
-`SPLICE_F_GIFT` is effectively a zero-copy transfer of user pages to the kernel. Once gifted, the pages are unlinked from the process's address space — accessing `buf` afterwards is undefined behaviour. In practice, `vmsplice` + `SPLICE_F_GIFT` is used in high-performance message brokers and kernel bypass-adjacent code.
+`SPLICE_F_GIFT` is effectively a zero-copy transfer of user pages to the kernel. `SPLICE_F_GIFT` is a user-space contract — the kernel trusts the caller not to modify the pages after the gift. There is no kernel-level enforcement; the kernel does NOT unmap the pages from the calling process. Accessing `buf` after the gift is undefined behaviour that may silently corrupt data in the pipe, but will not cause a segfault or other kernel protection. In practice, `vmsplice` + `SPLICE_F_GIFT` is used in high-performance message brokers and kernel bypass-adjacent code.
 
 ---
 

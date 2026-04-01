@@ -4,7 +4,7 @@
 
 ## What buffered I/O means
 
-By default every `read()` and `write()` on a regular file goes through the **page cache**: a region of DRAM managed by the kernel that caches file data as 4 KB pages (or larger folios since Linux 5.16). The kernel satisfies reads from these cached pages and accumulates writes in dirty pages before flushing them to storage asynchronously.
+By default every `read()` and `write()` on a regular file goes through the **page cache**: a region of DRAM managed by the kernel that caches file data as 4 KB pages (or larger folios; `struct folio` was introduced in Linux 5.16 but large folios in the file page cache required Linux 6.1+). The kernel satisfies reads from these cached pages and accumulates writes in dirty pages before flushing them to storage asynchronously.
 
 ```
 read()  → VFS → page cache hit?  yes → copy to userspace
@@ -67,9 +67,9 @@ struct address_space {
     gfp_t                    gfp_mask;      /* allocation flags for new pages */
     atomic_t                 i_mmap_writable;
     struct rb_root_cached    i_mmap;        /* all VMAs mapping this file */
-    unsigned long            nrpages;       /* total pages in cache */
+    unsigned long            nrpages;       /* total base-page units cached (= folio_nr_pages() per folio, not one per folio) */
     unsigned long            writeback_index; /* next page to write back */
-    const struct address_space_operations *a_ops;  /* readpage, writepage, … */
+    const struct address_space_operations *a_ops;  /* read_folio, dirty_folio, writepages, … */
     unsigned long            flags;
     errseq_t                 wb_err;        /* sticky write-back error */
     spinlock_t               private_lock;
@@ -78,7 +78,7 @@ struct address_space {
 };
 ```
 
-Before Linux 5.16 the cache was an `xarray` of `struct page *`. From 5.16 onward the unit is a **folio** — a physically contiguous group of pages represented by `struct folio`. A folio may be a single base page (order 0) or a large folio (order N, covering 2^N pages). The index into `i_pages` is the page index of the folio's first page.
+Before Linux 5.16 the cache was an `xarray` of `struct page *`. From 5.16 onward the unit is a **folio** — a physically contiguous group of pages represented by `struct folio`. A folio may be a single base page (order 0) or a large folio (order N, covering 2^N pages); large folios in the file page cache required Linux 6.1+. The index into `i_pages` is the page index of the folio's first page.
 
 ```c
 /* include/linux/mm_types.h (simplified) */
@@ -104,16 +104,16 @@ The `a_ops` pointer is the critical dispatch table linking the generic page cach
 /* include/linux/fs.h */
 struct address_space_operations {
     int  (*read_folio)(struct file *, struct folio *);  /* formerly readpage */
-    int  (*writepage)(struct page *, struct writeback_control *);
-    void (*dirty_folio)(struct address_space *, struct folio *);
-    int  (*write_begin)(struct file *, struct address_space *, loff_t,
-                         unsigned len, struct page **, void **);
-    int  (*write_end)(struct file *, struct address_space *, loff_t,
-                       unsigned len, unsigned copied, struct page *, void *);
-    int  (*writepages)(struct address_space *, struct writeback_control *);
+    int  (*writepage)(struct page *, struct writeback_control *);  /* writepage is being removed from the kernel; prefer writepages */
     bool (*dirty_folio)(struct address_space *, struct folio *);
+    int  (*write_begin)(struct file *, struct address_space *, loff_t,
+                         unsigned len, struct folio **, void **);
+    int  (*write_end)(struct file *, struct address_space *, loff_t,
+                       unsigned len, unsigned copied, struct folio *, void *);
+    int  (*writepages)(struct address_space *, struct writeback_control *);
     /* … */
 };
+/* write_begin/write_end signatures use struct folio since Linux 6.12 */
 ```
 
 ## Read path
@@ -140,10 +140,14 @@ ssize_t filemap_read(struct kiocb *iocb, struct iov_iter *iter,
         for (i = 0; i < nr; i++) {
             struct folio *folio = fbatch.folios[i];
 
-            /* Wait until folio is up-to-date (may sleep on PG_locked) */
-            error = folio_wait_uptodate(folio, iocb);
-            if (error)
-                goto out;
+            /*
+             * Wait until folio is up-to-date. This is the actual wait
+             * pattern used in filemap_read: wait for PG_locked to clear,
+             * then check PG_uptodate explicitly.
+             */
+            folio_wait_locked(folio);
+            if (!folio_test_uptodate(folio))
+                goto io_error;
 
             /* Copy data from folio to user iov_iter */
             copied = copy_folio_to_iter(folio, offset, bytes, iter);
@@ -171,12 +175,12 @@ filemap_read
       → filemap_read_folio()
           → a_ops->read_folio()     filesystem submits bio
               e.g. ext4_read_folio → mpage_read_folio → submit_bio
-  → folio_wait_uptodate()           sleep until PG_uptodate is set
+  → folio_wait_locked() + folio_test_uptodate()  sleep until PG_uptodate is set
       (woken by end_page_read / folio_end_read after bio completes)
   → copy_folio_to_iter()            now safe to copy
 ```
 
-The folio is held locked (`PG_locked`) while I/O is in flight. Any other reader that finds the folio already in `i_pages` but not yet uptodate will block inside `folio_wait_uptodate` on the same folio's wait queue rather than issuing a duplicate I/O.
+The folio is held locked (`PG_locked`) while I/O is in flight. Any other reader that finds the folio already in `i_pages` but not yet uptodate will block inside `folio_wait_locked` on the same folio's wait queue rather than issuing a duplicate I/O.
 
 Read-ahead runs in parallel: `page_cache_async_ra` and `ondemand_readahead` speculatively fill the cache ahead of the current read position to hide latency. The readahead window starts small and grows geometrically until it hits `ra->ra_pages`.
 
@@ -235,7 +239,7 @@ ssize_t generic_perform_write(struct kiocb *iocb, struct iov_iter *i)
 }
 ```
 
-`write_begin` and `write_end` are the two hooks that let each filesystem manage block allocation and journaling around the copy. For ext4 in `data=ordered` mode, `write_begin` pins journal credits and `write_end` triggers the journal commit for metadata before the page is marked dirty.
+`write_begin` and `write_end` are the two hooks that let each filesystem manage block allocation and journaling around the copy. For ext4 in `data=ordered` mode, `write_begin` pins journal credits and `write_end` calls `ext4_journal_stop()` to release the journal handle — this does not trigger a commit. The transaction commits later, at fsync time or when the transaction fills. The data ordering constraint (data written before its metadata is committed) is enforced at writeback time, not by `write_end`.
 
 ## Dirty page lifecycle
 
@@ -259,22 +263,32 @@ Once `write_end` marks a page dirty the kernel tracks it for writeback. The stat
 
 ### How a page becomes dirty
 
+The call chain has two distinct layers. `folio_mark_dirty` is the public API that
+dispatches through `a_ops->dirty_folio`. `filemap_dirty_folio` is the default
+implementation registered in `a_ops->dirty_folio` by most filesystems — these are
+two separate functions in a dispatch chain, not recursive calls.
+
 ```c
-/* mm/page-writeback.c */
-bool __folio_mark_dirty(struct folio *folio, struct address_space *mapping,
-                         int warn)
+/*
+ * Public API (mm/page-writeback.c):
+ * Dispatches through a_ops->dirty_folio if the filesystem registers one;
+ * falls back to filemap_dirty_folio otherwise.
+ */
+bool folio_mark_dirty(struct folio *folio)
 {
-    /*
-     * For most file systems (no private buffer heads):
-     * delegates to __set_page_dirty_nobuffers
-     */
-    if (mapping->a_ops->dirty_folio)
+    struct address_space *mapping = folio->mapping;
+
+    if (mapping && mapping->a_ops->dirty_folio)
         return mapping->a_ops->dirty_folio(mapping, folio);
 
     return filemap_dirty_folio(mapping, folio);
 }
 
-/* mm/filemap.c */
+/*
+ * Default a_ops->dirty_folio implementation (mm/filemap.c):
+ * Does the actual accounting — marks the folio dirty, updates writeback
+ * stats, and notifies the inode tracking machinery.
+ */
 bool filemap_dirty_folio(struct address_space *mapping, struct folio *folio)
 {
     folio_memcg_lock(folio);
@@ -282,10 +296,10 @@ bool filemap_dirty_folio(struct address_space *mapping, struct folio *folio)
         folio_memcg_unlock(folio);
         return false;   /* already dirty */
     }
-
-    /* Add to the per-BDI dirty list and account dirty memory */
-    __folio_mark_dirty(folio, mapping, 1);
     folio_memcg_unlock(folio);
+
+    /* Account dirty memory against the writeback device */
+    wb_stat_mod(inode_to_bdi(mapping->host)->wb, WB_RECLAIMABLE, 1);
 
     __mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
     return true;

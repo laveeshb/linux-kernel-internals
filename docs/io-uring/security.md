@@ -33,7 +33,7 @@ Userspace (seccomp: deny openat) ──► io_uring_enter ──► SQE: IORING_
 
 `IORING_SETUP_NO_SQTHREAD` (the default — omitting `IORING_SETUP_SQPOLL`) eliminates the polling thread, but io-wq threads still bypass seccomp for async work that cannot complete inline.
 
-`IORING_SETUP_SINGLE_ISSUER` (Linux 6.0) restricts submission to the one thread that created the ring, but does not change the seccomp bypass property.
+`IORING_SETUP_SINGLE_ISSUER` (Linux 6.2) restricts submission to the one thread that created the ring, but does not change the seccomp bypass property.
 
 The practical consequence: **seccomp alone is not a sufficient sandbox for processes that have access to an io_uring file descriptor**. Android, Chrome OS, and gVisor all respond to this by disabling `io_uring_setup` outright in their seccomp policies (see below).
 
@@ -44,7 +44,7 @@ The kernel has progressively tightened io_uring's privilege boundaries:
 | Version | Change |
 |---------|--------|
 | 5.10 | `io_uring_enter()` restricted — only the task that created the ring may call it |
-| 6.0 | `IORING_SETUP_SINGLE_ISSUER` — only one thread may submit SQEs to the ring |
+| 6.2 | `IORING_SETUP_SINGLE_ISSUER` — only one thread may submit SQEs to the ring |
 | 6.1 | `IORING_SETUP_DEFER_TASKRUN` — completions run on the submitting thread; avoids spawning any SQPOLL kernel thread |
 | all | `IORING_REGISTER_RESTRICTIONS` — whitelist the opcodes and registration operations a ring is allowed to use |
 
@@ -89,7 +89,7 @@ int setup_restricted_ring(unsigned sq_entries)
      * IORING_SETUP_SINGLE_ISSUER: only the creating thread may submit.
      * IORING_SETUP_DEFER_TASKRUN: no SQPOLL thread; completions run on
      *   the submission thread, keeping execution off io-wq.
-     * Both flags require Linux 6.1 for combined use.
+     * Both flags require Linux 6.2 for combined use.
      */
     params.flags = IORING_SETUP_SINGLE_ISSUER |
                    IORING_SETUP_DEFER_TASKRUN;
@@ -139,7 +139,7 @@ After `IORING_REGISTER_RESTRICTIONS` is applied, the kernel checks each SQE agai
 
 The complexity of the io_uring state machine — cancellation, timeouts, linked requests, fixed buffers, registered credentials — creates a large surface for subtle memory-safety bugs:
 
-**CVE-2022-29582** — use-after-free in io_uring file table handling (`io_uring/fdinfo.c`, `io_uring/rsrc.c`). A race between file table updates and async operation teardown allowed a local attacker to escalate privileges. Fixed in Linux 5.17.1 / 5.15.34. CVSS 7.8.
+**CVE-2022-29582** — use-after-free in io_uring file table handling (`io_uring/fdinfo.c`, `io_uring/rsrc.c`). A race between file table updates and async operation teardown allowed a local attacker to escalate privileges. Fixed in Linux 5.17.3 / 5.15.34. CVSS 7.8.
 
 **CVE-2023-2598** — integer overflow in fixed buffer registration. When registering fixed buffers via `IORING_REGISTER_BUFFERS`, insufficient validation of the buffer count allowed an overflow that corrupted kernel memory. Fixed in Linux 6.3. The vulnerable calculation was in `io_uring/rsrc.c:io_sqe_buffers_register()`.
 
@@ -172,7 +172,7 @@ deny io_uring override_creds,
 **Minimize flags**
 
 - Default: omit `IORING_SETUP_SQPOLL` unless polling latency is critical and the process is trusted. SQPOLL spawns a kernel thread that runs continuously with the process's credentials.
-- Use `IORING_SETUP_SINGLE_ISSUER` (Linux 6.0+) for any ring accessed from a single submission thread.
+- Use `IORING_SETUP_SINGLE_ISSUER` (Linux 6.2+) for any ring accessed from a single submission thread.
 - Use `IORING_SETUP_DEFER_TASKRUN` (Linux 6.1+) alongside `IORING_SETUP_SINGLE_ISSUER` to avoid spawning io-wq threads for completion processing.
 
 **Lock down rings in sandboxed contexts**

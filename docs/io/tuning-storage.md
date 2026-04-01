@@ -776,7 +776,7 @@ btrfs does have legitimate uses: incremental snapshots for backup pipelines, RAI
 /dev/nvme0n1p1 /var/lib/postgresql xfs noatime,nodiratime 0 2
 ```
 
-**`barrier=0`**: Write barriers ensure journal commits are durable by forcing a cache flush to the device before marking a journal transaction complete. Disabling barriers (`barrier=0`) improves write throughput but risks filesystem corruption if the system loses power mid-write.
+**`nobarrier`**: Write barriers ensure journal commits are durable by forcing a cache flush to the device before marking a journal transaction complete. Disabling barriers (`nobarrier`) improves write throughput but risks filesystem corruption if the system loses power mid-write.
 
 ```
 With barrier:     write data → flush → write journal commit → flush
@@ -785,15 +785,30 @@ Without barrier:  write data + journal commit (no ordering guarantee)
 
 Only disable barriers when the storage has a battery-backed write cache (RAID controller with BBU, enterprise NVMe with power-loss protection) that guarantees ordering persistence. Never disable on consumer SSDs.
 
+!!! warning "Data loss risk"
+    Disabling write barriers is only safe with battery-backed write cache (BBWC) or a UPS. Without hardware-level write-ordering guarantees, a power failure mid-journal-commit can silently corrupt the filesystem.
+
+!!! note "ext4 syntax"
+    `barrier=0` was the ext3 syntax; ext4 uses `nobarrier`.
+
 ```bash
 # Only with battery-backed write cache:
-mount -o noatime,barrier=0 /dev/nvme0n1p1 /var/lib/postgresql
+mount -o noatime,nobarrier /dev/nvme0n1p1 /var/lib/postgresql
 ```
 
-**`data=writeback` for WAL partitions**: For the PostgreSQL WAL or MySQL redo log partition, `data=writeback` (ext4) allows the journal to log metadata changes without enforcing that data blocks are written first. Since the database's own WAL provides ordering guarantees, this is safe and reduces fsync latency:
+**`data=writeback` for WAL partitions**:
+
+!!! warning "data=writeback is not safe for database data directories"
+    `data=writeback` decouples metadata journaling from data writeback, which can expose
+    stale data after a crash — even when the database has its own WAL. The database WAL
+    provides *logical* ordering but does not protect against the filesystem presenting
+    garbage data that predates the WAL record in newly allocated blocks.
+
+    PostgreSQL documentation explicitly recommends `data=ordered` (the ext4 default) for
+    data directories. The `data=writeback` mode is generally only appropriate for scratch
+    or temporary partitions where crash consistency is not required.
 
 ```bash
-# WAL-only partition: disable data ordering (database WAL provides safety)
 mount -o noatime,data=writeback /dev/nvme1n1p1 /var/lib/postgresql/pg_wal
 ```
 

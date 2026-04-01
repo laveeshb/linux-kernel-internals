@@ -198,7 +198,7 @@ The fix required:
 
 The kernel patches that addressed SQPOLL CPU hotplug handling added io_uring to the `cpuhp_setup_state` infrastructure with appropriate prepare and cleanup callbacks. The SQPOLL thread's CPU affinity handling was also hardened: on systems where the pinned CPU goes offline, the thread migrates to the nearest available CPU rather than becoming unschedulable.
 
-Applications that use `IORING_SETUP_SQ_AFF` to pin the SQPOLL thread to a specific CPU should be aware that on systems with dynamic CPU topology (cloud VMs, systems using `cpupower` to offline cores), the pinned CPU may not remain available. The `IORING_FEAT_SQPOLL_NONFIXED` feature flag (queryable via `io_uring_params.features` after `io_uring_setup`) can be used to detect kernels that handle this correctly.
+Applications that use `IORING_SETUP_SQ_AFF` to pin the SQPOLL thread to a specific CPU should be aware that on systems with dynamic CPU topology (cloud VMs, systems using `cpupower` to offline cores), the pinned CPU may not remain available. The SQPOLL hotplug fix was integrated without a dedicated feature flag; a kernel version check is the appropriate way to verify this fix is present. There is no specific flag in `io_uring_params.features` for SQPOLL hotplug safety — other available feature flags such as `IORING_FEAT_NODROP` are unrelated to this fix.
 
 For applications that do not strictly require a specific CPU affinity for the SQPOLL thread, omitting `IORING_SETUP_SQ_AFF` is the safer choice: the kernel assigns the thread to a CPU and manages migration automatically.
 

@@ -45,7 +45,7 @@ Under the hood, `io_uring_register_buffers` issues:
 io_uring_register(ring_fd, IORING_REGISTER_BUFFERS, iovecs, nr_iovecs);
 ```
 
-The kernel handler (`io_sqe_buffers_register` in `io_uring/rsrc.c`) iterates every `iovec`, calls `get_user_pages_fast()` to pin all pages, and stores the resulting `struct page **` arrays inside an `io_mapped_ubuf` structure:
+The kernel handler (`io_sqe_buffers_register` in `io_uring/rsrc.c`) iterates every `iovec`, calls `pin_user_pages_fast()` to pin all pages (falling back to `pin_user_pages()` for the non-fast path), and stores the resulting `struct page **` arrays inside an `io_mapped_ubuf` structure. io_uring buffer registration uses `FOLL_PIN` semantics (via `pin_user_pages_fast()`) rather than `FOLL_GET` (`get_user_pages_fast()`), which matters for DMA lifetime: pinned pages cannot be freed or migrated while the pin is held, which is required for safe long-lived DMA use.
 
 ```c
 /* io_uring/rsrc.c (simplified) */

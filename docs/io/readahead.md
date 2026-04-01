@@ -54,7 +54,8 @@ read()
       → filemap_read()
         → page_cache_sync_ra()   ← first read or after a miss
           → ondemand_readahead()
-            → page_cache_ra_unbounded()
+            → do_page_cache_ra()
+              → page_cache_ra_unbounded()
 ```
 
 ### `page_cache_ra_unbounded()`
@@ -64,7 +65,7 @@ read()
 1. Iterates over pages in the window `[ractl->_index, ractl->_index + nr_to_read)`.
 2. For each page not already in cache, allocates a page and marks it `PG_locked`.
 3. Submits a single merged `readahead` bio covering the range.
-4. Marks the last page in the window with `PG_readahead` — the async readahead marker (see below).
+4. Marks exactly one page — the first page of the lookahead zone, at index `start + size - async_size` — with `PG_readahead`. This single page acts as the trigger: when `filemap_read` encounters it already uptodate, async readahead fires for the next window.
 
 ```c
 /* mm/readahead.c */
@@ -81,11 +82,11 @@ void page_cache_ra_unbounded(struct readahead_control *ractl,
      * so async readahead fires when the process reaches them.
      */
     for (i = 0; i < nr_to_read; i++) {
-        struct page *page = xa_load(&mapping->i_pages, index + i);
-        if (page)
+        struct folio *folio = xa_load(&mapping->i_pages, index + i);
+        if (folio)
             continue;           /* already cached */
-        page = filemap_alloc_folio(gfp, 0);
-        filemap_add_folio(mapping, page, index + i, gfp);
+        folio = filemap_alloc_folio(gfp, 0);
+        filemap_add_folio(mapping, folio, index + i, gfp);
         ractl->_nr_pages++;
     }
     read_pages(ractl);          /* submit bio(s) */
@@ -94,7 +95,9 @@ void page_cache_ra_unbounded(struct readahead_control *ractl,
 
 ### `ondemand_readahead()`
 
-`ondemand_readahead()` sits above `page_cache_ra_unbounded()` and decides **how many pages** to read. It implements the window-growth heuristic and sequential-detection logic described in the next section.
+`ondemand_readahead()` is a `static` internal function (not a public API) that sits above `do_page_cache_ra()` and decides **how many pages** to read. It implements the window-growth heuristic and sequential-detection logic described in the next section.
+
+> **Note:** In Linux 6.6+, `ondemand_readahead()` was renamed to `page_cache_ra_order()` as part of the large-folio readahead refactor.
 
 ## Async readahead
 
@@ -102,16 +105,17 @@ Async readahead prefetches the **next** window in the background while the proce
 
 ### The readahead marker page
 
-When `page_cache_ra_unbounded()` submits a window, it sets the `PG_readahead` flag on the **last `async_size` pages** of the window. When `filemap_read()` encounters a page with `PG_readahead` set, it calls `page_cache_async_ra()` — which calls `ondemand_readahead()` again for the next window — without waiting for the current read to finish.
+When `page_cache_ra_unbounded()` submits a window, it sets the `PG_readahead` flag on exactly one page — the first page of the lookahead zone, at index `start + size - async_size`. When `filemap_read()` encounters this page already uptodate, it calls `page_cache_async_ra()` — which calls `ondemand_readahead()` again for the next window — without waiting for the current read to finish.
 
 ```
 Window N already in cache (or being read):
 ┌────────────────────────────────────────────┐
-│ page page page page page page [RA] [RA]    │
+│ page page page page page [RA] page page    │
 └────────────────────────────────────────────┘
-                                    ↑
-                    process reaches here → triggers window N+1 fetch
-                    (async, does not block the read())
+                               ↑
+               process reaches here (first page of lookahead zone,
+               index start+size-async_size) → triggers window N+1 fetch
+               (async, does not block the read())
 ```
 
 This means: by the time the process reads the last page of window N, window N+1 is already in flight (or done). With an appropriate `async_size`, the process never stalls.
@@ -122,8 +126,9 @@ void page_cache_async_ra(struct readahead_control *ractl,
                          struct folio *folio,
                          unsigned long req_count)
 {
-    /* Don't bother if the page is being read right now */
-    if (folio_test_writeback(folio))
+    /* Don't start async readahead if the folio is not yet uptodate
+     * or if the readahead flag is no longer set. */
+    if (!folio_test_readahead(folio))
         return;
     ondemand_readahead(ractl, folio, req_count);
 }
@@ -152,7 +157,7 @@ if (sequential) {
     ra->size = min(ra->size * 2, ra->ra_pages);
 } else {
     /* Random-looking access: reset to initial probe size */
-    ra->size  = initial_readahead(ra);
+    ra->size  = get_init_ra_size(ra->ra_pages, ra->ra_pages);
     ra->start = offset;
 }
 ra->async_size = ra->size / 2;   /* fire async prefetch halfway through */
@@ -192,7 +197,7 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice);
 | Advice | Effect on readahead |
 |--------|---------------------|
 | `POSIX_FADV_NORMAL` | Restore default `ra_pages` |
-| `POSIX_FADV_SEQUENTIAL` | Double `ra_pages` — kernel prefetches more aggressively |
+| `POSIX_FADV_SEQUENTIAL` | Double `ra_pages` relative to the BDI default — calling it twice does not quadruple |
 | `POSIX_FADV_RANDOM` | Set `ra_pages = 0` — disable readahead entirely |
 | `POSIX_FADV_WILLNEED` | Trigger immediate synchronous readahead for `[offset, offset+len)` |
 | `POSIX_FADV_DONTNEED` | Drop pages in range from the page cache |
@@ -200,7 +205,7 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice);
 
 ### `POSIX_FADV_SEQUENTIAL`
 
-Doubles `ra->ra_pages` relative to the device default. Useful for applications that stream a file from start to finish and want larger prefetch windows to hide I/O latency.
+Doubles `ra->ra_pages` relative to the BDI default — calling it twice does not quadruple the window. Useful for applications that stream a file from start to finish and want larger prefetch windows to hide I/O latency.
 
 ### `POSIX_FADV_RANDOM`
 

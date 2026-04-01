@@ -107,12 +107,12 @@ char *priv = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
 
 ### MAP_POPULATE: eager fault-in
 
-By default, pages are faulted in lazily on first access. `MAP_POPULATE` tells the kernel to pre-fault the entire mapping synchronously during the `mmap()` call itself, using `readahead` to batch the I/O:
+By default, pages are faulted in lazily on first access. `MAP_POPULATE` tells the kernel to pre-fault the entire mapping during the `mmap()` call itself, using `readahead` to batch the I/O. For file-backed mappings, `MAP_POPULATE` submits I/O to fault in pages but does NOT guarantee all I/O is complete when `mmap()` returns. For anonymous mappings, the operation does complete synchronously. Contrast with `MADV_POPULATE_READ`, which blocks until the pages are actually faulted in.
 
 ```c
-/* mmap() returns only after all pages are faulted in */
+/* mmap() submits readahead for all pages (file-backed: I/O may still be in flight) */
 void *addr = mmap(NULL, len, PROT_READ, MAP_SHARED | MAP_POPULATE, fd, 0);
-/* All pages are now in memory. No faults on subsequent access. */
+/* For guaranteed fault completion on file-backed mappings, use MADV_POPULATE_READ */
 ```
 
 This is useful when the latency of individual faults scattered across a workload is more harmful than a single up-front I/O burst. LMDB uses `MAP_POPULATE` for its environment open.
@@ -463,7 +463,7 @@ if (msync(map, len, MS_SYNC) != 0)
 
 ### MS_ASYNC: advisory flush
 
-`MS_ASYNC` marks the range as needing writeback and schedules it, but returns immediately without waiting. It is a hint to the kernel: "I am done writing this range, please start flushing." On Linux, `MS_ASYNC` has been a no-op in many kernel versions (the writeback daemon handles scheduling independently), but calling it is still a good practice for clarity.
+`MS_ASYNC` has been a complete no-op on Linux since kernel 2.6.19. The kernel's writeback daemon handles dirty page flushing independently. Calling `MS_ASYNC` has no observable effect and is retained only for POSIX source compatibility.
 
 ```c
 /* Write a block, schedule flush, continue processing */
@@ -491,7 +491,7 @@ msync(map, len, MS_INVALIDATE);
 | Writes visible to other mmap processes | Nothing — automatic (shared page cache) |
 | Writes visible via read() by other processes | Nothing — same page cache |
 | Writes durably on disk (survive power loss) | `msync(MS_SYNC)` or `fsync(fd)` |
-| Writes durably, async (best-effort) | `msync(MS_ASYNC)` |
+| `msync(MS_ASYNC)` — No-op on Linux since 2.6.19 | Never (writeback happens independently via the writeback daemon) |
 | Reload from disk after external change | `msync(MS_INVALIDATE)` |
 | Partial-file durability | `sync_file_range(fd, offset, len, SYNC_FILE_RANGE_WRITE \| SYNC_FILE_RANGE_WAIT_AFTER)` |
 

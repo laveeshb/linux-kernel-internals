@@ -36,23 +36,28 @@ A user program calls `write()`:
 // User space
 ssize_t n = write(fd, buffer, 4096);
 
-// Kernel entry: fs/read_write.c
+/* fs/read_write.c */
 SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf, size_t, count)
 {
+    return ksys_write(fd, buf, count);
+}
+
+ssize_t ksys_write(unsigned int fd, const char __user *buf, size_t count)
+{
     struct fd f = fdget_pos(fd);
-    if (!f.file)
-        return -EBADF;
+    ssize_t ret = -EBADF;
 
-    ret = vfs_write(f.file, buf, count, &f.file->f_pos);
-
-    fdput_pos(f);
+    if (f.file) {
+        ret = vfs_write(f.file, buf, count, file_ppos(f.file));
+        fdput_pos(f);
+    }
     return ret;
 }
 ```
 
 ### From syscall to VFS: ksys_write and vfs_write
 
-The kernel provides two internal helpers. `ksys_write()` wraps the fd resolution so the same logic can be called from kernel code without going through `SYSCALL_DEFINE`. `vfs_write()` does the permission checks and dispatches to the filesystem:
+The syscall stub simply calls `ksys_write()`. `ksys_write()` wraps the fd resolution so the same logic can be called from kernel code without going through `SYSCALL_DEFINE`. `vfs_write()` does the permission checks and dispatches to the filesystem:
 
 ```c
 // fs/read_write.c
@@ -236,7 +241,7 @@ ssize_t generic_perform_write(struct kiocb *iocb, struct iov_iter *i)
 
 ### write_begin: preparing the page
 
-`a_ops->write_begin` is the filesystem's hook to prepare the target folio before the copy. For ext4 with `iomap`, this resolves to `iomap_write_begin()`. It must:
+`a_ops->write_begin` is the filesystem's hook to prepare the target folio before the copy. For iomap-based filesystems, the `a_ops->write_begin` dispatch goes through the filesystem's own write_begin implementation (e.g., `ext4_write_begin`), which then calls into the iomap machinery — `iomap_write_begin()` is an internal iomap helper, not the `a_ops` callback itself. It must:
 
 1. Find or allocate the page in the page cache at the target offset.
 2. For a **partial page write** — a write that does not cover the entire 4 KB page — read the existing page content from disk first, so the unwritten bytes retain their on-disk values. This read-modify-write pattern avoids exposing uninitialised data.
@@ -276,11 +281,12 @@ With the page locked and uptodate, the kernel copies from the user iterator into
 size_t copy_page_from_iter_atomic(struct page *page, unsigned offset,
                                    size_t bytes, struct iov_iter *i)
 {
-    // kmap_atomic: temporarily map the page into kernel address space
+    // kmap_local_page: temporarily map the page into kernel address space
+    // (kmap_atomic() is deprecated since ~5.19; kmap_local_page() is the modern replacement)
     // copy_from_user_inatomic: copy without sleeping (we hold the page lock)
-    char *kaddr = kmap_atomic(page);
+    char *kaddr = kmap_local_page(page);
     size_t copied = copyout(kaddr + offset, i, bytes);
-    kunmap_atomic(kaddr);
+    kunmap_local(kaddr);
     return copied;
 }
 ```
@@ -290,7 +296,7 @@ size_t copy_page_from_iter_atomic(struct page *page, unsigned offset,
 `a_ops->write_end` is called after the copy. It does three things:
 
 1. Updates the inode size (`i_size`) if the write extended the file.
-2. Calls `folio_mark_dirty()` / `SetPageDirty` to mark the page dirty.
+2. Calls `folio_mark_dirty()` to mark the folio dirty. For file-backed pages, only `folio_mark_dirty()` (or its wrappers) should be used — raw flag setters like `SetPageDirty` bypass the `a_ops->dirty_folio` dispatch and inode accounting.
 3. Unlocks the page so other waiters can proceed.
 
 ```c
@@ -334,7 +340,7 @@ bool folio_mark_dirty(struct folio *folio)
 
 The `dirty_folio` a_ops hook dispatches to one of two implementations depending on whether the filesystem uses buffer heads:
 
-**`__set_page_dirty_nobuffers`** (used by iomap-based filesystems — ext4 with iomap, xfs, btrfs, f2fs):
+**`filemap_dirty_folio`** (used by iomap-based filesystems — ext4 with iomap, xfs, btrfs, f2fs; replaces the legacy page-based `__set_page_dirty_nobuffers`):
 
 ```c
 // mm/page-writeback.c
@@ -436,8 +442,10 @@ void __mark_inode_dirty(struct inode *inode, int flags)
     if (list_empty(&inode->i_io_list))
         inode->dirtied_when = jiffies;
 
+    if (!(inode->i_state & I_DIRTY))
+        wb_wakeup_delayed(wb);  // wake the per-BDI writeback worker only if newly dirty
+
     list_move(&inode->i_io_list, &wb->b_dirty);
-    wb_wakeup(wb);  // wake the per-BDI writeback worker
 }
 ```
 
@@ -473,6 +481,8 @@ stateDiagram-v2
     Writeback --> Clean : bio completes, folio_end_writeback()
 ```
 
+> **Note:** The `HardThrottle` state is not a single transition. `balance_dirty_pages()` loops internally — it sleeps the writer, wakes up, rechecks the dirty count, and sleeps again if the count is still above the threshold. The writer is unblocked only once dirty pages drain below the limit.
+
 ### balance_dirty_pages_ratelimited
 
 The rate-limited wrapper avoids calling `balance_dirty_pages()` on every single write — that would be too expensive. Instead it amortizes the check:
@@ -488,7 +498,7 @@ void balance_dirty_pages_ratelimited(struct address_space *mapping)
     // Cheap check: has this task dirtied enough pages to warrant a full check?
     ratelimit = current->nr_dirtied_pause;
     if (current->nr_dirtied >= ratelimit)
-        balance_dirty_pages(wb, mapping, current->nr_dirtied);
+        balance_dirty_pages(wb, current->nr_dirtied);
 }
 ```
 
@@ -499,7 +509,6 @@ When dirty pages exceed the hard limit, `balance_dirty_pages()` calculates a sle
 ```c
 // mm/page-writeback.c (simplified)
 static void balance_dirty_pages(struct bdi_writeback *wb,
-                                 struct address_space *mapping,
                                  unsigned long pages_dirtied)
 {
     for (;;) {
@@ -764,8 +773,9 @@ The folio state transitions during this process:
 
 ```c
 // Before writeback: folio is PG_dirty
-// a_ops->writepages sets PG_writeback and clears PG_dirty:
-folio_start_writeback(folio);  // sets PG_writeback
+// PG_dirty is cleared before writeback starts, separately from PG_writeback:
+folio_clear_dirty_for_io(folio);  // clears PG_dirty (done before writeback begins)
+folio_start_writeback(folio);     // sets PG_writeback only — does NOT clear PG_dirty
 
 // After bio completion (bio end_io handler):
 folio_end_writeback(folio);    // clears PG_writeback, wakes waiters

@@ -295,6 +295,9 @@ fallocate(fd, FALLOC_FL_UNSHARE_RANGE, 0, st.st_size);
 
 This is useful before intensive random writes to a reflinked file: without unsharing, every write triggers a COW allocation and potentially scatters extents. After unsharing, writes are in-place and contiguous (assuming the file was not already fragmented).
 
+!!! note "Filesystem implementation differences"
+    XFS has a native, efficient kernel-level unshare implementation that operates on extent metadata directly. btrfs does not have a native kernel-level unshare operation for this flag and falls back to a read-rewrite path, which is less efficient and produces I/O proportional to file size.
+
 See [Copy-on-write filesystems](#copy-on-write-filesystems-btrfs-and-xfs) below for the broader context.
 
 ## `posix_fallocate()`: the POSIX fallback
@@ -508,13 +511,15 @@ int main(void)
 |------|------|-----|-------|-------|-----|------|
 | `mode=0` (allocate) | Yes | Yes | Yes | Yes | No* | No* |
 | `FALLOC_FL_KEEP_SIZE` | Yes | Yes | Yes | Yes | No* | No* |
-| `FALLOC_FL_PUNCH_HOLE` | Yes (3.0+) | Yes | Yes | Yes | No* | Partial |
+| `FALLOC_FL_PUNCH_HOLE` | Yes (3.0+) | Yes | Yes | Yes | Partial† | Partial |
 | `FALLOC_FL_COLLAPSE_RANGE` | Yes (3.15+) | Yes (3.15+) | No | No | No | No |
 | `FALLOC_FL_ZERO_RANGE` | Yes (3.15+) | Yes | Yes | No | No | No |
 | `FALLOC_FL_INSERT_RANGE` | Yes (4.1+) | Yes (4.1+) | No | No | No | No |
 | `FALLOC_FL_UNSHARE_RANGE` | No | Yes | Yes | No | No | No |
 
-\* NFS and CIFS may support some modes depending on the server-side filesystem. `fallocate` over NFS typically returns `EOPNOTSUPP` from the client, causing `posix_fallocate` to fall back to writing zeros.
+\* NFS (for modes other than `FALLOC_FL_PUNCH_HOLE`) and CIFS may support some modes depending on the server-side filesystem. `fallocate` over NFS typically returns `EOPNOTSUPP` from the client, causing `posix_fallocate` to fall back to writing zeros.
+
+† NFSv4.2 clients support hole punching via the `DEALLOCATE` NFS operation when the server-side filesystem also supports it. NFSv3, NFSv4.0, and NFSv4.1 do not support `FALLOC_FL_PUNCH_HOLE` and return `EOPNOTSUPP`.
 
 Always check for `EOPNOTSUPP` and have a fallback:
 
@@ -556,7 +561,7 @@ ssize_t copy_file_range(int fd_in, loff_t *off_in,
                          size_t len, unsigned int flags);
 ```
 
-For block-aligned ranges on XFS or btrfs with matching block sizes, this becomes a reflink clone — O(1) regardless of file size. For other cases it falls back to a read/write loop.
+For block-aligned ranges on XFS or btrfs with matching block sizes, this becomes a reflink clone — O(extents), effectively constant for single-extent files, but scales with extent count for heavily fragmented files. For other cases it falls back to a read/write loop.
 
 ### Fragmentation over time with COW
 

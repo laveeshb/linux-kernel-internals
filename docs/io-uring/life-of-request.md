@@ -10,7 +10,7 @@ When a program submits a read via io_uring, it writes a Submission Queue Entry (
 flowchart TD
     A["Userspace: io_uring_prep_read(sqe, fd, buf, len, offset)<br/>advance SQ tail"] --> B
 
-    B["io_uring_enter(2)<br/>— or SQPOLL thread wakes —<br/>io_submit_sqes() → io_issue_sqe()"]
+    B["io_uring_enter(2)<br/>— or SQPOLL thread wakes —<br/>io_submit_sqes() → io_queue_sqe() → io_issue_sqe()"]
     B --> C
 
     C{"Can complete\nwithout blocking?"}
@@ -170,9 +170,11 @@ int io_uring_enter(unsigned int fd,
                    unsigned int to_submit,
                    unsigned int min_complete,
                    unsigned int flags,
-                   sigset_t    *sig,
-                   size_t       sigsz);
+                   const void __user *argp,
+                   size_t argsz);
 ```
+
+// The argp/argsz pair replaced the earlier sigset_t argument in Linux 5.11 when IORING_ENTER_EXT_ARG was introduced.
 
 - `to_submit`: how many SQEs to consume from the ring.
 - `min_complete`: if `IORING_ENTER_GETEVENTS` is set in `flags`, block until at least this many CQEs are available before returning. Setting this to `0` with `IORING_ENTER_GETEVENTS` performs a non-blocking poll.
@@ -207,9 +209,9 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 }
 ```
 
-### io_submit_sqes → io_issue_sqe
+### io_submit_sqes → io_queue_sqe → io_issue_sqe
 
-`io_submit_sqes()` loops over `to_submit` entries, calling `io_issue_sqe()` for each:
+`io_submit_sqes()` loops over `to_submit` entries, calling `io_queue_sqe()` for each, which in turn calls `io_issue_sqe()`:
 
 ```c
 /* io_uring/io_uring.c (simplified) */
@@ -223,13 +225,13 @@ static int io_submit_sqes(struct io_ring_ctx *ctx, unsigned int nr)
         struct io_kiocb *req     = io_alloc_req(ctx); /* from slab cache */
 
         io_init_req(ctx, req, sqe);      /* copy SQE fields into req */
-        io_submit_sqe(ctx, req);         /* dispatch */
+        io_queue_sqe(ctx, req);          /* dispatch */
         submitted++;
     }
     return submitted;
 }
 
-static void io_submit_sqe(struct io_ring_ctx *ctx, struct io_kiocb *req)
+static void io_queue_sqe(struct io_ring_ctx *ctx, struct io_kiocb *req)
 {
     /* Link, drain, and personality checks */
     io_issue_sqe(req, IO_URING_F_NONBLOCK);
@@ -283,7 +285,7 @@ static int io_read(struct io_kiocb *req, unsigned int issue_flags)
     ssize_t            ret;
 
     /* 1. Set up the kiocb */
-    kiocb->ki_pos   = req->cqe.res;   /* file offset from SQE */
+    /* ki_pos was set from sqe->off during io_read_prep() */
     kiocb->ki_filp  = req->file;
 
     kiocb_set_rw_flags(kiocb, req->rw.flags);
@@ -601,7 +603,7 @@ static inline void io_uring_cqe_seen(struct io_uring *ring,
                                      struct io_uring_cqe *cqe)
 {
     if (cqe)
-        io_uring_buf_ring_cq_advance(ring, 1);
+        io_uring_cq_advance(ring, 1);
         /* which does: smp_store_release(ring->cq.khead,
                                          *ring->cq.khead + 1) */
 }
@@ -719,12 +721,7 @@ Each submitted SQE is represented internally as a `struct io_kiocb` ("kiocb" bec
 ```c
 /* io_uring/io_uring.h (selected fields) */
 struct io_kiocb {
-    union {
-        struct file         *file;    /* resolved file pointer */
-        struct io_rw         rw;      /* for read/write ops */
-        struct io_poll_iocb  poll;    /* for poll ops */
-        /* ... one entry per opcode family ... */
-    };
+    struct file             *file;    /* resolved file pointer (standalone field) */
 
     struct io_ring_ctx      *ctx;     /* owning ring */
     struct io_uring_task    *tctx;    /* submitting task's io_uring state */
@@ -749,6 +746,11 @@ struct io_kiocb {
 
     /* Cleanup / free */
     struct callback_head      task_work;
+
+    /* Command-specific data lives in a flexible array at the end of the
+     * struct, accessed via io_kiocb_to_cmd(req, struct io_rw) etc.
+     * file is NOT in a union with command data. */
+    u8                        cmd[];  /* e.g. struct io_rw, struct io_poll_iocb */
 };
 ```
 
@@ -819,14 +821,12 @@ cat /proc/$(pgrep your-program)/fdinfo/3
 # sq head:	17
 # sq tail:	17
 # sq mask:	0x1f
-# sq overflow:	0
 # cq head:	17
 # cq tail:	17
-# cq overflow:	0
-# cq dropped:	0
+# cq_overflow:	0
 ```
 
-A non-zero `sq overflow` means SQEs were submitted faster than the kernel could consume them. A non-zero `cq overflow` means CQEs were posted faster than userspace consumed them — the most common cause of missed completions.
+A non-zero `cq_overflow` means CQEs were posted faster than userspace consumed them — the most common cause of missed completions.
 
 ### ftrace io_uring tracepoints
 
@@ -850,7 +850,7 @@ Key tracepoints to watch:
 | Tracepoint | Fires when |
 |------------|------------|
 | `io_uring:io_uring_create` | `io_uring_setup()` completes |
-| `io_uring:io_uring_submit_req` | An SQE is consumed from the ring |
+| `io_uring:io_uring_submit_sqe` | An SQE is consumed from the ring |
 | `io_uring:io_uring_queue_async_work` | A request is handed to io-wq |
 | `io_uring:io_uring_defer` | A request is deferred (IOSQE_IO_DRAIN) |
 | `io_uring:io_uring_complete` | A CQE is posted to the ring |
@@ -859,7 +859,7 @@ Key tracepoints to watch:
 Example output for a single read:
 
 ```
-io_uring_submit_req:   ring 0xffff... req 0xffff... opcode=READ user_data=0x1 flags=0
+io_uring_submit_sqe:   ring 0xffff... req 0xffff... opcode=READ user_data=0x1 flags=0
 io_uring_queue_async_work: ring 0xffff... req 0xffff... rw=0 op=READ flags=0 work_flags=1
 io_uring_complete:     ring 0xffff... req 0xffff... user_data=0x1 res=4096 cflags=0
 ```
@@ -871,7 +871,7 @@ A `io_uring_queue_async_work` line between submit and complete means the request
 ```bash
 # Count how often requests go async
 perf stat -e 'io_uring:io_uring_queue_async_work' \
-          -e 'io_uring:io_uring_submit_req' \
+          -e 'io_uring:io_uring_submit_sqe' \
           -- ./your-io-workload
 
 # The ratio async/total tells you your cache hit rate from io_uring's perspective.
