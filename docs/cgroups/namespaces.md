@@ -11,7 +11,7 @@
 | IPC | `CLONE_NEWIPC` | SysV IPC, POSIX message queues | 2.6.19 |
 | PID | `CLONE_NEWPID` | Process IDs | 2.6.24 [(LWN)](https://lwn.net/Articles/259217/) |
 | Network | `CLONE_NEWNET` | Network interfaces, routing, sockets | 2.6.24 |
-| User | `CLONE_NEWUSER` | User/group IDs | 3.8 (complete) [(LWN)](https://lwn.net/Articles/532593/) |
+| User | `CLONE_NEWUSER` | User/group IDs | 3.9 (complete) [(LWN)](https://lwn.net/Articles/532593/) |
 | Cgroup | `CLONE_NEWCGROUP` | Cgroup root view | 4.6 |
 | Time | `CLONE_NEWTIME` | CLOCK_MONOTONIC, CLOCK_BOOTTIME offsets | 5.6 |
 
@@ -244,7 +244,7 @@ ls /var/run/netns/
 
 ## User namespace
 
-User namespaces were made functionally complete and usable by unprivileged users in Linux 3.8 by Eric W. Biederman [(commit)](https://git.kernel.org/linus/94f2f14234178f118545a0be60a6371ddeb229b7) [(LWN)](https://lwn.net/Articles/532593/). User namespaces map UIDs/GIDs between inside and outside:
+User namespaces were made functionally complete and usable by unprivileged users in Linux 3.9 by Eric W. Biederman [(commit)](https://git.kernel.org/linus/94f2f14234178f118545a0be60a6371ddeb229b7) [(LWN)](https://lwn.net/Articles/532593/). User namespaces map UIDs/GIDs between inside and outside:
 
 ```c
 /* kernel/user_namespace.c */

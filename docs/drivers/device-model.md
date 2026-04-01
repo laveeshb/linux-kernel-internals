@@ -8,7 +8,7 @@ Before 2.6, each bus subsystem (PCI, USB, SCSI) independently managed power, hot
 
 - **Power management**: suspend/resume traverse the device tree in order
 - **Hotplug**: consistent uevent notifications for adding/removing devices
-- **sysfs**: every device and driver automatically appears in `/sys/` (sysfs was also written by Patrick Mochel during the 2.5 cycle; shipped in 2.6.0 [(LWN)](https://lwn.net/Articles/54651/))
+- **sysfs**: every device and driver automatically appears in `/sys/` (sysfs was written by Patrick Mochel during the 2.5 cycle and shipped with Linux 2.6.0 [(kernel docs)](https://www.kernel.org/doc/html/latest/filesystems/sysfs.html))
 - **Reference counting**: devices live exactly as long as they're needed
 
 ## kobject: the base object
