@@ -8,13 +8,13 @@ kprobes, tracepoints, and BPF are not redundant — they solve different parts o
 
 ### kprobes: dynamic but fragile (2000s)
 
-kprobes arrived as a way to instrument production kernels without recompilation. A kprobe on `tcp_sendmsg` fires every time that function is called, giving you register state and the ability to run arbitrary code.
+kprobes arrived in Linux 2.6.9 as a way to instrument production kernels without recompilation. A kprobe on `tcp_sendmsg` fires every time that function is called, giving you register state and the ability to run arbitrary code.
 
 The problem: kprobes are inherently unstable. If `tcp_sendmsg` is renamed, inlined by the compiler, or its calling convention changes, the probe silently does nothing or attaches to the wrong place. A tool written against one kernel version often breaks on the next. This made kprobes useful for ad-hoc debugging but unreliable for production monitoring.
 
 ### Tracepoints: stable ABI (Linux 2.6.28, 2008)
 
-Mathieu Desnoyers introduced the `TRACE_EVENT` infrastructure to give tracing tools a stable surface. A tracepoint like `sched_switch` or `block_rq_issue` is a deliberate, named annotation placed by kernel developers in semantically meaningful locations.
+Mathieu Desnoyers introduced [(LWN)](https://lwn.net/Articles/379903/) the `TRACE_EVENT` infrastructure to give tracing tools a stable surface. A tracepoint like `sched_switch` or `block_rq_issue` is a deliberate, named annotation placed by kernel developers in semantically meaningful locations.
 
 The contract: the tracepoint *name* and its *fields* are stable across kernel versions (treated like a userspace-visible ABI). Tools that attach to `sched_switch` and read `prev_pid`/`next_pid` keep working release after release, regardless of how the surrounding code changes.
 
@@ -28,7 +28,7 @@ BPF programs can attach to both tracepoints *and* kprobes, but they add a critic
 
 This turned tracepoints from "fire and log" into "fire and compute." A BPF program on `block_rq_complete` can maintain a per-device latency histogram entirely in kernel memory and expose it as a BPF map. Without BPF, collecting that histogram required copying every raw event to userspace and aggregating there — at high I/O rates, this was prohibitive.
 
-`fentry`/`fexit` (Linux 5.5, 2020) added a fourth layer: BPF programs that attach to any kernel function entry/exit using BTF type information to access typed arguments, without the INT3-trap overhead of kprobes and without needing an explicit `TRACE_EVENT` annotation.
+`fentry`/`fexit` (Linux 5.5, 2020) [(commit)](https://git.kernel.org/linus/fec56f5890d93fc2ed74166c397dc186b1c25769) added a fourth layer: BPF programs that attach to any kernel function entry/exit using BTF type information to access typed arguments, without the INT3-trap overhead of kprobes and without needing an explicit `TRACE_EVENT` annotation.
 
 ```
 kprobes      → attach anywhere, unstable ABI, INT3 overhead
@@ -257,7 +257,7 @@ static inline void trace_my_event(int value, const char *name)
 
 ## uprobes: userspace dynamic probes
 
-uprobes work like kprobes but for userspace binaries. The kernel inserts a breakpoint into the mapped pages:
+uprobes work like kprobes but for userspace binaries, introduced in Linux 3.5 [(commit)](https://git.kernel.org/linus/2b144498950e6030d1a35a0f69e08de17b2b5daf). The kernel inserts a breakpoint into the mapped pages:
 
 ```bash
 # Trace all calls to malloc in any process
@@ -289,7 +289,7 @@ struct uprobe {
 
 ## USDT: userspace statically defined tracepoints
 
-Similar to kernel TRACE_EVENT, USDT probes are static markers in userspace code:
+Similar to kernel TRACE_EVENT, USDT probes are static markers in userspace code. BPF attachment to USDT probes via the uprobe mechanism became available in Linux 4.8.
 
 ```c
 /* In C code (requires systemtap-sdt-dev or dtrace probes): */

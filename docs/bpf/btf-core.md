@@ -8,11 +8,11 @@ Kernel data structures change between versions. A BPF program compiled against k
 
 Before BTF/CO-RE, BPF programs were compiled with kernel headers from a specific version and only ran on that version (or required recompilation per kernel).
 
-**CO-RE** (Compile Once, Run Everywhere) lets you compile a BPF program once and have it work on any kernel version ≥ 5.8 that has BTF.
+**CO-RE** (Compile Once, Run Everywhere), developed by Andrii Nakryiko, lets you compile a BPF program once and have it work on any kernel version ≥ 5.8 that has BTF.
 
 ## BTF: BPF Type Format
 
-BTF is a compact type information format stored in a special ELF section (`.BTF`) and loaded into the kernel alongside BPF programs.
+BTF is a compact type information format stored in a special ELF section (`.BTF`) and loaded into the kernel alongside BPF programs. It was introduced in Linux 4.18 by Martin KaFai Lau. [(commit)](https://git.kernel.org/linus/69b693f0aefad82d714c6e76c4b5b3b54c0aaed1)
 
 ```bash
 # Check if kernel has BTF

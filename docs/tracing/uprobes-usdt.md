@@ -4,7 +4,7 @@
 
 ## uprobes: dynamic userspace instrumentation
 
-A **uprobe** is the userspace equivalent of a kprobe — it instruments any instruction address in a userspace binary by:
+A **uprobe** is the userspace equivalent of a kprobe, introduced in Linux 3.5 by Srikar Dronamraju (IBM) [(commit)](https://git.kernel.org/linus/2b144498950e6030d1a35a0f69e08de17b2b5daf) — it instruments any instruction address in a userspace binary by:
 1. Finding the address in the binary
 2. Replacing the instruction with a breakpoint (INT3 on x86)
 3. Running a BPF/ftrace handler on the breakpoint

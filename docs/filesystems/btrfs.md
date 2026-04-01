@@ -1,6 +1,6 @@
 # Btrfs: B-tree Filesystem
 
-> Copy-on-write B-tree layout, snapshots, subvolumes, and RAID
+> Copy-on-write B-tree layout, snapshots, subvolumes, and RAID. Created by Chris Mason at Oracle and merged into Linux 2.6.29 [(LWN)](https://lwn.net/Articles/342892/).
 
 ## Why Btrfs?
 
@@ -20,7 +20,7 @@ Btrfs (B-tree filesystem) was designed to address limitations of ext4:
 
 ## B-tree structure
 
-Everything in Btrfs is stored in B-trees. There is no separate inode table or block bitmap — all metadata lives in these trees:
+Everything in Btrfs is stored in B-trees (hence "B-tree filesystem"), a design inspired by ReiserFS and ZFS concepts. There is no separate inode table or block bitmap — all metadata lives in these trees:
 
 ```
 Btrfs superblock

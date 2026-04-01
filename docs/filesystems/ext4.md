@@ -1,6 +1,6 @@
 # ext4
 
-> The default Linux filesystem: journaled, extent-based, battle-tested
+> The default Linux filesystem: journaled, extent-based, battle-tested. Developed by Theodore Ts'o, Andreas Dilger, Alex Tomas, and others; merged as stable in Linux 2.6.28.
 
 ## On-disk layout
 
@@ -91,7 +91,7 @@ struct ext4_inode {
 
 ## Extent tree: efficient large file representation
 
-ext4 uses extents (contiguous block runs) instead of the old indirect block maps:
+ext4 uses extents (contiguous block runs) instead of the old indirect block maps. Extents were introduced by Alex Tomas [(commit)](https://git.kernel.org/linus/a86c6181748d4291d1c6c2a0eeee1052bade8f34):
 
 ```
 i_block[0..3] holds the extent tree root:

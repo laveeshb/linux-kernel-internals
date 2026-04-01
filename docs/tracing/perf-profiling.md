@@ -19,7 +19,7 @@ See [perf Events](perf-events.md) for fundamentals. This page covers advanced an
 
 ## Flame graphs: visualizing CPU time
 
-Flame graphs show the call stack hierarchy of where CPU time is spent. The x-axis is time (sorted alphabetically, not temporally); width represents time spent.
+Flame graphs show the call stack hierarchy of where CPU time is spent. Invented by Brendan Gregg at Sun/Oracle around 2011 [(brendangregg.com)](http://www.brendangregg.com/flamegraphs.html), the x-axis is time (sorted alphabetically, not temporally); width represents time spent.
 
 ### Generating flame graphs
 

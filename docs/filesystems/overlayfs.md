@@ -1,6 +1,6 @@
 # OverlayFS
 
-> Union mounts for container image layers
+> Union mounts for container image layers. Written by Miklos Szeredi at Novell/SUSE and merged in Linux 3.18 [(commit)](https://git.kernel.org/linus/e9be9d5e76e34872f0c37d72e25bc27fe9e2c54c) [(LWN)](https://lwn.net/Articles/618140/).
 
 ## What OverlayFS does
 
@@ -150,7 +150,7 @@ This dramatically reduces copy-up cost for permission changes.
 
 ## Docker's overlay2 driver
 
-Docker uses OverlayFS as its default storage driver (`overlay2`):
+Docker uses OverlayFS as its default storage driver (`overlay2`) — replacing AUFS as the default for most Linux distributions:
 
 ```bash
 # Docker image layers
