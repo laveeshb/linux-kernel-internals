@@ -41,7 +41,7 @@ struct vfio_device {
     struct device            *dev;
     const struct vfio_device_ops *ops;
     struct vfio_group        *group;
-    struct iommu_domain      *iommu_domain; /* attached domain */
+    /* IOMMU binding is via iommufd_device in 6.x+ */
     /* ... */
 };
 
@@ -49,7 +49,7 @@ struct vfio_group {
     struct iommu_group       *iommu_group;
     struct vfio_container    *container;
     struct list_head          device_list;
-    struct kref               kref;
+    refcount_t                drivers;
     /* ... */
 };
 
@@ -162,12 +162,14 @@ vCPU interrupt injection → guest ISR
 ### vfio_irq_ctx and eventfd
 
 ```c
-/* drivers/vfio/pci/vfio_pci_priv.h */
-struct vfio_irq_ctx {
-    struct eventfd_ctx  *trigger;  /* eventfd for interrupt notification */
-    struct virqfd       *unmask;   /* for level-triggered IRQs */
-    struct virqfd       *mask;
-    char                *name;
+/* drivers/vfio/pci/vfio_pci_intrs.c */
+struct vfio_pci_irq_ctx {
+    struct eventfd_ctx        *trigger;  /* eventfd for interrupt notification */
+    struct virqfd             *unmask;   /* for level-triggered IRQs */
+    struct virqfd             *mask;
+    char                      *name;
+    bool                       masked;
+    struct irq_bypass_producer producer;
 };
 ```
 

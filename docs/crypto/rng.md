@@ -14,7 +14,7 @@ Both ultimately source from the same entropy pool, which is seeded from hardware
 
 ## The entropy pool
 
-### Pre-5.4: multiple pools
+### Pre-5.6: multiple pools
 
 In early kernel versions, the kernel maintained three pools:
 
@@ -23,10 +23,11 @@ In early kernel versions, the kernel maintained three pools:
 - `nonblocking_pool`: fed `/dev/urandom`; never blocked
 
 The `nonblocking_pool` was merged into the CRNG output stage earlier, and the
-`blocking_pool` was removed in **Linux 5.4**. By 5.4 only the `input_pool` remained,
-with a ChaCha20-based CRNG output stage. The entropy _estimator_ was controversial: it
-claimed to track "bits of entropy" but was largely a heuristic. In practice it often
-over-estimated or under-estimated, causing spurious blocking or false confidence.
+`blocking_pool` was removed in **Linux 5.6**. By 5.6 only the `input_pool` remained,
+with a ChaCha20-based CRNG output stage. This is also when `/dev/random` became
+non-blocking. The entropy _estimator_ was controversial: it claimed to track "bits of
+entropy" but was largely a heuristic. In practice it often over-estimated or
+under-estimated, causing spurious blocking or false confidence.
 
 ### 5.17+: a single BLAKE2s pool
 
@@ -211,7 +212,7 @@ void get_random_bytes(void *buf, size_t len);
 /* Fast per-CPU versions (lock-free, 5.14+) */
 u32 get_random_u32(void);
 u64 get_random_u64(void);
-u32 get_random_u32_below(u32 ceil);  /* uniform in [0, ceil) — added 6.1 */
+u32 get_random_u32_below(u32 ceil);  /* uniform in [0, ceil) — added 6.2 */
 
 /* For filling structures with random data */
 void get_random_bytes_arch(void *buf, size_t len);  /* prefers RDRAND */

@@ -64,7 +64,7 @@ struct crypto_engine {
     spinlock_t              queue_lock;
     struct crypto_queue     queue;              /* pending requests */
 
-    struct work_struct      pump_requests;      /* kthread pumping the queue */
+    struct work_struct      pump_requests;      /* work item pumping the queue */
     struct workqueue_struct *wq;
 
     int (*prepare_crypt_hardware)(struct crypto_engine *engine);
@@ -375,13 +375,17 @@ ahash, and akcipher.
 
 ## Retry support
 
-When `engine->retry_support = true`, if `do_one_request()` returns `-ENOSPC`, the engine
-re-queues the request and tries again after a delay. This is used by drivers whose hardware
-command FIFOs can fill up under sustained load (e.g., Marvell CESA, Allwinner CE). Only
-`-ENOSPC` triggers re-queuing; other error codes cause the request to fail immediately.
+When `engine->retry_support = true`, the re-queuing behavior depends on the error returned
+by `do_one_request()`:
 
-Without retry support, a busy hardware return causes the request to fail immediately with an
-error back to the caller.
+- **`-ENOSPC`**: ALL pending requests in the engine queue are re-queued and retried after a
+  delay. This handles drivers whose hardware command FIFOs can fill up under sustained load
+  (e.g., Marvell CESA, Allwinner CE).
+- **Any other error**: only requests that have the `CRYPTO_TFM_REQ_MAY_BACKLOG` flag set are
+  re-queued; requests without that flag fail immediately with the error.
+
+Without retry support, any error from the hardware causes the request to fail immediately
+with an error back to the caller.
 
 ## Batching: do_batch_requests
 

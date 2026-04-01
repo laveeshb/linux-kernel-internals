@@ -39,16 +39,20 @@ static int crypt_iv_plain_gen(struct crypt_config *cc, u8 *iv,
 
 With AES-CBC and a static IV derived only from a 32-bit sector number, any two sectors with
 the same sector number that happen to have the same first block of plaintext will produce
-identical first blocks of ciphertext. More critically: for two sectors encrypted with the
-same IV and key, an attacker learns the XOR of their plaintexts by XORing the ciphertexts.
+identical first blocks of ciphertext. This is the key CBC IV-reuse failure mode: if two
+messages share the same IV and key, an attacker can detect when their **first plaintext
+blocks are identical** by comparing the first ciphertext blocks.
 
 ```
-sector_42_ciphertext XOR sector_42_ciphertext_after_update
-    = AES_CBC(key, IV=42, plaintext_v1) XOR AES_CBC(key, IV=42, plaintext_v2)
+AES_CBC(key, IV=42, plaintext_v1)[block_0] == AES_CBC(key, IV=42, plaintext_v2)[block_0]
+    iff plaintext_v1[block_0] == plaintext_v2[block_0]
 ```
 
-For CBC this leaks that the first 16-byte block is different (or the same), and in
-patterns of sector reuse the XOR leakage can be exploited.
+This is a **watermarking / traffic analysis** attack: an attacker with read access to the
+raw device can detect when two versions of the same sector begin with the same 16-byte
+block. This is distinct from the XOR-of-ciphertexts-equals-XOR-of-plaintexts leakage, which
+applies to stream cipher modes (CTR, OFB) — not CBC. In CBC, IV reuse reveals block
+equality, not plaintext content directly.
 
 ```bash
 # Confirm the cipher mode
@@ -508,9 +512,11 @@ and more varied inputs:
 
 ```bash
 # Run the AEAD test suite (requires CONFIG_CRYPTO_TEST)
-modprobe tcrypt mode=211   # test AES-GCM with larger vectors
-# testing AES-GCM...
-# test 0 (512 byte blocks, 1 byte auth tag): passed.
+# Note: tcrypt mode numbers are not stable across kernel versions.
+# The gcm(aes) aead test is in the mode 150s range; verify in your kernel's crypto/tcrypt.c.
+modprobe tcrypt mode=154   # gcm(aes) aead test — verify in your kernel's crypto/tcrypt.c
+# testing gcm(aes)...
+# test 0 (512 byte blocks): passed.
 # ...
 ```
 

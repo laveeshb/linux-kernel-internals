@@ -26,7 +26,7 @@ struct iova_domain {
     unsigned long   dma_32bit_pfn;    /* highest IOVA PFN < 4GB */
     unsigned long   max32_alloc_size; /* max single alloc below 4GB */
     struct iova      anchor;          /* sentinel node in rbtree */
-    struct iova_rcache rcaches[IOVA_RANGE_CACHE_MAX_SIZE]; /* per-CPU caches */
+    struct iova_rcache *rcaches; /* dynamically allocated in iova_domain_init_rcaches() */
 };
 ```
 
@@ -86,8 +86,8 @@ static dma_addr_t iommu_dma_alloc_iova(struct iommu_domain *domain,
     unsigned long shift = iova_shift(iovad);
     unsigned long iova_len = size >> shift;
 
-    /* Fast path: per-CPU rcache */
-    return iova_rcache_get(iovad, iova_len, dma_limit >> shift);
+    /* Fast path: per-CPU rcache (falls back to alloc_iova() on miss) */
+    return alloc_iova_fast(iovad, iova_len, dma_limit >> shift, true);
 }
 ```
 
@@ -100,10 +100,15 @@ The magazine-style per-CPU cache is the key to keeping IOVA allocation off the r
 ```c
 /* include/linux/iova.h */
 
-#define IOVA_MAG_SIZE 128
+/* 127 chosen so sizeof(struct iova_magazine) = exactly 1024 bytes
+ * (127 × 8 + 8 = 1024), avoiding kmalloc internal fragmentation. */
+#define IOVA_MAG_SIZE 127
 
 struct iova_magazine {
-    unsigned long  size;
+    union {
+        unsigned long size;         /* fill count when in use */
+        struct iova_magazine *next; /* free-list link when in depot */
+    };
     unsigned long  pfns[IOVA_MAG_SIZE];
 };
 
@@ -116,7 +121,7 @@ struct iova_cpu_rcache {
 struct iova_rcache {
     spinlock_t          lock;       /* protects depot */
     unsigned long       depot_size;
-    struct iova_magazine *depot[MAX_GLOBAL_MAGS]; /* global magazine depot */
+    struct iova_magazine *depot;    /* singly-linked list of depot magazines */
     struct iova_cpu_rcache __percpu *cpu_rcaches;
 };
 ```
@@ -150,11 +155,11 @@ The critical property: on the normal alloc/free cycle, no spinlock contention wi
 
 ## IOVA flush queues (struct iova_fq)
 
-Introduced in the 4.x/5.x era, flush queues decouple IOVA freeing from IOTLB invalidation. Unmapping a DMA range requires both freeing the IOVA and flushing the IOMMU TLB. IOTLB flushes are expensive — on Intel VT-d they require a write to the DMAR registers and may stall the bus.
+Introduced in Linux 5.15, flush queues decouple IOVA freeing from IOTLB invalidation. Unmapping a DMA range requires both freeing the IOVA and flushing the IOMMU TLB. IOTLB flushes are expensive — on Intel VT-d they require a write to the DMAR registers and may stall the bus.
 
 ```c
 /* include/linux/iova.h */
-#define IOVA_FQ_SIZE   256
+#define IOVA_DEFAULT_FQ_SIZE   256
 
 struct iova_fq_entry {
     unsigned long iova_pfn;
@@ -163,10 +168,10 @@ struct iova_fq_entry {
 };
 
 struct iova_fq {
-    struct iova_fq_entry entries[IOVA_FQ_SIZE];
     unsigned int head;
     unsigned int tail;
     spinlock_t lock;
+    struct iova_fq_entry entries[]; /* flexible array member */
 };
 ```
 
@@ -178,16 +183,16 @@ The domain type `IOMMU_DOMAIN_DMA_FQ` enables flush-queue mode:
 /* drivers/iommu/dma-iommu.c */
 void iommu_dma_free_iova(struct iommu_dma_cookie *cookie,
                           dma_addr_t iova, size_t size,
-                          struct page *freelist)
+                          struct iommu_iotlb_gather *gather)
 {
     struct iova_domain *iovad = &cookie->iovad;
 
-    if (cookie->type == IOMMU_DMA_FQ_COOKIE)
+    if (gather && gather->queued)
         queue_iova(cookie, iova_pfn(iovad, iova),
-                   size >> iova_shift(iovad), freelist);
+                   size >> iova_shift(iovad), gather);
     else
-        iova_rcache_insert(iovad, iova_pfn(iovad, iova),
-                           size >> iova_shift(iovad));
+        free_iova_fast(iovad, iova_pfn(iovad, iova),
+                       size >> iova_shift(iovad));
 }
 ```
 

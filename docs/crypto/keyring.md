@@ -443,13 +443,13 @@ keyctl add encrypted myenckey "load user:mymaster <hex_blob>" @u
 ```
 
 The payload format on disk is: `<key_type> <master_desc> <datalen> <iv> <ciphertext> <hmac>`,
-all in hex. The encryption uses AES-256-CBC with an HMAC-SHA256 integrity check.
+all in hex. The encryption uses AES-128-CBC with an HMAC-SHA256 integrity check.
 
 ## fscrypt and IMA integration
 
 **fscrypt** uses logon keys. When userspace calls `FS_IOC_ADD_ENCRYPTION_KEY`, the kernel:
 
-1. Derives a "filesystem-level" key identifier (SHA-512 hash of the raw key material)
+1. Derives a "filesystem-level" key identifier (HKDF-SHA512 of the raw key material — specifically the first 16 bytes of an HKDF-SHA512 expansion, not a plain SHA-512 hash)
 2. Stores the master key in the filesystem's in-kernel key structure
 3. Optionally also accepts "logon" type keys via the legacy v1 API
 

@@ -112,7 +112,8 @@ Over 29% of CPU is in IOVA allocation and mapping. The NIC driver uses `dma_map_
 dmesg | grep "DMAR: IOMMU"
 
 # Look at IOVA cache effectiveness
-cat /sys/kernel/debug/iommu/iova
+# Note: this path does not exist generically — check /sys/kernel/debug/iommu/intel/ or vendor-specific paths
+cat /sys/kernel/debug/iommu/intel/iommu_perf_stats
 # The output shows allocation counts and cache hit rates per domain
 
 # perf: show callers of alloc_iova
@@ -338,7 +339,7 @@ cat /sys/kernel/debug/swiotlb/io_tlb_used
 # 16384  ← fully exhausted
 
 # Check IOVA space below 4GB
-cat /sys/kernel/debug/iommu/iova
+# Note: this path does not exist generically — check /sys/kernel/debug/iommu/intel/ or vendor-specific paths
 # Shows the 32-bit region state
 
 # Which devices are competing for 32-bit IOVA?
@@ -358,8 +359,8 @@ The problem: several devices (the RAID controller, a legacy USB controller, an o
 # Increase swiotlb to 512MB (value is in MB, or use swiotlb=<num_slabs>)
 GRUB_CMDLINE_LINUX="swiotlb=262144"
 # 262144 slabs × 2KB per slab = 512MB
-# Or in newer kernels (5.15+):
-GRUB_CMDLINE_LINUX="swiotlb=512m"
+# Note: the kernel's swiotlb parser accepts only plain integers (number of 2KB slots).
+# Use swiotlb=262144 for 512MB. The m/M suffix is not supported in mainline.
 ```
 
 **Ensure 64-bit devices don't consume 32-bit IOVA space.**
@@ -400,7 +401,7 @@ echo "$USED / $TOTAL"
 | Symptom | First tool | Likely cause |
 |---------|-----------|-------------|
 | `DMAR: [fault reason NN]` flood in dmesg | `dmesg \| grep DMAR` | Wrong DMA direction, stale mapping, or IOMMU not configured for device |
-| High `alloc_iova` in `perf top` | `perf report`, `/sys/kernel/debug/iommu/iova` | IOVA rcache miss, per-packet mapping, wrong buffer sizes |
+| High `alloc_iova` in `perf top` | `perf report`, vendor-specific debugfs (e.g. `/sys/kernel/debug/iommu/intel/`) | IOVA rcache miss, per-packet mapping, wrong buffer sizes |
 | VFIO "group not viable" error | `ls /sys/kernel/iommu_groups/<N>/devices/` | Multiple devices in one group; need to bind all to vfio-pci |
 | DSA/accelerator stall with PRI overflow | `dmesg \| grep "page request"`, iommu tracepoints | Pages not pre-faulted; THP splitting; PRI queue too small |
 | `DMA: Out of SW-IOMMU space` | `cat /sys/kernel/debug/swiotlb/io_tlb_used` | swiotlb pool exhausted; 32-bit device with large allocations |

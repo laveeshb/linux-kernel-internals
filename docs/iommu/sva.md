@@ -36,7 +36,7 @@ Device DMA request:
 
 Without SVA, all device transactions for a given IOMMU domain use a single page table (the domain's IOVA space). With SVA, each PASID maps to one process's page tables. The IOMMU hardware maintains a PASID table alongside the device's context entry.
 
-PASID values 0 through 2^20−1 (just over one million) are available. In practice, the kernel allocates PASIDs from a per-IOMMU ID space using `ioasid_alloc()` (drivers/iommu/ioasid.c, kernel 5.11+).
+PASID values 0 through 2^20−1 (just over one million) are available. In practice, the kernel allocates PASIDs from a global ID space using `iommu_alloc_global_pasid()` (drivers/iommu/iommu.c, kernel 6.1+).
 
 ## PCIe capability requirements
 
@@ -100,7 +100,7 @@ struct io_pgtable_ops {
 };
 ```
 
-For SVA, `io_pgtable_ops` maps to the process page tables directly. The ARM SMMU v3 implementation (`drivers/iommu/arm/arm-smmu-v3/`) can configure a stream entry to use the ARM64 page table format. However, the stream table entry does not point directly to the process's `pgd` — ARM SMMUv3 uses a Context Descriptor (CD) table as an indirection layer: the stream table entry points to the CD table, and each CD entry (indexed by PASID) holds the TTBR equivalent that points to the process's `pgd`. Intel's implementation (`drivers/iommu/intel/svm.c`) creates a PASID entry in the DMAR PASID table with an IOMMU-internal page table pointer (SLPTP in second-level mode, or FLPTR in first-level/scalable mode); the IOMMU does not use CR3 directly.
+For SVA, `io_pgtable_ops` maps to the process page tables directly. The ARM SMMU v3 implementation (`drivers/iommu/arm/arm-smmu-v3/`) can configure a stream entry to use the ARM64 page table format. However, the stream table entry does not point directly to the process's `pgd` — ARM SMMUv3 uses a Context Descriptor (CD) table as an indirection layer: the stream table entry points to the CD table, and each CD entry (indexed by PASID) holds the TTBR equivalent that points to the process's `pgd`. Intel's implementation (`drivers/iommu/intel/svm.c`) creates a PASID entry in the DMAR PASID table using first-level page tables (FLPTR in scalable mode); SVA always uses first-level page tables with the process `pgd` — the IOMMU does not use CR3 directly.
 
 ## The Linux SVA API (kernel 5.14+)
 
@@ -164,8 +164,8 @@ iommu_sva_unbind_device(sva_handle);
 
 When `iommu_sva_bind_device()` is called:
 
-1. **PASID allocation**: `ioasid_alloc()` reserves a PASID from the per-IOMMU ID pool.
-2. **PASID table entry**: The IOMMU driver writes the process's page table root into the PASID table at index PASID. On Intel, `intel_iommu_sva_bind_device()` calls `intel_pasid_setup_first_level()` or `intel_pasid_setup_second_level()`, which programs the DMAR PASID table entry with the process's CR3. On ARM SMMU v3, `arm_smmu_sva_alloc_pasid()` programs a CD (Context Descriptor) entry.
+1. **PASID allocation**: `iommu_alloc_global_pasid()` reserves a PASID from the global ID space.
+2. **PASID table entry**: The IOMMU driver writes the process's page table root into the PASID table at index PASID. On Intel, `intel_svm_set_dev_pasid()` calls `intel_pasid_setup_first_level()`, which programs the DMAR PASID table entry with the process's CR3 (Intel SVA always uses first-level page tables). On ARM SMMU v3, `arm_smmu_sva_set_dev_pasid()` programs a CD (Context Descriptor) entry.
 3. **mm notifier**: The kernel registers an `mmu_notifier` callback on the process's `mm_struct`. When the process's page tables change (page unmapped, THP split, process exit), the notifier fires and triggers an IOTLB invalidation for all devices sharing this PASID. This is what keeps the device's ATC coherent with the CPU page tables.
 4. **Handle returned**: The `struct iommu_sva` wraps the PASID and the mm reference.
 
