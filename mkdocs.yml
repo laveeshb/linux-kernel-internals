@@ -339,12 +339,18 @@ nav:
     - POSIX Message Queues: ipc/mqueue.md
   - I/O Patterns:
     - Getting Started: io/README.md
+    - Buffered I/O and the Page Cache: io/buffered-io.md
+    - Readahead: io/readahead.md
+    - Page Cache Writeback: io/page-cache-writeback.md
     - Direct I/O: io/direct-io.md
     - Async I/O Evolution: io/async-io.md
   - io_uring:
     - Getting Started: io-uring/README.md
     - Architecture and Rings: io-uring/io-uring-arch.md
     - Operations and Advanced Features: io-uring/io-uring-ops.md
+    - Fixed Buffers and Files: io-uring/fixed-buffers.md
+    - Multishot, Linked Requests, and Probing: io-uring/multishot-ops.md
+    - Security Model: io-uring/security.md
   - Tracing:
     - Getting Started: tracing/README.md
     - ftrace: tracing/ftrace.md
