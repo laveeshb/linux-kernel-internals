@@ -23,7 +23,7 @@ struct key {
     key_serial_t            serial;         /* unique key ID (keyctl show prints these) */
     union {
         struct list_head    graveyard_link;
-        unsigned long       processor;
+        /* internal linkage — varies by kernel version */
     };
     struct rw_semaphore     sem;            /* protects key contents */
     struct key_user         *user;          /* owner accounting */
@@ -47,19 +47,12 @@ struct key {
 
     const struct key_type   *type;         /* "user", "logon", "keyring", ... */
 
-    union {
-        struct keyring_index_key index_key;
-        struct {
-            struct key_type *type;
-            char            *description;
-        };
-    };
+    struct keyring_index_key index_key; /* holds type and description */
 
     union {
         union key_payload   payload;        /* the actual key material */
         struct {
             /* For keyrings: */
-            struct list_head        name_link;
             struct assoc_array      keys;
         };
     };
@@ -125,10 +118,9 @@ struct encrypted_key_payload {
     char               *datalen;
     u8                 *iv;
     u8                 *encrypted_data;
-    unsigned short      datalen_locked;
     unsigned short      decrypted_datalen;
     unsigned short      payload_datalen;
-    unsigned short      encrypted_key_format;
+    unsigned short      format;
     u8                 *decrypted_data;         /* AES-CBC decrypted in kernel */
     u8                  payload_data[];
 };
@@ -216,7 +208,6 @@ Keyrings are arranged in a hierarchy. When a key is searched, the kernel walks u
 @u  user keyring          ← per-UID, persists while user is logged in
 @us user-session keyring  ← per-UID session (union of @u and @s for most purposes)
 @g  group keyring         ← per-GID (rarely used)
-@a  anonymous keyring     ← temporary, not attached to any process
 
 System keyrings (kernel-internal, not per-process):
 .builtin_trusted_keys     ← built-in X.509 certificates (module signing, IMA)
@@ -452,7 +443,7 @@ keyctl add encrypted myenckey "load user:mymaster <hex_blob>" @u
 ```
 
 The payload format on disk is: `<key_type> <master_desc> <datalen> <iv> <ciphertext> <hmac>`,
-all in hex. The encryption uses AES-128-CBC with an HMAC-SHA256 integrity check.
+all in hex. The encryption uses AES-256-CBC with an HMAC-SHA256 integrity check.
 
 ## fscrypt and IMA integration
 
@@ -477,9 +468,9 @@ keyctl padd asymmetric "" %:.ima < /etc/ima/signing_key.der
 
 ## Container isolation
 
-Key namespaces: there is **no** `KEY_NAMESPACE` in the same sense as network or PID
-namespaces. Keys are not namespaced directly. Instead, isolation comes from the keyring
-hierarchy:
+Key namespaces (`struct key_namespace`) were added in Linux 5.2, tied to user namespaces
+via `CLONE_NEWUSER`. Each user namespace has its own keyring namespace, providing isolation
+between containers using separate user namespaces. Specifically:
 
 - `CLONE_NEWUSER` creates a new user namespace, which gets a fresh user keyring (`@u`)
   and session keyring (`@s`) for UIDs within that namespace.

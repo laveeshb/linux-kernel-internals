@@ -100,7 +100,7 @@ struct io_pgtable_ops {
 };
 ```
 
-For SVA, `io_pgtable_ops` maps to the process page tables directly. The ARM SMMU v3 implementation (`drivers/iommu/arm/arm-smmu-v3/`) can configure a stream entry to use the ARM64 page table format, then point the PASID entry at the process's `pgd`. Intel's implementation (`drivers/iommu/intel/svm.c`) creates a PASID entry in the DMAR PASID table pointing to the process's CR3-equivalent.
+For SVA, `io_pgtable_ops` maps to the process page tables directly. The ARM SMMU v3 implementation (`drivers/iommu/arm/arm-smmu-v3/`) can configure a stream entry to use the ARM64 page table format. However, the stream table entry does not point directly to the process's `pgd` — ARM SMMUv3 uses a Context Descriptor (CD) table as an indirection layer: the stream table entry points to the CD table, and each CD entry (indexed by PASID) holds the TTBR equivalent that points to the process's `pgd`. Intel's implementation (`drivers/iommu/intel/svm.c`) creates a PASID entry in the DMAR PASID table with an IOMMU-internal page table pointer (SLPTP in second-level mode, or FLPTR in first-level/scalable mode); the IOMMU does not use CR3 directly.
 
 ## The Linux SVA API (kernel 5.14+)
 
@@ -236,7 +236,7 @@ grep CONFIG_IOMMU_SVA /boot/config-$(uname -r)
 | `drivers/iommu/iommu-sva.c` | `iommu_sva_bind_device()`, mm notifier, PASID lifecycle |
 | `drivers/iommu/intel/svm.c` | Intel VT-d SVA: PASID table programming, PRI handling |
 | `drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c` | ARM SMMUv3 SVA: CD table, s1 page table sharing |
-| `drivers/iommu/ioasid.c` | PASID allocation (`ioasid_alloc()`, `ioasid_free()`) |
+| `drivers/iommu/ioasid.c` | PASID allocation (`ioasid_alloc()`, `ioasid_free()`) — existed in 5.11–6.0; removed in 6.1 when PASID allocation was folded into the iommu core (`drivers/iommu/iommu.c`) |
 | `include/linux/iommu.h` | `iommu_sva`, `iommu_sva_bind_device()` declarations |
 | `include/linux/io-pgtable.h` | `io_pgtable_ops` abstraction |
 

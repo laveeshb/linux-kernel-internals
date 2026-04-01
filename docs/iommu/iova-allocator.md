@@ -87,7 +87,7 @@ static dma_addr_t iommu_dma_alloc_iova(struct iommu_domain *domain,
     unsigned long iova_len = size >> shift;
 
     /* Fast path: per-CPU rcache */
-    return iova_alloc_rcache(iovad, iova_len, dma_limit >> shift);
+    return iova_rcache_get(iovad, iova_len, dma_limit >> shift);
 }
 ```
 
@@ -150,7 +150,7 @@ The critical property: on the normal alloc/free cycle, no spinlock contention wi
 
 ## IOVA flush queues (struct iova_fq)
 
-Introduced in Linux 5.10 (commit `d49e6ae51fd8`), flush queues decouple IOVA freeing from IOTLB invalidation. Unmapping a DMA range requires both freeing the IOVA and flushing the IOMMU TLB. IOTLB flushes are expensive — on Intel VT-d they require a write to the DMAR registers and may stall the bus.
+Introduced in the 4.x/5.x era, flush queues decouple IOVA freeing from IOTLB invalidation. Unmapping a DMA range requires both freeing the IOVA and flushing the IOMMU TLB. IOTLB flushes are expensive — on Intel VT-d they require a write to the DMAR registers and may stall the bus.
 
 ```c
 /* include/linux/iova.h */
@@ -159,7 +159,6 @@ Introduced in Linux 5.10 (commit `d49e6ae51fd8`), flush queues decouple IOVA fre
 struct iova_fq_entry {
     unsigned long iova_pfn;
     unsigned long pages;
-    struct list_head freelist; /* deferred page freelist */
     u64 counter;               /* monotonic counter at enqueue time */
 };
 
@@ -187,8 +186,8 @@ void iommu_dma_free_iova(struct iommu_dma_cookie *cookie,
         queue_iova(cookie, iova_pfn(iovad, iova),
                    size >> iova_shift(iovad), freelist);
     else
-        free_iova_fast(iovad, iova_pfn(iovad, iova),
-                       size >> iova_shift(iovad));
+        iova_rcache_insert(iovad, iova_pfn(iovad, iova),
+                           size >> iova_shift(iovad));
 }
 ```
 
@@ -199,9 +198,10 @@ Many legacy and embedded devices have 32-bit DMA address registers. On a system 
 The `dma_32bit_pfn` field in `struct iova_domain` marks the upper boundary of the 32-bit IOVA region:
 
 ```c
-/* init_iova_domain() sets this based on the device DMA mask */
-iovad->dma_32bit_pfn = IOVA_START_PFN +
-                       (DMA_BIT_MASK(32) >> PAGE_SHIFT);
+/* init_iova_domain() sets this based on the device DMA mask.
+ * dma_32bit_pfn is the upper PFN limit for 32-bit DMA, derived from:
+ *   min(DMA_BIT_MASK(32), dev->bus_dma_limit) >> PAGE_SHIFT
+ * It is NOT a sum with IOVA_START_PFN. */
 ```
 
 When a driver calls `dma_set_mask(dev, DMA_BIT_MASK(32))`, subsequent allocations use `limit_pfn = iovad->dma_32bit_pfn`. The allocator satisfies the constraint by searching only the region below 4 GB.
@@ -218,7 +218,9 @@ IOVA allocation shows up in profiles in two ways:
 
 ```bash
 # See IOVA allocator state per domain
-cat /sys/kernel/debug/iommu/iova
+# Note: no single generic /sys/kernel/debug/iommu/iova file exists.
+# IOVA-related stats appear under vendor-specific paths, e.g.:
+#   /sys/kernel/debug/iommu/intel/  (Intel VT-d)
 
 # perf: find IOVA allocation cost in a NIC driver workload
 perf record -g -- netperf -t UDP_STREAM -H <host> -l 30

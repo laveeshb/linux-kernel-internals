@@ -14,9 +14,9 @@ A server running a 10GbE NIC driver starts logging thousands of lines per second
 
 ```
 DMAR: [DMA Write] Request device [02:00.0] fault addr 7fa800000000
-      DMAR:[fault reason 06] PTE Read access is not set
+      DMAR:[fault reason 06] Write access is not set
 DMAR: [DMA Write] Request device [02:00.0] fault addr 7fa800001000
-      DMAR:[fault reason 06] PTE Read access is not set
+      DMAR:[fault reason 06] Write access is not set
 DMAR: [DMA Write] Request device [02:00.0] fault addr 7fa800002000
 ...
 ```
@@ -37,14 +37,15 @@ dmesg | grep "DMAR: IOMMU"
 # DMAR: IOMMU enabled
 
 # DMAR fault registers (Intel VT-d specific)
-# Fault reason 06 = "PTE Read access is not set"
+# Fault reason 06 = "Write access is not set"
+# (Fault reason 05 = "Read access is not set")
 # This means a mapping exists but with wrong permissions (write attempted to read-only mapping)
 
 # Check the IOVA allocator state for the domain
 cat /sys/kernel/debug/iommu/intel/iommu_perf_stats
 ```
 
-Fault reason 06 is the important clue: the mapping exists, but the PTE allows read-only access and the device is trying to write. This points to a driver that incorrectly maps receive buffers as `DMA_TO_DEVICE` (read-only from device perspective) instead of `DMA_FROM_DEVICE`.
+Fault reason 06 ("Write access is not set") is the important clue: the mapping exists, but the PTE does not allow writes and the device is trying to write. This points to a driver that incorrectly maps receive buffers as `DMA_TO_DEVICE` (read-only from device perspective) instead of `DMA_FROM_DEVICE`.
 
 ```bash
 # Enable DMA API debugging to catch mismatched directions at map time
@@ -355,8 +356,8 @@ The problem: several devices (the RAID controller, a legacy USB controller, an o
 
 ```bash
 # Increase swiotlb to 512MB (value is in MB, or use swiotlb=<num_slabs>)
-GRUB_CMDLINE_LINUX="swiotlb=131072"
-# 131072 slabs × 2KB per slab = 256MB
+GRUB_CMDLINE_LINUX="swiotlb=262144"
+# 262144 slabs × 2KB per slab = 512MB
 # Or in newer kernels (5.15+):
 GRUB_CMDLINE_LINUX="swiotlb=512m"
 ```

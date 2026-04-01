@@ -116,7 +116,7 @@ differ at the last byte (rather than the first) causes `memcmp()` to run longer.
 samples (millions of requests), the byte-by-byte comparison is statistically distinguishable,
 allowing a timing oracle attack to reconstruct the expected tag one byte at a time.
 
-This is the same class of vulnerability as the 2009 Lucky13 TLS attack and various HMAC
+This is the same class of vulnerability as the 2013 Lucky13 TLS attack and various HMAC
 verification bugs.
 
 ### Root cause
@@ -125,7 +125,7 @@ verification bugs.
 use, but wrong for secret comparison. The compiler is also free to optimize comparison code
 in ways that create timing variation.
 
-Linux added `crypto_memneq()` in kernel 3.13 (commit b839da0f) specifically to address this:
+Linux added `crypto_memneq()` in kernel 3.14 (commit b839da0f) specifically to address this:
 
 ```c
 /* include/crypto/algapi.h */
@@ -161,13 +161,14 @@ The function is compiled with special care:
 
 ```makefile
 # crypto/Makefile
-CFLAGS_memneq.o := -fno-optimize-sibling-calls
+CFLAGS_memneq.o := -Os
 ```
 
-The `-fno-optimize-sibling-calls` flag prevents the compiler from turning the final return
-into a tail call, which could eliminate the loop and cause GCC to introduce early exits.
-The function is also marked `noinline` to prevent inlining that could allow the surrounding
-code's optimization context to affect it.
+The `-Os` (optimize for size) flag prevents loop unrolling and early-exit optimizations that
+could introduce timing variation. Combined with the `noinline` attribute (which prevents
+inlining that could allow the surrounding code's optimization context to affect it) and
+`OPTIMIZER_HIDE_VAR()` (which hides the accumulator from the optimizer), the function
+maintains its constant-time property.
 
 ### Fix
 
@@ -347,8 +348,8 @@ static int proc_keys_show(struct seq_file *m, void *v)
 
 The default permissions for user-created keys give `view` permission to the world
 (`other` bits include `0x01 = view`). A key with `perm = 0x1f3f0000` has:
-- possessor: `0x3f` = all permissions
-- user: `0x3f` = all permissions
+- possessor: `0x1f` = view|read|write|search|link (setattr bit 0x20 is NOT set)
+- user: `0x3f` = all permissions (view|read|write|search|link|setattr)
 - group: `0x00` = no permissions
 - other: `0x00` = no permissions
 

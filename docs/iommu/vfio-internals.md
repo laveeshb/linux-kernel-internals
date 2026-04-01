@@ -87,7 +87,7 @@ static int vfio_dma_do_map(struct vfio_iommu *iommu,
 
     /* Pin user pages: HVA → HPA */
     ret = pin_user_pages_remote(current->mm, vaddr,
-                                 npage, gup_flags, pages, NULL);
+                                 npage, gup_flags, pages);
 
     /* Record the mapping in our radix tree */
     dma = vfio_find_dma(iommu, iova, size);  /* ensure no overlap */
@@ -162,7 +162,7 @@ vCPU interrupt injection → guest ISR
 ### vfio_irq_ctx and eventfd
 
 ```c
-/* drivers/vfio/vfio_main.c */
+/* drivers/vfio/pci/vfio_pci_priv.h */
 struct vfio_irq_ctx {
     struct eventfd_ctx  *trigger;  /* eventfd for interrupt notification */
     struct virqfd       *unmask;   /* for level-triggered IRQs */
@@ -262,7 +262,7 @@ struct vfio_device_ops {
 };
 ```
 
-**Intel GVT-g** (Intel integrated GPU virtualization) and **nvidia vGPU** implement their own `vfio_device_ops`. The mdev device appears to QEMU as a standard VFIO device, so no QEMU changes are needed — QEMU just opens `/dev/vfio/<group>` and operates normally.
+**Intel GVT-g** (Intel integrated GPU virtualization, deprecated and removed from the Linux kernel around 6.8) and **nvidia vGPU** implement their own `vfio_device_ops`. The mdev device appears to QEMU as a standard VFIO device, so no QEMU changes are needed — QEMU just opens `/dev/vfio/<group>` and operates normally.
 
 ### mdev isolation model
 
@@ -347,9 +347,11 @@ ls /dev/vfio/
 # DMAR faults during passthrough (device DMA'd to unmapped address)
 dmesg | grep DMAR
 
-# VFIO tracing
-echo 1 > /sys/kernel/tracing/events/vfio_ap/enable
+# VFIO tracing (generic x86/arm64)
+echo 1 > /sys/kernel/tracing/events/vfio/enable
 echo 1 > /sys/kernel/tracing/events/iommu/enable
+# Note: events/vfio_ap/ tracepoints are s390 (IBM Z) only — for AP
+# (Adjunct Processor) crypto devices. Do not use on x86 or arm64.
 
 # MSI eventfd: see how often interrupts fire
 # (via /proc/interrupts or perf stat)

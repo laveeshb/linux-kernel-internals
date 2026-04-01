@@ -10,11 +10,11 @@ asynchronously, and you get an interrupt when it's done. Writing a driver that s
 kernel crypto API's `do_one_request()` contract correctly while managing hardware queuing,
 fallbacks, and error recovery requires a lot of boilerplate.
 
-`crypto_engine` (introduced in kernel 4.0) provides a generic work-queue layer that sits between
+`crypto_engine` (introduced in kernel 3.19) provides a generic work-queue layer that sits between
 the crypto API and a hardware driver. It:
 
 - Serializes requests to hardware that can only process one at a time
-- Handles retry when hardware is busy (`ENGINE_FLAG_RETRY`)
+- Handles retry when hardware is busy (enabled via `engine->retry_support = true`)
 - Calls driver callbacks at the right points (prepare → do → finalize)
 - Integrates with the async request completion path
 
@@ -33,8 +33,7 @@ Caller (IPsec, dm-crypt, TLS)
   crypto_engine work queue
   (crypto/engine.c)
         │  ← serialized, one request at a time
-        │  1. driver->prepare_request(engine, req)
-        │  2. driver->do_one_request(engine, req)
+        │  1. driver->do_one_request(engine, req)
         │     ↓ programs DMA, returns -EINPROGRESS
         │
   Hardware DMA + interrupt
@@ -50,12 +49,12 @@ Caller (IPsec, dm-crypt, TLS)
 Defined in `include/crypto/engine.h`:
 
 ```c
+/* simplified — see include/crypto/engine.h for authoritative layout */
 struct crypto_engine {
     char                    name[ENGINE_NAME_LEN];
     bool                    idling;
-    bool                    retry_support;      /* ENGINE_FLAG_RETRY */
+    bool                    retry_support;
 
-    struct list_head        cur_req_list;
     struct crypto_async_request *cur_req;
 
     bool                    running;
@@ -64,9 +63,6 @@ struct crypto_engine {
     struct list_head        list;
     spinlock_t              queue_lock;
     struct crypto_queue     queue;              /* pending requests */
-
-    bool                    busy;
-    bool                    first_tr_started;
 
     struct work_struct      pump_requests;      /* kthread pumping the queue */
     struct workqueue_struct *wq;
@@ -86,12 +82,8 @@ single-channel.
 Each algorithm registered with crypto_engine provides a `struct crypto_engine_op`:
 
 ```c
-/* include/crypto/engine.h */
+/* include/crypto/engine.h (kernel 5.13+) */
 struct crypto_engine_op {
-    int (*prepare_request)(struct crypto_engine *engine,
-                           void *areq);
-    int (*unprepare_request)(struct crypto_engine *engine,
-                             void *areq);
     int (*do_one_request)(struct crypto_engine *engine,
                           void *areq);
 };
@@ -99,38 +91,31 @@ struct crypto_engine_op {
 
 | Callback | Called when | Typical work |
 |---|---|---|
-| `prepare_request` | Before dispatching to hardware | Map scatter-gather, derive IV, set up DMA descriptors |
 | `do_one_request` | Hardware is idle, request at head of queue | Start DMA, return `-EINPROGRESS` |
-| `unprepare_request` | After completion (success or error) | Unmap DMA, free temporary buffers |
 
-`prepare_request` and `unprepare_request` are optional. `do_one_request` is required.
+`do_one_request` is required and is the only callback in modern kernels (5.13+).
 
-## Per-request context: skcipher_engine_ctx and aead_engine_ctx
+> **Note**: Before kernel ~5.13, this struct also contained `prepare_request` and
+> `unprepare_request` callbacks, which were removed in the engine refactor.
 
-Each transform context embeds a `struct crypto_engine_op` so the engine can find the callbacks:
+## Algorithm registration: skcipher_engine_alg
+
+The engine op is embedded in the algorithm descriptor struct, not in a per-transform context
+struct. For example, `struct skcipher_engine_alg` wraps `struct skcipher_alg` with an
+appended `struct crypto_engine_op op`:
 
 ```c
 /* include/crypto/engine.h */
-struct skcipher_engine_ctx {
-    struct crypto_engine_op op;
-};
-
-struct aead_engine_ctx {
-    struct crypto_engine_op op;
-};
-
-struct ahash_engine_ctx {
-    bool                    used;
-    struct crypto_engine_op op;
-};
-
-struct akcipher_engine_ctx {
+struct skcipher_engine_alg {
+    struct skcipher_alg     base;
     struct crypto_engine_op op;
 };
 ```
 
-A driver's private transform context must start with one of these structs (or embed it as the
-first member), so that `crypto_engine` can cast to it generically.
+The same pattern applies for AEAD (`struct aead_engine_alg`), ahash
+(`struct ahash_engine_alg`), and akcipher (`struct akcipher_engine_alg`). Drivers embed the
+engine op inside the algorithm descriptor and register with the engine-aware helpers (e.g.,
+`crypto_engine_register_skcipher()`) rather than the plain crypto API helpers.
 
 ## How a driver uses crypto_engine
 
@@ -210,16 +195,13 @@ static struct skcipher_engine_alg mydrv_aes_algs[] = {
             .exit        = mydrv_aes_exit,
         },
         .op = {
-            .prepare_request   = mydrv_prepare_request,
-            .unprepare_request = mydrv_unprepare_request,
             .do_one_request    = mydrv_do_one_request,
         },
     },
 };
 
-/* In probe, after engine is started: */
-ret = crypto_engine_register_skciphers(mydrv_aes_algs,
-                                        ARRAY_SIZE(mydrv_aes_algs));
+/* In probe, after engine is started (register each algorithm individually): */
+ret = crypto_engine_register_skcipher(&mydrv_aes_algs[0]);
 ```
 
 ### Step 3: the encrypt/decrypt entry points enqueue the request
@@ -261,9 +243,12 @@ static int mydrv_do_one_request(struct crypto_engine *engine, void *areq)
     ret = dma_map_sg(dd->dev, req->dst, sg_nents(req->dst), DMA_FROM_DEVICE);
 
     /* Program hardware registers */
+    /* Note: req->iv is a virtual pointer; obtain a DMA address via dma_map_single() */
+    dma_addr_t iv_dma = dma_map_single(dd->dev, req->iv, crypto_skcipher_ivsize(...),
+                                        DMA_TO_DEVICE);
     writel(MYDRV_CTRL_START | MYDRV_CTRL_CBC, dd->base + MYDRV_CTRL);
     writel(ctx->key_phys, dd->base + MYDRV_KEY_ADDR);
-    writel(req->iv_phys,  dd->base + MYDRV_IV_ADDR);
+    writel(iv_dma,        dd->base + MYDRV_IV_ADDR);
 
     /* Start DMA */
     mydrv_start_dma(dd, req->src, req->dst, req->cryptlen);
@@ -304,9 +289,8 @@ static irqreturn_t mydrv_irq(int irq, void *dev_id)
 }
 ```
 
-`crypto_finalize_skcipher_request()` (and equivalents for AEAD, ahash, akcipher) calls
-`unprepare_request` if registered, then invokes the request's completion callback, then
-kicks the engine to pump the next queued request.
+`crypto_finalize_skcipher_request()` (and equivalents for AEAD, ahash, akcipher) invokes
+the request's completion callback, then kicks the engine to pump the next queued request.
 
 ## The fallback pattern
 
@@ -386,14 +370,15 @@ static int mydrv_aes_encrypt(struct skcipher_request *req)
 }
 ```
 
-The same pattern applies to AEAD (`aead_engine_ctx`, `crypto_finalize_aead_request()`), ahash,
-and akcipher.
+The same pattern applies to AEAD (`struct aead_engine_alg`, `crypto_finalize_aead_request()`),
+ahash, and akcipher.
 
-## Retry support: ENGINE_FLAG_RETRY
+## Retry support
 
-When `engine->retry_support = true`, if `do_one_request()` returns `-ENOSPC` or `-EBUSY`, the
-engine re-queues the request and tries again after a delay. This is used by drivers whose
-hardware command FIFOs can fill up under sustained load (e.g., Marvell CESA, Allwinner CE).
+When `engine->retry_support = true`, if `do_one_request()` returns `-ENOSPC`, the engine
+re-queues the request and tries again after a delay. This is used by drivers whose hardware
+command FIFOs can fill up under sustained load (e.g., Marvell CESA, Allwinner CE). Only
+`-ENOSPC` triggers re-queuing; other error codes cause the request to fail immediately.
 
 Without retry support, a busy hardware return causes the request to fail immediately with an
 error back to the caller.
@@ -446,8 +431,9 @@ ls /sys/kernel/debug/
 # Some drivers export counters here (e.g., number of requests, fallback count)
 
 # Run the crypto test suite against hardware algorithms
-modprobe tcrypt mode=1
-# This exercises registered algorithms including hardware ones
+# Note: mode=1 tests MD5 only. To run all algorithm tests, use mode=0.
+modprobe tcrypt mode=0
+# This exercises all registered algorithms including hardware ones
 ```
 
 ## Relevant source

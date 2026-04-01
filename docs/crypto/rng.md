@@ -14,17 +14,19 @@ Both ultimately source from the same entropy pool, which is seeded from hardware
 
 ## The entropy pool
 
-### Pre-5.17: multiple pools
+### Pre-5.4: multiple pools
 
-Before kernel 5.17, the kernel maintained three pools:
+In early kernel versions, the kernel maintained three pools:
 
-- `input_pool`: the primary entropy accumulator (4096 bits, ChaCha20-based after 5.2)
+- `input_pool`: the primary entropy accumulator (4096 bits, hash-based mixing)
 - `blocking_pool`: fed `/dev/random`; blocked when estimated entropy was low
 - `nonblocking_pool`: fed `/dev/urandom`; never blocked
 
-The entropy _estimator_ was controversial: it claimed to track "bits of entropy" but was
-largely a heuristic. In practice it often over-estimated or under-estimated, causing spurious
-blocking or false confidence.
+The `nonblocking_pool` was merged into the CRNG output stage earlier, and the
+`blocking_pool` was removed in **Linux 5.4**. By 5.4 only the `input_pool` remained,
+with a ChaCha20-based CRNG output stage. The entropy _estimator_ was controversial: it
+claimed to track "bits of entropy" but was largely a heuristic. In practice it often
+over-estimated or under-estimated, causing spurious blocking or false confidence.
 
 ### 5.17+: a single BLAKE2s pool
 
@@ -38,7 +40,7 @@ The new pool:
 ```c
 /* drivers/char/random.c (5.17+) */
 
-/* The primary pool is 256 bits folded through BLAKE2s */
+/* The primary pool is 256 bits mixed through BLAKE2s (input pool, not CRNG output) */
 static struct {
     struct blake2s_state    hash;
     spinlock_t              lock;
@@ -48,16 +50,17 @@ static struct {
 };
 ```
 
-When 256 bits are accumulated, `crng_init` transitions from 0 → 2 (fully initialized).
-After that, the pool is periodically reseeded from new entropy, but the CRNG output is
-already cryptographically indistinguishable from random.
+The `crng_init` counter has three states: 0 (unseeded), 1 (early seeded, ~128 bits of
+entropy, usable but not fully initialized), and 2 (fully seeded, 256 bits). The transition
+is 0 → 1 → 2. After `crng_init` reaches 2, the pool is periodically reseeded from new
+entropy, but the CRNG output is already cryptographically indistinguishable from random.
 
 The CRNG (Cryptographically Secure Random Number Generator) uses ChaCha20 as its stream
 cipher. Per-CPU CRNGs (added in 5.14) allow fast, lock-free generation:
 
 ```c
-/* Simplified: each CPU has its own ChaCha20 state */
-static DEFINE_PER_CPU(struct chacha20_state, crngs);
+/* struct crng — internal type, wraps ChaCha20 state; not a public kernel API */
+/* Each CPU has its own CRNG instance for lock-free generation */
 ```
 
 ## Entropy sources
@@ -231,7 +234,8 @@ usleep_range(1000 + get_random_u32_below(1000), 3000);
 ```
 Power on
     │
-    ├─ early_init_primary_crng()     ← CRNG allocated, NOT yet initialized
+    ├─ rand_initialize() / early kernel init ← CRNG allocated, NOT yet initialized
+    │  (internal routines; not part of the stable API)
     │  crng_init = 0
     │
     ├─ Interrupt jitter accumulates  ← add_interrupt_randomness()
@@ -295,9 +299,9 @@ ls /sys/bus/virtio/drivers/virtio_rng/
 **RDRAND / RDSEED in the guest**: if the hypervisor passes through CPU RNG instructions,
 the VM uses real hardware entropy.
 
-**VM fork detection**: Linux 5.17+ includes `virt_randomize_platform_key()` which detects
-VM forks via a virtual machine generation ID (VMGENID) ACPI device. When the hypervisor
-changes the generation ID (on snapshot resume), the kernel reseeds the CRNG:
+**VM fork detection**: Linux 5.17+ includes support for detecting VM forks via a virtual
+machine generation ID (VMGENID) ACPI device. When the hypervisor changes the generation ID
+(on snapshot resume), the kernel calls `add_vmfork_randomness()` to reseed the CRNG:
 
 ```c
 /* drivers/virt/vmgenid.c */
@@ -328,8 +332,9 @@ cat /proc/sys/kernel/random/entropy_avail
 
 # Pool parameters
 cat /proc/sys/kernel/random/poolsize      # 256
-cat /proc/sys/kernel/random/read_wakeup_threshold   # 64 (bits)
-cat /proc/sys/kernel/random/write_wakeup_threshold  # 28 (bits)
+# Note: read_wakeup_threshold and write_wakeup_threshold were removed in Linux 5.17.
+# They do not exist on modern kernels. Use entropy_avail, poolsize, and
+# urandom_min_reseed_secs instead.
 
 # UUID generated from /dev/urandom (convenient test)
 cat /proc/sys/kernel/random/uuid
