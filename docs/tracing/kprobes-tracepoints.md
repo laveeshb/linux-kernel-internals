@@ -28,7 +28,7 @@ BPF programs can attach to both tracepoints *and* kprobes, but they add a critic
 
 This turned tracepoints from "fire and log" into "fire and compute." A BPF program on `block_rq_complete` can maintain a per-device latency histogram entirely in kernel memory and expose it as a BPF map. Without BPF, collecting that histogram required copying every raw event to userspace and aggregating there — at high I/O rates, this was prohibitive.
 
-`fentry`/`fexit` (Linux 5.5, 2020) [(commit)](https://git.kernel.org/linus/fec56f5890d93fc2ed74166c397dc186b1c25769) added a fourth layer: BPF programs that attach to any kernel function entry/exit using BTF type information to access typed arguments, without the INT3-trap overhead of kprobes and without needing an explicit `TRACE_EVENT` annotation.
+`fentry`/`fexit` (Linux 5.5, 2020) [(commit)](https://git.kernel.org/linus/fec56f5890d93fc2ed74166c397dc186b1c25951) added a fourth layer: BPF programs that attach to any kernel function entry/exit using BTF type information to access typed arguments, without the INT3-trap overhead of kprobes and without needing an explicit `TRACE_EVENT` annotation.
 
 ```
 kprobes      → attach anywhere, unstable ABI, INT3 overhead
@@ -257,7 +257,7 @@ static inline void trace_my_event(int value, const char *name)
 
 ## uprobes: userspace dynamic probes
 
-uprobes work like kprobes but for userspace binaries, introduced in Linux 3.5 [(commit)](https://git.kernel.org/linus/2b144498950e6030d1a35a0f69e08de17b2b5daf). The kernel inserts a breakpoint into the mapped pages:
+uprobes work like kprobes but for userspace binaries, introduced in Linux 3.5 [(commit)](https://git.kernel.org/linus/2b144498350860b6ee9dc57ff27a93ad488de5dc). The kernel inserts a breakpoint into the mapped pages:
 
 ```bash
 # Trace all calls to malloc in any process

@@ -91,7 +91,7 @@ struct ext4_inode {
 
 ## Extent tree: efficient large file representation
 
-ext4 uses extents (contiguous block runs) instead of the old indirect block maps. Extents were introduced by Alex Tomas [(commit)](https://git.kernel.org/linus/a86c6181748d4291d1c6c2a0eeee1052bade8f34):
+ext4 uses extents (contiguous block runs) instead of the old indirect block maps. Extents were introduced by Alex Tomas [(commit)](https://git.kernel.org/linus/a86c61812637c7dd0c57e29880cffd477b62f2e7):
 
 ```
 i_block[0..3] holds the extent tree root:

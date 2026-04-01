@@ -4,16 +4,16 @@
 
 ## What ftrace is
 
-ftrace is the kernel's main tracing framework, accessible via tracefs at `/sys/kernel/tracing/`. Created by Steven Rostedt and introduced in Linux 2.6.27 [(commit)](https://git.kernel.org/linus/16444a8a40d4f9f7dde2a5b35dad62b3c2ca7cfa) [(LWN)](https://lwn.net/Articles/290277/), it:
+ftrace is the kernel's main tracing framework, accessible via tracefs at `/sys/kernel/tracing/`. Created by Steven Rostedt and introduced in Linux 2.6.27 [(commit)](https://git.kernel.org/linus/16444a8a40d4c7b4f6de34af0cae1f76a4f6c901) [(LWN)](https://lwn.net/Articles/290277/), it:
 
 - Records every kernel function call (function tracer)
 - Traces execution paths and call graphs (function_graph tracer)
 - Provides a ring buffer for low-overhead event collection
-- Is the backend for BPF `fentry`/`fexit` (Linux 5.5) [(commit)](https://git.kernel.org/linus/fec56f5890d93fc2ed74166c397dc186b1c25769), kprobes, and tracepoints
+- Is the backend for BPF `fentry`/`fexit` (Linux 5.5) [(commit)](https://git.kernel.org/linus/fec56f5890d93fc2ed74166c397dc186b1c25951), kprobes, and tracepoints
 
 ## tracefs interface
 
-tracefs was introduced as a standalone filesystem in Linux 4.1 [(commit)](https://git.kernel.org/linus/3f3c73de77b51b0e8b5b9c74c09be31e6c4e2fa).
+tracefs was introduced as a standalone filesystem in Linux 4.1 [(commit)](https://git.kernel.org/linus/4282d60689d4f21b40692029080440cc58e8a17d).
 
 ```bash
 # Mount tracefs (if not already mounted)
@@ -78,7 +78,7 @@ echo "" > /sys/kernel/tracing/set_ftrace_filter
 
 ## Function graph tracer
 
-Shows call hierarchy and execution time. Added by Frédéric Weisbecker [(commit)](https://git.kernel.org/linus/e49dc19c167e5e93f0e90d90c3ad13bb9e2f27f7).
+Shows call hierarchy and execution time. Added by Frédéric Weisbecker in Linux 2.6.29 [(commit)](https://git.kernel.org/linus/15e6cb3673ea6277999642802406a764b49391b0).
 
 ```bash
 echo function_graph > /sys/kernel/tracing/current_tracer

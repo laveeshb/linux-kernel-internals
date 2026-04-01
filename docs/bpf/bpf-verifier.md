@@ -12,7 +12,7 @@ Every BPF program must pass the verifier before it can run. The verifier statica
 4. **Context correctness** — only fields allowed for the program type are accessed
 5. **Stack safety** — no stack overflow, no uninitialized reads
 
-The verifier performs this analysis in `kernel/bpf/verifier.c` (~30,000 lines). It was introduced alongside eBPF in Linux 3.18 by Alexei Starovoitov. [(commit)](https://git.kernel.org/linus/17a5267067f3157fb47bf774917af0b43571e78b)
+The verifier performs this analysis in `kernel/bpf/verifier.c` (~30,000 lines). It was introduced alongside eBPF in Linux 3.18 by Alexei Starovoitov. [(commit)](https://git.kernel.org/linus/17a5267067f3c372fec9ffb798d6eaba6b5e6a4c)
 
 ## Two phases of verification
 

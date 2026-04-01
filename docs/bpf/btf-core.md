@@ -12,7 +12,7 @@ Before BTF/CO-RE, BPF programs were compiled with kernel headers from a specific
 
 ## BTF: BPF Type Format
 
-BTF is a compact type information format stored in a special ELF section (`.BTF`) and loaded into the kernel alongside BPF programs. It was introduced in Linux 4.18 by Martin KaFai Lau. [(commit)](https://git.kernel.org/linus/69b693f0aefad82d714c6e76c4b5b3b54c0aaed1)
+BTF is a compact type information format stored in a special ELF section (`.BTF`) and loaded into the kernel alongside BPF programs. It was introduced in Linux 4.18 by Martin KaFai Lau. [(commit)](https://git.kernel.org/linus/69b693f0aefa0ed521e8bd02260523b5ae446ad7)
 
 ```bash
 # Check if kernel has BTF
