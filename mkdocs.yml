@@ -322,6 +322,12 @@ nav:
     - Syscall Entry Path: syscalls/syscall-entry.md
     - SYSCALL_DEFINE and Dispatch: syscalls/syscall-define.md
     - Adding a New Syscall: syscalls/adding-syscall.md
+    - 32-bit Compat Syscalls: syscalls/compat.md
+    - ptrace and Syscall Interception: syscalls/ptrace-interception.md
+    - vDSO and Virtual System Calls: syscalls/vdso.md
+    - Syscall Auditing: syscalls/audit.md
+    - Syscall Restart Mechanisms: syscalls/restart-block.md
+    - War Stories: syscalls/war-stories.md
   - Device Drivers:
     - Getting Started: drivers/README.md
     - Linux Device Model: drivers/device-model.md
@@ -377,6 +383,9 @@ nav:
     - Parameters, Symbols, and Kconfig: modules/module-params.md
     - Module Signing: modules/module-signing.md
     - Kbuild Build System: modules/kbuild.md
+    - Module Loading Internals: modules/module-loading-internals.md
+    - Dynamic Debug: modules/dynamic-debug.md
+    - War Stories: modules/war-stories.md
   - Filesystems:
     - Getting Started: filesystems/README.md
     - ext4: filesystems/ext4.md
@@ -417,6 +426,10 @@ nav:
     - Clocksource and Clockevent Drivers: time/clocksource.md
     - hrtimers: time/hrtimers.md
     - POSIX Timers and timerfd: time/posix-timers.md
+    - The Timer Wheel: time/timer-wheel.md
+    - NTP and Clock Discipline: time/ntp.md
+    - Time Namespaces: time/time-namespaces.md
+    - War Stories: time/war-stories.md
   - IOMMU and DMA:
     - Getting Started: iommu/README.md
     - IOMMU Architecture: iommu/iommu-arch.md
@@ -451,7 +464,11 @@ nav:
   - Live Patching:
     - Getting Started: livepatch/README.md
     - Kernel Live Patching: livepatch/klp.md
+    - KLP Consistency Model: livepatch/klp-consistency.md
+    - Cumulative Patches and Atomic Replace: livepatch/klp-cumulative.md
+    - "KLP State: Custom Consistency Checks": livepatch/klp-state.md
     - kexec: livepatch/kexec.md
+    - War Stories: livepatch/war-stories.md
   - Architecture:
     - ARM64:
       - Getting Started: arch/arm64/README.md
