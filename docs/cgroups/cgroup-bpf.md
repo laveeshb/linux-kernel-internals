@@ -190,7 +190,7 @@ bpftool cgroup attach /sys/fs/cgroup/containers/c1/ egress \
 
 The BPF program itself uses `bpf_skb_store_bytes()` or sets `skb->mark` to a container ID, and TC flower/u32 classifiers match on the mark to apply per-container `tbf` qdiscs.
 
-For a purely BPF approach, `BPF_MAP_TYPE_TOKEN_BUCKET` or a custom token-bucket in a BPF map can rate-limit packets directly from the `BPF_CGROUP_INET_EGRESS` hook by dropping packets when the bucket is empty.
+For a purely BPF approach, a custom token-bucket implemented in a `BPF_MAP_TYPE_ARRAY` (with atomic operations) can rate-limit packets directly from the `BPF_CGROUP_INET_EGRESS` hook by dropping packets when the bucket is empty.
 
 ## Inspecting attached programs
 
@@ -212,26 +212,27 @@ bpftool cgroup show /sys/fs/cgroup/
 
 ## Kernel implementation
 
-The kernel runs cgroup BPF programs from the hot paths of network, socket, and device subsystems. The entry points are the `cgroup_bpf_run_filter_*()` family of functions, defined in `include/linux/bpf-cgroup.h` and implemented in `kernel/bpf/cgroup.c`:
+The kernel runs cgroup BPF programs from the hot paths of network, socket, and device subsystems. The internal entry points use the `__cgroup_bpf_run_filter_*()` family (double-underscore prefix), defined in `include/linux/bpf-cgroup.h` and invoked via `BPF_CGROUP_RUN_PROG_*` wrapper macros:
 
 ```c
-/* include/linux/bpf-cgroup.h */
-int cgroup_bpf_run_filter_skb(struct sock *sk, struct sk_buff *skb, int type);
-int cgroup_bpf_run_filter_sk(struct sock *sk, int type);
-int cgroup_bpf_run_filter_sock_addr(struct sock *sk,
-                                    struct sockaddr *uaddr, int type,
-                                    void *t_ctx);
-int cgroup_bpf_run_filter_sock_ops(struct sock *sk,
-                                   struct bpf_sock_ops_kern *sock_ops, int type);
-int cgroup_bpf_check_dev_permission(short dev_type, u32 major, u32 minor,
-                                    short access, enum bpf_attach_type type);
+/* include/linux/bpf-cgroup.h (simplified signatures) */
+int __cgroup_bpf_run_filter_skb(struct sock *sk, struct sk_buff *skb,
+                                 enum cgroup_bpf_attach_type atype);
+int __cgroup_bpf_run_filter_sk(struct sock *sk,
+                                enum cgroup_bpf_attach_type atype);
+int __cgroup_bpf_run_filter_sock_ops(struct sock *sk,
+                                     struct bpf_sock_ops_kern *sock_ops,
+                                     enum cgroup_bpf_attach_type atype);
+int __cgroup_bpf_check_dev_permission(short dev_type, u32 major, u32 minor,
+                                       short access,
+                                       enum cgroup_bpf_attach_type atype);
 ```
 
-These are called from:
-- `net/ipv4/ip_output.c` and `net/ipv6/ip6_output.c` → `cgroup_bpf_run_filter_skb(..., BPF_CGROUP_INET_EGRESS)`
-- `net/ipv4/ip_input.c` → `cgroup_bpf_run_filter_skb(..., BPF_CGROUP_INET_INGRESS)`
-- `net/core/sock.c` → `cgroup_bpf_run_filter_sk(..., BPF_CGROUP_INET_SOCK_CREATE)` on `sock_init_data()`
-- `drivers/char/mem.c`, `fs/namei.c` → `cgroup_bpf_check_dev_permission()` on device opens
+These are invoked via macros from:
+- `net/ipv4/ip_output.c`, `net/ipv6/ip6_output.c` → `BPF_CGROUP_RUN_PROG_INET_EGRESS`
+- `net/core/dev.c` (`__netif_receive_skb_core`) → `BPF_CGROUP_RUN_PROG_INET_INGRESS`
+- `net/ipv4/af_inet.c` (`inet_create`) → `BPF_CGROUP_RUN_PROG_INET_SOCK`
+- `security/device_cgroup.c` (`devcgroup_check_permission`) → `BPF_CGROUP_RUN_PROG_DEVICE_CGROUP`
 
 The `struct cgroup_bpf` embedded in `struct cgroup` holds the attached programs:
 
@@ -242,18 +243,18 @@ struct cgroup_bpf {
      * effective[] holds the effective set of programs for this cgroup —
      * programs attached here plus inherited from ancestors (flattened).
      */
-    struct bpf_prog_array __rcu *effective[MAX_BPF_CGROUP_TYPE_INDEX];
+    struct bpf_prog_array __rcu *effective[MAX_CGROUP_BPF_ATTACH_TYPE];
 
     /* programs attached directly to this cgroup */
-    struct hlist_head     progs[MAX_BPF_CGROUP_TYPE_INDEX];
-    u8                    flags[MAX_BPF_CGROUP_TYPE_INDEX];
+    struct hlist_head     progs[MAX_CGROUP_BPF_ATTACH_TYPE];
+    u8                    flags[MAX_CGROUP_BPF_ATTACH_TYPE];
 
     struct list_head      storages;
     struct bpf_prog_array *inactive; /* for RCU update */
 };
 ```
 
-When a program is attached, `cgroup_bpf_inherit()` walks from root to the target cgroup and rebuilds the `effective[]` prog arrays for the cgroup and all its descendants. This means the hot path only dereferences `effective[]` via `BPF_PROG_RUN_ARRAY()` — there is no hierarchy walk at runtime.
+When a program is attached, `update_effective_progs()` (called from `__cgroup_bpf_attach()`) walks from root to the target cgroup and rebuilds the `effective[]` prog arrays for the cgroup and all its descendants. `cgroup_bpf_inherit()` is a separate function called only at cgroup creation time to copy inherited programs from the parent. The hot path only dereferences `effective[]` via `BPF_PROG_RUN_ARRAY()` — there is no hierarchy walk at runtime.
 
 ## Further reading
 

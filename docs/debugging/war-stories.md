@@ -180,9 +180,9 @@ void stats_flush_worker(struct work_struct *work)
 
 ### What happened
 
-A new io_uring feature landed in `linux-next`. Within 2 hours, syzbot reported a NULL pointer dereference in `io_write()`, triggered by an `IORING_OP_WRITE` SQE with `IOSQE_FIXED_FILE` set but with `ctx->file_table.data` being NULL (no fixed files registered).
+A new io_uring feature landed in `linux-next`. Within 2 hours, syzbot reported a NULL pointer dereference in `io_write()`, triggered by an `IORING_OP_WRITE` SQE with `IOSQE_FIXED_FILE` set but with `ctx->file_table.files` being NULL (no fixed files registered).
 
-The kernel was reading `ctx->file_table.data[req->fixed_file]` without checking whether `ctx->file_table.data` was initialized. The reproducer was a 20-line C program.
+The kernel was reading `ctx->file_table.files[req->fixed_file]` without checking whether `ctx->file_table.files` was initialized. The reproducer was a 20-line C program.
 
 ### The syzbot report
 
@@ -215,7 +215,7 @@ static struct file *io_file_get_fixed(struct io_ring_ctx *ctx,
                                       struct io_kiocb *req,
                                       unsigned int issue_flags)
 {
-    unsigned int fd = req->cqe.fd;
+    unsigned int fd = req->fixed_file;   /* fixed-file index from the SQE */
 
     /* Missing: check if file_table is initialized */
     if (fd >= ctx->file_table.nr)    /* nr is 0 → returns NULL next line */
@@ -234,9 +234,9 @@ static struct file *io_file_get_fixed(struct io_ring_ctx *ctx,
                                       struct io_kiocb *req,
                                       unsigned int issue_flags)
 {
-    unsigned int fd = req->cqe.fd;
+    unsigned int fd = req->fixed_file;   /* fixed-file index from the SQE */
 
-    if (unlikely(!ctx->file_table.data))   /* guard: no fixed files registered */
+    if (unlikely(!ctx->file_table.files))   /* guard: no fixed files registered */
         return NULL;
     if (unlikely(fd >= ctx->file_table.nr))
         return NULL;
@@ -248,7 +248,7 @@ static struct file *io_file_get_fixed(struct io_ring_ctx *ctx,
 Alternatively, the check can return `-EBADF` early from `io_write()`:
 ```c
 if (req->flags & REQ_F_FIXED_FILE) {
-    if (unlikely(!ctx->file_table.data))
+    if (unlikely(!ctx->file_table.files))
         return -EBADF;
 }
 ```

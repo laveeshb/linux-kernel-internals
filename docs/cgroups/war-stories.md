@@ -49,7 +49,7 @@ The Linux kernel 5.14 commit `(39f450ac4b06)` added `cpu.idle` to support SCHED_
 
 **What happened**: The JVM gradually grew its heap to ~510M. A transient spike (GC unable to free enough memory, loading a large dataset) caused the cgroup to hit `memory.max`. The kernel's OOM killer invoked `out_of_memory()` → `oom_kill_process()`, which selected the JVM process as the largest `oom_score_adj`-weighted process and killed it. The supervisor restarted the JVM. The JVM grew back to 510M. The spike recurred. Killed again. This loop ran every ~30 seconds for six hours before anyone noticed — the container was never killed, only individual processes inside it, so Kubernetes never restarted the pod.
 
-**The kernel mechanism**: When a cgroup exceeds `memory.max`, `mem_cgroup_oom()` is called. By default, the OOM killer selects the process with the highest `oom_score` within the cgroup (not the cgroup as a whole). If the container runtime has set `oom_score_adj` on only the container init process, the JVM (with default `oom_score_adj=0`) may be selected instead. The cgroup keeps running; the OOM event is visible in:
+**The kernel mechanism**: When a cgroup exceeds `memory.max`, `try_charge_memcg()` calls `mem_cgroup_oom()` which invokes `mem_cgroup_out_of_memory()`. By default, the OOM killer selects the process with the highest `oom_score` within the cgroup (not the cgroup as a whole). If the container runtime has set `oom_score_adj` on only the container init process, the JVM (with default `oom_score_adj=0`) may be selected instead. The cgroup keeps running; the OOM event is visible in:
 
 ```bash
 # OOM events per cgroup:
@@ -102,9 +102,9 @@ found that the path did not exist. On cgroup v2, the equivalent is:
 |----|----|
 | `memory.limit_in_bytes` | `memory.max` |
 | `memory.soft_limit_in_bytes` | `memory.high` |
-| `memory.memsw.limit_in_bytes` | `memory.max` + `memory.swap.max` |
+| `memory.memsw.limit_in_bytes` | No direct equivalent: v2 `memory.max` caps RAM only; `memory.swap.max` caps swap-only (not combined) |
 | `memory.usage_in_bytes` | `memory.current` |
-| `memory.memsw.usage_in_bytes` | `memory.current` + `memory.swap.current` |
+| `memory.memsw.usage_in_bytes` | `memory.current` + `memory.swap.current` (computed, not a single file) |
 
 **Class 3 — Controller not enabled**: Several hosts showed that `memory.max` existed but writes were silently ignored. The root cause: the memory controller was not listed in `cgroup.subtree_control` at the container's parent cgroup. On cgroup v2, a controller must be enabled at each level of the hierarchy before its interface files appear in children. The kernel boot parameter `cgroup_enable=memory` is not needed for v2 (the memory controller is built in), but the subtree_control chain must be complete:
 

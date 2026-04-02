@@ -58,7 +58,7 @@ semop(semid, &op, 1);
 /* If this process crashes, semaphore is automatically incremented back */
 ```
 
-The kernel tracks per-process undo lists in `struct sem_undo` (defined in `include/linux/sem.h`). On `do_exit()`, `exit_sem()` walks the undo list and reverses each pending adjustment.
+The kernel tracks per-process undo lists in `struct sem_undo` (defined in `ipc/sem.c`). On `do_exit()`, `exit_sem()` walks the undo list and reverses each pending adjustment.
 
 **Without `SEM_UNDO`**: a process that dies while holding a semaphore leaves it permanently decremented — all subsequent waiters block forever.
 
@@ -99,10 +99,11 @@ semctl(semid, 0, IPC_RMID);
 ### Kernel internals
 
 ```c
-/* include/linux/sem.h */
+/* ipc/sem.c (internal kernel structures, not exported in headers) */
 struct sem_array {
     struct kern_ipc_perm  sem_perm;    /* permissions + IPC id */
     time64_t              sem_ctime;   /* last semctl() time */
+    time64_t              sem_otime;   /* last semop() time */
     struct list_head      pending_alter;  /* pending sops that alter the set */
     struct list_head      pending_const;  /* pending sops that don't alter (wait-for-zero) */
     struct list_head      list_id;     /* list of all sem_arrays */
@@ -113,12 +114,11 @@ struct sem_array {
 };
 
 struct sem {
-    int       semval;        /* current value */
-    int       sempid;        /* pid of last semop() */
-    spinlock_t lock;         /* per-semaphore lock (simple ops) */
+    int          semval;        /* current value */
+    struct pid  *sempid;        /* pid of last semop() (namespace-aware) */
+    spinlock_t   lock;          /* per-semaphore lock (simple ops) */
     struct list_head pending_alter;  /* simple pending alter ops */
     struct list_head pending_const;  /* simple pending const ops */
-    time64_t  sem_otime;     /* last semop time */
 };
 ```
 

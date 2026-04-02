@@ -89,7 +89,7 @@ MemoryHigh=400M       # memory.high = 419430400
 # memory.swap.max (limit swap usage)
 MemorySwapMax=0       # memory.swap.max = 0  (no swap)
 
-# io.weight (BFQ proportional scheduling weight, 1-10000)
+# io.weight (proportional IO scheduling weight, range 1-10000)
 IOWeight=100          # io.weight = 100
 
 # io.max (per-device hard bandwidth limit)
@@ -151,7 +151,7 @@ This is used by:
 - **Kubernetes kubelet** — creates per-pod cgroups under `kubelet.service/` or a dedicated slice
 - **User systemd instances** — `user@1000.service` is delegated so the per-user systemd can manage `user.slice/user-1000.slice/`
 
-When `Delegate=yes`, systemd writes the `cgroup.delegate` file (available since kernel 5.10 in some form, formally as `cgroup.delegate` in later versions) and sets the cgroup's ownership to the service's `User=` so the unprivileged process can write `cgroup.subtree_control` and create child cgroups without root.
+When `Delegate=yes`, systemd uses `chown(2)` on the cgroup directory to the service's `User=` UID, which allows the unprivileged process to write `cgroup.subtree_control` and create child cgroup subdirectories without root. There is no `cgroup.delegate` kernel interface file; delegation is purely a matter of filesystem ownership on the cgroup directory.
 
 The correct pattern for a container runtime using delegation:
 

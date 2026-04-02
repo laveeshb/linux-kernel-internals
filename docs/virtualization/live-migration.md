@@ -60,7 +60,7 @@ ioctl(vm_fd, KVM_GET_DIRTY_LOG, &dirty_log);
    KVM also clears all dirty bits and re-write-protects the pages. */
 ```
 
-`KVM_CLEAR_DIRTY_LOG` (added in kernel 4.18) clears dirty bits for a specific range of pages rather than the entire slot, reducing the number of EPT write-protection flushes during iterative pre-copy:
+`KVM_CLEAR_DIRTY_LOG` (added in kernel 5.4) clears dirty bits for a specific range of pages rather than the entire slot, reducing the number of EPT write-protection flushes during iterative pre-copy:
 
 ```c
 struct kvm_clear_dirty_log clear = {
@@ -96,7 +96,7 @@ struct kvm_dirty_gfn {
 };
 ```
 
-The dirty ring is mmap'd from the vCPU fd (same region as `struct kvm_run`, at offset `KVM_DIRTY_LOG_PAGE_OFFSET * PAGE_SIZE`). QEMU reads the ring as vCPU threads produce entries, avoiding the need to poll a bitmap and re-write-protect all pages.
+The dirty ring is mmap'd from the vCPU fd at offset `KVM_DIRTY_LOG_PAGE_OFFSET * PAGE_SIZE` (a separate region from `struct kvm_run`, which is at offset 0). QEMU reads the ring as vCPU threads produce entries, avoiding the need to poll a bitmap and re-write-protect all pages.
 
 ## The three migration phases in detail
 
@@ -114,7 +114,7 @@ Each round sends fewer pages — the guest's working set converges. QEMU tracks:
 
 Pre-copy ends when the estimated remaining transfer time drops below the target downtime (default 300 ms in QEMU's `migrate_set_parameter max-bandwidth`).
 
-**Auto-converge**: if the dirty rate stays high and convergence is not happening, QEMU throttles the vCPUs (via `KVM_SET_GUEST_DEBUG` or a synthetic CPU limit) to slow the guest's write rate. This ensures migration completes at the cost of temporary guest performance degradation.
+**Auto-converge**: if the dirty rate stays high and convergence is not happening, QEMU throttles the vCPUs by injecting `usleep()` calls in the vCPU threads (controlled by the `throttle-trigger-threshold` and `cpu-throttle-increment` migration parameters, implemented in QEMU userspace) to slow the guest's write rate. This ensures migration completes at the cost of temporary guest performance degradation.
 
 ### Phase 2: Stop-and-copy
 
@@ -207,13 +207,13 @@ Post-copy:  stop VM → transfer CPU → resume on dest (immediately)
                                        → fault on missing pages → fetch from source
 ```
 
-KVM post-copy relies on **userfaultfd** (`UFFD_FEATURE_MISSING_SHMEM`). QEMU on the destination registers the guest RAM mapping with `userfaultfd`; when the guest accesses an uncopied page, the kernel delivers a `UFFD_EVENT_PAGEFAULT` to a QEMU thread, which fetches the page from the source host and installs it.
+KVM post-copy relies on **userfaultfd** (`UFFD_FEATURE_MISSING_ANONYMOUS`). QEMU on the destination registers the guest RAM mapping (anonymous memory) with `userfaultfd`; when the guest accesses an uncopied page, the kernel delivers a `UFFD_EVENT_PAGEFAULT` to a QEMU thread, which fetches the page from the source host and installs it.
 
 ```c
 /* Destination: register RAM with userfaultfd */
 int uffd = syscall(SYS_userfaultfd, O_CLOEXEC | O_NONBLOCK);
 
-struct uffdio_api api = { .api = UFFD_API, .features = UFFD_FEATURE_MISSING_SHMEM };
+struct uffdio_api api = { .api = UFFD_API, .features = UFFD_FEATURE_MISSING_ANONYMOUS };
 ioctl(uffd, UFFDIO_API, &api);
 
 struct uffdio_register reg = {

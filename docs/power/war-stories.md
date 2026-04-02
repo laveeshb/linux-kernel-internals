@@ -65,12 +65,12 @@ static int mynic_resume(struct device *dev)
     return 0;
 }
 
-/* SIMPLE_DEV_PM_OPS wires up both system sleep and runtime PM,
-   sharing implementations where the operations are identical. */
+/* SIMPLE_DEV_PM_OPS fills system sleep callbacks (suspend/resume/freeze/thaw/etc.)
+   with the same pair of functions. Runtime PM callbacks need SET_RUNTIME_PM_OPS. */
 static SIMPLE_DEV_PM_OPS(mynic_pm_ops, mynic_suspend, mynic_resume);
 ```
 
-`SIMPLE_DEV_PM_OPS` (defined in `include/linux/pm.h`) is a convenience macro that fills both the system sleep callbacks (`suspend`/`resume`) and the runtime PM callbacks with the same functions, and also handles `freeze`/`thaw`/`restore` for hibernation by reusing the same implementations.
+`SIMPLE_DEV_PM_OPS` (defined in `include/linux/pm.h`) is a convenience macro that fills the system sleep callbacks (`suspend`, `resume`, `freeze`, `thaw`, `poweroff`, `restore`) with the same pair of functions. Note: it does **not** wire up runtime PM callbacks (`runtime_suspend`, `runtime_resume`) — those require `SET_RUNTIME_PM_OPS` separately.
 
 **Lesson**: an absent callback is not a safe default for devices with hardware state. Use `CONFIG_PM_DEBUG` during development; test with `echo mem > /sys/power/state` before submitting any driver.
 
@@ -237,8 +237,8 @@ A cloud operator deployed new servers and, to enforce per-server power budgets f
 
 ```bash
 # Set package 0 total power limit to 150 W
-echo 150000000 > /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_0_power_limit_uw
-echo 1 > /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_0_enabled
+echo 150000000 > /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw
+echo 1 > /sys/class/powercap/intel-rapl:0/constraint_0_enabled
 ```
 
 ### What happened
@@ -255,7 +255,7 @@ The database team suspected a kernel regression. Extensive profiling showed the 
 
 ```bash
 # Read energy counters on two domains over 1 second
-cat /sys/class/powercap/intel-rapl/intel-rapl:0:1/name
+cat /sys/class/powercap/intel-rapl:0:1/name
 # "dram"
 # (energy_uj was incrementing at 45 W equivalent — the DRAM domain limit was ~20 W)
 ```

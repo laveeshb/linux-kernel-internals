@@ -43,12 +43,12 @@ L0 must respond to each of these exits by emulating what the hardware would do i
 
 | L1 instruction | Exit to L0 | L0 action |
 |---------------|-----------|-----------|
-| `VMXON` | `EXIT_REASON_VMXON` | `handle_vmon()` — enable nested VMX state for this vCPU |
+| `VMXON` | `EXIT_REASON_VMXON` | `handle_vmxon()` — enable nested VMX state for this vCPU |
 | `VMPTRLD` (set current VMCS) | `EXIT_REASON_VMPTRLD` | `handle_vmptrld()` — record which vmcs12 L1 is working with |
 | `VMWRITE` | `EXIT_REASON_VMWRITE` | `handle_vmwrite()` — write field to vmcs12 in memory |
 | `VMREAD` | `EXIT_REASON_VMREAD` | `handle_vmread()` — read field from vmcs12 in memory |
-| `VMLAUNCH` | `EXIT_REASON_VMLAUNCH` | `nested_vmx_enter_non_root_mode()` — synthesize L2 entry |
-| `VMRESUME` | `EXIT_REASON_VMRESUME` | `nested_vmx_enter_non_root_mode()` — re-enter L2 |
+| `VMLAUNCH` | `EXIT_REASON_VMLAUNCH` | `handle_vmlaunch()` → `nested_vmx_run()` — synthesize L2 entry |
+| `VMRESUME` | `EXIT_REASON_VMRESUME` | `handle_vmresume()` → `nested_vmx_run()` — re-enter L2 |
 | `VMXOFF` | `EXIT_REASON_VMXOFF` | `handle_vmoff()` — disable nested VMX state |
 
 All of the above handlers live in `arch/x86/kvm/vmx/nested.c`.
@@ -62,7 +62,7 @@ L0 keeps an in-memory copy of what L1 believes the VMCS contains. This is `struc
 struct vmcs12 {
     /* Header — must match the hardware VMCS revision identifier */
     u32 revision_id;
-    u32 abort_indicator;
+    u32 abort;            /* VM-entry abort indicator */
 
     /* Guest state area: what L1 puts here is L2's state */
     u64 guest_cr0, guest_cr3, guest_cr4;
@@ -92,7 +92,7 @@ struct vmcs12 {
 };
 ```
 
-L0 allocates one `struct vmcs12` per L1 vCPU and stores a pointer in `struct vcpu_vmx.nested.vmcs12` (in `arch/x86/kvm/vmx/vmx.h`). When L1 executes `VMREAD`/`VMWRITE`, L0 reads/writes fields of this in-memory structure rather than touching a real VMCS.
+L0 allocates one `struct vmcs12` per L1 vCPU and stores a pointer in `struct vcpu_vmx.nested.cached_vmcs12` (in `arch/x86/kvm/vmx/vmx.h`). When L1 executes `VMREAD`/`VMWRITE`, L0 reads/writes fields of this in-memory structure rather than touching a real VMCS.
 
 ## The merge: vmcs01 + vmcs12 = vmcs02
 
@@ -105,13 +105,13 @@ Instead, L0 creates **vmcs02**: a real VMCS that merges L1's intent with L0's re
 
 ```
 vmcs01 (L0 → L1):        vmcs12 (L1's intent for L2):     vmcs02 (L0 → L2 on real hardware):
-  L0's EPT for L1           L1's EPT for L2                  Two-level EPT (shadow EPT)
+  L0's EPT for L1           L1's EPT for L2                  Two-level EPT (nested EPT)
   L0's MSR bitmap           L1's MSR bitmap                  Union of both bitmaps
   L0 host state             L1 host state (= L2 exit target) L0 host state
   L1 guest state            L2 guest state                   L2 guest state
 ```
 
-The merge is performed in `nested_vmx_enter_non_root_mode()` → `prepare_vmcs02()` in `arch/x86/kvm/vmx/nested.c`:
+The merge is performed via `nested_vmx_run()` → `prepare_vmcs02()` in `arch/x86/kvm/vmx/nested.c`:
 
 ```c
 /* arch/x86/kvm/vmx/nested.c (simplified) */
@@ -164,7 +164,7 @@ static int vmx_check_nested_events(struct kvm_vcpu *vcpu)
     ...
 }
 
-static bool nested_vmx_exit_reflected(struct kvm_vcpu *vcpu, u32 exit_reason)
+static bool nested_vmx_reflect_vmexit(struct kvm_vcpu *vcpu)
 {
     /*
      * Returns true if this exit should be "reflected" (forwarded) to L1.
@@ -196,7 +196,8 @@ static void nested_vmx_vmexit(struct kvm_vcpu *vcpu, u32 exit_reason,
     vmcs12->guest_physical_address = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
 
     /* Switch from vmcs02 back to vmcs01 (restore L1 as the active guest) */
-    vmcs_load(vmx->vmcs01.vmcs);
+    vmx->loaded_vmcs = &vmx->vmcs01;
+    vmcs_load(vmx->loaded_vmcs->vmcs);
 
     /* Restore L1 host (= L0 guest) state from vmcs12->host_* fields */
     /* L1 will resume at vmcs12->host_rip (its vmexit handler) */
@@ -227,7 +228,7 @@ L2 GVA → L2 GPA:   L2's own page tables (4 levels)  ← each entry is a GPA
 L2 GPA → L1 HPA:   L1's EPT (vmcs12->ept_pointer)   ← 4 levels, each entry GPA walks L0 EPT
 L1 HPA = L0 GPA → L0 HPA: L0's EPT (vmcs01's EPT)   ← 4 levels
 
-Worst case EPT walk: (4+1) × (4+1) = 25 memory accesses per TLB miss
+Worst case EPT walk: 4 × (4+1) + (4+1) = 24 memory accesses per TLB miss
 Non-nested EPT walk: (4+1) = 5 memory accesses per TLB miss
 ```
 
@@ -245,7 +246,7 @@ int size = ioctl(vcpu_fd, KVM_CHECK_EXTENSION, KVM_CAP_NESTED_STATE);
 struct kvm_nested_state *state = malloc(size);
 state->size = size;
 ioctl(vcpu_fd, KVM_GET_NESTED_STATE, state);
-/* state contains: nested.format (VMX or SVM), vmcs12 data, shadow VMCS, etc. */
+/* state->format distinguishes VMX from SVM; followed by vmcs12 data, etc. */
 
 /* Restore on destination */
 ioctl(vcpu_fd, KVM_SET_NESTED_STATE, state);
@@ -282,7 +283,7 @@ cat /sys/module/kvm_amd/parameters/nested     # 1 or 0
 
 Nested virtualization exposes a large attack surface. L1 can craft arbitrary VMCS/VMCB values and attempt to confuse L0:
 
-- **vmcs12 field validation**: `nested_vmx_entry_failure_check()` validates all vmcs12 control fields before entering L2. Invalid combinations cause `VM_FAIL` with `VM_INSTRUCTION_ERROR` set, matching hardware behavior.
+- **vmcs12 field validation**: `nested_vmx_check_vmentry_prereqs()` and related helpers validate all vmcs12 control fields before entering L2. Invalid combinations cause `VM_FAIL` with `VM_INSTRUCTION_ERROR` set, matching hardware behavior.
 - **EPT pointer sanity**: L0 verifies `vmcs12->ept_pointer` alignment and reserved bits.
 - **Spectre/Meltdown mitigations**: L0 must flush branch predictor state on L2 → L1 → L0 transitions to prevent L2 from influencing L0's branch prediction through L1.
 

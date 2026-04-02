@@ -145,7 +145,7 @@ if (rcmsg && rcmsg->cmsg_type == SCM_RIGHTS) {
 }
 ```
 
-The kernel's `unix_stream_sendmsg()` / `unix_scm_to_skb()` path (in `net/unix/af_unix.c`) attaches the file references to the socket buffer. On the receive side, `unix_scm_recv()` installs them into the receiver's `files_struct` via `receive_fd()`.
+The kernel's `unix_stream_sendmsg()` / `unix_scm_to_skb()` path (in `net/unix/af_unix.c`) attaches the file references to the socket buffer. On the receive side, `unix_detach_fds()` extracts them from the skb, then `scm_detach_fds()` (in `net/core/scm.c`) installs them into the receiver's `files_struct` via `receive_fd()`.
 
 ### Leak risk
 
@@ -218,6 +218,8 @@ struct unix_sock {
     unsigned long   gc_flags;
     struct socket_wq peer_wq;
     wait_queue_entry_t peer_wake;
+    struct scm_stat scm_stat;       /* SCM stats for this socket */
+    /* ... */
 };
 ```
 

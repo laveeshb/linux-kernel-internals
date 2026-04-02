@@ -19,10 +19,10 @@ They can be enabled simultaneously. KFENCE catches what it samples with zero ove
 
 ### Shadow memory
 
-Generic KASAN maps every 8 bytes of kernel memory to 1 **shadow byte** stored in a dedicated shadow region. On x86-64, the shadow region starts at `0xfffffe8000000000`.
+Generic KASAN maps every 8 bytes of kernel memory to 1 **shadow byte** stored in a dedicated shadow region. On x86-64 with 4-level paging, the shadow region starts at `0xdffffc0000000000` (the `KASAN_SHADOW_OFFSET`).
 
 ```
-shadow_address = (address >> 3) + 0xfffffe8000000000;
+shadow_address = (address >> 3) + 0xdffffc0000000000;
 ```
 
 The shadow byte encoding:
@@ -31,12 +31,13 @@ The shadow byte encoding:
 |---|---|
 | `0` | All 8 bytes are accessible |
 | `1`–`7` | First N bytes are accessible; bytes N+1–8 are in a redzone |
-| `0x6b` (`KASAN_FREED_MAGIC`) | Object was freed (use-after-free) |
-| `0x7d` (`KASAN_REDZONE_MAGIC`) | Slab redzone between objects |
+| `0xFB` (`KASAN_KMALLOC_FREE`) | Object was freed (use-after-free) |
+| `0xAC` (`KASAN_SLAB_REDZONE`) | Slab redzone between objects |
 | `0xf9` (`KASAN_GLOBAL_REDZONE`) | Global variable redzone |
-| `0xf2` (`KASAN_STACK_LEFT`) | Left stack redzone |
-| `0xf3` (`KASAN_STACK_MID`) | Stack mid-redzone |
-| `0xf4` (`KASAN_STACK_RIGHT`) | Right stack redzone |
+| `0xF1` (`KASAN_STACK_LEFT`) | Left stack redzone |
+| `0xF2` (`KASAN_STACK_MID`) | Stack mid-redzone |
+| `0xF3` (`KASAN_STACK_RIGHT`) | Right stack redzone |
+| `0xF4` (`KASAN_STACK_PARTIAL`) | Partial stack frame redzone |
 | `0xfc` (`KASAN_KMALLOC_REDZONE`) | kmalloc right redzone |
 
 These constants are defined in `mm/kasan/kasan.h` (older kernels) and `include/linux/kasan-tags.h`.
@@ -78,10 +79,10 @@ static __always_inline bool memory_is_poisoned_1(unsigned long addr)
 
 KASAN hooks into the slab allocator via functions defined in `mm/kasan/common.c`:
 
-- `kasan_alloc_pages(page, order, flags)` — called from `__alloc_pages()` to unpoison a newly allocated page
+- `kasan_unpoison_pages(page, order, init)` — called from `__alloc_pages()` to unpoison a newly allocated page
 - `kasan_poison_pages(page, order, init)` — called on page free to poison the region
 - `kasan_slab_alloc(cache, object, flags, init)` — unpoisons a slab object returned to the caller
-- `kasan_slab_free(cache, object, ip)` — poisons a freed slab object with `KASAN_FREED_MAGIC`
+- `kasan_slab_free(cache, object, ip)` — poisons a freed slab object with `KASAN_KMALLOC_FREE (0xFB)`
 
 For use-after-free detection, KASAN also records allocation and free stack traces:
 
@@ -148,9 +149,9 @@ Freed by task 1234:
 The buggy address belongs to the object at ffff888101234500
  which belongs to the cache skbuff_head_cache of size 232
 Shadow bytes around the buggy address:
- ffff888101234400: fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
- ffff888101234480: fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
->ffff888101234500: 6b 6b 6b 6b 6b 6b 6b 6b 6b 6b 6b 6b 6b 6b 6b 6b
+ ffff888101234400: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+ ffff888101234480: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+>ffff888101234500: fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
                                                               ^
 ==================================================================
 ```
@@ -159,7 +160,7 @@ Key sections:
 1. **Bug type and location** — access type, size, address, offending function
 2. **Allocation stack** — where the object was originally allocated
 3. **Free stack** — where the object was freed
-4. **Shadow dump** — surrounding shadow bytes; `6b` = `KASAN_FREED_MAGIC`
+4. **Shadow dump** — surrounding shadow bytes; `fb` = `KASAN_KMALLOC_FREE` (freed slab object)
 
 ### Overhead
 
@@ -220,14 +221,17 @@ KFENCE is not invoked for every allocation. Instead, the slab allocator calls `k
 /* mm/kfence/core.c — called from slab allocator hot path */
 void *__kfence_alloc(struct kmem_cache *s, size_t size, gfp_t flags)
 {
-    if (!kfence_allocation_gate.counter)
+    /* Gate is set to 1 by a periodic timer every kfence_sample_interval ms */
+    if (!atomic_long_read(&kfence_allocation_gate))
         return NULL;        /* not time to sample yet */
-    /* ... */
+    /* Atomically claim the slot; only one allocation per interval wins */
+    if (atomic_long_cmpxchg(&kfence_allocation_gate, 1, 0) != 1)
+        return NULL;
     return kfence_alloc(s, size, flags);
 }
 ```
 
-The gate counter decrements by one on each allocator invocation. When it reaches zero, the next allocation is redirected into the KFENCE pool and the counter resets to `kfence_sample_interval` (in milliseconds, converted to allocation counts using a timer).
+A periodic timer fires every `kfence_sample_interval` milliseconds and sets `kfence_allocation_gate` to `1`. When the slab allocator calls `kfence_alloc()`, it atomically tests and clears the gate: if the gate is `1` (timer has fired), this allocation is redirected into the KFENCE pool. The sampling is purely time-driven — the gate is never decremented per allocation.
 
 ### Configuration
 
@@ -297,7 +301,7 @@ KFENCE only catches errors in the sampled allocations. An OOB or UAF in a non-sa
 | Deterministic | Yes | No (sampling) |
 | Production use | No | Yes |
 | OOB detection | Shadow byte check | Guard page fault |
-| UAF detection | Shadow byte (`KASAN_FREED_MAGIC`) | Guard page (mprotect) |
+| UAF detection | Shadow byte (`KASAN_KMALLOC_FREE`, 0xFB) | Guard page (mprotect) |
 | Allocation stack | Yes | Yes |
 | Free stack | Yes | Yes |
 | Kernel version | 4.0+ | 5.12+ |

@@ -146,7 +146,7 @@ ps -o pid,stat,ppid | awk '$2 ~ /Z/ && $3 == <parent_pid> {count++} END {print c
 
 Standard signals (1–31) use a single-bit pending mask per thread (`pending` in `struct task_struct`, type `struct sigpending`). The mask has one bit per signal number. If `SIGCHLD` is already pending when another child exits, the new delivery is silently discarded — the mask bit is already set. The signal handler sees only one delivery regardless of how many children exited.
 
-Real-time signals (34–64) use a queue (`struct sigqueue`) and are not subject to this merging, but `SIGCHLD` is a standard signal.
+Real-time signals (`SIGRTMIN` through `SIGRTMAX`, kernel range 32–63, user-visible range 34–63) use a queue (`struct sigqueue`) and are not subject to this merging, but `SIGCHLD` is a standard signal.
 
 ### Fix
 

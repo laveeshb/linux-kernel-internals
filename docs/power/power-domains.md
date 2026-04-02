@@ -22,7 +22,7 @@ SoC power topology (simplified)
 Each rail: single switch, all devices must be idle before it can be cut.
 ```
 
-Before genpd, each SoC vendor duplicated logic to track device idleness and sequence rail power-off. The **Generic Power Domain (genpd)** framework, introduced around Linux 3.11, provides that infrastructure once and for all.
+Before genpd, each SoC vendor duplicated logic to track device idleness and sequence rail power-off. The **Generic Power Domain (genpd)** framework, introduced in Linux 3.1 (2011), provides that infrastructure once and for all.
 
 ## struct generic_pm_domain
 
@@ -35,8 +35,7 @@ struct generic_pm_domain {
 
     const char            *name;
 
-    enum gpd_status        status;       /* GPD_STATE_ACTIVE, GPD_STATE_POWER_OFF,
-                                            or GPD_STATE_BUSY */
+    enum gpd_status        status;       /* GENPD_STATE_ON or GENPD_STATE_OFF */
 
     unsigned int           device_count;
     unsigned int           suspended_count;
@@ -47,12 +46,10 @@ struct generic_pm_domain {
     int (*power_on) (struct generic_pm_domain *domain);
 
     struct list_head       dev_list;      /* struct generic_pm_domain_data per dev */
-    struct list_head       master_links;  /* domains this one depends on (parents) */
-    struct list_head       slave_links;   /* domains that depend on this one */
+    struct list_head       parent_links;  /* domains this one depends on (parents) */
+    struct list_head       child_links;   /* domains that depend on this one */
 
-    /* timing, used by PM governors */
-    s64                    max_off_time_ns;
-    bool                   max_off_time_changed;
+    /* governor timing data lives in genpd->gd (struct genpd_governor_data) */
 };
 ```
 
@@ -60,9 +57,8 @@ struct generic_pm_domain {
 
 | Value | Meaning |
 |-------|---------|
-| `GPD_STATE_ACTIVE` | Rail on; at least one device is active |
-| `GPD_STATE_POWER_OFF` | Rail off; all devices are runtime-suspended |
-| `GPD_STATE_BUSY` | Transitioning (power-on or power-off in progress) |
+| `GENPD_STATE_ON` | Rail on; at least one device is active |
+| `GENPD_STATE_OFF` | Rail off; all devices are runtime-suspended |
 
 ## Registering a power domain
 
@@ -111,7 +107,7 @@ Some rails have dependencies — a sub-rail cannot be on unless its parent rail 
 ret = pm_genpd_add_subdomain(&display_core_domain, &display_dsi_domain);
 ```
 
-Internally genpd tracks `master_links` (what I depend on) and `slave_links` (what depends on me). During power-on, the master is powered first; during power-off, the slave is powered off first.
+Internally genpd tracks `parent_links` (what I depend on) and `child_links` (what depends on me). During power-on, the parent is powered first; during power-off, the child is powered off first.
 
 ```
 Dependency graph:
@@ -158,25 +154,26 @@ Each device can carry timing metadata used by the genpd governor to decide wheth
 ```c
 /* include/linux/pm_domain.h */
 struct gpd_timing_data {
-    s64 power_on_latency_ns;   /* time from power_on() call to device ready */
-    s64 power_off_latency_ns;  /* time from last device suspend to rail off */
+    s64 suspend_latency_ns;    /* time from last device suspend to rail off */
+    s64 resume_latency_ns;     /* time from power_on() call to device ready */
     s64 effective_constraint_ns;
+    ktime_t next_wakeup;
     bool constraint_changed;
-    bool cached_stop_ok;
+    bool cached_suspend_ok;
 };
 ```
 
-If the governor predicts the idle window is shorter than `power_on_latency_ns + power_off_latency_ns`, it skips the power-off because the cost of cycling the rail exceeds the benefit.
+If the governor predicts the idle window is shorter than `suspend_latency_ns + resume_latency_ns`, it skips the power-off because the cost of cycling the rail exceeds the benefit.
 
-Drivers supply timing via Device Tree properties (`power-domain-off-latency-ns`, `power-domain-on-latency-ns`) or by filling `gpd_timing_data` directly during probe.
+Drivers can supply per-state timing via the `domain-idle-state` Device Tree node using `entry-latency-us` and `exit-latency-us` properties (in microseconds; the kernel scales to nanoseconds internally).
 
 ## genpd governors
 
-Two governors ship in-tree (`drivers/base/power/domain_governor.c`):
+Two governors ship in-tree (`drivers/pmdomain/governor.c`):
 
-**`simple_qos`** (the default): powers off the domain when all devices are suspended and the predicted idle duration exceeds the round-trip latency. It uses the `effective_constraint_ns` from QoS constraints attached to devices.
+**`simple_qos_governor`** (the default): powers off the domain when all devices are suspended and the predicted idle duration exceeds the round-trip latency. It uses the `effective_constraint_ns` from QoS constraints attached to devices.
 
-**`pm_qos`** (deprecated alias of `simple_qos`): same behavior under an older name.
+**`pm_domain_always_on_gov`**: never powers off the domain; used for domains that must stay on (e.g., always-on power rails).
 
 The governor is selected as the second argument to `pm_genpd_init()`. Pass `NULL` for the default `simple_qos`.
 
@@ -187,20 +184,21 @@ The genpd core creates one directory per domain under `/sys/kernel/debug/pm_genp
 ```bash
 # List all registered power domains
 ls /sys/kernel/debug/pm_genpd/
-# gpu-domain  display_core  display_dsi  ...
+# pm_genpd_summary  gpu-domain  display_core  display_dsi  ...
 
-# Inspect a domain
-cat /sys/kernel/debug/pm_genpd/gpu-domain/summary
-# domain                          status          slaves
+# Global summary of all domains and their devices:
+cat /sys/kernel/debug/pm_genpd/pm_genpd_summary
+# domain                          status          children
 # gpu-domain                      on
-#   /devices/platform/gpu         active  0
-#     power-domain on-lat   0 ns off-lat   0 ns
-#     constraint   0 ns
+#   /devices/platform/gpu         active  resume-latency: 0 ns
+#     constraint: 0 ns
 
-# The 'status' column shows: on / off / busy
+# Per-domain directories contain: current_state, sub_domains,
+# idle_states, active_time, total_idle_time, devices
+cat /sys/kernel/debug/pm_genpd/gpu-domain/current_state
 ```
 
-The `summary` file is synthesized by `genpd_summary_show()` in `drivers/base/power/domain.c` and covers domain status, attached devices, and timing data in one pass — useful during bringup to verify the domain tree is correctly described.
+The global `pm_genpd_summary` file is synthesized by `genpd_summary_show()` in `drivers/pmdomain/core.c` and covers all domain statuses, attached devices, and timing in one pass.
 
 ## Real-world implementations
 

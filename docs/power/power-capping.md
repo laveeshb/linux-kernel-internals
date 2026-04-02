@@ -19,7 +19,7 @@ Each power domain covers a different physical scope:
 |--------|-------|----------------|
 | `package` | Entire CPU socket (cores + uncore + LLC) | Sandy Bridge |
 | `core` | CPU cores + L1/L2 caches only | Sandy Bridge |
-| `uncore` | GPU (integrated), LLC, memory controller | Sandy Bridge |
+| `uncore` | GPU (integrated graphics / ring bus) | Sandy Bridge |
 | `dram` | DRAM power consumption | Sandy Bridge EP |
 | `psys` | Platform-wide (SoC + VR losses) | Skylake |
 
@@ -55,13 +55,14 @@ Direct MSR access requires `CAP_SYS_RAWIO` and the `msr` kernel module. The powe
 ```c
 /* include/linux/powercap.h */
 struct powercap_zone {
-    int                         id;
-    char                       *name;
-    struct powercap_zone       *parent;  /* NULL for root zones */
+    int                             id;
+    char                           *name;
+    void                           *control_type_inst;
     const struct powercap_zone_ops *ops;
     struct powercap_control_type   *control_type;
-    struct device               dev;
-    struct list_head            idr_children;
+    struct device                   dev;
+    struct idr                      idr;
+    struct idr                     *parent_idr;
     /* ... */
 };
 
@@ -69,7 +70,7 @@ struct powercap_zone_ops {
     int (*get_max_energy_range_uj)(struct powercap_zone *, u64 *);
     int (*get_energy_uj)(struct powercap_zone *, u64 *);
     int (*reset_energy_uj)(struct powercap_zone *);
-    int (*get_power_uw)(struct powercap_zone *, u32 *);
+    int (*get_power_uw)(struct powercap_zone *, u64 *);   /* u64, not u32 */
     int (*set_enable)(struct powercap_zone *, bool);
     int (*get_enable)(struct powercap_zone *, bool *);
     int (*release)(struct powercap_zone *);
@@ -107,27 +108,27 @@ cat /sys/class/powercap/intel-rapl:0:0/name        # "core"
 cat /sys/class/powercap/intel-rapl:0:1/name        # "uncore" or "dram"
 
 # Read current accumulated energy (µJ; wrap-around counter)
-cat /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj
+cat /sys/class/powercap/intel-rapl:0/energy_uj
 # 4882348230
 
 # Compute power: read energy_uj twice, 1 second apart
-E1=$(cat /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj)
+E1=$(cat /sys/class/powercap/intel-rapl:0/energy_uj)
 sleep 1
-E2=$(cat /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj)
+E2=$(cat /sys/class/powercap/intel-rapl:0/energy_uj)
 echo "Package power: $(( (E2 - E1) / 1000000 )) W"
 
 # Read current long-term power limit (µW)
-cat /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_0_power_limit_uw
+cat /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw
 # 45000000  (= 45 W)
 
 # Set a 35 W long-term power limit on package 0
-echo 35000000 > /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_0_power_limit_uw
+echo 35000000 > /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw
 
 # Enable constraint 0 (may already be enabled)
-echo 1 > /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_0_enabled
+echo 1 > /sys/class/powercap/intel-rapl:0/constraint_0_enabled
 
 # Read the time window over which the limit is averaged
-cat /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_0_time_window_us
+cat /sys/class/powercap/intel-rapl:0/constraint_0_time_window_us
 # 999424  (~1 second)
 ```
 
@@ -144,11 +145,11 @@ PL2 is always ≥ PL1. A typical OEM configuration: PL1 = 15 W (thermal envelope
 
 ```bash
 # Short-term (burst) limit
-cat /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_1_name
+cat /sys/class/powercap/intel-rapl:0/constraint_1_name
 # "short_term"
-cat /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_1_power_limit_uw
+cat /sys/class/powercap/intel-rapl:0/constraint_1_power_limit_uw
 # 64000000  (64 W burst)
-cat /sys/class/powercap/intel-rapl/intel-rapl:0/constraint_1_time_window_us
+cat /sys/class/powercap/intel-rapl:0/constraint_1_time_window_us
 # 2440       (~2.4 ms)
 ```
 

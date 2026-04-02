@@ -10,7 +10,7 @@ Every KVM vCPU runs in a tight loop inside `kvm_arch_vcpu_ioctl_run()` in `arch/
 kvm_arch_vcpu_ioctl_run()          arch/x86/kvm/x86.c
   └── vcpu_run()
         └── vcpu_enter_guest()
-              ├── kvm_x86_ops.prepare_guest_switch(vcpu)
+              ├── kvm_x86_ops.prepare_switch_to_guest(vcpu)
               ├── VMLAUNCH / VMRESUME  ← hardware runs guest here
               │       (guest executes at near-native speed)
               │
@@ -43,10 +43,10 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
     /* Inject a pending interrupt (if any) before entering */
     if (vcpu->arch.interrupt.injected)
-        kvm_x86_ops.set_irq(vcpu);
+        kvm_x86_ops.inject_irq(vcpu, false);
 
     /* Disable preemption, switch to guest CR3, enter VMX non-root */
-    kvm_x86_ops.run(vcpu);  /* VMLAUNCH or VMRESUME */
+    kvm_x86_ops.vcpu_run(vcpu);  /* VMLAUNCH or VMRESUME */
 
     /*
      * We are back — VM exit occurred.
@@ -60,11 +60,11 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 ## Exit reason dispatch
 
-On Intel, the exit reason is stored in the VMCS `VM_EXIT_REASON` field. KVM VMX reads it into `vcpu->arch.exit_reason` and indexes into `kvm_vmx_exit_handlers[]`:
+On Intel, the exit reason is stored in the VMCS `VM_EXIT_REASON` field. KVM VMX reads it into `vcpu->arch.exit_reason` and indexes into `vmx_exit_handlers[]`:
 
 ```c
 /* arch/x86/kvm/vmx/vmx.c */
-static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
+static int (*vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
     [EXIT_REASON_EXCEPTION_NMI]     = handle_exception_nmi,
     [EXIT_REASON_EXTERNAL_INTERRUPT]= handle_external_interrupt,
     [EXIT_REASON_IO_INSTRUCTION]    = handle_io,
@@ -86,11 +86,11 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu,
 {
     u32 exit_reason = vmx_get_exit_reason(vcpu);
 
-    if (unlikely(exit_reason >= ARRAY_SIZE(kvm_vmx_exit_handlers) ||
-                 !kvm_vmx_exit_handlers[exit_reason]))
+    if (unlikely(exit_reason >= ARRAY_SIZE(vmx_exit_handlers) ||
+                 !vmx_exit_handlers[exit_reason]))
         return handle_invalid_guest_state(vcpu);
 
-    return kvm_vmx_exit_handlers[exit_reason](vcpu);
+    return vmx_exit_handlers[exit_reason](vcpu);
 }
 ```
 
@@ -149,8 +149,7 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
     u64 error_code = 0;
 
     /* Was this a read, write, or instruction fetch? */
-    if (exit_qualification & EPT_VIOLATION_ACC_READ)
-        error_code |= PFERR_USER_MASK;
+    /* No PFERR bit for read (absence of WRITE and FETCH implies read) */
     if (exit_qualification & EPT_VIOLATION_ACC_WRITE)
         error_code |= PFERR_WRITE_MASK;
     if (exit_qualification & EPT_VIOLATION_ACC_INSTR)
@@ -178,12 +177,11 @@ When the guest executes `HLT` and interrupts are disabled, there is nothing for 
 /* virt/kvm/kvm_main.c */
 bool kvm_vcpu_block(struct kvm_vcpu *vcpu)
 {
-    prepare_to_wait(&vcpu->wq, &wait, TASK_INTERRUPTIBLE);
-
-    if (!kvm_arch_vcpu_runnable(vcpu))
-        schedule();   /* yield the host CPU */
-
-    finish_wait(&vcpu->wq, &wait);
+    /* vcpu->wait is a struct rcuwait, not a wait_queue_head_t */
+    rcuwait_wait_event(&vcpu->wait,
+                       kvm_arch_vcpu_runnable(vcpu) ||
+                       kvm_arch_vcpu_has_work(vcpu),
+                       TASK_INTERRUPTIBLE);
     return kvm_arch_vcpu_runnable(vcpu);
 }
 ```
@@ -192,7 +190,7 @@ The vCPU thread sleeps until `kvm_vcpu_kick()` wakes it — typically because a 
 
 ### EXIT_REASON_MSR_READ / MSR_WRITE
 
-MSR accesses can be made cheap with the **MSR bitmap**: a 4KB bitmap in the VMCS where each bit controls whether a specific MSR causes a VM exit. Frequently-read MSRs like `IA32_TSC` or `IA32_SYSENTER_EIP` can be pass-through (no exit). For intercepted MSRs, KVM dispatches to `kvm_get_msr()` or `kvm_set_msr()` (in `arch/x86/kvm/x86.c`), which calls per-MSR handlers registered in `kvm_msr_handlers[]`.
+MSR accesses can be made cheap with the **MSR bitmap**: a 4KB bitmap in the VMCS where each bit controls whether a specific MSR causes a VM exit. Frequently-read MSRs like `IA32_TSC` or `IA32_SYSENTER_EIP` can be pass-through (no exit). For intercepted MSRs, KVM dispatches to `kvm_get_msr()` or `kvm_set_msr()` (in `arch/x86/kvm/x86.c`), which uses switch-based per-MSR dispatch inside `__kvm_get_msr()` / `__kvm_set_msr()`.
 
 ### EXIT_REASON_EXCEPTION_NMI
 
@@ -267,7 +265,7 @@ void kvm_vcpu_kick(struct kvm_vcpu *vcpu)
         smp_send_reschedule(vcpu->cpu);
 
     /* Wake the vCPU thread if it is blocking (e.g., in HLT) */
-    wake_up(&vcpu->wq);
+    rcuwait_wake_up(&vcpu->wait);
 }
 ```
 
