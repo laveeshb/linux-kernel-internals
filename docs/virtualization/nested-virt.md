@@ -49,7 +49,7 @@ L0 must respond to each of these exits by emulating what the hardware would do i
 | `VMREAD` | `EXIT_REASON_VMREAD` | `handle_vmread()` — read field from vmcs12 in memory |
 | `VMLAUNCH` | `EXIT_REASON_VMLAUNCH` | `handle_vmlaunch()` → `nested_vmx_run()` — synthesize L2 entry |
 | `VMRESUME` | `EXIT_REASON_VMRESUME` | `handle_vmresume()` → `nested_vmx_run()` — re-enter L2 |
-| `VMXOFF` | `EXIT_REASON_VMXOFF` | `handle_vmoff()` — disable nested VMX state |
+| `VMXOFF` | `EXIT_REASON_VMXOFF` | `handle_vmxoff()` — disable nested VMX state |
 
 All of the above handlers live in `arch/x86/kvm/vmx/nested.c`.
 
@@ -228,7 +228,7 @@ L2 GVA → L2 GPA:   L2's own page tables (4 levels)  ← each entry is a GPA
 L2 GPA → L1 HPA:   L1's EPT (vmcs12->ept_pointer)   ← 4 levels, each entry GPA walks L0 EPT
 L1 HPA = L0 GPA → L0 HPA: L0's EPT (vmcs01's EPT)   ← 4 levels
 
-Worst case EPT walk: 4 × (4+1) + (4+1) = 24 memory accesses per TLB miss
+Worst case EPT walk: 4 × (4+1) + (4+1) = 25 memory accesses per TLB miss
 Non-nested EPT walk: (4+1) = 5 memory accesses per TLB miss
 ```
 

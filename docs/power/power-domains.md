@@ -112,9 +112,9 @@ Internally genpd tracks `parent_links` (what I depend on) and `child_links` (wha
 ```
 Dependency graph:
 
-  display_core_domain (master)
-  └── display_dsi_domain (slave)
-         └── mipi_phy_domain (slave of slave)
+  display_core_domain (parent)
+  └── display_dsi_domain (child)
+         └── mipi_phy_domain (child of child)
 
 Power-on order:  display_core → display_dsi → mipi_phy
 Power-off order: mipi_phy → display_dsi → display_core
@@ -141,7 +141,7 @@ pm_runtime_get_sync(dev)      [device driver]
         │
         ▼
 genpd runtime_resume hook
-   if (domain->status == GPD_STATE_POWER_OFF)
+   if (domain->status == GENPD_STATE_OFF)
         domain->power_on()    [platform callback → asserts rail]
    wait for power_on to settle (gpd_timing_data latency)
    dev->runtime_resume()      [device driver callback]
@@ -217,6 +217,6 @@ All three follow the same pattern: allocate `struct generic_pm_domain`, fill `po
 - [Runtime PM](runtime-pm.md) — usage counting, autosuspend, dev_pm_ops
 - [System Suspend](suspend.md) — system-wide sleep; genpd participates in the freeze/suspend sequence
 - [Device Tree](../drivers/device-tree.md) — `power-domains` binding
-- `drivers/base/power/domain.c` — genpd core
+- `drivers/pmdomain/core.c` — genpd core
 - `include/linux/pm_domain.h` — data structures
 - `Documentation/devicetree/bindings/power/power-domain.yaml` — DT binding spec

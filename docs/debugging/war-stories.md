@@ -222,7 +222,7 @@ static struct file *io_file_get_fixed(struct io_ring_ctx *ctx,
         return NULL;
 
     return io_fixed_file_slot(&ctx->file_table, fd)->file_ptr & ~3;
-    /* file_table.data is NULL → deref of NULL + offset */
+    /* file_table.files is NULL → deref of NULL + offset */
 }
 ```
 

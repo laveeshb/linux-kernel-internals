@@ -32,13 +32,12 @@ The shadow byte encoding:
 | `0` | All 8 bytes are accessible |
 | `1`–`7` | First N bytes are accessible; bytes N+1–8 are in a redzone |
 | `0xFB` (`KASAN_KMALLOC_FREE`) | Object was freed (use-after-free) |
-| `0xAC` (`KASAN_SLAB_REDZONE`) | Slab redzone between objects |
+| `0xFC` (`KASAN_KMALLOC_REDZONE`) | kmalloc right redzone |
 | `0xf9` (`KASAN_GLOBAL_REDZONE`) | Global variable redzone |
 | `0xF1` (`KASAN_STACK_LEFT`) | Left stack redzone |
 | `0xF2` (`KASAN_STACK_MID`) | Stack mid-redzone |
 | `0xF3` (`KASAN_STACK_RIGHT`) | Right stack redzone |
 | `0xF4` (`KASAN_STACK_PARTIAL`) | Partial stack frame redzone |
-| `0xfc` (`KASAN_KMALLOC_REDZONE`) | kmalloc right redzone |
 
 These constants are defined in `mm/kasan/kasan.h` (older kernels) and `include/linux/kasan-tags.h`.
 
@@ -222,10 +221,10 @@ KFENCE is not invoked for every allocation. Instead, the slab allocator calls `k
 void *__kfence_alloc(struct kmem_cache *s, size_t size, gfp_t flags)
 {
     /* Gate is set to 1 by a periodic timer every kfence_sample_interval ms */
-    if (!atomic_long_read(&kfence_allocation_gate))
+    if (!atomic_read(&kfence_allocation_gate))
         return NULL;        /* not time to sample yet */
     /* Atomically claim the slot; only one allocation per interval wins */
-    if (atomic_long_cmpxchg(&kfence_allocation_gate, 1, 0) != 1)
+    if (atomic_cmpxchg(&kfence_allocation_gate, 1, 0) != 1)
         return NULL;
     return kfence_alloc(s, size, flags);
 }

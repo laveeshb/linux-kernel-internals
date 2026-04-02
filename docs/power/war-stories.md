@@ -268,7 +268,7 @@ Setting the package limit did not change the DRAM sub-domain limit. The operator
 
 ```bash
 # Enumerate all zones and their current limits
-for zone in /sys/class/powercap/intel-rapl/intel-rapl:*/; do
+for zone in /sys/class/powercap/intel-rapl:*/; do
     name=$(cat "$zone/name" 2>/dev/null)
     limit=$(cat "$zone/constraint_0_power_limit_uw" 2>/dev/null)
     echo "$name: $limit µW"
@@ -279,7 +279,7 @@ done
 # dram:      20000000 µW   ← this was the bottleneck
 
 # Raise DRAM domain limit to allow full memory bandwidth
-echo 40000000 > /sys/class/powercap/intel-rapl/intel-rapl:0:1/constraint_0_power_limit_uw
+echo 40000000 > /sys/class/powercap/intel-rapl:0:1/constraint_0_power_limit_uw
 ```
 
 After raising the DRAM limit, memory bandwidth throttling disappeared and throughput returned to baseline — well within the 150 W package budget because the CPU cores were only at 35% load.

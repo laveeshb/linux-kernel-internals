@@ -207,13 +207,13 @@ Post-copy:  stop VM → transfer CPU → resume on dest (immediately)
                                        → fault on missing pages → fetch from source
 ```
 
-KVM post-copy relies on **userfaultfd** (`UFFD_FEATURE_MISSING_ANONYMOUS`). QEMU on the destination registers the guest RAM mapping (anonymous memory) with `userfaultfd`; when the guest accesses an uncopied page, the kernel delivers a `UFFD_EVENT_PAGEFAULT` to a QEMU thread, which fetches the page from the source host and installs it.
+KVM post-copy relies on **userfaultfd**. QEMU on the destination registers the guest RAM mapping (anonymous memory) with `userfaultfd` in `MISSING` mode; when the guest accesses an uncopied page, the kernel delivers a `UFFD_EVENT_PAGEFAULT` to a QEMU thread, which fetches the page from the source host and installs it.
 
 ```c
 /* Destination: register RAM with userfaultfd */
 int uffd = syscall(SYS_userfaultfd, O_CLOEXEC | O_NONBLOCK);
 
-struct uffdio_api api = { .api = UFFD_API, .features = UFFD_FEATURE_MISSING_ANONYMOUS };
+struct uffdio_api api = { .api = UFFD_API, .features = 0 }; /* anonymous memory needs no feature flag for MISSING mode */
 ioctl(uffd, UFFDIO_API, &api);
 
 struct uffdio_register reg = {

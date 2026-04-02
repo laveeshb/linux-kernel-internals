@@ -10,14 +10,14 @@ Every KVM vCPU runs in a tight loop inside `kvm_arch_vcpu_ioctl_run()` in `arch/
 kvm_arch_vcpu_ioctl_run()          arch/x86/kvm/x86.c
   └── vcpu_run()
         └── vcpu_enter_guest()
-              ├── kvm_x86_ops.prepare_switch_to_guest(vcpu)
+              ├── kvm_x86_ops.prepare_guest_switch(vcpu)
               ├── VMLAUNCH / VMRESUME  ← hardware runs guest here
               │       (guest executes at near-native speed)
               │
               │   [VM exit fires — hardware saves guest state to VMCS]
               │
               └── kvm_x86_ops.handle_exit(vcpu, exit_fastpath)
-                    └── kvm_vmx_exit_handlers[exit_reason](vcpu)
+                    └── vmx_exit_handlers[exit_reason](vcpu)
                           returns 1 → resume guest
                           returns 0 → exit to userspace (QEMU)
 ```
@@ -43,10 +43,10 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
     /* Inject a pending interrupt (if any) before entering */
     if (vcpu->arch.interrupt.injected)
-        kvm_x86_ops.inject_irq(vcpu, false);
+        kvm_x86_ops.inject_irq(vcpu);
 
     /* Disable preemption, switch to guest CR3, enter VMX non-root */
-    kvm_x86_ops.vcpu_run(vcpu);  /* VMLAUNCH or VMRESUME */
+    kvm_x86_ops.run(vcpu);  /* VMLAUNCH or VMRESUME */
 
     /*
      * We are back — VM exit occurred.

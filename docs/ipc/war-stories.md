@@ -65,7 +65,7 @@ lsof -p <worker_pid> | grep passwd  # many open copies of /etc/passwd
 
 ### Root cause
 
-When `SCM_RIGHTS` delivers a file descriptor, the kernel calls `receive_fd()` (in `net/unix/af_unix.c`), which allocates a new file descriptor in the receiver's `files_struct` via `__alloc_fd()`. This is a full kernel-level `dup()` — the receiver's fd table grows by one per received fd, completely independently of the sender. The sender closing its copy has no effect on the receiver's copy.
+When `SCM_RIGHTS` delivers a file descriptor, the kernel calls `receive_fd()` (in `fs/file.c`), which allocates a new file descriptor in the receiver's `files_struct` via `__alloc_fd()`. This is a full kernel-level `dup()` — the receiver's fd table grows by one per received fd, completely independently of the sender. The sender closing its copy has no effect on the receiver's copy.
 
 The `inflight` counter in `struct unix_sock` tracks fds currently in socket buffers. Once delivered, the fd is solely the receiver's responsibility.
 

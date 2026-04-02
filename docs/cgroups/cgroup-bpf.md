@@ -230,8 +230,8 @@ int __cgroup_bpf_check_dev_permission(short dev_type, u32 major, u32 minor,
 
 These are invoked via macros from:
 - `net/ipv4/ip_output.c`, `net/ipv6/ip6_output.c` → `BPF_CGROUP_RUN_PROG_INET_EGRESS`
-- `net/core/dev.c` (`__netif_receive_skb_core`) → `BPF_CGROUP_RUN_PROG_INET_INGRESS`
-- `net/ipv4/af_inet.c` (`inet_create`) → `BPF_CGROUP_RUN_PROG_INET_SOCK`
+- `net/ipv4/ip_input.c` (`ip_rcv`) → `BPF_CGROUP_RUN_PROG_INET_INGRESS`
+- `net/socket.c` (`__sock_create`) → `BPF_CGROUP_RUN_PROG_INET_SOCK`
 - `security/device_cgroup.c` (`devcgroup_check_permission`) → `BPF_CGROUP_RUN_PROG_DEVICE_CGROUP`
 
 The `struct cgroup_bpf` embedded in `struct cgroup` holds the attached programs:

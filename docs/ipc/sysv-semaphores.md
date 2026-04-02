@@ -122,7 +122,7 @@ struct sem {
 };
 ```
 
-Waiting operations are tracked in `struct sem_queue` (also in `include/linux/sem.h`). When `semop()` cannot complete immediately, it enqueues a `sem_queue` entry and sleeps. `do_semop()` in `ipc/sem.c` walks the pending queue and wakes sleepers when a semaphore increment makes their operation satisfiable.
+Waiting operations are tracked in `struct sem_queue` (defined in `ipc/sem.c`, an internal structure not exported in headers). When `semop()` cannot complete immediately, it enqueues a `sem_queue` entry and sleeps. `do_semop()` in `ipc/sem.c` walks the pending queue and wakes sleepers when a semaphore increment makes their operation satisfiable.
 
 ## SysV Message Queues
 
