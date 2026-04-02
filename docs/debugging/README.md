@@ -24,6 +24,11 @@ Boot failures                   early_printk, earlyprintk=ttyS0
 | [KGDB](kgdb.md) | Live kernel debugging with GDB over serial or network |
 | [kdump and crash](kdump.md) | Capturing and analyzing kernel crash dumps |
 | [Oops analysis](oops-analysis.md) | Reading oops output, addr2line, decode_stacktrace |
+| [KCSAN](kcsan.md) | Data race detection using watchpoints and the Linux Kernel Memory Model |
+| [syzkaller](syzkaller.md) | Automated syscall fuzzing, syzbot, and reproducer workflow |
+| [KASAN and KFENCE](kasan-kfence.md) | Memory error detection: out-of-bounds, use-after-free, shadow memory |
+| [lockdep in Practice](dynamic-debug-lockdep.md) | Reading splats, annotating false positives, contention stats |
+| [War Stories](war-stories.md) | Real bugs caught by KASAN, lockdep, syzkaller, kdump, and KFENCE |
 
 ## Quick reference
 

@@ -35,6 +35,10 @@ Host (Linux + KVM)
 | [KVM Architecture](kvm-arch.md) | /dev/kvm API, vCPU, VM exits, VMCS |
 | [Memory Virtualization](kvm-memory.md) | EPT/NPT, shadow paging, balloon, huge pages |
 | [virtio](virtio.md) | Paravirtualized I/O, virtqueue, vhost acceleration |
+| [VFIO Device Passthrough](vfio.md) | IOMMU groups, DMA remapping, VFIO container hierarchy |
+| [KVM Exit Handling](kvm-exits.md) | Exit reasons, I/O emulation, MMIO, interrupt injection |
+| [KVM Live Migration](live-migration.md) | Dirty logging, pre-copy, CPU state transfer, post-copy |
+| [Nested Virtualization](nested-virt.md) | L0/L1/L2, vmcs12, vmcs02 merge, two-level EPT |
 
 ## Quick reference
 
