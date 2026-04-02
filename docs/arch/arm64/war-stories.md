@@ -207,10 +207,10 @@ static int good_driver_tx(struct my_dev *dev, void *data, size_t len)
         kfree(buf);
         return -EIO;
     }
-    /* dma_map_single() with DMA_TO_DEVICE flushes (clean+invalidate)
+    /* dma_map_single() with DMA_TO_DEVICE cleans (but does not invalidate)
      * the affected cache lines on non-coherent platforms.
-     * On ARM64 this issues: dc civac (Data Cache Clean and Invalidate
-     * by VA to PoC) for each cache line in the buffer. */
+     * On ARM64 this issues: dc cvac (Data Cache Clean by VA to PoC)
+     * for each cache line in the buffer — clean only, not clean+invalidate. */
     program_dma(dev, dma_addr, len, DMA_TO_DEVICE);
     return 0;
 }
@@ -226,7 +226,7 @@ buf = dma_alloc_coherent(dev->dev, size, &dma_addr, GFP_KERNEL);
 /* CPU and device both see a consistent view; no flush needed */
 ```
 
-Whether a device requires explicit cache management depends on `dev->dma_coherent` (set from DT or ACPI describing the platform's coherency fabric) or the presence of an IOMMU that provides snooping. On platforms with a fully coherent interconnect, `dma_map_single()` is a no-op for cache management; on non-coherent platforms it does the necessary `dc civac` sequence.
+Whether a device requires explicit cache management depends on `dev->dma_coherent` (set from DT or ACPI describing the platform's coherency fabric) or the presence of an IOMMU that provides snooping. On platforms with a fully coherent interconnect, `dma_map_single()` is a no-op for cache management; on non-coherent platforms it does the necessary `dc cvac` sequence.
 
 ### Diagnosis
 
@@ -315,7 +315,7 @@ Note that BTI enforcement only applies to **pages mapped with** `PROT_BTI` (via 
 ### Diagnosis
 
 1. The crash backtrace points to the instruction immediately after `blr xN` where `xN` holds the JIT code address.
-2. Decode the ESR_EL1 from the signal info or `dmesg`: `EC=0x24`, ISS indicates BTI failure.
+2. Decode the ESR_EL1 from the signal info or `dmesg`: `EC=0x0D` (`ESR_ELx_EC_BTI`), ISS indicates BTI failure.
 3. Inspect the first 4 bytes of the JIT buffer: they should be `5f 24 03 d5` (`bti c`) but instead show the first instruction of the function body.
 4. Confirm BTI is active: `grep BTI /proc/$(pidof agent)/smaps` or check `/proc/cpuinfo` for `bti` in the Features line.
 5. Verify the binary's BTI note: `readelf -n /usr/bin/agent`.

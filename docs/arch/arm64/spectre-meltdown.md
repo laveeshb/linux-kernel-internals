@@ -195,7 +195,7 @@ This affects a wide range of ARM cores:
 - Cortex-A72 (used in Raspberry Pi 4, many server SoCs)
 - Cortex-A73, Cortex-A75
 - Cortex-A76, Cortex-A77, Cortex-A78
-- Neoverse N1, Neoverse N2 (used in AWS Graviton2/3)
+- Neoverse N1 (used in AWS Graviton2), Neoverse V1 (used in AWS Graviton3), Neoverse N2 (used in AWS Graviton4)
 - Various other implementations (see ARM's official errata list)
 
 ### Mitigation 1: CSV2_3 (architectural isolation)

@@ -17,7 +17,7 @@ ARM64 splits the virtual address space at the midpoint using the **top bit of th
 
 With the default `VA_BITS=48`, user space occupies `[0, 0x0000_FFFF_FFFF_FFFF]` and the kernel occupies `[0xFFFF_0000_0000_0000, 0xFFFF_FFFF_FFFF_FFFF]`. The top bit (bit 63) of a virtual address selects the register: bit 63 = 0 uses TTBR0, bit 63 = 1 uses TTBR1. Any address with bits between VA_BITS-1 and 63 not all matching (i.e., not properly sign-extended) causes a Translation Fault.
 
-**52-bit VA (optional):** ARMv8.7+ supports 52-bit virtual addresses (`VA_BITS=52`) with a 5-level page table (`CONFIG_ARM64_VA_BITS_52`). This extends the user and kernel ranges to 4PB each. Most production configs still use 48-bit.
+**52-bit VA (optional):** ARMv8.7+ supports 52-bit virtual addresses (`VA_BITS=52`) with `CONFIG_ARM64_VA_BITS_52`. This still uses 4 translation levels (not 5); the extra bits come from widening the Level 0 index field. This extends the user and kernel ranges to 4PB each. Most production configs still use 48-bit.
 
 On context switch, the kernel writes the new process's PGD physical address into `TTBR0_EL1`. The ASID (see below) is packed into bits `[63:48]` of `TTBR0_EL1` at the same time. `TTBR1_EL1` is set once at boot and never changes.
 
@@ -241,7 +241,7 @@ switch_mm_fastpath:
 
 ### ASID generation wrap
 
-ARM64 supports 8-bit or 16-bit ASIDs (`TCR_EL1.AS`). Linux always uses 16-bit ASIDs where available (`arch/arm64/Kconfig`: `ARM64_HW_AFDBM`). With 16-bit ASIDs there are 65536 possible values. When they are exhausted, the kernel bumps an internal **generation counter** and flushes the entire TLB (`TLBI VMALLE1IS`), then reallocates ASIDs from scratch.
+ARM64 supports 8-bit or 16-bit ASIDs (`TCR_EL1.AS`). Linux detects ASID width at runtime from `ID_AA64MMFR0_EL1.ASIDBits` and uses 16-bit ASIDs where available. With 16-bit ASIDs there are 65536 possible values. When they are exhausted, the kernel bumps an internal **generation counter** and flushes the entire TLB (`TLBI VMALLE1IS`), then reallocates ASIDs from scratch.
 
 ---
 

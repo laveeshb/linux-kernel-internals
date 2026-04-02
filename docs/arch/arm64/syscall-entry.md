@@ -146,7 +146,7 @@ the program counter from `ELR_EL1` and processor state from `SPSR_EL1`, returnin
 After register save, control flows from assembly into C:
 
 ```
-el0_svc (entry.S)
+el0_svc (entry-common.c)
   └─► do_el0_svc (syscall.c)
         └─► el0_svc_common (syscall.c)
               ├── syscall_enter_from_user_mode_work()  [tracing, seccomp]
@@ -216,14 +216,14 @@ static long syscall_enter_from_user_mode_work(struct pt_regs *regs, long syscall
     if (work & SYSCALL_WORK_SYSCALL_TRACEPOINT)
         trace_sys_enter(regs, syscall);       /* sys_enter raw tracepoint */
 
-    syscall = ptrace_syscall_enter(regs, syscall);  /* ptrace stop if traced */
+    syscall = ptrace_report_syscall_entry(regs);  /* ptrace stop if traced */
 
     return syscall;
 }
 ```
 
-When a task is traced with `PTRACE_SYSCALL` (as used by `strace`), `TIF_SYSCALL_TRACE` is set and
-`ptrace_syscall_enter()` pauses the task. The tracer reads registers via `PTRACE_GETREGSET` with
+When a task is traced with `PTRACE_SYSCALL` (as used by `strace`), `SYSCALL_WORK_SYSCALL_TRACE` is set (since Linux 5.12, replacing the old `TIF_SYSCALL_TRACE`) and
+`ptrace_report_syscall_entry()` pauses the task. The tracer reads registers via `PTRACE_GETREGSET` with
 `NT_PRSTATUS`, which exposes `struct user_pt_regs`.
 
 The return path mirrors entry: `syscall_exit_to_user_mode()` fires `sys_exit` tracepoints, handles

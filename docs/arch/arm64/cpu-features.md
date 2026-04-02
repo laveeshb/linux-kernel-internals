@@ -400,8 +400,10 @@ prctl(PR_SVE_GET_VL);       /* get current VL */
 
 The kernel rounds `vl` down to the largest supported value not exceeding the
 request. Valid values are multiples of 16 from 16 to 256 bytes (128 to 2048
-bits). The system-wide maximum is readable from
-`/proc/sys/abi/sve_default_vector_length`.
+bits). The system-wide default VL is readable from
+`/proc/sys/abi/sve_default_vector_length` (this is the default applied to new
+threads, not an upper bound; the true maximum is reported by
+`prctl(PR_SVE_GET_VL)` after setting the VL to an arbitrarily large value).
 
 ### Lazy State Save
 
@@ -411,7 +413,7 @@ SVE register state is saved and restored lazily:
    (because `CPACR_EL1.ZEN` = 0 in most contexts).
 2. The trap handler sets `TIF_SVE` in the thread flags, allocates per-task
    SVE storage (`task->thread.sve_state`), and re-enables SVE by setting
-   `CPACR_EL1.ZEN = 1`.
+   `CPACR_EL1.ZEN = 0b11` (allow EL0 and EL1 SVE access without trapping).
 3. On context switch, `fpsimd_thread_switch()` saves SVE state only when
    `TIF_SVE` is set, avoiding overhead for non-SVE tasks.
 
@@ -492,11 +494,11 @@ The flag `PROT_MTE` is `arch/arm64/include/uapi/asm/mman.h`.
 
 ### Modes
 
-| Mode | TCR_EL1.TCMA | Behavior |
-|------|-------------|---------|
-| `PR_MTE_TCF_NONE` | — | MTE disabled |
-| `PR_MTE_TCF_SYNC` | — | Synchronous fault on tag mismatch |
-| `PR_MTE_TCF_ASYNC` | — | Async fault; reported via SIGBUS |
+| Mode | SCTLR_EL1.TCF0 | Behavior |
+|------|---------------|---------|
+| `PR_MTE_TCF_NONE` | `0b00` | MTE disabled |
+| `PR_MTE_TCF_SYNC` | `0b01` | Synchronous fault on tag mismatch |
+| `PR_MTE_TCF_ASYNC` | `0b10` | Async fault; reported via SIGBUS |
 
 MTE tags are not preserved across `fork()` for COW pages until the page is
 actually written; the kernel handles tag inheritance in `copy_user_highpage()`.
@@ -525,7 +527,7 @@ match affected CPU revisions:
 },
 ```
 
-`MIDR_CORTEX_A53` is `0x410FD034`. The range `(variant=0, rev_min=0,
+`MIDR_CORTEX_A53` is `0x410FD030`. The range `(variant=0, rev_min=0,
 rev_max=4)` matches r0p0 through r0p4.
 
 ### Workaround Mechanisms
@@ -571,8 +573,8 @@ Features        : fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp \
 
 ### sysfs ID Registers
 
-Linux 5.11+ exposes raw ID register values under sysfs (when
-`CONFIG_ARM64_PSEUDO_NMI` or `CONFIG_HWCAP_CPUID` allows EL0 access):
+Linux 5.11+ exposes raw ID register values under sysfs (gated by
+`CONFIG_ARM64_CPUIDLE` build config and `ID_AA64DFR0_EL1.PMSVer` capability checks):
 
 ```bash
 $ grep . /sys/devices/system/cpu/cpu0/regs/identification/*
