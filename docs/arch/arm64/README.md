@@ -16,8 +16,14 @@ Understanding ARM64-specific behavior is essential for kernel work on these plat
 
 | Page | What it covers |
 |------|----------------|
+| [Boot Sequence](boot.md) | Head.S, identity mapping, decompressor, MMU enable, SMP bringup |
 | [Exception Model](exception-model.md) | EL0-EL3, VBAR_EL1, syndrome registers, GIC |
 | [Memory Model](memory-model.md) | Weak ordering, barriers, load-acquire/store-release, LDAR/STLR |
+| [Page Tables](page-tables.md) | TTBR0/TTBR1, granule sizes, PTE format, ASID, MAIR_EL1, stage 2 |
+| [Syscall Entry](syscall-entry.md) | SVC instruction, el0_svc, syscall table, vDSO, compat |
+| [CPU Features and Alternatives](cpu-features.md) | Feature detection, alternatives patching, hwcaps, errata, SVE/BTI/MTE |
+| [Spectre and Meltdown](spectre-meltdown.md) | Spectre v1/v2/BHB/v4, SSBS, CSV2, BHB clearing, KPTI |
+| [War Stories](war-stories.md) | SVE context switch, TLB ordering, DMA coherency, BTI crash, errata range bug |
 
 ## ARM64 vs x86 key differences
 

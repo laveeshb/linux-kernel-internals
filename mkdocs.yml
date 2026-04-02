@@ -490,6 +490,11 @@ nav:
       - Boot Sequence: arch/arm64/boot.md
       - Exception Model: arch/arm64/exception-model.md
       - Memory Model: arch/arm64/memory-model.md
+      - Page Tables: arch/arm64/page-tables.md
+      - Syscall Entry: arch/arm64/syscall-entry.md
+      - CPU Features and Alternatives: arch/arm64/cpu-features.md
+      - Spectre and Meltdown: arch/arm64/spectre-meltdown.md
+      - War Stories: arch/arm64/war-stories.md
     - x86:
       - Getting Started: arch/x86/README.md
       - Boot Sequence: arch/x86/boot.md
