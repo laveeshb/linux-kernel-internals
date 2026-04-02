@@ -30,8 +30,13 @@ Hardware: ACPI P-states, HWP (Hardware P-state), C-states, ARM DVFS
 | Page | What it covers |
 |------|----------------|
 | [cpufreq](cpufreq.md) | P-states, governors, schedutil, intel_pstate, HWP |
-| [Runtime PM](runtime-pm.md) | dev_pm_ops, pm_runtime_get/put, power domains |
+| [cpuidle](cpuidle.md) | C-states, latency/power tradeoffs, menu and TEO governors |
+| [Runtime PM](runtime-pm.md) | dev_pm_ops, pm_runtime_get/put, usage counting, autosuspend |
 | [System Suspend](suspend.md) | suspend-to-RAM, hibernate, wakeup sources, PM notifiers |
+| [Thermal Management](thermal.md) | thermal zones, trip points, cooling devices, step_wise, power_allocator |
+| [Power Domains and genpd](power-domains.md) | generic_pm_domain, rail dependencies, DT binding, debugfs |
+| [Power Capping and RAPL](power-capping.md) | Intel RAPL, powercap framework, MSRs, ARM SCMI |
+| [War Stories](war-stories.md) | Suspend regressions, runtime PM deadlocks, thermal storms, RAPL surprises |
 
 ## Quick reference
 

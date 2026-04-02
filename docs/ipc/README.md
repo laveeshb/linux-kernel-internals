@@ -22,3 +22,6 @@
 | [Signals](signals.md) | Signal delivery, sigaction, masks, real-time signals |
 | [Pipes and FIFOs](pipes.md) | Pipe internals, splice, vmsplice |
 | [Shared Memory and Semaphores](shared-memory.md) | POSIX shm, SysV shm, semaphores, eventfd |
+| [Unix Domain Sockets](unix-sockets.md) | SOCK_SEQPACKET, abstract namespace, SCM_RIGHTS, SO_PEERCRED |
+| [SysV IPC: Semaphores and Message Queues](sysv-semaphores.md) | semget/semop, msgget/msgsnd, SEM_UNDO, leak prevention |
+| [IPC War Stories](war-stories.md) | Leaked semaphores, fd exhaustion, signal storms, pipe surprises |

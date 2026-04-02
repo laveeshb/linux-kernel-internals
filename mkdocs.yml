@@ -317,6 +317,9 @@ nav:
     - Namespaces: cgroups/namespaces.md
     - Container Isolation: cgroups/container-isolation.md
     - io Controller: cgroups/io-cgroup.md
+    - Cgroup BPF Programs: cgroups/cgroup-bpf.md
+    - systemd and Cgroup Integration: cgroups/systemd-cgroups.md
+    - War Stories: cgroups/war-stories.md
   - System Calls:
     - Getting Started: syscalls/README.md
     - Syscall Entry Path: syscalls/syscall-entry.md
@@ -343,6 +346,9 @@ nav:
     - Shared Memory and Semaphores: ipc/shared-memory.md
     - eventfd and signalfd: ipc/eventfd-signalfd.md
     - POSIX Message Queues: ipc/mqueue.md
+    - Unix Domain Sockets: ipc/unix-sockets.md
+    - SysV Semaphores and Message Queues: ipc/sysv-semaphores.md
+    - IPC War Stories: ipc/war-stories.md
   - I/O Patterns:
     - Getting Started: io/README.md
     - Life of a Write: io/life-of-a-write.md
@@ -413,6 +419,9 @@ nav:
     - Memory Virtualization: virtualization/kvm-memory.md
     - virtio: virtualization/virtio.md
     - VFIO Device Passthrough: virtualization/vfio.md
+    - KVM Exit Handling: virtualization/kvm-exits.md
+    - KVM Live Migration: virtualization/live-migration.md
+    - Nested Virtualization: virtualization/nested-virt.md
   - Power Management:
     - Getting Started: power/README.md
     - cpufreq and P-states: power/cpufreq.md
@@ -420,6 +429,9 @@ nav:
     - Thermal Management: power/thermal.md
     - Runtime PM: power/runtime-pm.md
     - System Suspend: power/suspend.md
+    - Power Domains and genpd: power/power-domains.md
+    - Power Capping and RAPL: power/power-capping.md
+    - War Stories: power/war-stories.md
   - Time:
     - Getting Started: time/README.md
     - Timekeeping and Clocksources: time/timekeeping.md
@@ -445,6 +457,9 @@ nav:
     - Oops Analysis: debugging/oops-analysis.md
     - KCSAN (Data Race Detector): debugging/kcsan.md
     - syzkaller Fuzzing: debugging/syzkaller.md
+    - KASAN and KFENCE: debugging/kasan-kfence.md
+    - lockdep in Practice: debugging/dynamic-debug-lockdep.md
+    - War Stories: debugging/war-stories.md
   - Crypto:
     - Getting Started: crypto/README.md
     - Kernel Crypto API: crypto/crypto-api.md

@@ -40,6 +40,10 @@ Together they implement container isolation: Docker, Kubernetes pods, and system
 | [Resource Controllers](cgroup-controllers.md) | cpu, memory, io, pids controllers in detail |
 | [Namespaces](namespaces.md) | All 8 namespace types, clone/unshare/setns |
 | [Container Isolation](container-isolation.md) | How namespaces + cgroups combine for containers |
+| [io Controller](io-cgroup.md) | blkio, io.weight, io.max, io.latency, BFQ |
+| [Cgroup BPF Programs](cgroup-bpf.md) | eBPF attach types, device policy, network filtering |
+| [systemd and Cgroup Integration](systemd-cgroups.md) | Slices, scopes, services, delegation |
+| [War Stories](war-stories.md) | OOM loops, CFS throttling, v1→v2 migration pain |
 
 ## Quick reference
 
