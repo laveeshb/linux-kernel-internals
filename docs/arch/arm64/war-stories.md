@@ -28,7 +28,7 @@ The mechanism was subtle:
 The key registers and functions:
 
 - `TIF_SVE` — thread flag indicating SVE state is valid and must be saved/restored
-- `CPACR_EL1.FPEN` (bits 21:20) — controls FP/SVE trap to EL1; `0b01` traps SVE, `0b11` allows both FPSIMD and SVE
+- `CPACR_EL1.FPEN` (bits 21:20) — controls FPSIMD trap to EL1 (not SVE). SVE access is governed by the separate `CPACR_EL1.ZEN` field (bits 17:16). `kernel_neon_begin()` sets both FPEN and ZEN appropriately; code that only sets FPEN still traps on SVE instructions.
 - `fpsimd_save_state()` / `fpsimd_load_state()` — low-level save/restore of the FPSIMD register file
 - `kernel_neon_begin()` — saves userspace FPSIMD/SVE context if needed, enables NEON for kernel use, disables preemption
 - `kernel_neon_end()` — restores accounting state, re-enables preemption
@@ -277,7 +277,7 @@ When an indirect branch is executed, the CPU sets `BTYPE` to record the branch t
 - `BTI jc` — landing pad for both
 - `NOP` — only valid in some configurations
 
-If the landing address does not have the correct `BTI` instruction, the CPU raises a Branch Target Exception. The ESR_EL1 encodes this as EC=`0x24` (data abort from current EL) or EC=`0x11` (SVC) — specifically, the `BTYPE` field in ESR indicates a BTI failure (ISS `DFSC` value `0b100100`).
+If the landing address does not have the correct `BTI` instruction, the CPU raises a Branch Target Exception. The ESR_EL1 encodes this with EC=`0x0D` (`ESR_ELx_EC_BTI`), defined in `arch/arm64/include/asm/esr.h`. This is distinct from a data abort (EC=`0x24`) — BTI exceptions have their own exception class and ISS encoding.
 
 The kernel enables BTI for a process when the ELF binary has the `GNU_PROPERTY_AARCH64_FEATURE_1_BTI` bit set in its `.note.gnu.property` section. You can check this:
 
@@ -428,7 +428,7 @@ Errata workarounds are safety-critical: an off-by-one in a MIDR revision range s
 | 1 | SVE context switch corruption | Unmatched `kernel_neon_begin/end` breaks lazy FP save accounting | Userspace numerical errors; ftrace on fpsimd paths | Yes — lazy FPSIMD/SVE save is ARM64-specific |
 | 2 | Stale PTE after TLBI | Missing `dsb(ishst)` before TLB invalidate | Intermittent translation faults on recently remapped VA | Yes — ARM64 weak ordering; x86 TSO hides this |
 | 3 | Device reads stale DMA data | Non-coherent DMA without cache flush | Device transmits zeros; confirmed with `pgprot_noncached` | Partly — non-coherent DMA exists on other arches but common on embedded ARM64 |
-| 4 | BTI enforcement crash | JIT code missing `BTI c` landing pad instruction | SIGSEGV with ESR EC=0x24 BTI failure | Yes — ARMv8.5 BTI is ARM64-specific |
+| 4 | BTI enforcement crash | JIT code missing `BTI c` landing pad instruction | SIGSEGV with ESR EC=0x0D (ESR_ELx_EC_BTI) | Yes — ARMv8.5 BTI is ARM64-specific |
 | 5 | Erratum workaround not applied | MIDR revision range off-by-one in errata table | Spurious faults; no erratum boot message; `midr_el1` sysfs | Yes — ARM64 MIDR-based errata infrastructure |
 
 ---

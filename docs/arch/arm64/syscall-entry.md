@@ -87,19 +87,27 @@ a 64-bit SVC, EC is `0x15`:
 
 The handler reads `ESR_EL1`, extracts EC, and branches to `el0_svc`:
 
-```asm
-/* arch/arm64/kernel/entry.S (simplified) */
-SYM_CODE_START(el0t_64_sync_handler)
-    kernel_entry 0, 64               /* save registers to pt_regs */
+```c
+/* arch/arm64/kernel/entry-common.c */
+asmlinkage void noinstr el0t_64_sync_handler(struct pt_regs *regs)
+{
+    unsigned long esr = read_sysreg(esr_el1);
 
-    mrs     x22, esr_el1             /* read exception syndrome */
-    lsr     x24, x22, #ESR_ELx_EC_SHIFT
-
-    cmp     x24, #ESR_ELx_EC_SVC64
-    b.eq    el0_svc                  /* branch to SVC handler */
-    b       el0_sync_handler         /* other exceptions: faults, debug */
-SYM_CODE_END(el0t_64_sync_handler)
+    switch (ESR_ELx_EC(esr)) {
+    case ESR_ELx_EC_SVC64:
+        el0_svc(regs);
+        break;
+    case ESR_ELx_EC_DABT_LOW:
+        el0_da(regs, esr);
+        break;
+    /* ... other exception classes ... */
+    default:
+        el0_inv(regs, esr);
+    }
+}
 ```
+
+Note: `el0t_64_sync_handler` is a C function in `arch/arm64/kernel/entry-common.c` (not assembly). The low-level vector stub in `entry.S` saves registers with `kernel_entry 0, 64` and then calls this C handler.
 
 ---
 
@@ -197,10 +205,13 @@ checks the `syscall_work` flags in `thread_info`:
 /* kernel/entry/common.c */
 static long syscall_enter_from_user_mode_work(struct pt_regs *regs, long syscall)
 {
-    u32 work = READ_ONCE(current_thread_info()->syscall_work);
+    unsigned long work = READ_ONCE(current_thread_info()->syscall_work);
 
-    if (work & SYSCALL_WORK_SECCOMP)
-        syscall = __secure_computing(NULL);   /* run BPF filter */
+    if (work & SYSCALL_WORK_SECCOMP) {
+        int ret = __secure_computing(NULL);   /* run BPF filter */
+        if (ret == -1)
+            return ret;  /* process killed by seccomp */
+    }
 
     if (work & SYSCALL_WORK_SYSCALL_TRACEPOINT)
         trace_sys_enter(regs, syscall);       /* sys_enter raw tracepoint */
@@ -340,7 +351,8 @@ cat /sys/kernel/debug/tracing/trace
 
 **Kernel source files:**
 
-- `arch/arm64/kernel/entry.S` — vector table, `kernel_entry`/`kernel_exit`, `el0t_64_sync_handler`
+- `arch/arm64/kernel/entry.S` — vector table, `kernel_entry`/`kernel_exit` macros, low-level stubs
+- `arch/arm64/kernel/entry-common.c` — C exception handlers including `el0t_64_sync_handler`
 - `arch/arm64/kernel/syscall.c` — `do_el0_svc`, `el0_svc_common`, `invoke_syscall`
 - `arch/arm64/kernel/sys.c` — `sys_call_table` definition
 - `arch/arm64/kernel/sys_compat.c` — `compat_sys_call_table` for AArch32 processes

@@ -22,12 +22,14 @@ With the default `VA_BITS=48`, user space occupies `[0, 0x0000_FFFF_FFFF_FFFF]` 
 On context switch, the kernel writes the new process's PGD physical address into `TTBR0_EL1`. The ASID (see below) is packed into bits `[63:48]` of `TTBR0_EL1` at the same time. `TTBR1_EL1` is set once at boot and never changes.
 
 ```c
-/* arch/arm64/mm/context.c */
-static void cpu_switch_mm(pgd_t *pgd, struct mm_struct *mm)
+/* arch/arm64/include/asm/mmu_context.h */
+static inline void cpu_switch_mm(pgd_t *pgd, struct mm_struct *mm)
 {
     BUG_ON(pgd == swapper_pg_dir);
     cpu_set_reserved_ttbr0();
-    local_flush_tlb_all();
+    /* ASID packed in mm->context.id; cpu_do_switch_mm writes TTBR0_EL1
+     * with the new PGD PA and ASID together — no TLB flush needed when
+     * switching to a different ASID (that is the whole point of ASIDs). */
     cpu_do_switch_mm(virt_to_phys(pgd), mm);
 }
 ```
@@ -127,7 +129,7 @@ ARM64 Page/Block Descriptor (64-bit):
 | `10` | Read-Only | No access |
 | `11` | Read-Only | Read-Only |
 
-Linux sets `UXN` on all kernel mappings and `PXN` on all user mappings (preventing user code from being executed at EL1 and vice versa). The `AF` (Access Flag) bit is managed by software on ARM64: when the kernel sets up a PTE with AF=0, the first access generates an Access Flag Fault, which the kernel handles by setting AF=1 and recording the access for page reclaim heuristics.
+Linux sets `UXN` on all kernel mappings and `PXN` on all user mappings (preventing user code from being executed at EL1 and vice versa). The `AF` (Access Flag) bit: on pre-ARMv8.1 hardware it is managed by software — a PTE with AF=0 generates an Access Flag Fault on first access, which the kernel handles by setting AF=1. On ARMv8.1+ hardware with `FEAT_HAFDBS`, Linux enables hardware-managed AF (`TCR_EL1.HA=1`), so the CPU sets AF automatically without faulting. The Access Flag is used by the page reclaim path to distinguish recently-accessed pages.
 
 ### ARM64 vs x86-64 PTE comparison
 

@@ -265,7 +265,7 @@ An attacker can exploit this by:
 
 ### Mitigation: SSBS register bit
 
-ARM64 CPUs that support mitigation expose the **SSBS** (Speculative Store Bypass Safe) bit. Setting `SSBS=0` in `PSTATE` (or the equivalent system register `SSBS_EL1`) instructs the CPU to disable speculative store bypass, preventing the attack.
+ARM64 CPUs that support mitigation expose the **SSBS** (Speculative Store Bypass Safe) bit in `PSTATE`. Setting `SSBS=0` instructs the CPU to disable speculative store bypass, preventing the attack. The system register is accessed via `MSR SSBS, Xn` / `MRS Xn, SSBS` (the register is named `SSBS`, not `SSBS_EL1`).
 
 Support is indicated by the **SSBS field in `ID_AA64PFR1_EL1`**.
 
@@ -327,7 +327,7 @@ The ARM64 spectre mitigations are spread across several files:
 | File | What it contains |
 |------|-----------------|
 | `arch/arm64/kernel/entry.S` | BHB clearing loop and `CLRBHB` at EL0→EL1 entry; kernel entry trampolines |
-| `arch/arm64/kernel/spectre.c` | Runtime detection, per-CPU mitigation state, SMCCC firmware calls |
+| `arch/arm64/kernel/proton-pack.c` | Runtime detection, per-CPU mitigation state, SMCCC firmware calls |
 | `arch/arm64/include/asm/spectre.h` | Mitigation type enums, per-CPU spectre state structure |
 | `arch/arm64/include/asm/barrier.h` | `array_index_mask_nospec()` ARM64 implementation; `__nospeculation_barrier()` |
 | `include/linux/nospec.h` | Architecture-independent `array_index_nospec()` macro |

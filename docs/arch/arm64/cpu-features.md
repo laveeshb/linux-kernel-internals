@@ -178,7 +178,9 @@ if (cpus_have_cap(ARM64_HAS_LSE_ATOMICS))
 ```c
 static inline bool this_cpu_has_cap(unsigned int cap)
 {
-    return !!(this_cpu_read(cpu_hwcap_keys[cap]));
+    if (!WARN_ON(cap >= ARM64_NCAPS))
+        return !!test_bit(cap, (unsigned long *)this_cpu_ptr(&cpu_hwcaps));
+    return false;
 }
 ```
 
@@ -434,10 +436,12 @@ kernel_neon_end();     /* restores state, re-enables preemption */
 
 ## BTI — Branch Target Identification
 
-BTI is an ARMv8.5 control-flow integrity feature. When enabled
-(`SCTLR_EL1.BT1 = 1`), any indirect branch (`BR`, `BLR`, `RET`) must land on
-a `BTI` instruction (or the destination of a paired `BL`/`BLRAAZ` that
-implies a call target). Landing anywhere else raises a Branch Target Exception.
+BTI is an ARMv8.5 control-flow integrity feature. When enabled for userspace
+(`SCTLR_EL1.BT0 = 1`) or kernel (`SCTLR_EL1.BT1 = 1`), any indirect branch
+(`BR`, `BLR`, `RET`) must land on a `BTI` instruction (or the destination of
+a paired `BL`/`BLRAAZ` that implies a call target). Landing anywhere else
+raises a Branch Target Exception. The kernel sets `BT0` to enforce BTI for
+user processes; `BT1` controls enforcement in kernel code.
 
 ### ELF Marking
 
@@ -447,10 +451,9 @@ Binaries opt in via a GNU property note:
 GNU_PROPERTY_AARCH64_FEATURE_1_BTI   (bit 0 of GNU_PROPERTY_AARCH64_FEATURE_1_AND)
 ```
 
-The dynamic linker (`ld.so`) reads this note. The kernel checks it at
-`execve()` time in `arch/arm64/kernel/process.c` via
-`arch64_elf_check_arch()` and sets `SCTLR_EL1.BT1` for the process if the
-property is present.
+The dynamic linker (`ld.so`) reads this note. The kernel checks it at `execve()` time via `arch_parse_elf_property()` in
+`arch/arm64/kernel/process.c` and sets `SCTLR_EL1.BT0` for the process if
+the property is present, enabling BTI enforcement for userspace code.
 
 ### Interaction with JIT and Signal Handlers
 
@@ -542,7 +545,7 @@ rev_max=4)` matches r0p0 through r0p4.
 | 835769 | Cortex-A53 r0p0–r0p4 | Incorrect result from MUL/MADD after load | Compiler `-mfix-cortex-a53-835769` |
 | 1530923 | Cortex-A55 | Speculative AT instruction may cause faults | Speculation barrier alternatives |
 | 2457168 | Cortex-A510 | PMULL2 may produce incorrect results | Alternatives patch |
-| 1418040 | Cortex-A76/Neoverse-N1 | ICache invalidation may be incomplete | `ic iallu` alternatives |
+| 1418040 | Cortex-A55 | ICache invalidation may be incomplete | `ic iallu` alternatives |
 
 Errata workarounds are conditionally compiled via `CONFIG_ARM64_ERRATUM_*`
 Kconfig symbols and do not add overhead on unaffected hardware.
