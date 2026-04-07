@@ -351,18 +351,49 @@ nav:
     - IPC War Stories: ipc/war-stories.md
   - I/O Patterns:
     - Getting Started: io/README.md
-    - Life of a Write: io/life-of-a-write.md
-    - Buffered I/O and the Page Cache: io/buffered-io.md
-    - Readahead: io/readahead.md
-    - Page Cache Writeback: io/page-cache-writeback.md
-    - Memory-Mapped I/O: io/mmap-io.md
-    - Direct I/O: io/direct-io.md
-    - Vectored I/O (Scatter-Gather): io/vectored-io.md
-    - splice, sendfile, and Zero-Copy: io/splice-sendfile.md
-    - fallocate and File Space Management: io/fallocate.md
-    - Async I/O Evolution: io/async-io.md
-    - Observability: io/observability.md
-    - Tuning Storage I/O: io/tuning-storage.md
+    - Kernel Internals:
+      - "struct file_operations": io/file-operations.md
+      - "address_space_operations": io/address-space-ops.md
+      - "struct kiocb": io/kiocb.md
+      - "iov_iter: Unified Buffer Abstraction": io/iov-iter.md
+      - iomap Internals: io/iomap-internals.md
+      - Page Cache Internals: io/page-cache-internals.md
+      - Writeback Internals: io/writeback-internals.md
+    - Lifecycle:
+      - Life of an open: io/life-of-an-open.md
+      - Life of a read: io/life-of-a-read.md
+      - Life of a write: io/life-of-a-write.md
+      - Life of an fsync: io/life-of-an-fsync.md
+    - I/O Patterns:
+      - Buffered I/O and the Page Cache: io/buffered-io.md
+      - Direct I/O: io/direct-io.md
+      - Memory-Mapped I/O: io/mmap-io.md
+      - Readahead: io/readahead.md
+      - Vectored I/O (Scatter-Gather): io/vectored-io.md
+      - splice, sendfile, and Zero-Copy: io/splice-sendfile.md
+      - Zero-Copy Internals: io/zero-copy-internals.md
+      - Async I/O Evolution: io/async-io.md
+    - Writeback & Durability:
+      - Page Cache Writeback: io/page-cache-writeback.md
+      - "fsync, fdatasync, and O_SYNC": io/fsync-fdatasync.md
+    - I/O Interfaces:
+      - "pread, pwrite, preadv2, pwritev2": io/pread-pwrite.md
+      - File Locking: io/file-locking.md
+      - fallocate and Space Management: io/fallocate.md
+      - Truncate and Hole Punching: io/truncate-internals.md
+    - Advanced:
+      - "I/O Polling (HIPRI and IOPOLL)": io/io-polling.md
+      - I/O Priorities: io/io-priorities.md
+      - "DAX: Direct Access for Persistent Memory": io/dax.md
+    - Observability:
+      - Observability Overview: io/observability.md
+      - ftrace for I/O: io/ftrace-io.md
+      - I/O Tracepoints: io/io-tracepoints.md
+      - perf for I/O: io/perf-io.md
+      - /proc/diskstats Reference: io/proc-diskstats.md
+    - Tuning & Reference:
+      - Tuning Storage I/O: io/tuning-storage.md
+      - I/O Sysctl Reference: io/sysctl-io-reference.md
     - War Stories: io/war-stories.md
   - io_uring:
     - Getting Started: io-uring/README.md
