@@ -123,11 +123,16 @@ cat /sys/kernel/debug/tracing/trace | grep error
 # Method 2: Monitor the device for errors
 watch -n 1 'dmesg | tail -5'
 
-# Method 3: Use bpftrace to catch writeback errors
+# Method 3: Use bpftrace to catch the moment an error is recorded on an inode.
+# mapping_set_error() is called when a writeback I/O fails; it records the error
+# on the address_space so that a subsequent fsync() can return EIO.
 bpftrace -e '
-kretprobe:writeback_dirty_page {
-    if (retval < 0) {
-        printf("writeback error: %d inode %ld\n", retval, ((struct page *)arg0)->mapping->host->i_ino);
+kprobe:mapping_set_error {
+    if ((int)arg1 != 0) {
+        printf("writeback error %d on inode %ld (%s)\n",
+               (int)arg1,
+               ((struct address_space *)arg0)->host->i_ino,
+               comm);
     }
 }'
 ```
@@ -256,7 +261,7 @@ The most robust defense against silent corruption is a checksumming filesystem:
 
 **ZFS**: checksums everything, supports self-healing with redundant devices.
 
-**XFS** (v5+): checksums metadata but not data by default. Data checksums require `mkfs.xfs -m crc=1` (now the default since v5).
+**XFS** (v5+): checksums all metadata by default (v5 format has been the default since kernel v4.0). User data blocks are not checksummed regardless of format version. To verify format version: `xfs_info /mountpoint | grep ftype`.
 
 **ext4**: checksums metadata but not data. Use `tune2fs -E metadata_csum=1 /dev/sda1`.
 

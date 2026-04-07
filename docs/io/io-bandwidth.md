@@ -177,7 +177,7 @@ QD=32:  ~7.0 GB/s  (saturated — diminishing returns)
 QD=64:  ~7.0 GB/s  (no improvement, higher latency)
 ```
 
-The relationship is: `throughput = queue_depth / latency`. If latency is 100µs (0.1ms), a single queue achieves 10,000 IOPS = 40 MB/s at 4KB. At queue depth 32: 320,000 IOPS = 1.25 GB/s at 4KB.
+The relationship is: `IOPS = queue_depth / latency`; multiply by block size for throughput. If latency is 100µs (0.1ms), a queue depth of 1 achieves 10,000 IOPS = 40 MB/s at 4KB. At queue depth 32: 320,000 IOPS = 1.25 GB/s at 4KB.
 
 ---
 

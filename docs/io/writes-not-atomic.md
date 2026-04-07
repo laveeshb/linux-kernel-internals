@@ -114,7 +114,7 @@ write(fd, line, line_len);
 /* The line is appended atomically — no other writer can interleave here */
 ```
 
-But the guarantee only applies to writes ≤ `PIPE_BUF` (4096 bytes on Linux) for local filesystems. Larger `O_APPEND` writes may be split by the filesystem.
+The `PIPE_BUF` limit does not apply to `O_APPEND` on regular files — `PIPE_BUF` is a pipe-specific guarantee. For regular files, the seek-to-end and write are always atomic in the sense that no other writer can insert data between them. However, writes large enough to span multiple page boundaries are split into per-page operations by `generic_perform_write()` (see [Kernel-level write splitting](#kernel-level-write-splitting) below), and two concurrent large `O_APPEND` writes may therefore interleave at page granularity. For reliable non-interleaved records, keep each `O_APPEND` write smaller than a page (4096 bytes on x86).
 
 For log files, `O_APPEND` with short writes (< 4096 bytes per line) is a reliable multi-process logging pattern:
 
@@ -227,7 +227,7 @@ For `O_DIRECT`, the write goes through `iomap_dio_rw()` or `__blockdev_direct_IO
 | Operation | Atomicity guarantee |
 |-----------|---------------------|
 | `write()` ≤ `PIPE_BUF` to a pipe | Fully atomic (no interleaving from other writers) |
-| `write()` with `O_APPEND` (< `PIPE_BUF`) | Seek+write atomic (no position race) |
+| `write()` with `O_APPEND` | Seek+write atomic (no position race); data may interleave at page boundaries if write > 4096 bytes |
 | `write()` to a regular file | No interleaving guarantee for concurrent writers |
 | `pwrite()` | Offset used atomically; no isolation from concurrent writes |
 | `rename()` | Atomic at VFS level (reader sees old or new, never partial) |

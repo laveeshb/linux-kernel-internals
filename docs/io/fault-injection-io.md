@@ -40,7 +40,7 @@ ls /sys/kernel/debug/fail_make_request/ 2>/dev/null && echo "block fault injecti
 
 ## `FAIL_MAKE_REQUEST`: failing block I/O submissions
 
-`FAIL_MAKE_REQUEST` intercepts calls to `submit_bio()` and returns `-EIO` with a configured probability, simulating a device that rejects I/O requests.
+`FAIL_MAKE_REQUEST` intercepts block I/O submissions at the `submit_bio()` boundary and fails the BIO with `-EIO` through the completion path. `submit_bio()` itself is `void`; the error is injected asynchronously — the BIO is never dispatched to the device and instead completes with an error, exactly as a real device rejection would appear to the filesystem above.
 
 ### Setup
 
@@ -139,9 +139,13 @@ dd if=/dev/zero of=/tmp/test.img bs=1M count=1024
 LOOP=$(losetup -f --show /tmp/test.img)
 
 # Create a dm-flakey device that fails every 10th I/O
-dmsetup create flakey --table "0 2097152 flakey $LOOP 0 100 10"
-# Format 100 = up period (I/Os succeed), 10 = down period (I/Os fail)
-# Every 110-second cycle: 100s of good I/Os, 10s of failures
+dmsetup create flakey --table "0 2097152 flakey $LOOP 0 200000 20000"
+# dm-flakey up/down parameters are in 512-byte SECTORS, not seconds.
+# up_sectors=200000 (≈100MB), down_sectors=20000 (≈10MB):
+# failures occur for every 10MB of I/O after 100MB of good I/O.
+# To approximate time-based cycles, multiply target seconds by your
+# expected throughput in sectors/second: at 50MB/s = 100000 sectors/s,
+# 100 seconds ≈ 10000000 sectors.
 
 mkfs.ext4 /dev/mapper/flakey
 mount /dev/mapper/flakey /mnt/test
@@ -165,8 +169,9 @@ dd if=/dev/zero of=/tmp/disk.img bs=1M count=2048
 LOOP=$(losetup -f --show /tmp/disk.img)
 SECTORS=$(blockdev --getsz $LOOP)
 
-# Basic flakey: up_interval=180s, down_interval=20s (90% uptime)
-dmsetup create flakey --table "0 $SECTORS flakey $LOOP 0 180 20"
+# Basic flakey: up_sectors=3600000 (~1.8GB), down_sectors=400000 (~200MB)
+# Parameters are in 512-byte sectors, not seconds.
+dmsetup create flakey --table "0 $SECTORS flakey $LOOP 0 3600000 400000"
 
 # During down_interval, all writes return EIO:
 # dmsetup create flakey --table "0 $SECTORS flakey $LOOP 0 180 20 1 drop_writes"
@@ -189,7 +194,7 @@ losetup -d $LOOP
 | `error_writes` | Write requests return EIO | Explicit write error handling |
 | `corrupt_bio_byte` | Flip a byte in read I/Os | Checksum validation, data integrity |
 
-`drop_writes` is particularly insidious: writes appear to succeed from the application's perspective, but the data never reaches storage. This tests whether the application relies on `fsync()` to verify durability — if it does, the corruption will eventually be detected; if it doesn't, data is silently lost.
+`drop_writes` is particularly insidious: writes appear to succeed from the application's perspective — including `fsync()`, which returns 0 — but the data never reaches storage. The kernel and filesystem believe the writes went through; dm-flakey discards them silently at the device mapper level. The only way to detect the loss is to read the data back and compare it, or use a filesystem with per-block checksums (Btrfs, ZFS) that will catch the discrepancy. This mode tests whether an application does read-after-write verification rather than trusting `fsync()` alone.
 
 ---
 

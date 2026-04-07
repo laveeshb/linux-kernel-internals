@@ -21,7 +21,7 @@ flowchart TD
     SATURATION -->|"bio merging poor"| MERGEFIX["Check block size alignment\nSee: Tuning Storage I/O"]
 
     LATENCY -->|"filesystem journal"| JOURNAL{"Step 5: Journal\niostat -x journal device\nblktrace -d"}
-    LATENCY -->|"writeback"| WRITEBACK{"Step 6: Writeback\n/proc/vmstat: bdflush\nvm.dirty_* thresholds"}
+    LATENCY -->|"writeback"| WRITEBACK{"Step 6: Writeback\n/proc/vmstat: nr_dirty\nvm.dirty_* thresholds"}
     LATENCY -->|"readahead"| READAHEAD{"Step 7: Readahead\npgmajfault rate\nra_pages setting"}
 
     JOURNAL --> JOURNALFIX["Tune journal size/commit\nSee: War Stories (regressions)"]
@@ -108,7 +108,7 @@ cat /proc/diskstats | grep nvme0n1
 Check `/proc/vmstat` for page cache behavior:
 
 ```bash
-grep -E '(pgpgin|pgpgout|pswpin|pswpout|pgmajfault|pgfault|nr_dirty|nr_writeback|nr_unstable|bdflush|pdflush|background_writeout|nr_dirtied|nr_written)' /proc/vmstat
+grep -E '(pgpgin|pgpgout|pswpin|pswpout|pgmajfault|pgfault|nr_dirty|nr_writeback|nr_dirtied|nr_written)' /proc/vmstat
 ```
 
 Key counters:
@@ -143,22 +143,30 @@ grep -E '(nr_dirty|nr_writeback|dirty_thresh|nr_dirty_threshold)' /proc/vmstat
 **Detecting throttling with `ftrace`:**
 
 ```bash
-# Trace balance_dirty_pages to see if writers are being throttled
-echo 1 > /sys/kernel/debug/tracing/events/writeback/balance_dirty_pages/enable
+# Trace dirty throttling using bpftrace — measures time spent inside
+# balance_dirty_pages_ratelimited(), which is where write() stalls occur
+bpftrace -e '
+kprobe:balance_dirty_pages_ratelimited { @start[tid] = nsecs; }
+kretprobe:balance_dirty_pages_ratelimited /@start[tid]/ {
+    $us = (nsecs - @start[tid]) / 1000;
+    if ($us > 1000) {  /* only log stalls > 1ms */
+        printf("dirty throttle stall: %s pid %d: %d us\n", comm, pid, $us);
+    }
+    delete(@start[tid]);
+}'
+
+# Or use the writeback tracepoints to see throttle decisions:
+# (check which are available on your kernel first)
+ls /sys/kernel/debug/tracing/events/writeback/ | grep -E '(balance|dirty)'
+echo 1 > /sys/kernel/debug/tracing/events/writeback/writeback_dirty_page/enable
 echo 1 > /sys/kernel/debug/tracing/tracing_on
 sleep 5
 echo 0 > /sys/kernel/debug/tracing/tracing_on
-cat /sys/kernel/debug/tracing/trace | grep balance_dirty | head -20
+cat /sys/kernel/debug/tracing/trace | grep writeback_dirty | head -20
+echo 0 > /sys/kernel/debug/tracing/events/writeback/writeback_dirty_page/enable
 ```
 
-The `balance_dirty_pages` tracepoint shows:
-- `written`: bytes written since last call
-- `dirty`: current dirty page count
-- `thresh`: the throttling threshold
-- `bg_thresh`: background writeback threshold
-- `paused`: microseconds the calling task was paused
-
-If `paused > 0` appears frequently, write throttling is the cause of your stalls. See [Writeback Internals](writeback-internals.md) for the algorithm details and [Tuning Storage I/O](tuning-storage.md) for remediation.
+If the bpftrace output shows frequent stalls (pauses > 1ms from `balance_dirty_pages_ratelimited`), write throttling is the cause. See [Writeback Internals](writeback-internals.md) for the algorithm details and [Tuning Storage I/O](tuning-storage.md) for remediation. See [Writeback Internals](writeback-internals.md) for the algorithm details and [Tuning Storage I/O](tuning-storage.md) for remediation.
 
 ---
 
@@ -259,8 +267,12 @@ kprobe:blk_account_io_done /@start[arg0]/ {
 When block device latency is fine but application I/O is still slow, the bottleneck is at the filesystem layer: journal contention, lock serialization, or extent tree overhead.
 
 ```bash
-# ext4: journal stats
-cat /proc/fs/ext4/*/journal_info  # journaling mode, commit interval
+# ext4: journal stats via JBD2
+ls /proc/fs/jbd2/                     # list active journals (one per mounted ext4)
+cat /proc/fs/jbd2/sda1-8/info        # journal stats: commits, blocks written
+# Fields: transactions committed, blocks logged, average commit time, etc.
+# To check journaling mode (data=ordered, data=writeback, data=journal):
+tune2fs -l /dev/sda1 | grep "Default mount options"
 
 # xfs: per-filesystem stats
 cat /proc/fs/xfs/stat

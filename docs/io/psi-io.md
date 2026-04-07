@@ -145,8 +145,10 @@ PSI is designed for alerting. The kernel supports **PSI notifications** (since v
 /* PSI notification via poll/epoll (no busy-waiting) */
 int fd = open("/proc/pressure/io", O_RDWR | O_NONBLOCK);
 
-/* Alert when full pressure exceeds 5% over 500ms window */
-const char *trigger = "full 5000000 500000";  /* 5% over 500ms */
+/* Alert when full pressure exceeds 5% over 500ms window.
+ * Format: "TYPE STALL_THRESHOLD_US WINDOW_US"
+ * 5% of 500ms = 25,000µs stall threshold in a 500,000µs window. */
+const char *trigger = "full 25000 500000";
 write(fd, trigger, strlen(trigger));
 
 /* Now poll for the notification */

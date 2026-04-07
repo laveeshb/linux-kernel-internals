@@ -86,7 +86,7 @@ When a process writes to a file with `O_DIRECT` and another process reads the sa
 
 The reverse also fails: a buffered write followed by an `O_DIRECT` read can read from disk rather than the in-memory dirty page, returning pre-write data.
 
-The `O_DIRECT` write path includes a cache invalidation step, but the invalidation and the DMA completion are not atomic — a concurrent buffered read can slip in between them and re-populate the cache with old data from disk before the DMA write completes.
+The `O_DIRECT` write path calls `invalidate_inode_pages2_range()` to flush the affected region from the page cache *before* submitting the DMA write to the device. A concurrent buffered reader that starts after the invalidation but before the DMA completes will issue a fresh read from the device — which still holds the pre-write data — and populate the page cache with that stale content. When the DMA write then commits, the page cache is out of sync. Subsequent buffered reads serve the now-stale cached copy.
 
 ### Root cause
 
