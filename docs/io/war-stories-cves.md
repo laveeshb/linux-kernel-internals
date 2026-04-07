@@ -6,7 +6,7 @@ The Linux I/O stack handles data movement between userspace and storage. This pa
 
 ---
 
-## CVE-2016-10229: `recvmmsg` double-free via UDP with MSG_PEEK
+## [CVE-2016-10229](https://nvd.nist.gov/vuln/detail/CVE-2016-10229): `recvmmsg` double-free via UDP with MSG_PEEK
 
 **CVSS: 9.8 (Critical) | Affected: v4.5 and earlier | Fixed: v4.5-rc7 ([commit a2e2725](https://git.kernel.org/linus/a2e2725541fa))**
 
@@ -42,7 +42,7 @@ The fix ([commit a2e2725](https://git.kernel.org/linus/a2e2725541fa)) restructur
 
 ---
 
-## CVE-2019-11487: `pipe_write` reference count overflow via large writes
+## [CVE-2019-11487](https://nvd.nist.gov/vuln/detail/CVE-2019-11487): `pipe_write` reference count overflow via large writes
 
 **CVSS: 7.8 (High) | Affected: v2.6.15 – v5.0 | Fixed: v5.1 ([commit 15fab63](https://git.kernel.org/linus/15fab63e1e57))**
 
@@ -74,7 +74,7 @@ Changed the pipe page reference count to `atomic64_t` ([commit 15fab63](https://
 
 ---
 
-## CVE-2022-0847: Dirty Pipe — unprivileged write to read-only files via pipe splicing
+## [CVE-2022-0847](https://nvd.nist.gov/vuln/detail/CVE-2022-0847): Dirty Pipe — unprivileged write to read-only files via pipe splicing
 
 **CVSS: 7.8 (High) | Affected: v5.8 – v5.16 | Fixed: v5.16.11, v5.15.25, v5.10.102 ([commit 9d2231c](https://git.kernel.org/linus/9d2231c5d74e))**
 
@@ -151,7 +151,7 @@ Additionally, the `prepare_pipe_buf` callback for the `page_cache_pipe_buf_ops` 
 
 ---
 
-## CVE-2023-2163: eBPF verifier — out-of-bounds read via I/O map access
+## [CVE-2023-2163](https://nvd.nist.gov/vuln/detail/CVE-2023-2163): eBPF verifier — out-of-bounds read via I/O map access
 
 **CVSS: 8.2 (High) | Affected: v5.4 – v6.2 | Fixed: v6.3 ([commit 71b547f](https://git.kernel.org/linus/71b547f))**
 
@@ -184,7 +184,7 @@ The fix tightened the interval propagation for the affected instruction sequence
 
 ---
 
-## CVE-2024-0646: `io_uring` file descriptor leak via IORING_OP_CONNECT
+## [CVE-2024-0646](https://nvd.nist.gov/vuln/detail/CVE-2024-0646): `io_uring` file descriptor leak via IORING_OP_CONNECT
 
 **CVSS: 7.8 (High) | Affected: v6.4 – v6.6 | Fixed: v6.6.2 ([commit 3f66f8](https://git.kernel.org/linus/3f66f8))**
 
@@ -210,7 +210,7 @@ The fix added an explicit reference release in the cancel path, and added assert
 
 **Async I/O cancellation paths are under-tested.** io_uring's cancellation infrastructure covers many operations, but the reference management through cancellation requires careful auditing for each new operation type. Cancellation paths are exercised far less frequently in practice and in tests than the normal completion path.
 
-**io_uring's complexity requires structured review.** io_uring's power comes from its ability to handle arbitrary combinations of operations asynchronously. This flexibility makes it a large attack surface. Since its introduction in v5.1, io_uring has been the source of multiple CVEs. Mitigations include restricting io_uring access in security-sensitive environments (`io_uring_disabled` sysctl, seccomp filter rules blocking `io_uring_setup`).
+**io_uring's complexity requires structured review.** io_uring's power comes from its ability to handle arbitrary combinations of operations asynchronously. This flexibility makes it a large attack surface. Since its introduction in v5.1 ([commit 2b188cc1bb85](https://git.kernel.org/linus/2b188cc1bb85)), io_uring has been the source of multiple CVEs. Mitigations include restricting io_uring access in security-sensitive environments (`io_uring_disabled` sysctl, seccomp filter rules blocking `io_uring_setup`).
 
 ---
 

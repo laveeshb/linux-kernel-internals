@@ -613,7 +613,7 @@ A task that dirtied pages at a rate equal to `task_ratelimit` will pause for exa
 
 ## Cgroup-aware writeback (cgroup v2)
 
-Since Linux 4.0, the writeback subsystem is fully cgroup-aware when using cgroup v2 with both `memory` and `io` controllers enabled.
+Since Linux 4.2, the writeback subsystem is fully cgroup-aware when using cgroup v2 with both `memory` and `io` controllers enabled.
 
 ### Architecture
 

@@ -255,7 +255,7 @@ Matthew Wilcox replaced it with the **XArray** (merged in 4.20, 2019), a lockles
 
 `struct page` was designed for 4KB pages. As the kernel grew support for huge pages (2MB, 1GB), every function that took a `struct page *` had to be audited to decide whether it was operating on a single 4KB page or the head page of a compound page. The API was a minefield of implicit conventions.
 
-Matthew Wilcox introduced `struct folio` in Linux 5.16 (2022) to represent a physically contiguous, power-of-two-aligned set of pages as a first-class type. A folio may be a single 4KB page or a 2MB huge page; the type system carries that information rather than relying on `PageCompound()` checks.
+Matthew Wilcox introduced `struct folio` in Linux 5.16 ([commit 6b24ca4a1a8d](https://git.kernel.org/linus/6b24ca4a1a8d), 2022) to represent a physically contiguous, power-of-two-aligned set of pages as a first-class type. A folio may be a single 4KB page or a 2MB huge page; the type system carries that information rather than relying on `PageCompound()` checks.
 
 ```c
 /* include/linux/mm_types.h (simplified) */

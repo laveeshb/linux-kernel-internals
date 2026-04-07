@@ -38,7 +38,7 @@ The fundamental kernel structure (`struct bio`) representing a single block I/O 
 The kernel subsystem between filesystems (and direct I/O paths) and device drivers. Receives BIOs, optionally reorders and merges them via the I/O scheduler, and dispatches them to drivers. The modern block layer (`blk-mq`) supports multiple hardware queues for NVMe parallelism.
 
 ### `blk-mq`
-The multi-queue block layer, introduced in v3.13 and made the default in v4.9. Replaces the single-queue block layer with a design that supports multiple per-CPU software queues and multiple hardware queues, eliminating queue locking overhead on multi-core systems.
+The multi-queue block layer, introduced in v3.13 ([commit 320ae51feed5](https://git.kernel.org/linus/320ae51feed5)) and made the default in v4.9. Replaces the single-queue block layer with a design that supports multiple per-CPU software queues and multiple hardware queues, eliminating queue locking overhead on multi-core systems.
 
 ---
 
@@ -71,7 +71,7 @@ A process state in the Linux scheduler meaning "uninterruptible sleep" — the p
 ## E
 
 ### `errseq_t`
-A kernel type (introduced in v4.13) used to track whether a writeback error has occurred for a file since the last time the error was checked. `fsync()` uses `errseq_t` to return `EIO` exactly once after a writeback failure, rather than on every subsequent `fsync()` call.
+A kernel type (introduced in v4.13, [commit 5660e13d2fd5](https://git.kernel.org/linus/5660e13d2fd5)) used to track whether a writeback error has occurred for a file since the last time the error was checked. `fsync()` uses `errseq_t` to return `EIO` exactly once after a writeback failure, rather than on every subsequent `fsync()` call.
 
 ### Extent
 A contiguous range of blocks on storage allocated to a file. Modern filesystems (ext4 with extents enabled, XFS, Btrfs) use extents rather than per-block pointers for large files, reducing metadata overhead and enabling more efficient large I/O.
@@ -100,7 +100,7 @@ A flag on a block request (`REQ_FUA`) that tells the device to write the data di
 ## I
 
 ### `iomap`
-A modern kernel framework (introduced in v4.8) for implementing filesystem block mapping — the translation from file offsets to block device addresses. Replaces the older `buffer_head` approach for I/O, enabling more efficient large I/O, direct I/O, and DAX. Used by XFS, ext4 (for large files), Btrfs, and others. See [iomap Internals](iomap-internals.md).
+A modern kernel framework (introduced in v4.8, [commit 4b4bb46d00b3](https://git.kernel.org/linus/4b4bb46d00b3)) for implementing filesystem block mapping — the translation from file offsets to block device addresses. Replaces the older `buffer_head` approach for I/O, enabling more efficient large I/O, direct I/O, and DAX. Used by XFS, ext4 (for large files), Btrfs, and others. See [iomap Internals](iomap-internals.md).
 
 ### `io_uring`
 A Linux I/O interface (v5.1, [commit 2b188cc1bb857](https://git.kernel.org/linus/2b188cc1bb857)) that uses shared-memory ring buffers to submit and complete I/O with minimal syscall overhead. Supports arbitrary operations (not just file I/O), kernel-side polling (`IORING_SETUP_SQPOLL`), and registered buffers. See [io_uring Architecture](../io-uring/io-uring-arch.md).

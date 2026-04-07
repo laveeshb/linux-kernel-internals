@@ -53,7 +53,7 @@ The radix tree gave O(log N) lookup — acceptable for large files — and suppo
 
 ### Era 3: XArray (4.20+)
 
-Linux 4.20 replaced the radix tree with the **XArray**, designed by Matthew Wilcox. The `xarray` is conceptually the same structure — a sparse array of pointers indexed by an unsigned long — but with a substantially cleaner implementation and internal locking.
+Linux 4.20 ([commit b803b42c7f2b](https://git.kernel.org/linus/b803b42c7f2b)) replaced the radix tree with the **XArray**, designed by Matthew Wilcox. The `xarray` is conceptually the same structure — a sparse array of pointers indexed by an unsigned long — but with a substantially cleaner implementation and internal locking.
 
 ```c
 /* include/linux/fs.h, 4.20+ */
@@ -82,7 +82,7 @@ The algorithmic complexity (O(log N) height proportional to `BITS_PER_LONG`) and
 
 Code throughout the kernel had to test `PageCompound(page)` and call `compound_head(page)` before touching many fields. Bugs were common and the semantics were unclear at every call site.
 
-Linux 5.16 introduced `struct folio` as the **canonical unit of the page cache**. A folio is always the head. It always represents 2^order contiguous base pages. All page cache operations that previously accepted a `struct page *` pointing at a head were converted to accept `struct folio *`.
+Linux 5.16 introduced `struct folio` ([commit 6b24ca4a1a8d](https://git.kernel.org/linus/6b24ca4a1a8d)) as the **canonical unit of the page cache**. A folio is always the head. It always represents 2^order contiguous base pages. All page cache operations that previously accepted a `struct page *` pointing at a head were converted to accept `struct folio *`.
 
 ```c
 /* include/linux/mm_types.h (simplified) */
