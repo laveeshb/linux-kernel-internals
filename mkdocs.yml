@@ -391,10 +391,28 @@ nav:
       - I/O Tracepoints: io/io-tracepoints.md
       - perf for I/O: io/perf-io.md
       - /proc/diskstats Reference: io/proc-diskstats.md
-    - Tuning & Reference:
+    - Explainers:
+      - Buffered I/O vs Direct I/O: io/buffered-vs-direct.md
+      - Writes Are Not Atomic: io/writes-not-atomic.md
+      - I/O Consistency and Ordering: io/io-consistency.md
+    - Tuning:
       - Tuning Storage I/O: io/tuning-storage.md
       - I/O Sysctl Reference: io/sysctl-io-reference.md
-    - War Stories: io/war-stories.md
+      - Tuning I/O for Databases: io/tuning-databases.md
+      - Tuning I/O for Containers: io/tuning-containers.md
+      - Tuning I/O for Low Latency: io/tuning-latency.md
+      - Tuning I/O for Streaming: io/tuning-streaming.md
+    - Debugging:
+      - Why is my I/O slow?: io/debugging-slow-io.md
+      - Debugging I/O Hangs: io/debugging-io-hangs.md
+      - Debugging Data Corruption: io/debugging-data-corruption.md
+      - strace and bpftrace for I/O: io/strace-bpftrace-io.md
+    - Bugs:
+      - "War Stories: Data Loss": io/war-stories-data-loss.md
+      - "War Stories: Performance Regressions": io/war-stories-regressions.md
+      - "War Stories: CVEs": io/war-stories-cves.md
+    - Reference:
+      - Glossary: io/glossary.md
   - io_uring:
     - Getting Started: io-uring/README.md
     - Life of an io_uring Request: io-uring/life-of-request.md
