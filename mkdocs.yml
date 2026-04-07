@@ -387,10 +387,12 @@ nav:
       - "DAX: Direct Access for Persistent Memory": io/dax.md
     - Observability:
       - Observability Overview: io/observability.md
+      - PSI for I/O: io/psi-io.md
       - ftrace for I/O: io/ftrace-io.md
       - I/O Tracepoints: io/io-tracepoints.md
       - perf for I/O: io/perf-io.md
       - /proc/diskstats Reference: io/proc-diskstats.md
+      - Understanding /proc/diskstats: io/understanding-proc-diskstats.md
     - Explainers:
       - Buffered I/O vs Direct I/O: io/buffered-vs-direct.md
       - Writes Are Not Atomic: io/writes-not-atomic.md
@@ -398,6 +400,7 @@ nav:
     - Tuning:
       - Tuning Storage I/O: io/tuning-storage.md
       - I/O Sysctl Reference: io/sysctl-io-reference.md
+      - I/O Bandwidth: io/io-bandwidth.md
       - Tuning I/O for Databases: io/tuning-databases.md
       - Tuning I/O for Containers: io/tuning-containers.md
       - Tuning I/O for Low Latency: io/tuning-latency.md
@@ -407,7 +410,9 @@ nav:
       - Debugging I/O Hangs: io/debugging-io-hangs.md
       - Debugging Data Corruption: io/debugging-data-corruption.md
       - strace and bpftrace for I/O: io/strace-bpftrace-io.md
+      - Fault Injection for I/O: io/fault-injection-io.md
     - Bugs:
+      - Bug Index: io/bugs/README.md
       - "War Stories: Data Loss": io/war-stories-data-loss.md
       - "War Stories: Performance Regressions": io/war-stories-regressions.md
       - "War Stories: CVEs": io/war-stories-cves.md
