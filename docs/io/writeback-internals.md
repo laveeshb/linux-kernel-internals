@@ -162,7 +162,7 @@ spin_unlock(&inode->i_lock);
 
 ### I_DIRTY_TIME deferral
 
-Timestamp updates (reads update atime, writes update mtime/ctime) are extremely frequent and cause journal commits on filesystems like ext4. To avoid this overhead, Linux 4.0 introduced `I_DIRTY_TIME`: when `relatime` or `lazytime` mount options are active, only the in-memory inode timestamps are updated and the inode is placed on `b_dirty_time` rather than `b_dirty`. The timestamps are flushed when:
+Timestamp updates (reads update atime, writes update mtime/ctime) are extremely frequent and cause journal commits on filesystems like ext4. To avoid this overhead, Linux 3.18 ([commit 0ae45f63d4ef](https://git.kernel.org/linus/0ae45f63d4ef)) introduced `I_DIRTY_TIME`: when `relatime` or `lazytime` mount options are active, only the in-memory inode timestamps are updated and the inode is placed on `b_dirty_time` rather than `b_dirty`. The timestamps are flushed when:
 
 - The inode is about to be evicted from memory
 - Data writeback happens for the same inode

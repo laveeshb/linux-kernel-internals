@@ -527,7 +527,7 @@ VFS provides generic implementations that any filesystem can use directly or cal
 |----------|----------|---------|
 | `generic_file_read_iter()` | `mm/filemap.c` | Buffered read via page cache; handles both sync and O_DIRECT |
 | `generic_file_write_iter()` | `mm/filemap.c` | Buffered write via page cache |
-| `generic_file_splice_read()` | `fs/splice.c` | Splice from page cache into pipe |
+| `filemap_splice_read()` | `fs/splice.c` | Splice from page cache into pipe (renamed from `generic_file_splice_read` in v5.18) |
 | `iter_file_splice_write()` | `fs/splice.c` | Drain pipe into file via write_iter |
 
 ### Seeking

@@ -436,7 +436,7 @@ With mandatory locking enabled on a file, `read(2)` and `write(2)` by any proces
 
 ### Why it was removed
 
-Mandatory locking was removed in Linux 5.15 (commit `b8852d4`) for several reasons:
+Mandatory locking was removed in Linux 5.15 ([commit b8852d4fe4e9](https://git.kernel.org/linus/b8852d4fe4e9)) for several reasons:
 
 - **Races with `mmap`**: A process holding a mandatory write lock could still be bypassed by mapping the file and writing through the mapping, since `mmap`-based access did not check mandatory locks consistently.
 - **TOCTOU hazards**: The window between a `stat(2)` check and the actual `open()` could lead to security issues in programs expecting mandatory lock protection.

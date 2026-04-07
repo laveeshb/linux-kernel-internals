@@ -241,7 +241,7 @@ NVMe controllers use a pair of rings per queue: a submission queue (SQ) that the
 /* drivers/nvme/host/pci.c */
 static inline bool nvme_cqe_pending(struct nvme_queue *nvmeq)
 {
-    struct nvme_completion *hd = sq_head(nvmeq);
+    struct nvme_completion *hd = cq_head(nvmeq);
     return (le16_to_cpu(hd->status) & 1) == nvmeq->cq_phase;
 }
 
@@ -387,7 +387,7 @@ static int io_iopoll_check(struct io_ring_ctx *ctx, long min)
             break;
         if (!iters && !io_cqring_events(ctx))
             break;
-    } while (!io_cqring_events(ctx) < min);
+    } while (io_cqring_events(ctx) < min);
 
     return ret;
 }

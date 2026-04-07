@@ -241,7 +241,7 @@ Inside `ext4_punch_hole()`, the sequence mirrors the truncate-down path:
 
 1. `filemap_write_and_wait_range()` — flush any dirty pages in the hole range.
 2. `truncate_inode_pages_range()` — invalidate page cache for the punched range.
-3. `ext4_free_blocks()` (via extent tree manipulation) — return the blocks.
+3. `ext4_ext_remove_space()` — walk the extent tree and remove extents covering the punched range, freeing the underlying blocks.
 4. Update the extent tree to mark the range as a hole (`EXT4_EXT_MARK_UNWRIT` or simply remove the extents).
 
 ### Filesystem support

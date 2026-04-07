@@ -105,7 +105,7 @@ Bit field of `IOCB_*` flags. See the next section for the full table.
 
 ### ki_ioprio
 
-I/O priority encoded as a 16-bit `ioprio_value` (class in bits 15:13, data in bits 12:0). Set from the process's I/O priority via `get_current_ioprio()` at kiocb init time, or per-call via `pwritev2(RWF_IOPRIO)` (since Linux 6.3). Passed to the block layer in `bio->bi_ioprio` so BFQ and mq-deadline can schedule requests accordingly.
+I/O priority encoded as a 16-bit `ioprio_value` (class in bits 15:13, data in bits 12:0). Set from the process's I/O priority via `get_current_ioprio()` at kiocb init time. There is no per-call `RWF_*` flag to override I/O priority; use `ioprio_set(2)` to change priority per-thread, or cgroup v2 `io.weight` for container-level control. Passed to the block layer in `bio->bi_ioprio` so BFQ and mq-deadline can schedule requests accordingly.
 
 ### ki_waitq / ki_result (union)
 
@@ -352,7 +352,7 @@ static void io_complete_rw(struct kiocb *kiocb, long res)
     struct io_rw *rw = container_of(kiocb, struct io_rw, kiocb);
     struct io_kiocb *req = cmd_to_io_kiocb(rw);
 
-    if (!kiocb->ki_flags & IOCB_WRITE)
+    if (!(kiocb->ki_flags & IOCB_WRITE))
         kiocb_done(kiocb, res, IO_URING_F_COMPLETE_DEFER);
     else
         io_rw_done(kiocb, res);

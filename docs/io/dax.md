@@ -28,7 +28,7 @@ DAX mmap (the killer feature):
   access  → CPU load/store directly to PMEM (no kernel involvement after fault)
 ```
 
-The concept first appeared in Linux 3.11 as `MAP_POPULATE` support for ramdisks. Real DAX support for PMEM hardware landed in 3.12, with ext4 as the first filesystem. Since then DAX has matured substantially: XFS gained DAX in 4.0, per-file DAX flags arrived in 5.8, and the iomap-based DAX path is now the standard implementation.
+DAX support for PMEM hardware landed in Linux 4.0 with ext4 as the first filesystem ([commit 5f0d8344a0a7](https://git.kernel.org/linus/5f0d8344a0a7)). XFS gained DAX in 4.0 as well. Per-file DAX flags (`FS_XFLAG_DAX`, `S_DAX`) arrived in 5.8 ([commit 9f28f797e6c6](https://git.kernel.org/linus/9f28f797e6c6)), allowing DAX to be controlled per-file rather than as a mount-wide option. The iomap-based DAX path is now the standard implementation for both ext4 and XFS.
 
 ---
 
@@ -611,7 +611,7 @@ Practical considerations:
 
 btrfs uses copy-on-write (COW) semantics for all writes: a write to an existing block allocates a new block, writes the data there, and then updates the tree to point to the new location. The old block is freed.
 
-DAX mmap installs PTEs pointing to specific PMEM physical addresses. With COW, those physical addresses can change under the process's feet — the PTE would point to freed or reused PMEM. Making this safe would require either abandoning COW (breaking fundamental btrfs guarantees) or invalidating all DAX PTEs on every write (destroying performance). Neither is acceptable.
+DAX mmap installs PTEs that point directly to PMEM physical addresses. A COW write would need to allocate a new block, copy the data, and update the tree — but the installed PTEs still point to the old block. The kernel cannot rewrite all live PTEs atomically with the tree update. The only safe resolution would be invalidating all DAX PTEs before every COW write (destroying the performance advantage) or abandoning COW entirely (breaking fundamental btrfs consistency guarantees). Neither is acceptable.
 
 This is a fundamental architectural incompatibility, not a "not implemented yet" situation.
 
