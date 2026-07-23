@@ -18,6 +18,8 @@ x86-64 kernel virtual address space (4-level paging):
 ffff800000000000 ┌────────────────────────────────┐ ← start of kernel half
                  │ guard hole (8 TB, reserved     │
                  │ for hypervisors)               │
+ffff880000000000 ├────────────────────────────────┤
+                 │ LDT remap for KPTI (0.5 TB)    │
 ffff888000000000 ├────────────────────────────────┤ ← PAGE_OFFSET
                  │ direct map of all physical     │
                  │ memory ("physmap", 64 TB)      │   __va() / __pa()
@@ -38,8 +40,8 @@ ffffec0000000000 ├────────────────────
 fffffe0000000000 ├────────────────────────────────┤
                  │ cpu_entry_area                 │   entry stacks, GDT, TSS
 fffffe8000000000 ├────────────────────────────────┤
-                 │ LDT remap (PTI), ESPFIX        │
-                 │ stacks, EFI runtime services   │
+                 │ ESPFIX stacks, EFI runtime     │
+                 │ services (with holes between)  │
 ffffffff80000000 ├────────────────────────────────┤ ← __START_KERNEL_map
                  │ kernel text + data (512 MB /   │
                  │ 1 GB with KASLR)               │   .text, .rodata, .data, .bss
@@ -104,10 +106,10 @@ flowchart LR
 
 The direct map's huge pages are also its weakness. Features that change permissions on a *single* 4 KB page — `set_memory_ro()` for module text, `set_memory_np()` for [secretmem](https://lwn.net/Articles/812325/), DEBUG_PAGEALLOC — force the kernel to split a 1 GB or 2 MB direct-map page into 4 KB pages, permanently increasing TLB pressure for all kernel memory access. Direct-map fragmentation is a recurring performance topic on the mm lists, and it's why permission-changing APIs are used sparingly.
 
-The security story is sharper. Because *user* pages are also visible through the direct map, a kernel bug that lets an attacker dereference a controlled kernel address can reach user-controlled data at a kernel address — the *ret2dir* attack family. Responses to this shaped several modern features:
+The security story is sharper. Because *user* pages are also visible through the direct map, a kernel bug that lets an attacker dereference a controlled kernel address can reach user-controlled data at a kernel address — the *ret2dir* attack family ([Kemerlis et al., USENIX Security 2014](https://www.usenix.org/conference/usenixsecurity14/technical-sessions/presentation/kemerlis)). Responses to this shaped several modern features:
 
-- `memfd_secret()` (Linux 5.14) gives userspace pages that are **removed from the direct map** entirely — even a compromised kernel can't casually read them.
-- KVM's `guest_memfd` applies the same idea to confidential-VM guest memory.
+- `memfd_secret()` (Linux 5.14, [LWN](https://lwn.net/Articles/865256/)) gives userspace pages that are **removed from the direct map** entirely — even a compromised kernel can't casually read them.
+- KVM's `guest_memfd` applies the same idea to confidential-VM guest memory ([LWN: Unmapping guest_memfd from the direct map](https://lwn.net/Articles/981306/)).
 - The direct map is **not executable** (NX set), so having a second writable alias of a page can't be directly turned into code execution.
 
 ---
@@ -136,7 +138,7 @@ Third major region: `VMALLOC_START` to `VMALLOC_END`, 32 TB of space for **virtu
 - **It's where non-RAM mappings live.** `ioremap()` places device MMIO here; `vmap()` stitches arbitrary page sets into contiguous ranges.
 - **Guard pages come free.** Each vmalloc area is separated from the next by an unmapped page, so linear overflows fault. This is exactly why kernel stacks moved into vmalloc space (`CONFIG_VMAP_STACK`, Linux 4.9, [LWN: Virtually mapped kernel stacks](https://lwn.net/Articles/692208/)): a stack overflow now hits a guard page and oopses cleanly instead of silently corrupting whatever was adjacent.
 
-The subtle cost of the region: vmalloc mappings modify the shared kernel page tables at PGD level lazily, which historically required `vmalloc_fault()` — a page-fault path that filled in another process's top-level entries on first touch. Modern kernels pre-populate the shared PGD entries for the whole region to avoid that class of fault entirely.
+The subtle cost of the region: vmalloc mappings modify the shared kernel page tables at PGD level lazily, which historically required `vmalloc_fault()` — a page-fault path that filled in another process's top-level entries on first touch. Modern kernels pre-populate the shared entries for the whole region at boot to avoid that class of fault entirely ([commit 6eb82f994026](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=6eb82f994026), Linux 5.9).
 
 ---
 
@@ -162,11 +164,11 @@ Everything above describes the *compile-time* layout. With `CONFIG_RANDOMIZE_BAS
 | Direct map base | 1 GB (PUD) | shuffled within the region |
 | vmalloc base | 1 GB (PUD) | shuffled within the region |
 | vmemmap base | 1 GB (PUD) | shuffled within the region |
-| Module area base | randomized within its 1.5 GB |
+| Module load base | small page-granular offset within the module area |
 
 The region randomization lives in [arch/x86/mm/kaslr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/kaslr.c): the direct map, vmalloc, and vmemmap keep their *order* but their bases are re-dealt within the available space, so an attacker who leaks a direct-map pointer learns nothing about where vmalloc or the kernel image landed.
 
-Honest assessment of the design ([LWN: Kernel address space layout randomization](https://lwn.net/Articles/569635/)): KASLR raises the bar from "compute the address" to "find an info leak first" — and kernel pointer leaks are common enough (`%p` hashing, `kptr_restrict`, and `dmesg_restrict` all exist to fight them) that KASLR is best understood as one layer, not a boundary. Some things deliberately *cannot* be randomized: `cpu_entry_area` stays at a fixed address because the syscall/interrupt entry code must find its stacks before it has loaded any randomized base, and the fixmap region exists precisely to give early boot and special features compile-time-constant addresses.
+Honest assessment of the design ([LWN: Kernel address space layout randomization](https://lwn.net/Articles/569635/)): KASLR raises the bar from "compute the address" to "find an info leak first" — and kernel pointer leaks are common enough (`%p` hashing, `kptr_restrict`, and `dmesg_restrict` all exist to fight them) that KASLR is best understood as one layer, not a boundary. Some things resist randomization: the `cpu_entry_area` *region* stays at a fixed base because the syscall/interrupt entry code must find its stacks before it has loaded any randomized base, and the fixmap region exists precisely to give early boot and special features compile-time-constant addresses. The fixed `cpu_entry_area` was in fact exploited as a KASLR bypass — since Linux 6.2 the per-CPU areas *within* the region are shuffled in response ([x86/mm: Randomize per-cpu entry area](https://lkml.org/lkml/2022/10/21/1130), CVE-2023-0597).
 
 ---
 
