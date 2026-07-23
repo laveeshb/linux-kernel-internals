@@ -412,4 +412,4 @@ cat /sys/kernel/debug/page_tables/kernel
 - [KVM Memory Virtualization](../../virtualization/kvm-memory.md) — Stage 2 page tables, EPT/NPT analog on ARM64
 - [TLB Optimization](../../mm/tlb-optimization.md) — batched TLB invalidation and mmu_gather
 - ARM Architecture Reference Manual (DDI 0487) — D5: AArch64 Virtual Memory System Architecture
-- `Documentation/arch/arm64/memory.rst` in the kernel tree — ARM64 virtual address layout
+- [Documentation/arch/arm64/memory.rst](https://docs.kernel.org/arch/arm64/memory.html) — ARM64 virtual address layout

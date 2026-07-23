@@ -398,3 +398,19 @@ dmesg | grep -i pcid
 | UMIP enforcement | 4.19 | Automatically enabled if supported |
 | FSGSBASE instructions in kernel | 5.9 | `CR4.FSGSBASE` enabled |
 | `X86_BUG_*` flags for speculative execution | 4.15 | Meltdown/Spectre era |
+
+---
+
+## Further reading
+
+### Kernel source & documentation
+
+- [arch/x86/include/asm/cpufeatures.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/cpufeatures.h) — the full feature-bit vocabulary (`X86_FEATURE_*`)
+- [arch/x86/kernel/cpu/common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/cpu/common.c) — `get_cpu_cap()` and boot-time detection
+- [arch/x86/kernel/alternative.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/alternative.c) — the runtime patching engine behind `ALTERNATIVE`
+- [Intel SDM](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) — Vol. 2A documents every CPUID leaf
+
+### Related pages
+
+- [ARM64 CPU Features](../arm64/cpu-features.md) — the system-register equivalent of CPUID, and arm64's alternatives engine
+- [Kernel Hardening](../../security/kernel-hardening.md) — mitigations selected via these feature/bug bits

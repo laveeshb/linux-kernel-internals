@@ -440,3 +440,5 @@ Errata workarounds are safety-critical: an off-by-one in a MIDR revision range s
 - [Page Tables](page-tables.md) — PTE format, TLB management, `flush_tlb_range()` internals
 - [CPU Features](cpu-features.md) — Feature detection, MIDR_EL1 format, `arm64_errata[]` infrastructure, SVE/BTI/MTE capability probing
 - [Spectre and Meltdown](spectre-meltdown.md) — Speculative execution, erratum-driven mitigations, SMCCC firmware interfaces
+- [Documentation/arch/arm64/silicon-errata.rst](https://docs.kernel.org/arch/arm64/silicon-errata.html) — the kernel's list of every worked-around erratum (Case 5's world)
+- [arch/arm64/kernel/cpu_errata.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/kernel/cpu_errata.c) — MIDR match ranges for erratum workarounds

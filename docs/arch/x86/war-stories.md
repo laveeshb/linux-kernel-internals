@@ -401,3 +401,19 @@ perf stat -e dTLB-load-misses,iTLB-load-misses -p $$ sleep 5
 CPUID feature bits cannot be assumed to be complete, consistent, or independent. A CPU can report PCID support while lacking INVPCID — a configuration that is useful in isolation (PCID works for normal context switches) but that the kernel's KPTI path could not use correctly without both. The fix required treating PCID and INVPCID as independent features and implementing the correct fallback for every combination.
 
 This case is also a good example of why the kernel's feature detection and alternative patching infrastructure exists: `X86_FEATURE_*` flags and the `cpu_has()` family of functions provide a single authoritative source of truth for capability checks, making it possible to audit all the places a feature is required and add missing checks consistently.
+
+---
+
+## Further reading
+
+### Sources
+
+- [CVE-2012-0217 (NVD)](https://nvd.nist.gov/vuln/detail/CVE-2012-0217) — the AMD SYSRET canonical-address privilege escalation
+- [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — TSC calibration and watchdog, scene of Case 2
+- [Spectre Side Channels](https://docs.kernel.org/admin-guide/hw-vuln/spectre.html) — retpoline and its interaction with indirect calls (Case 4)
+
+### Related pages
+
+- [x86-64 Syscall Entry](syscall-entry.md) — the SYSRET path exploited in Case 3
+- [Spectre and Meltdown](spectre-meltdown.md) — background for the KPTI and retpoline cases
+- [x86 CPU Features](cpu-features.md) — feature detection, INVPCID fallback (Case 5)
