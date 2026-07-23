@@ -24,7 +24,7 @@ ffff888000000000 ├────────────────────
                  │ direct map of all physical     │
                  │ memory ("physmap", 64 TB)      │   __va() / __pa()
 ffffc88000000000 ├────────────────────────────────┤
-                 │ hole (1 TB guard)              │
+                 │ hole (0.5 TB guard)            │
 ffffc90000000000 ├────────────────────────────────┤ ← VMALLOC_START
                  │ vmalloc / ioremap (32 TB)      │
 ffffe90000000000 ├────────────────────────────────┤
@@ -85,6 +85,9 @@ This is *the* payoff of 64-bit virtual addresses: 32-bit kernels couldn't map mo
 Two consequences worth internalizing:
 
 - **Every physical page has (at least) two virtual addresses.** A page mapped at `0x00007f...` in some process is *also* visible at `PAGE_OFFSET + phys` in the direct map. `kmalloc()` returns direct-map addresses; that's why `virt_to_phys()` works on kmalloc memory but not on vmalloc memory.
+- **The direct map's page tables are shared and huge.** The kernel maps it with 1 GB and 2 MB pages wherever possible (`init_mem_mapping()` in [arch/x86/mm/init.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/init.c)), so the whole of a large machine's RAM fits in a handful of TLB entries.
+
+One physical page, seen from every region:
 
 ```mermaid
 flowchart LR
@@ -100,7 +103,6 @@ flowchart LR
     V --> P
     M -. "describes" .-> P
 ```
-- **The direct map's page tables are shared and huge.** The kernel maps it with 1 GB and 2 MB pages wherever possible (`init_mem_mapping()` in [arch/x86/mm/init.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/init.c)), so the whole of a large machine's RAM fits in a handful of TLB entries.
 
 ### The cost: fragmentation and attack surface
 
@@ -136,6 +138,7 @@ Third major region: `VMALLOC_START` to `VMALLOC_END`, 32 TB of space for **virtu
 
 - **It's the escape hatch from physical contiguity.** After boot, large physically-contiguous allocations become unreliable (see [Compaction](compaction.md)); vmalloc trades TLB efficiency (4 KB mappings, unlike the direct map's huge pages) for guaranteed success on large sizes.
 - **It's where non-RAM mappings live.** `ioremap()` places device MMIO here; `vmap()` stitches arbitrary page sets into contiguous ranges.
+- **It hosts dynamic per-CPU memory.** When the boot-time per-CPU area fills up, `pcpu_alloc()` grabs new chunks from vmalloc space — that's why `pcpu_alloc` entries show up in `/proc/vmallocinfo`.
 - **Guard pages come free.** Each vmalloc area is separated from the next by an unmapped page, so linear overflows fault. This is exactly why kernel stacks moved into vmalloc space (`CONFIG_VMAP_STACK`, Linux 4.9, [LWN: Virtually mapped kernel stacks](https://lwn.net/Articles/692208/)): a stack overflow now hits a guard page and oopses cleanly instead of silently corrupting whatever was adjacent.
 
 The subtle cost of the region: vmalloc mappings modify the shared kernel page tables at PGD level lazily, which historically required `vmalloc_fault()` — a page-fault path that filled in another process's top-level entries on first touch. Modern kernels pre-populate the shared entries for the whole region at boot to avoid that class of fault entirely ([commit 6eb82f994026](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=6eb82f994026), Linux 5.9).
@@ -164,7 +167,7 @@ Everything above describes the *compile-time* layout. With `CONFIG_RANDOMIZE_BAS
 | Direct map base | 1 GB (PUD) | shuffled within the region |
 | vmalloc base | 1 GB (PUD) | shuffled within the region |
 | vmemmap base | 1 GB (PUD) | shuffled within the region |
-| Module load base | small page-granular offset within the module area |
+| Module load base | 4 KB | small offset at the start of the module area |
 
 The region randomization lives in [arch/x86/mm/kaslr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/kaslr.c): the direct map, vmalloc, and vmemmap keep their *order* but their bases are re-dealt within the available space, so an attacker who leaks a direct-map pointer learns nothing about where vmalloc or the kernel image landed.
 
@@ -178,13 +181,14 @@ The same concepts appear on arm64 ([arm64 memory model](../arch/arm64/memory-mod
 
 ---
 
-## Observing the layout
+## Try It Yourself
 
 ```bash
 # The authoritative map for your running kernel
 sudo cat /sys/kernel/debug/page_tables/kernel     # CONFIG_PTDUMP_DEBUGFS
-# Shows every kernel mapping with size (4K/2M/1G) and permissions —
-# you can watch direct-map huge pages split after loading a module
+# Shows every kernel mapping with size (4K/2M/1G) and permissions,
+# with region markers (vmalloc, vmemmap, ...) — you can watch
+# direct-map huge pages split after loading a module
 
 # Where did KASLR put things this boot?
 sudo grep -E "startup_64|_text" /proc/kallsyms     # kernel text base
@@ -193,11 +197,12 @@ sudo grep -E "startup_64|_text" /proc/kallsyms     # kernel text base
 # Direct map huge-page coverage (watch DirectMap4k grow = fragmentation)
 grep DirectMap /proc/meminfo
 
-# vmalloc region usage
+# vmalloc region usage (note the pcpu_alloc entries — per-CPU chunks)
 sudo cat /proc/vmallocinfo | head -20
 
-# struct page overhead (the vmemmap's population, roughly)
-grep -i memmap /proc/vmstat 2>/dev/null; grep Percpu /proc/meminfo
+# struct page overhead — i.e. how much RAM backs the vmemmap (6.11+)
+grep memmap /proc/vmstat
+# On older kernels, estimate it: MemTotal / 4096 * 64 bytes ≈ 1.6% of RAM
 
 # Prove kmalloc lives in the direct map and vmalloc doesn't:
 sudo cat /proc/vmallocinfo | awk '{print $1}' | head -3   # 0xffffc9... (vmalloc)
@@ -229,6 +234,7 @@ sudo cat /proc/vmallocinfo | awk '{print $1}' | head -3   # 0xffffc9... (vmalloc
 | Virtually-mapped stacks (`VMAP_STACK`) | 4.9 | Stacks moved into vmalloc for guard pages |
 | KPTI | 4.15 | Kernel half hidden while in userspace |
 | `memfd_secret()` | 5.14 | User pages removable from direct map |
+| cpu_entry_area randomization | 6.2 | Per-CPU areas shuffled after a KASLR bypass (CVE-2023-0597) |
 | 5-level paging layout | 4.14+ | Same structure, bigger constants |
 
 ---

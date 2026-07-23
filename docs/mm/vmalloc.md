@@ -4,7 +4,7 @@
 
 ## What is vmalloc?
 
-`vmalloc()` allocates memory that is contiguous in *virtual* address space but may be backed by non-contiguous physical pages. This makes it suitable for large allocations where physical contiguity isn't required.
+`vmalloc()` allocates memory that is contiguous in *virtual* address space but may be backed by non-contiguous physical pages. This makes it suitable for large allocations where physical contiguity isn't required. (For where the vmalloc region sits relative to the direct map and vmemmap — and why it's a separate region at all — see [The Kernel Address Space](kernel-address-space.md).)
 
 ```c
 void *vmalloc(unsigned long size);
