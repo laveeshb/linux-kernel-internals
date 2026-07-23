@@ -30,8 +30,11 @@ Linux provides multiple complementary tracing mechanisms:
 | Page | What it covers |
 |------|----------------|
 | [ftrace](ftrace.md) | Function tracing, tracefs, ring buffer, trace-cmd |
+| [ftrace Advanced](ftrace-advanced.md) | Function graph, trigger actions, boot-time tracing |
 | [Kprobes and Tracepoints](kprobes-tracepoints.md) | kprobe/kretprobe, static tracepoints, TRACE_EVENT |
+| [uprobes and USDT](uprobes-usdt.md) | Userspace probes and static markers |
 | [perf Events](perf-events.md) | perf_event_open, PMU counters, sampling, flamegraphs |
+| [perf Profiling](perf-profiling.md) | CPU profiling workflows, flamegraph recipes |
 
 ## Quick reference
 

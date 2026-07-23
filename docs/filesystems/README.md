@@ -28,8 +28,11 @@ Application: open("/data/file", O_RDONLY)
 | Page | What it covers |
 |------|----------------|
 | [ext4](ext4.md) | On-disk layout, extents, journaling with jbd2 |
-| [tmpfs and ramfs](tmpfs.md) | Memory-backed filesystems, size limits |
+| [ext4 Journaling Deep Dive](ext4-journal.md) | jbd2 internals, ordered vs journaled data |
+| [XFS](xfs.md) | Allocation groups, delayed allocation, log design |
 | [btrfs](btrfs.md) | Copy-on-Write B-tree, subvolumes, snapshots |
+| [tmpfs and ramfs](tmpfs.md) | Memory-backed filesystems, size limits |
+| [overlayfs](overlayfs.md) | Union mounts, copy-up, container layers |
 
 ## Choosing a filesystem
 
@@ -40,5 +43,5 @@ Application: open("/data/file", O_RDONLY)
 | xfs | High-performance servers | High scalability |
 | tmpfs | /tmp, /run, shared memory | RAM-backed, fast |
 | overlayfs | Container images | Union of layers |
-| squashfs | Read-only (LiveCD, containers) | Compressed, read-only |
-| erofs | Android, embedded | Compressed, fast read |
+| squashfs | Read-only (LiveCD, containers) | Compressed, read-only — no dedicated page yet |
+| erofs | Android, embedded | Compressed, fast read — no dedicated page yet |
