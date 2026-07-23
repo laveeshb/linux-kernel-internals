@@ -57,32 +57,33 @@ For comprehensive testing documentation, see [Documentation/dev-tools/testing-ov
 **Address Translation & Process Memory:**
 
 5. **[Page Tables](page-tables.md)** - Virtual address translation
-6. **[Process Address Space](mmap.md)** - VMAs, mmap, demand paging
+6. **[The Kernel Address Space](kernel-address-space.md)** - Direct map, vmemmap, vmalloc space, KASLR
+7. **[Process Address Space](mmap.md)** - VMAs, mmap, demand paging
 
 **Memory Pressure & Reclaim:**
 
-7. **[Page Reclaim](reclaim.md)** - LRU, kswapd, MGLRU
-8. **[Swap](swap.md)** - Extending memory to disk
-9. **[Page Cache](page-cache.md)** - File data caching
+8. **[Page Reclaim](reclaim.md)** - LRU, kswapd, MGLRU
+9. **[Swap](swap.md)** - Extending memory to disk
+10. **[Page Cache](page-cache.md)** - File data caching
 
 **Advanced Topics:**
 
-10. **[Memory Cgroups](memcg.md)** - Container memory limits
-11. **[NUMA](numa.md)** - Multi-node memory management
-12. **[Transparent Huge Pages](thp.md)** - Automatic huge pages
-13. **[Compaction](compaction.md)** - Memory defragmentation
-14. **[KSM](ksm.md)** - Page deduplication for VMs
+11. **[Memory Cgroups](memcg.md)** - Container memory limits
+12. **[NUMA](numa.md)** - Multi-node memory management
+13. **[Transparent Huge Pages](thp.md)** - Automatic huge pages
+14. **[Compaction](compaction.md)** - Memory defragmentation
+15. **[KSM](ksm.md)** - Page deduplication for VMs
 
 **End-to-End Walkthroughs:**
 
 After the fundamentals, these trace operations through the entire stack:
 
-15. **[Life of a malloc](life-of-malloc.md)** - From userspace to physical page
-16. **[Life of a page](life-of-page.md)** - Allocation through reclaim
-17. **[What happens when you fork](fork.md)** - COW mechanics
-18. **[Running out of memory](oom.md)** - The path to OOM kill
-19. **[Life of a file read](life-of-read.md)** - Page cache in action
-20. **[What happens during swapping](swapping.md)** - Swap-out and swap-in
+16. **[Life of a malloc](life-of-malloc.md)** - From userspace to physical page
+17. **[Life of a page](life-of-page.md)** - Allocation through reclaim
+18. **[What happens when you fork](fork.md)** - COW mechanics
+19. **[Running out of memory](oom.md)** - The path to OOM kill
+20. **[Life of a file read](life-of-read.md)** - Page cache in action
+21. **[What happens during swapping](swapping.md)** - Swap-out and swap-in
 
 ### What You'll Learn
 
@@ -119,6 +120,7 @@ After the fundamentals, these trace operations through the entire stack:
 | [vmalloc](vmalloc.md) | Virtually contiguous allocation |
 | [vrealloc](vrealloc.md) | Resizing allocations |
 | [page-tables](page-tables.md) | Virtual address translation |
+| [kernel-address-space](kernel-address-space.md) | The kernel half: direct map, vmemmap, KASLR |
 | [reclaim](reclaim.md) | What happens under memory pressure |
 | [memcg](memcg.md) | Container memory limits |
 | [thp](thp.md) | Transparent Huge Pages - automatic 2MB pages |

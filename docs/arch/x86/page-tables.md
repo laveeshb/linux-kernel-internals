@@ -303,6 +303,8 @@ perf stat -e tlb:tlb_flush ls
 
 ## Kernel virtual address layout
 
+> Deep dive: [The Kernel Address Space](../../mm/kernel-address-space.md) covers each of these regions — the direct map, vmemmap, vmalloc, KASLR — and the rationale behind the layout.
+
 The 64-bit kernel virtual address space is divided into regions (values are for a typical 4-level paging, non-5-level system with `CONFIG_X86_64`):
 
 ```

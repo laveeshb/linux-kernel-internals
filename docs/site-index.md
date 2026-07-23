@@ -36,6 +36,7 @@ A complete listing of all documentation, organized by topic.
 | Page | Description |
 |------|-------------|
 | [Page Tables](mm/page-tables.md) | Virtual-to-physical address translation |
+| [The Kernel Address Space](mm/kernel-address-space.md) | Direct map, vmemmap, vmalloc space, KASLR |
 | [Process Address Space](mm/mmap.md) | VMAs, mmap, demand paging, COW |
 
 ### Caching & Reclaim
