@@ -431,3 +431,27 @@ grep entry_SYSCALL_64 /proc/kallsyms
 modprobe msr
 rdmsr 0xC0000082   # LSTAR — should match the above address
 ```
+
+---
+
+## Further reading
+
+### Kernel source & documentation
+
+- [arch/x86/entry/entry_64.S](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/entry_64.S) — `entry_SYSCALL_64` itself; unusually well commented
+- [arch/x86/entry/syscall_64.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/syscall_64.c) — the syscall table and `do_syscall_64()`
+
+### Man pages
+
+- [`syscall(2)`](https://man7.org/linux/man-pages/man2/syscall.2.html) — calling conventions for every architecture in one table
+- [`vdso(7)`](https://man7.org/linux/man-pages/man7/vdso.7.html) — which syscalls never enter the kernel
+
+### Related pages
+
+- [Syscall Entry Path](../../syscalls/syscall-entry.md) — the architecture-neutral view
+- [ARM64 Syscall Entry](../arm64/syscall-entry.md) — SVC instead of SYSCALL
+- [vDSO](../../mm/vdso.md) — the fast path in depth
+
+### LWN articles
+
+- [Anatomy of a system call, part 1](https://lwn.net/Articles/604287/) — the classic walkthrough of this exact path

@@ -442,3 +442,19 @@ systemd-analyze blame
 - **5-level paging at boot**: if the CPU supports LA57 and the kernel is configured with `CONFIG_X86_5LEVEL=y`, `startup_64` sets up 5-level page tables. Introduced in Linux 4.14.
 - **UEFI stub**: the in-kernel EFI stub (`CONFIG_EFI_STUB`) was introduced in Linux 3.3, allowing kernels to be booted directly by UEFI without a bootloader.
 - **Compressed kernel formats**: gzip is the oldest; lz4, lzma, xz, zstd support was added incrementally; zstd (fastest decompression) was added in Linux 5.9.
+
+---
+
+## Further reading
+
+### Kernel source & documentation
+
+- [The Linux/x86 Boot Protocol](https://docs.kernel.org/arch/x86/boot.html) — the setup header, entry conventions, and protocol history
+- [arch/x86/boot/](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/boot/) — the real-mode setup code walked through above
+- [arch/x86/kernel/head_64.S](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/head_64.S) — `startup_64` and early paging setup
+
+### Related pages
+
+- [x86_64 Boot Page Table Setup](../../mm/boot-page-tables.md) — the early page tables in depth, KASLR, 5-level enablement
+- [memblock](../../mm/memblock.md) — the boot-time memory allocator this sequence hands off to
+- [ARM64 Boot Sequence](../arm64/boot.md) — the same journey on the other major architecture
