@@ -212,6 +212,7 @@ nav:
       - Scheduler Tracing: sched/sched-tracing.md
       - Scheduler Tuning: sched/sched-tuning.md
   - Networking:
+    - Getting Started: net/README.md
     - Fundamentals:
       - "Why Is the Network Stack So Complex?": net/network-stack-overview.md
       - "sk_buff: The Network Buffer": net/sk-buff.md

@@ -35,6 +35,9 @@ struct device_driver ←── struct pci_driver (driver-specific extension)
 | [Linux Device Model](device-model.md) | struct device, bus, driver, kobject, sysfs |
 | [Platform Drivers](platform-driver.md) | Platform bus, probe/remove, devm_, device tree |
 | [Character and Misc Devices](chardev.md) | cdev, file_operations, ioctl, mmap from driver side |
+| [PCI Drivers](pci-driver.md) | Enumeration, config space, BARs, MSI setup |
+| [I2C and SPI](i2c-spi.md) | Slow-bus drivers, regmap, device addressing |
+| [Device Tree](device-tree.md) | Hardware description for non-discoverable buses |
 
 ## Quick reference
 
