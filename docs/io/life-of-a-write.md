@@ -826,7 +826,7 @@ static void __submit_bio(struct bio *bio)
 
 `blk_mq_submit_bio` places the bio into the appropriate hardware dispatch queue, handles I/O scheduling (BFQ, mq-deadline, none), merges adjacent bios where possible, and ultimately calls the device driver's queue command function.
 
-For a deeper look at request queues, I/O schedulers, and driver dispatch, see the [block layer docs](../block/).
+For a deeper look at request queues, I/O schedulers, and driver dispatch, see the [block layer docs](../block/README.md).
 
 ## Stage 8: Barriers and persistence guarantees
 
