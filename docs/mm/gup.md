@@ -33,7 +33,7 @@ long pin_user_pages(unsigned long start, unsigned long nr_pages,
 unpin_user_pages(pages, nr_pages);
 ```
 
-The `gup_flags` (`FOLL_WRITE`, `FOLL_PIN`, `FOLL_LONGTERM`, …) encode the caller's *intent*, and — as the history below shows — the entire safety of the interface turns on stating that intent correctly.
+The caller-supplied `gup_flags` (`FOLL_WRITE`, `FOLL_LONGTERM`, …) encode intent, and — as the history below shows — the entire safety of the interface turns on stating that intent correctly. (`FOLL_PIN` itself is set internally by the `pin_user_pages*()` wrappers, not passed by callers.)
 
 ---
 
