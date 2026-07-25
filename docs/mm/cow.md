@@ -168,7 +168,7 @@ This splitting behavior is the default for anonymous THP since kernel ~4.5. Howe
 
 When the kernel pins user pages for DMA (via `get_user_pages()`), COW gets complicated. The [Dirty COW vulnerability](https://dirtycow.ninja/) (CVE-2016-5195) exploited a race condition in this area.
 
-The kernel now handles this with more care, but the interaction between pinned pages and COW remains complex. See [`mm/gup.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/gup.c) for the gory details.
+The kernel now handles this with more care, but the interaction between pinned pages and COW remains complex. See [Getting User Pages (GUP)](gup.md) for the full mechanism — get vs pin, FOLL_LONGTERM, and why pinning collides with COW — and [`mm/gup.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/gup.c) for the gory details.
 
 ## Performance implications
 

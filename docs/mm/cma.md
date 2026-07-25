@@ -365,7 +365,7 @@ The debugfs interface for monitoring CMA was added, giving operators visibility 
 
 **Common causes**:
 
-- **Pinned pages in the CMA region**: Pages undergoing I/O or held by `get_user_pages()` cannot be migrated. This is the most common cause of CMA allocation failures.
+- **Pinned pages in the CMA region**: Pages undergoing I/O or held by `get_user_pages()` cannot be migrated. This is the most common cause of CMA allocation failures. See [Getting User Pages (GUP)](gup.md#foll_longterm-the-pin-that-fights-the-whole-memory-manager) for why long-term pins and CMA movability are fundamentally at odds.
 - **CMA region too small**: The region must accommodate the largest single contiguous allocation plus any concurrent allocations from other devices.
 - **Fragmentation within CMA**: If device allocations of varying sizes come and go, the CMA bitmap itself can become fragmented (external fragmentation within the CMA region).
 
