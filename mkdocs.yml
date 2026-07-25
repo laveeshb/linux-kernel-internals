@@ -117,6 +117,7 @@ nav:
       - HMM (Heterogeneous Memory Management): mm/hmm.md
       - userfaultfd: mm/userfaultfd.md
       - Page Table Walking API: mm/page-walk.md
+      - "GUP: Getting User Pages": mm/gup.md
       - vrealloc: mm/vrealloc.md
     - Memory Cgroups:
       - Container Memory Limits: mm/container-memory-limits.md

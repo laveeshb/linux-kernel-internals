@@ -6,7 +6,7 @@
 
 Every `read()` or `write()` — and every plain `IORING_OP_READ` — pays two costs that are easy to overlook:
 
-**Page pinning.** Before DMA can start, the kernel must ensure the target pages stay resident in physical memory for the duration of the transfer. This means calling `get_user_pages()` to walk the page tables, increment the page's reference count, and pin each page against reclaim. When the I/O completes, the pages must be unpinned (`unpin_user_pages()`). On a NVMe device capable of 1M IOPS, with a 4 KB buffer spanning a single page, that is 1M pin/unpin cycles per second — each one a TLB-unfriendly page-table walk.
+**Page pinning.** Before DMA can start, the kernel must ensure the target pages stay resident in physical memory for the duration of the transfer. This means calling `get_user_pages()` to walk the page tables, increment the page's reference count, and pin each page against reclaim (see [Getting User Pages (GUP)](../mm/gup.md) for the get-vs-pin mechanism this builds on). When the I/O completes, the pages must be unpinned (`unpin_user_pages()`). On a NVMe device capable of 1M IOPS, with a 4 KB buffer spanning a single page, that is 1M pin/unpin cycles per second — each one a TLB-unfriendly page-table walk.
 
 **File descriptor lookup.** The kernel resolves an integer `fd` to a `struct file *` on every operation via `fdget()`, which takes a reference on the file and must drop it when done. At high IOPS the lock contention on the file descriptor table is measurable.
 
