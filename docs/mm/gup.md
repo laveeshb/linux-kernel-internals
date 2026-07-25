@@ -117,10 +117,11 @@ The rule of thumb the documentation pushes: if you will access the *data*, use `
 ```bash
 # Pages currently pinned for DMA show up in the "unevictable"/pinned
 # accounting; per-task locked memory (RLIMIT_MEMLOCK governs long-term pins):
+# VmPin = pages pinned unmovable; drivers that account long-term pins
+# (RDMA, VFIO, io_uring registered buffers) charge them to pinned_vm here.
+# Note: an ad-hoc get_user_pages() pin is NOT systematically exposed —
+# only callers that explicitly account show up.
 grep -i "VmLck\|VmPin" /proc/$$/status
-
-# System-wide unevictable/mlocked total (long-term pins land here)
-grep -iE "Unevictable|Mlocked" /proc/meminfo
 
 # Watch a device driver's DMA pinning live (VFIO, RDMA, io_uring):
 sudo bpftrace -e 'kprobe:pin_user_pages_remote,
@@ -143,7 +144,7 @@ dmesg | grep -iE "alloc_contig|cma:.*fail|migrat"
 
 **RDMA/VFIO registration fails with `-ENOMEM` despite free memory.** `FOLL_LONGTERM` migrate-before-pin couldn't relocate the page out of `ZONE_MOVABLE`, or you've hit `RLIMIT_MEMLOCK`. Long-term pins count against locked-memory limits precisely because they are unreclaimable.
 
-**A device reads stale/garbage data after fork.** A classic pin-vs-COW interaction: pages pinned before a `fork()` can diverge from what the child sees once COW kicks in. Modern kernels mitigate this (pinned anonymous pages are copied at fork via `PG_anon_exclusive`), but the underlying hazard is why long-term DMA buffers should be set up with this in mind.
+**A device reads stale/garbage data after fork.** A classic pin-vs-COW interaction: pages pinned before a `fork()` can diverge from what the child sees once COW kicks in. Modern kernels mitigate this — pinned anonymous pages are copied *eagerly* at fork rather than shared COW (Peter Xu's early-COW-for-pinned-pages, 5.9), and 5.19's `PG_anon_exclusive` made GUP-vs-COW reliable in general — but the underlying hazard is why long-term DMA buffers should be set up with this in mind.
 
 ---
 
@@ -152,11 +153,12 @@ dmesg | grep -iE "alloc_contig|cma:.*fail|migrat"
 | Change | Linux version | Why it matters here |
 |--------|--------------|---------------------|
 | `get_user_pages_fast()` lockless path | 2.6.27 | The high-throughput DMA/direct-I/O fast path |
-| Dirty COW fix (write intent kept across retries) | 4.9 ([19be0eaffa3a](https://git.kernel.org/linus/19be0eaffa3a)) | Closed CVE-2016-5195 |
+| Dirty COW fix (write intent kept across retries) | 4.8.3 / 4.9 ([19be0eaffa3a](https://git.kernel.org/linus/19be0eaffa3a)) | Closed CVE-2016-5195 (merged Oct 2016) |
 | `pin_user_pages()` + `FOLL_PIN` | 5.6 ([eddb1c228f79](https://git.kernel.org/linus/eddb1c228f79)) | DMA intent made visible via the pin bias |
 | `pin_user_pages_remote()` replaces `get_user_pages_remote()` for DMA | 5.6 | VFIO/RDMA switch to the pin API |
 | Prohibit long-term pins in `ZONE_MOVABLE`; migrate-first | 5.11–5.12 | Preserves movability of CMA/movable zones |
-| `PG_anon_exclusive` — reliable COW vs pin | 5.19 | The architectural end of the GUP/COW war |
+| Early-COW for pinned pages at fork | 5.9 | Pinned anon pages copied eagerly instead of shared |
+| `PG_anon_exclusive` — reliable COW vs pin | 5.19 ([LWN](https://lwn.net/Articles/887178/)) | The architectural end of the GUP/COW war |
 
 ---
 
@@ -182,3 +184,4 @@ dmesg | grep -iE "alloc_contig|cma:.*fail|migrat"
 - [Explicit pinning of user-space pages](https://lwn.net/Articles/807108/) — John Hubbard introduces `pin_user_pages()` and the counting bias
 - [Patching until the COWs come home (part 1)](https://lwn.net/Articles/849638/) — Vlastimil Babka on the pin-vs-COW data-leak class
 - [Preserving the mobility of ZONE_MOVABLE](https://lwn.net/Articles/843326/) — migrate-before-pin and why long-term pins threaten movable zones
+- [Reliable GUP pins of anonymous pages](https://lwn.net/Articles/887178/) — David Hildenbrand on `PG_anon_exclusive` and ending the GUP/COW war
