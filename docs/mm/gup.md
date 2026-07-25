@@ -76,9 +76,9 @@ The kernel's answer is **migrate-before-pin**: a `FOLL_LONGTERM` request first t
 
 ## Fast GUP: walking page tables without the locks
 
-The straightforward GUP path takes `mmap_lock` and walks the page tables under it. For a high-IOPS direct-I/O or io_uring workload doing millions of pins per second, that lock and the full walk are pure overhead ([io_uring fixed buffers](../io-uring/fixed-buffers.md) exists precisely to amortize it away). So there is a **lockless fast path**, `get_user_pages_fast()` / `pin_user_pages_fast()`:
+The straightforward GUP path takes `mmap_lock` and walks the page tables under it. For a high-IOPS direct-I/O or io_uring workload doing millions of pins per second, that lock and the full walk are pure overhead ([io_uring fixed buffers](../io-uring/fixed-buffers.md) exists precisely to amortize it away). So there is a **lockless fast path**, `get_user_pages_fast()` / `pin_user_pages_fast()` — Nick Piggin's original x86 work in 2.6.27 ([LWN: Toward better direct I/O scalability](https://lwn.net/Articles/275808/)):
 
-- It walks the page tables **without taking `mmap_lock`**, relying instead on the fact that freeing a page table requires an IPI/RCU grace period that a fast-GUP walker (running with interrupts effectively disabled) will block, so the tables can't vanish underneath it (see [RCU in memory management](rcu-mm.md), `follow_page_mask()` and the `gup_fast` machinery in `mm/gup.c`).
+- It walks the page tables **without taking `mmap_lock`**, relying instead on the fact that a fast-GUP walker runs with **interrupts disabled**. On x86 that blocks the TLB-shootdown IPI that page-table freeing broadcasts, so the tables can't vanish underneath the walk; architectures with hardware TLB broadcast instead **RCU-free** the page tables and the interrupts-off window acts as the RCU read-side critical section ([LWN: a general RCU get_user_pages_fast](https://lwn.net/Articles/616211/); see [RCU in memory management](rcu-mm.md), `follow_page_mask()` and the `gup_fast` machinery in `mm/gup.c`).
 - It speculatively bumps the refcount and then **re-validates** the PTE; if anything changed, it backs out and falls back to the slow, locked path.
 
 This is a textbook lockless-read pattern: optimistic, verify-after, fall back on conflict. It is also the reason GUP interacts so delicately with copy-on-write — a fast walker and a faulting writer can race on the very same PTE.
@@ -115,8 +115,6 @@ The rule of thumb the documentation pushes: if you will access the *data*, use `
 ## Observing pins
 
 ```bash
-# Pages currently pinned for DMA show up in the "unevictable"/pinned
-# accounting; per-task locked memory (RLIMIT_MEMLOCK governs long-term pins):
 # VmPin = pages pinned unmovable; drivers that account long-term pins
 # (RDMA, VFIO, io_uring registered buffers) charge them to pinned_vm here.
 # Note: an ad-hoc get_user_pages() pin is NOT systematically exposed —
@@ -152,7 +150,7 @@ dmesg | grep -iE "alloc_contig|cma:.*fail|migrat"
 
 | Change | Linux version | Why it matters here |
 |--------|--------------|---------------------|
-| `get_user_pages_fast()` lockless path | 2.6.27 | The high-throughput DMA/direct-I/O fast path |
+| `get_user_pages_fast()` lockless path | 2.6.27 ([8174c430e445](https://git.kernel.org/linus/8174c430e445)) | The high-throughput DMA/direct-I/O fast path |
 | Dirty COW fix (write intent kept across retries) | 4.8.3 / 4.9 ([19be0eaffa3a](https://git.kernel.org/linus/19be0eaffa3a)) | Closed CVE-2016-5195 (merged Oct 2016) |
 | `pin_user_pages()` + `FOLL_PIN` | 5.6 ([eddb1c228f79](https://git.kernel.org/linus/eddb1c228f79)) | DMA intent made visible via the pin bias |
 | `pin_user_pages_remote()` replaces `get_user_pages_remote()` for DMA | 5.6 | VFIO/RDMA switch to the pin API |
@@ -185,3 +183,5 @@ dmesg | grep -iE "alloc_contig|cma:.*fail|migrat"
 - [Patching until the COWs come home (part 1)](https://lwn.net/Articles/849638/) — Vlastimil Babka on the pin-vs-COW data-leak class
 - [Preserving the mobility of ZONE_MOVABLE](https://lwn.net/Articles/843326/) — migrate-before-pin and why long-term pins threaten movable zones
 - [Reliable GUP pins of anonymous pages](https://lwn.net/Articles/887178/) — David Hildenbrand on `PG_anon_exclusive` and ending the GUP/COW war
+- [Toward better direct I/O scalability](https://lwn.net/Articles/275808/) — the 2008 origin of lockless `get_user_pages_fast()`
+- [A general RCU get_user_pages_fast](https://lwn.net/Articles/616211/) — RCU-freed page tables for architectures without IPI TLB shootdown
