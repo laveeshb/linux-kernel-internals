@@ -43,13 +43,12 @@ Since Linux 5.6 there are two families that appear interchangeable:
 
 | | `get_user_pages()` (FOLL_GET) | `pin_user_pages()` (FOLL_PIN) |
 |---|---|---|
-| Reference taken | ordinary page refcount +1 | pin: refcount += `GUP_PIN_COUNTING_BIAS` (1024) |
-| Duration | **short-term** — released before userspace notices | possibly **long-term** — held while hardware runs |
-| Will the caller read/write page *data*? | not necessarily (may only touch `struct page`) | **yes** |
-| Detectable as pinned? | no — indistinguishable from any other ref | yes — `folio_maybe_dma_pinned()` |
+| **The distinction — will the caller access the page's *data*?** | **No** — only manipulates `struct page` metadata, not the memory it tracks | **Yes** — reads/writes the actual page contents (e.g. DMA) |
+| Reference taken | ordinary page refcount +1 | base page: refcount += `GUP_PIN_COUNTING_BIAS` (1024); large folios use a separate `_pincount` |
+| Detectable as a DMA pin? | no — indistinguishable from any other ref | yes — `folio_maybe_dma_pinned()` |
 | Release with | `put_page()` | `unpin_user_pages()` |
 
-The split exists because of a subtle, expensive lesson: **an ordinary reference count cannot tell the memory-management core that a page is being used for DMA.** A refcount of, say, 3 could mean three fleeting references or one live DMA transfer that must not be disturbed. Code that needs to make a decision — "is it safe to migrate this page, or write back this dirty folio while a device might still be writing to it?" — had no way to ask.
+The primary axis is **data access, not duration** — the kernel documentation is explicit that "FOLL_GET is for `struct page` manipulation, without affecting the data," while FOLL_PIN is for when "the caller will access the page data." (*How long* the pin is held is a separate axis, owned by `FOLL_LONGTERM` below.) The split exists because of a subtle, expensive lesson: **an ordinary reference count cannot tell the memory-management core that a page is being used for DMA.** A refcount of, say, 3 could mean three fleeting references or one live DMA transfer that must not be disturbed. Code that needs to make a decision — "is it safe to migrate this page, or write back this dirty folio while a device might still be writing to it?" — had no way to ask.
 
 John Hubbard's `FOLL_PIN` redesign ([LWN: Explicit pinning of user-space pages](https://lwn.net/Articles/807108/)) makes the DMA intent *visible in the page itself*. The trick, per the [kernel documentation](https://docs.kernel.org/core-api/pin_user_pages.html), is to bias the count: a pin adds `GUP_PIN_COUNTING_BIAS` (1024) to the refcount rather than 1, so:
 
@@ -59,7 +58,7 @@ if (folio_maybe_dma_pinned(folio))
         /* do NOT migrate; do NOT assume writeback ends the writer */
 ```
 
-The bias scheme is a pragmatic hack — on a huge compound page the count is shared, so a 1 GB page can only be pinned a handful of times before overflow, which is why large folios grew a *separate* pincount field. But the important part is conceptual: **the API now carries the contract that context used to only imply.** The guidance is blunt — new code that touches page data should use `pin_user_pages()`; `get_user_pages()` is legacy for the cases that only manipulate `struct page` metadata.
+The bias scheme is a pragmatic hack — on a huge compound page the count was shared, so a 1 GB page could only be pinned a handful of times before overflow, which is why large folios grew a *separate* `_pincount` field. But the important part is conceptual: **the API now carries the contract that context used to only imply.** The guidance is blunt — new code that touches page data should use `pin_user_pages()`; `get_user_pages()` is legacy for the cases that only manipulate `struct page` metadata.
 
 ---
 
@@ -70,7 +69,7 @@ A short pin is a nuisance; a *long* pin is a structural problem. `FOLL_LONGTERM`
 - **Compaction / anti-fragmentation** — the kernel earns physically-contiguous free space by migrating movable pages together. A long-term pin nails a page in place, permanently fragmenting the region around it ([Compaction](compaction.md)).
 - **CMA and `ZONE_MOVABLE`** — these regions exist *specifically* so their pages can always be migrated away when someone needs contiguous memory. A page pinned there defeats the region's entire reason for existing ([CMA](cma.md)).
 
-The kernel's answer is **migrate-before-pin**: a `FOLL_LONGTERM` request first tries to move the target page *out* of any movable zone or CMA area into ordinary memory, and only then pins it. If the migration fails, so does the pin ([LWN: Preserving the mobility of ZONE_MOVABLE](https://lwn.net/Articles/843326/), [prohibit pinning pages in ZONE_MOVABLE](https://lwn.net/Articles/843143/)). This is why the most common CMA allocation failure in the field is "a page here is pinned by `get_user_pages()`" — a device driver's DMA buffer holding a CMA page hostage. The tension is fundamental: **movability and long-term pinning are mutually exclusive by construction**, and the kernel can only choose which one wins per-page.
+The kernel's answer is **migrate-before-pin**: a `FOLL_LONGTERM` request first tries to move the target page *out* of any movable zone or CMA area into ordinary memory, and only then pins it. If the migration fails, so does the pin ([LWN: Preserving the mobility of ZONE_MOVABLE](https://lwn.net/Articles/843326/), [prohibit pinning pages in ZONE_MOVABLE](https://lwn.net/Articles/843143/)). This is why a classic CMA allocation failure is "a page here is pinned by `get_user_pages()`" — a device driver's DMA buffer holding a CMA page hostage. The tension is fundamental: **movability and long-term pinning are mutually exclusive by construction**, and the kernel can only choose which one wins per-page.
 
 ---
 
@@ -102,13 +101,13 @@ The [kernel documentation](https://docs.kernel.org/core-api/pin_user_pages.html)
 
 | Case | Caller | Correct call |
 |------|--------|--------------|
-| 1 | **Direct I/O** — short-lived buffer, DMA completes soon | `pin_user_pages_fast(FOLL_PIN)` |
-| 2 | **RDMA / long-lived DMA** — buffer registered indefinitely | `pin_user_pages(FOLL_PIN \| FOLL_LONGTERM)` |
+| 1 | **Direct I/O** — short-lived buffer, DMA completes soon | `pin_user_pages_fast()` |
+| 2 | **RDMA / long-lived DMA** — buffer registered indefinitely | `pin_user_pages(..., FOLL_LONGTERM)` |
 | 3 | **MMU-notifier users** — track the mapping, re-fetch on invalidation | often no pin needed |
-| 4 | **`struct page` manipulation only** — never touches page *data* | `get_user_pages()` (FOLL_GET) |
-| 5 | **Writing to page data** | `pin_user_pages(FOLL_PIN)` |
+| 4 | **`struct page` manipulation only** — never touches page *data* | `get_user_pages()` |
+| 5 | **Writing to page data** | `pin_user_pages()` |
 
-The rule of thumb the documentation pushes: if you will access the *data*, use `FOLL_PIN`; if the access outlives the syscall, add `FOLL_LONGTERM` and accept the migrate-first cost.
+You never pass `FOLL_PIN` yourself — it is internal to GUP and "should not appear at the gup call sites"; you pick the `pin_user_pages*()` wrapper and it sets `FOLL_PIN` for you. The rule of thumb the documentation pushes: if you will access the *data*, use a pin; if the access outlives the syscall, add `FOLL_LONGTERM` and accept the migrate-first cost.
 
 ---
 
