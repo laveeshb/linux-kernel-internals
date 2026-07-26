@@ -180,36 +180,37 @@ TSC unreliability on multi-socket systems is well-known but the failure mode (ti
 
 ---
 
-## Case 3: AMD SYSRET canonical address bug (CVE-2012-0217)
+## Case 3: Intel SYSRET canonical address bug (CVE-2012-0217)
 
 ### Before state
 
-`SYSRET` (the 64-bit return instruction, counterpart to `SYSCALL`) has a subtle behavior: it loads `CS` and sets privilege level to ring 3 **before** loading `RIP` from `RCX`. This means there is a brief moment — between the CS load and the RIP load — where the CPU is in ring 3 but has not yet set the user RIP.
+`SYSRET` (specifically the 64-bit `SYSRETQ`, the fast counterpart to `SYSCALL`) returns to user space by restoring `RIP` from `RCX`, `RFLAGS` from `R11`, and setting the code segment to ring 3. By the time the kernel executes `SYSRET`, it has *already* restored the user's `RSP` and run `swapgs` to restore the user's `GS.base` — so the CPU is one instruction away from user space while still technically at CPL 0.
+
+The subtlety that matters: what if `RCX` (the return `RIP`) is a **non-canonical address** — one where bits 63:48 are not a sign extension of bit 47? The processor must raise `#GP`, but *when* and *in what state* it does so differs between vendors, and that difference is the whole bug.
 
 ### The vulnerability
 
-On AMD processors, if the `RCX` register (which holds the user-space return address) contains a **non-canonical address** (an address where bits 63:48 are not a sign extension of bit 47), AMD's `SYSRET` checks RIP canonicality **after** switching the privilege level to ring 3. The resulting `#GP` therefore fires from ring 3, not ring 0. Normal exception delivery from ring 3 then uses the TSS to switch back to ring 0 — and the TSS stack pointer becomes the attack vector if it can be influenced.
+On **Intel** processors, `SYSRET` checks the new `RIP` for canonicality and, if it fails, raises `#GP` **while still in ring 0 (CPL 0)** — but only *after* `RSP` has been pointed at the user's stack and `GS.base` swapped to the user's. So the `#GP` handler begins executing with **kernel privilege on a user-controlled stack**, and its first `gs:`-relative access faults because `GS.base` is now the user's. An attacker who arranges the non-canonical return and grooms the user stack and GS can steer the fault handler into their own code — a clean unprivileged → ring-0 escalation.
 
-On Intel processors, the non-canonical check happens **before** the privilege level change, so `#GP` is raised while still in ring 0 with the kernel stack, which is safe.
-
-The vulnerability was AMD-specific in its exploitable form. However, Xen (the hypervisor) and early Linux code shared the same vulnerable pattern.
+On **AMD** processors the `#GP` is delivered before the CPU reaches that exploitable state, so AMD hardware is **not affected**. That asymmetry is exactly why the bug hid for years: `SYSRET` originated with AMD (which authored the AMD64 spec), kernels were written against AMD's semantics, and Intel's implementation quietly diverged.
 
 ### Discovery and impact
 
-The vulnerability was discovered by Rafal Wojtczuk and reported in 2012 (CVE-2012-0217). It affected:
-- Xen paravirtualized guests on AMD hosts (the Xen `SYSRET` path)
-- Linux kernels on AMD hardware
-- NetBSD, FreeBSD, and other OS kernels using `SYSRET`
+Here is the twist that makes this a good war story: **Linux had already fixed this exact bug in 2006.** Linux hit the non-canonical-`SYSRET` hole on early Intel EM64T CPUs and closed it in **2.6.16.5** (CVE-2006-0744) — the fault-on-the-user-stack-with-wrong-GS problem, described there in almost the same words. Six years later, Rafal Wojtczuk found that everyone who *hadn't* copied Linux's fix was still exposed, and disclosed it as CVE-2012-0217 (June 2012). Because `SYSRET` is subtle enough that each kernel got it wrong independently, it hit a broad set of systems — all **running on Intel CPUs**:
+- Xen PV guests on Intel hosts (the Xen `SYSRET` path) — a guest → hypervisor escape
+- FreeBSD, NetBSD, Oracle Solaris / illumos, and Microsoft Windows (7 / Server 2008 R2)
+- **Linux was *not* affected in 2012** — it had been fixed since 2006
+- AMD hardware was unaffected throughout
 
-An unprivileged user process could gain full kernel (ring 0) execution.
+An unprivileged user process (or PV guest) on a vulnerable system could gain full kernel (ring 0) execution.
 
 ### Root cause
 
-The kernel's `entry_SYSCALL_64` return path checked the return address, but the check was not in the right place — it happened after the point where a non-canonical address in `RCX` could cause trouble. The fix requires checking `RCX` for canonicality before issuing `SYSRET`, and falling back to `IRET` if the address is non-canonical.
+The naive `SYSRET` return path issues the instruction without first checking that the return address in `RCX` is canonical, trusting the CPU to fault safely if it isn't — which is true on AMD but not on Intel. The fix is to check `RCX` for canonicality *before* `SYSRET` and fall back to `IRET` (which handles the privilege change safely) when it is non-canonical.
 
 ### Fix
 
-The Linux fix (applied in 3.4.5 / 3.5 stable):
+Linux's fix — the one everyone else eventually copied — checks `RCX` before returning. Here it is in the form it takes in modern `arch/x86/entry/entry_64.S` (the 2006 original was the same idea with different symbol names):
 
 ```c
 /* arch/x86/entry/entry_64.S (post-fix, simplified) */
@@ -245,7 +246,7 @@ grep -n "SYSRET\|non_canonical\|swapgs_restore" \
 
 ### What it taught us
 
-The `SYSCALL`/`SYSRET` instruction pair has documented edge cases that differ between Intel and AMD implementations. The Linux kernel (and Xen) relied on behavior that is safe on Intel but exploitable on AMD. This case illustrates why the AMD architecture manuals must be read independently of Intel's, and why fuzzing and formal analysis of privilege transition code is important. The fix — a single canonical-address check — is cheap and correct, but it took a working exploit to surface the need for it.
+The `SYSCALL`/`SYSRET` pair has vendor-specific edge cases: `SYSRET`'s response to a non-canonical `RIP` is safe on AMD but exploitable on Intel, because kernels were written against AMD's semantics — AMD defined AMD64 — and Intel's implementation diverged. The striking part is that this was **learned once and forgotten**: Linux closed the hole in 2006 (CVE-2006-0744), yet the same trap caught Xen, the BSDs, Solaris, and Windows six years later as CVE-2012-0217. Privilege-transition instructions have to be validated against *each* vendor's manual, and a fix in one kernel doesn't propagate to the others — everyone re-learns the sharp edge independently. The fix itself is a single canonical-address check before `SYSRET`; the expensive part was noticing it was needed.
 
 ---
 
@@ -408,7 +409,9 @@ This case is also a good example of why the kernel's feature detection and alter
 
 ### Sources
 
-- [CVE-2012-0217 (NVD)](https://nvd.nist.gov/vuln/detail/CVE-2012-0217) — CVE-2012-0217, the SYSRET non-canonical-address privilege escalation (the vulnerable behavior is Intel's SYSRET; AMD CPUs are unaffected)
+- [CVE-2012-0217 (NVD)](https://nvd.nist.gov/vuln/detail/CVE-2012-0217) — the SYSRET non-canonical-address privilege escalation (the vulnerable behavior is Intel's SYSRET; AMD CPUs are unaffected)
+- [CVE-2006-0744 (NVD)](https://nvd.nist.gov/vuln/detail/CVE-2006-0744) — the same bug in Linux, fixed six years earlier in kernel 2.6.16.5
+- [fail0verflow: Intel's SYSRET kernel privilege escalation](https://fail0verflow.com/blog/2012/cve-2012-0217-intel-sysret-freebsd/) — the canonical technical walkthrough of the ring-0/user-stack fault and the exploit
 - [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — TSC calibration and watchdog, scene of Case 2
 - [Spectre Side Channels](https://docs.kernel.org/admin-guide/hw-vuln/spectre.html) — retpoline and its interaction with indirect calls (Case 4)
 
