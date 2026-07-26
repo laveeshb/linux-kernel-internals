@@ -196,20 +196,21 @@ On **AMD** processors the `#GP` is delivered before the CPU reaches that exploit
 
 ### Discovery and impact
 
-The vulnerability was discovered by Rafal Wojtczuk and disclosed in June 2012 (CVE-2012-0217). Because so many kernels had copied the same `SYSRET` return pattern, it hit a remarkably broad set of systems — all **running on Intel CPUs**:
+Here is the twist that makes this a good war story: **Linux had already fixed this exact bug in 2006.** Linux hit the non-canonical-`SYSRET` hole on early Intel EM64T CPUs and closed it in **2.6.16.5** (CVE-2006-0744) — the fault-on-the-user-stack-with-wrong-GS problem, described there in almost the same words. Six years later, Rafal Wojtczuk found that everyone who *hadn't* copied Linux's fix was still exposed, and disclosed it as CVE-2012-0217 (June 2012). Because `SYSRET` is subtle enough that each kernel got it wrong independently, it hit a broad set of systems — all **running on Intel CPUs**:
 - Xen PV guests on Intel hosts (the Xen `SYSRET` path) — a guest → hypervisor escape
-- Linux, NetBSD, FreeBSD, Solaris, and Windows kernels
-- AMD hardware was unaffected
+- FreeBSD, NetBSD, Oracle Solaris / illumos, and Microsoft Windows (7 / Server 2008 R2)
+- **Linux was *not* affected in 2012** — it had been fixed since 2006
+- AMD hardware was unaffected throughout
 
-An unprivileged user process (or PV guest) could gain full kernel (ring 0) execution.
+An unprivileged user process (or PV guest) on a vulnerable system could gain full kernel (ring 0) execution.
 
 ### Root cause
 
-The kernel's `entry_SYSCALL_64` return path checked the return address, but the check was not in the right place — it happened after the point where a non-canonical address in `RCX` could cause trouble. The fix requires checking `RCX` for canonicality before issuing `SYSRET`, and falling back to `IRET` if the address is non-canonical.
+The naive `SYSRET` return path issues the instruction without first checking that the return address in `RCX` is canonical, trusting the CPU to fault safely if it isn't — which is true on AMD but not on Intel. The fix is to check `RCX` for canonicality *before* `SYSRET` and fall back to `IRET` (which handles the privilege change safely) when it is non-canonical.
 
 ### Fix
 
-The Linux fix (applied in 3.4.5 / 3.5 stable):
+Linux's fix — the one everyone else eventually copied — checks `RCX` before returning (in `arch/x86/entry/entry_64.S`):
 
 ```c
 /* arch/x86/entry/entry_64.S (post-fix, simplified) */
@@ -245,7 +246,7 @@ grep -n "SYSRET\|non_canonical\|swapgs_restore" \
 
 ### What it taught us
 
-The `SYSCALL`/`SYSRET` pair has vendor-specific edge cases: `SYSRET`'s response to a non-canonical `RIP` is safe on AMD but exploitable on Intel. The kernel and Xen had been written against AMD's semantics — AMD defined AMD64 — and Intel's divergence went unnoticed until a working exploit surfaced it. The lesson: privilege-transition instructions must be validated against *each* vendor's manual, not assumed identical. The fix — a single canonical-address check before `SYSRET` — is cheap and correct, but it took an exploit to force it.
+The `SYSCALL`/`SYSRET` pair has vendor-specific edge cases: `SYSRET`'s response to a non-canonical `RIP` is safe on AMD but exploitable on Intel, because kernels were written against AMD's semantics — AMD defined AMD64 — and Intel's implementation diverged. The striking part is that this was **learned once and forgotten**: Linux closed the hole in 2006 (CVE-2006-0744), yet the same trap caught Xen, the BSDs, Solaris, and Windows six years later as CVE-2012-0217. Privilege-transition instructions have to be validated against *each* vendor's manual, and a fix in one kernel doesn't propagate to the others — everyone re-learns the sharp edge independently. The fix itself is a single canonical-address check before `SYSRET`; the expensive part was noticing it was needed.
 
 ---
 
@@ -409,6 +410,7 @@ This case is also a good example of why the kernel's feature detection and alter
 ### Sources
 
 - [CVE-2012-0217 (NVD)](https://nvd.nist.gov/vuln/detail/CVE-2012-0217) — the SYSRET non-canonical-address privilege escalation (the vulnerable behavior is Intel's SYSRET; AMD CPUs are unaffected)
+- [CVE-2006-0744 (NVD)](https://nvd.nist.gov/vuln/detail/CVE-2006-0744) — the same bug in Linux, fixed six years earlier in kernel 2.6.16.5
 - [fail0verflow: Intel's SYSRET kernel privilege escalation](https://fail0verflow.com/blog/2012/cve-2012-0217-intel-sysret-freebsd/) — the canonical technical walkthrough of the ring-0/user-stack fault and the exploit
 - [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — TSC calibration and watchdog, scene of Case 2
 - [Spectre Side Channels](https://docs.kernel.org/admin-guide/hw-vuln/spectre.html) — retpoline and its interaction with indirect calls (Case 4)
