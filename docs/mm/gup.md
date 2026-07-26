@@ -175,6 +175,7 @@ dmesg | grep -iE "alloc_contig|cma:.*fail|migrat"
 - [VFIO Internals](../iommu/vfio-internals.md) — `pin_user_pages_remote()` for device DMA
 - [CMA](cma.md) — why pinned pages are the top cause of CMA allocation failure
 - [RCU in Memory Management](rcu-mm.md) — the lockless page-table walk fast GUP relies on
+- [The Kernel Address Space](kernel-address-space.md) — where the pages GUP returns actually live (the direct map)
 
 ### LWN articles
 
