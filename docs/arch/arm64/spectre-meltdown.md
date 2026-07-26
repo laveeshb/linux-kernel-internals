@@ -415,4 +415,5 @@ On recent hardware (Graviton3, Apple M-series, Cortex-X3+) CSV2_3 or ECBHB cover
 - [ARM64 CPU Features](cpu-features.md) — how the kernel detects and uses CPU feature bits at boot (system register approach vs. x86 CPUID)
 - ARM Architecture Reference Manual (ARM DDI 0487) — `ID_AA64PFR0_EL1` CSV2/CSV2_3 fields; `ID_AA64PFR1_EL1` SSBS field; `ID_AA64MMFR1_EL1` ECBHB field
 - ARM Security Advisory: Spectre-BHB (2022) — per-core BHB depth table and recommended loop counts
-- `Documentation/admin-guide/hw-vuln/spectre.rst` in the kernel tree — canonical kernel documentation for all spectre variants
+- [Spectre Side Channels](https://docs.kernel.org/admin-guide/hw-vuln/spectre.html) — canonical kernel documentation for all spectre variants
+- [LWN: Notes from the Intelpocalypse](https://lwn.net/Articles/742702/) — the disclosure and the kernel's response

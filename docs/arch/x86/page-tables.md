@@ -386,3 +386,26 @@ dmesg | grep -i "huge\|2M\|PMD"
 | 5-level paging (LA57) | 4.14 | `CONFIG_X86_5LEVEL`, CR4.LA57 |
 | KPTI (Meltdown fix) | 4.15 | Two PGDs, CR3 switch on entry/exit |
 | KPTI + PCID optimization | 4.15 | Dual-ASID scheme, `bit 63` no-flush |
+
+---
+
+## Further reading
+
+### Kernel source & documentation
+
+- [Documentation/arch/x86/x86_64/mm.rst](https://docs.kernel.org/arch/x86/x86_64/mm.html) — the canonical virtual memory layout tables
+- [arch/x86/include/asm/pgtable_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/pgtable_types.h) — every `_PAGE_*` bit defined
+- [arch/x86/mm/tlb.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/tlb.c) — CR3 switching, PCID/ASID management, KPTI CR3 assembly
+
+### Related pages
+
+- [Page Tables (generic)](../../mm/page-tables.md) — the arch-independent pgd/pud/pmd/pte view
+- [x86_64 Boot Page Table Setup](../../mm/boot-page-tables.md) — how these structures are first built
+- [TLB Optimization](../../mm/tlb-optimization.md) — flush batching above the architecture layer
+- [ARM64 Page Tables](../arm64/page-tables.md) — TTBR0/TTBR1 instead of one CR3
+
+### LWN articles
+
+- [KAISER: hiding the kernel from user space](https://lwn.net/Articles/738975/) — the design that became KPTI, written pre-Meltdown
+- [Notes from the Intelpocalypse](https://lwn.net/Articles/742702/) — Meltdown/Spectre and what they meant for the kernel
+- [Kernel address space layout randomization](https://lwn.net/Articles/569635/) — KASLR design and limitations
