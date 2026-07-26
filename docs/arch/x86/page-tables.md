@@ -303,11 +303,14 @@ perf stat -e tlb:tlb_flush ls
 
 ## Kernel virtual address layout
 
+> Deep dive: [The Kernel Address Space](../../mm/kernel-address-space.md) covers each of these regions — the direct map, vmemmap, vmalloc, KASLR — and the rationale behind the layout.
+
 The 64-bit kernel virtual address space is divided into regions (values are for a typical 4-level paging, non-5-level system with `CONFIG_X86_64`):
 
 ```
 Virtual address layout (x86-64, 4-level paging, kernel 6.x):
 
+ffff880000000000 - ffff887fffffffff  LDT remap area (for KPTI)
 ffff888000000000 - ffffc87fffffffff  Direct mapping of all physical memory (physmap)
                                      Accessed via __va() / __pa()
 ffffc90000000000 - ffffe8ffffffffff  vmalloc / ioremap area
@@ -315,7 +318,7 @@ ffffe90000000000 - ffffe9ffffffffff  Hole
 ffffea0000000000 - ffffeaffffffffff  Virtual memory map (struct page array)
 ffffec0000000000 - fffffbffffffffff  KASAN shadow memory (if CONFIG_KASAN)
 fffffe0000000000 - fffffe7fffffffff  cpu_entry_area (per-CPU entry trampoline, fixmap)
-fffffe8000000000 - fffffeffffffffff  LDT remap area
+fffffe8000000000 - fffffeffffffffff  Hole (LDT remap lived here before 4.20)
 ffffff0000000000 - ffffff7fffffffff  %esp fixup stacks
 ffffffef00000000 - fffffffeffffffff  EFI runtime services mapping
 ffffffff80000000 - ffffffff9fffffff  Kernel text (.text, .rodata)

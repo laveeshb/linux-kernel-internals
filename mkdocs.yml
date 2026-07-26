@@ -88,6 +88,7 @@ nav:
       - Memory Hotplug: mm/memory-hotplug.md
     - Address Translation:
       - Page Tables: mm/page-tables.md
+      - Kernel Address Space: mm/kernel-address-space.md
       - Process Address Space: mm/mmap.md
       - Page Fault Handler: mm/page-fault.md
       - "vDSO: Fast Syscalls Without the Kernel": mm/vdso.md
