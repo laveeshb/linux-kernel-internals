@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   docs:
-    name: Build + link/anchor check
+    name: Build (strict)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,10 +29,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Strict build fails on broken link *targets*, nav errors, etc.
+      # `--strict` + the `validation.links.anchors: warn` setting in
+      # mkdocs.yml fails the build on any broken internal link OR broken
+      # #anchor fragment. Nav errors and unrecognized links fail too.
       - name: mkdocs build --strict
         run: mkdocs build --strict
-
-      # Strict build does NOT fail on broken #anchor fragments; this does.
-      - name: Check internal links and anchors
-        run: python scripts/check_doc_links.py
