@@ -210,7 +210,7 @@ The naive `SYSRET` return path issues the instruction without first checking tha
 
 ### Fix
 
-Linux's fix — the one everyone else eventually copied — checks `RCX` before returning (in `arch/x86/entry/entry_64.S`):
+Linux's fix — the one everyone else eventually copied — checks `RCX` before returning. Here it is in the form it takes in modern `arch/x86/entry/entry_64.S` (the 2006 original was the same idea with different symbol names):
 
 ```c
 /* arch/x86/entry/entry_64.S (post-fix, simplified) */
