@@ -519,7 +519,7 @@ The physical device was added but no sysfs entry appeared.
 
 ### SPARSEMEM and the Foundations (v2.6.13, 2005)
 
-Memory hotplug required a new memory model. The classic `FLATMEM` model assumed a contiguous `mem_map` array spanning all physical memory, which breaks when memory appears and disappears at runtime. SPARSEMEM introduced the per-section `struct mem_section` array, making the `struct page` arrays discontiguous and independently allocatable.
+Memory hotplug required a new [memory model](memory-model.md). The classic `FLATMEM` model assumed a contiguous `mem_map` array spanning all physical memory, which breaks when memory appears and disappears at runtime. SPARSEMEM introduced the per-section `struct mem_section` array, making the `struct page` arrays discontiguous and independently allocatable.
 
 ### Initial Hotplug Support (v2.6.15, 2006)
 
