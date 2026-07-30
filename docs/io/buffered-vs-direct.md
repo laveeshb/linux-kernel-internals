@@ -186,7 +186,7 @@ If any of these requirements is violated, `read()` or `write()` returns `EINVAL`
 
 **No write buffering**: O_DIRECT writes are synchronous by default. Write throughput is limited by device throughput, not by RAM.
 
-**Mixed-mode coherency**: mixing O_DIRECT and buffered I/O on the same file can produce stale reads. See [War Stories: Data Loss](war-stories-data-loss.md#case-2-o_direct-and-buffered-io-coherency).
+**Mixed-mode coherency**: mixing O_DIRECT and buffered I/O on the same file can produce stale reads. See [War Stories: Data Loss](war-stories-data-loss.md#incident-2).
 
 ---
 

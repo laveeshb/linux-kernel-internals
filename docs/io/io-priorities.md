@@ -714,5 +714,5 @@ cat /sys/fs/cgroup/myapp/io.stat  # BFQ per-cgroup statistics
 - [struct kiocb](kiocb.md) — ki_ioprio and how it propagates through the I/O stack
 - [Direct I/O](direct-io.md) — O_DIRECT path where ioprio most reliably reaches the scheduler
 - [Async I/O](async-io.md) — io_uring interaction with BFQ's per-process model
-- [cgroups I/O](../cgroups/io-control.md) — io.weight, io.max, io.latency reference
+- [cgroups I/O](../cgroups/io-cgroup.md) — io.weight, io.max, io.latency reference
 - [Observability](observability.md) — blktrace, ftrace, iostat for verifying priority enforcement

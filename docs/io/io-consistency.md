@@ -63,7 +63,7 @@ fsync(fd);
 
 **Cost**: each `fdatasync()`/`fsync()` causes at least one storage write (the flush command to the device). On an NVMe device, this takes ~100µs. On a SATA SSD, ~1ms. On a spinning disk, ~5-10ms.
 
-**What is NOT guaranteed by `fsync(fd)`**: the parent directory entry. If the file was newly created or renamed, the directory entry may not be on storage even after `fsync(fd)` returns. See [fsync, fdatasync, and O_SYNC](fsync-fdatasync.md) and [War Stories: Data Loss](war-stories-data-loss.md#case-3-fsync-after-rename-is-not-enough).
+**What is NOT guaranteed by `fsync(fd)`**: the parent directory entry. If the file was newly created or renamed, the directory entry may not be on storage even after `fsync(fd)` returns. See [fsync, fdatasync, and O_SYNC](fsync-fdatasync.md) and [War Stories: Data Loss](war-stories-data-loss.md#incident-3).
 
 ---
 
@@ -177,7 +177,7 @@ ext4's journaling mode determines the ordering guarantees provided by the filesy
 
 **`data=journal`**: all data writes go through the journal. Strongest guarantee, slowest performance. Each write is written twice (journal + final location).
 
-**`data=writeback`**: metadata is journaled, but data writes are completely independent. Fastest, but a crash after the journal commit and before the data write can expose stale data from reused blocks. (See [War Stories: Data Loss](war-stories-data-loss.md#case-1-ext4-datawriteback-and-stale-data-exposure-after-a-crash).)
+**`data=writeback`**: metadata is journaled, but data writes are completely independent. Fastest, but a crash after the journal commit and before the data write can expose stale data from reused blocks. (See [War Stories: Data Loss](war-stories-data-loss.md#incident-1).)
 
 ```bash
 # Check filesystem journaling mode

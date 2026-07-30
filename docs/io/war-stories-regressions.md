@@ -6,7 +6,7 @@ These are real regressions documented in LKML discussions, LWN articles, and ker
 
 ---
 
-## Regression 1: Dirty throttling rework — write latency spikes in v3.1
+## Regression 1: Dirty throttling rework — write latency spikes in v3.1 {#regression-1}
 
 *Introduced: v3.1 (October 2011). Significantly improved in v3.2. Final stabilization: v3.10-v3.13.*
 
@@ -77,7 +77,7 @@ Over several kernel versions (v3.2 through v3.13), the dirty throttling algorith
 
 ---
 
-## Regression 2: CFQ scheduler retirement and BFQ introduction — latency regressions for mixed workloads
+## Regression 2: CFQ scheduler retirement and BFQ introduction — latency regressions for mixed workloads {#regression-2}
 
 *CFQ deprecated: v5.0 (2019). Removed: v5.3. BFQ introduced as alternative: v4.12.*
 
@@ -137,7 +137,7 @@ BFQ continued to receive fixes for specific workload regressions ([v5.10 fixups]
 
 ---
 
-## Regression 3: Writeback cgroup integration — I/O latency for cgrouped workloads in v4.2
+## Regression 3: Writeback cgroup integration — I/O latency for cgrouped workloads in v4.2 {#regression-3}
 
 *Introduced: v4.2 (August 2015). Stabilization patches through v4.5.*
 
@@ -193,7 +193,7 @@ Modern kernels (v5.x+) have stable cgroup-aware writeback. The combination with 
 
 ---
 
-## Regression 4: `O_DIRECT` + `io_uring` corking — throughput drop for mixed workloads in v5.8
+## Regression 4: `O_DIRECT` + `io_uring` corking — throughput drop for mixed workloads in v5.8 {#regression-4}
 
 *Reported: v5.8 (August 2020). Fixed in v5.10.*
 

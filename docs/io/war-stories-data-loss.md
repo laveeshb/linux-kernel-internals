@@ -6,7 +6,7 @@ These incidents are drawn from public LKML discussions, filesystem developer pos
 
 ---
 
-## Incident 1: ext4 `data=writeback` — stale data exposure after a crash
+## Incident 1: ext4 `data=writeback` — stale data exposure after a crash {#incident-1}
 
 *Documented: ext4 since first release. Widely reported: 2008–2012. Documentation improved: v3.x era.*
 
@@ -64,7 +64,7 @@ mount -o remount,data=ordered /dev/sda1
 
 ---
 
-## Incident 2: `O_DIRECT` + buffered I/O coherency — stale reads from mixed-mode access
+## Incident 2: `O_DIRECT` + buffered I/O coherency — stale reads from mixed-mode access {#incident-2}
 
 *Documented in `open(2)` man page. Widely encountered: 2005–present. Race window narrowed but not closed.*
 
@@ -123,7 +123,7 @@ grep flags /proc/<pid>/fdinfo/* | awk -F: '{
 
 ---
 
-## Incident 3: `fsync()` after `rename()` — missing files after a crash
+## Incident 3: `fsync()` after `rename()` — missing files after a crash {#incident-3}
 
 *First widely documented: ~2009. Fixed in SQLite: 3.7.x. Fixed in PostgreSQL: multiple versions. Affects all local filesystems.*
 
@@ -191,7 +191,7 @@ strace -e trace=fsync,fdatasync,rename,renameat -p <pid> 2>&1
 
 ---
 
-## Incident 4: Asynchronous writeback errors silently dropped before v4.13
+## Incident 4: Asynchronous writeback errors silently dropped before v4.13 {#incident-4}
 
 *Kernel-wide issue. Partial fix: v4.13 (errseq_t). Broader fix: v5.8+.*
 
