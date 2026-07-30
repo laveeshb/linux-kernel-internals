@@ -53,7 +53,7 @@ The cost is in the lookup. "Classic" SPARSEMEM's `pfn_to_page()` is no longer a 
 ```c
 /* classic sparsemem, conceptually */
 struct mem_section *ms = __pfn_to_section(pfn);
-struct page *base = section_mem_map_addr(ms);
+struct page *base = __section_mem_map_addr(ms);
 return base + pfn;   /* base is pre-offset so this indexes correctly */
 ```
 
