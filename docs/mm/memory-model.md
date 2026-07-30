@@ -82,6 +82,8 @@ The trick is to spend cheap **virtual** address space: map a virtually-contiguou
 | SPARSEMEM | per-section sub-arrays | section lookup, then index | no | **yes** |
 | SPARSEMEM_VMEMMAP | virtual array, sparsely backed | index (fastest) | no | **yes** |
 
+(Strictly, `SPARSEMEM_VMEMMAP` is not a fourth model but SPARSEMEM's default *configuration* — same section machinery, a different `pfn_to_page()` — but the cost difference is large enough to list it separately.)
+
 The historical arc — FLATMEM → DISCONTIGMEM → SPARSEMEM → vmemmap — is told well in Mike Rapoport's [Memory: the flat, the discontiguous, and the sparse](https://lwn.net/Articles/789304/).
 
 ---
