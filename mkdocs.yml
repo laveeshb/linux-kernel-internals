@@ -375,6 +375,16 @@ nav:
     - Async I/O Evolution: io/async-io.md
     - Observability: io/observability.md
     - Tuning Storage I/O: io/tuning-storage.md
+    - "Buffered vs Direct I/O": io/buffered-vs-direct.md
+    - I/O Consistency and Ordering: io/io-consistency.md
+    - "fsync, fdatasync, and O_SYNC": io/fsync-fdatasync.md
+    - "pread / pwrite and RWF flags": io/pread-pwrite.md
+    - I/O Polling: io/io-polling.md
+    - "I/O Priorities (ionice)": io/io-priorities.md
+    - I/O Bandwidth: io/io-bandwidth.md
+    - Tuning for Streaming Workloads: io/tuning-streaming.md
+    - Debugging I/O Hangs: io/debugging-io-hangs.md
+    - "Understanding /proc/diskstats": io/understanding-proc-diskstats.md
     - War Stories: io/war-stories.md
   - io_uring:
     - Getting Started: io-uring/README.md
