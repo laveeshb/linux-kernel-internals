@@ -45,7 +45,7 @@ It was superseded because it conflated two *different* problems — "which NUMA 
 
 The model on essentially every modern 64-bit system. It divides the physical address space into fixed-size **sections** and gives each *present* section its own independently-allocated `struct page` sub-array:
 
-- A section is `SECTION_SIZE_BITS` wide — **27 bits, i.e. 128 MB, on x86-64**.
+- A section is `SECTION_SIZE_BITS` wide — **27 bits, i.e. 128 MB, on x86-64** ([arch/x86/include/asm/sparsemem.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/sparsemem.h)).
 - An array (or two-level radix for large machines) of `struct mem_section` records which sections exist and where their `struct page` sub-array lives. See [Memory Hotplug](memory-hotplug.md) for the `mem_section` structure in detail — hotplug is SPARSEMEM's biggest beneficiary, since adding or removing a DIMM is adding or removing sections.
 
 The cost is in the lookup. "Classic" SPARSEMEM's `pfn_to_page()` is no longer a bare index — it extracts the section from the PFN, finds the section's `struct page` base, and indexes within it:
@@ -102,7 +102,7 @@ The long-term goal, driven by Matthew Wilcox out of the folio work, is to disman
 
 The transition is well underway rather than theoretical:
 
-- Type-specific descriptors are being **carved out of `struct page` one at a time** — `struct slab` and `struct ptdesc` (page-table pages) and netmem descriptors have already been separated, each overlaying `struct page` during the migration.
+- Type-specific descriptors are being **carved out of `struct page` one at a time** — [`struct slab`](https://lwn.net/Articles/881039/) (5.17) and `struct ptdesc` (page-table pages) and netmem descriptors have already been separated, each overlaying `struct page` during the migration.
 - The hard part is the **"long tail"**: kernel code all over the tree reaches into arbitrary `struct page` fields, and every such site has to be converted before the union can actually shrink.
 - The payoff: `struct page`'s memory tax drops from ~1.6% of RAM toward a fraction of that, the type confusion goes away, and memory management gets more flexible.
 
@@ -150,7 +150,7 @@ sudo perf top -e cycles --sort symbol | grep -iE "pfn_to|page_to_pfn"
 |--------|--------------|---------------------|
 | FLATMEM | always | The original single-array model |
 | SPARSEMEM | 2.6.13 (2005) | Per-section arrays; made hotplug possible |
-| SPARSEMEM_VMEMMAP | 2.6.24 (2008) | O(1) `pfn_to_page()` with no waste on holes; today's default |
+| SPARSEMEM_VMEMMAP | 2.6.24 ([8f6aac419bd5](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8f6aac419bd5)) | O(1) `pfn_to_page()` with no waste on holes; today's default |
 | DISCONTIGMEM removed | 2021 (last users gone by 5.11) | The NUMA-era model retired for good |
 | Folios | 5.16+ | First honestly-typed replacement for bare `struct page` |
 | Memory descriptors (`struct slab`, `ptdesc`, …) | ongoing | `struct page` being dismantled toward an 8-byte typed descriptor |
