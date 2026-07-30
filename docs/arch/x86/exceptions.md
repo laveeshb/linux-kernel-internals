@@ -522,7 +522,7 @@ cat /proc/interrupts | head -5
 - [IRQ Handling](../../interrupts/interrupts.md) — external interrupt delivery
 - [Syscall Entry](../../syscalls/syscall-entry.md) — SYSCALL/SYSRET path in detail
 - [Kernel Hardening](../../security/kernel-hardening.md) — SMEP/SMAP, KPTI
-- `arch/x86/kernel/traps.c` — exception handler implementations
-- `arch/x86/mm/fault.c` — page fault handler
-- `arch/x86/entry/entry_64.S` — exception/syscall entry assembly
-- Intel SDM Vol 3A, Chapter 6 — Interrupt and Exception Handling
+- [arch/x86/kernel/traps.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/traps.c) — exception handler implementations
+- [arch/x86/mm/fault.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/mm/fault.c) — page fault handler
+- [arch/x86/entry/entry_64.S](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/entry_64.S) — exception/syscall entry assembly
+- [Intel SDM](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) Vol 3A, Chapter 6 — Interrupt and Exception Handling

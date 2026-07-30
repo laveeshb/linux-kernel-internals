@@ -306,6 +306,7 @@ cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq
 - [ARM64 Memory Model](memory-model.md) — TTBR0/TTBR1, page table format
 - [Page Tables](../../mm/page-tables.md) — host-side page table internals
 - [SMP](../../sched/context-switch.md) — secondary CPU initialization
-- `arch/arm64/kernel/head.S` — complete boot assembly
-- `arch/arm64/mm/mmu.c` — page table creation
+- [arch/arm64/kernel/head.S](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/kernel/head.S) — complete boot assembly
+- [arch/arm64/mm/mmu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/mm/mmu.c) — page table creation
+- [Booting AArch64 Linux](https://docs.kernel.org/arch/arm64/booting.html) — the boot contract between firmware/bootloader and kernel
 - ARM Architecture Reference Manual (ARM DDI 0487) — authoritative reference

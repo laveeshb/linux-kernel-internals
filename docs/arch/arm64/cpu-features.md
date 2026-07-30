@@ -638,7 +638,7 @@ start_kernel()
   definition and all `ARM64_CPUCAP_*` type flags
 - `arch/arm64/include/asm/cpucaps.h` — enumeration of all `ARM64_*` capability
   indices and `ARM64_NCAPS`
-- `arch/arm64/kernel/cpufeature.c` — `arm64_features[]` table, detection logic,
+- [arch/arm64/kernel/cpufeature.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/kernel/cpufeature.c) — `arm64_features[]` table, detection logic,
   `update_cpu_capabilities()`, `apply_alternatives_all()` callsite
 - `arch/arm64/kernel/cpu_errata.c` — `arm64_errata[]` table with full MIDR
   match ranges and workaround descriptions

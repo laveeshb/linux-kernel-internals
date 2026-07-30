@@ -437,3 +437,24 @@ grep . /sys/devices/system/cpu/vulnerabilities/*
 | May 2019 | MDS (Zombieload) disclosed; kernel 5.1 adds VERW flush |
 | Nov 2019 | TAA (TSX Async Abort); kernel 5.4 adds mitigation |
 | 2020+ | Continued stream of microarchitectural vulnerabilities; mitigations added per release |
+
+---
+
+## Further reading
+
+### Kernel source & documentation
+
+- [Spectre Side Channels](https://docs.kernel.org/admin-guide/hw-vuln/spectre.html) — the kernel's own admin-facing documentation of variants and mitigation controls
+- [arch/x86/kernel/cpu/bugs.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/cpu/bugs.c) — where every mitigation is selected and reported
+- [meltdownattack.com](https://meltdownattack.com/) — the original Meltdown and Spectre papers
+
+### Related pages
+
+- [Spectre and Meltdown on ARM64](../arm64/spectre-meltdown.md) — the same vulnerabilities through arm64's lens
+- [x86-64 Page Tables](page-tables.md) — KPTI mechanics: dual PGDs, PCID
+- [Kernel Hardening](../../security/kernel-hardening.md) — the broader mitigation landscape
+
+### LWN articles
+
+- [Notes from the Intelpocalypse](https://lwn.net/Articles/742702/) — the disclosure week, explained calmly
+- [KAISER: hiding the kernel from user space](https://lwn.net/Articles/738975/) — the KASLR defense that turned out to stop Meltdown

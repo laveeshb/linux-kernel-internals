@@ -45,7 +45,7 @@ UEFI boot skips the real mode steps entirely — the firmware hands off to the k
 | [Exception Handling](exceptions.md) | IDT, exception entry, hardware push sequence, page fault handler, IST stacks |
 | [CPU Features](cpu-features.md) | CPUID, x86_capability[], alternative patching, CPU bug mitigations |
 | [Spectre and Meltdown](spectre-meltdown.md) | Hardware vulnerabilities, KPTI, retpoline, IBRS/IBPB/STIBP, MDS/VERW |
-| [War Stories](war-stories.md) | KPTI regression, TSC drift, AMD SYSRET bug, BPF JIT + retpoline, INVPCID fallback |
+| [War Stories](war-stories.md) | KPTI regression, TSC drift, Intel SYSRET bug, BPF JIT + retpoline, INVPCID fallback |
 
 ---
 

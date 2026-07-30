@@ -291,4 +291,4 @@ dmesg | grep "data-race"
 - [Locking: RCU](../../locking/rcu.md) — how RCU uses barriers
 - [Memory Management: page tables](../../mm/page-tables.md) — page table barrier requirements
 - ARM Architecture Reference Manual — B2: The AArch64 Application Level Memory Model
-- `Documentation/memory-barriers.txt` in the kernel tree
+- [Documentation/memory-barriers.txt](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/memory-barriers.txt) — the kernel's memory-ordering bible

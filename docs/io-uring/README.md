@@ -269,4 +269,4 @@ io_uring_submit(&ring);
 
 ## Appendix
 
-- **[Glossary](../glossary.md)** — Terminology reference (SQE, CQE, SQPOLL, io-wq, fixed buffer, multishot)
+- **[Glossary](../mm/glossary.md)** — Terminology reference (SQE, CQE, SQPOLL, io-wq, fixed buffer, multishot)
