@@ -104,8 +104,8 @@ The `RWF_*` flags passed to `preadv2()` and `pwritev2()` are copied directly int
 
 ```c
 /* include/uapi/linux/fs.h */
-#define RWF_HIPRI   ((__force __poll_t)0x00000001)
-#define RWF_NOWAIT  ((__force __poll_t)0x00000008)
+#define RWF_HIPRI   ((__force __kernel_rwf_t)0x00000001)
+#define RWF_NOWAIT  ((__force __kernel_rwf_t)0x00000008)
 
 /* include/linux/fs.h */
 #define IOCB_HIPRI  (__force int) RWF_HIPRI    /* = 0x1 */
