@@ -256,6 +256,7 @@ sudo cat /proc/vmallocinfo | awk '{print $1}' | head -3   # 0xffffc9... (vmalloc
 - [vmalloc](vmalloc.md) — the allocator that manages the vmalloc region
 - [Page Tables](page-tables.md) — arch-independent view
 - [Memory Hotplug](memory-hotplug.md) — vmemmap population at runtime
+- [The Physical Memory Model](memory-model.md) — why the vmemmap array exists: FLATMEM, SPARSEMEM, and memdesc
 - [Getting User Pages (GUP)](gup.md) — how the direct-map pages get pinned for DMA
 - [arm64 Memory Model](../arch/arm64/memory-model.md) — the TTBR0/TTBR1 split in depth
 
