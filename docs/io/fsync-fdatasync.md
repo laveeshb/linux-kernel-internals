@@ -318,20 +318,25 @@ Benchmarks on a SATA SSD with ext4 `data=ordered` typically show `fdatasync()` a
 
 `sync()` instructs the kernel to flush all dirty pages and all journal transactions across all mounted filesystems. Historically `sync()` initiated writeback and returned immediately — this was intentional; the Unix documentation simply said it "schedules" writes, not that it waits for them.
 
-**Linux behavior**: since Linux 2.6.something (the change was gradual; `sync_filesystem()` was made to wait for completion in the 2.6.x series), `sync()` does wait for writeback and journal commits to complete. The current kernel implementation:
+**Linux behavior**: unlike the bare POSIX requirement, Linux `sync()` has waited for writeback and journal commits to complete for a very long time (the behaviour predates the 2.6 series — see the NOTES in `sync(2)`). The current kernel implementation delegates to `ksys_sync()`:
 
 ```c
 /* fs/sync.c */
-SYSCALL_DEFINE0(sync)
+void ksys_sync(void)
 {
     int nowait = 0, wait = 1;
 
     wakeup_flusher_threads(WB_REASON_SYNC);
-    iterate_supers(sync_inodes_sb, &nowait);  /* start writeback */
-    wait_for_completion(&nowait_completion);
-    iterate_supers(sync_inodes_sb, &wait);    /* wait for completion */
-    if (unlikely(laptop_mode))
-        laptop_sync_completion();
+    iterate_supers(sync_inodes_one_sb, NULL);  /* write back + wait on inodes */
+    iterate_supers(sync_fs_one_sb, &nowait);   /* ->sync_fs, no wait */
+    iterate_supers(sync_fs_one_sb, &wait);     /* ->sync_fs, wait */
+    sync_bdevs(false);                         /* flush block-device caches */
+    sync_bdevs(true);                          /* ... and wait */
+}
+
+SYSCALL_DEFINE0(sync)
+{
+    ksys_sync();
     return 0;
 }
 ```
@@ -348,22 +353,20 @@ Despite waiting, `sync()` does **not** issue a FLUSH command to every storage de
 /* fs/sync.c */
 SYSCALL_DEFINE1(syncfs, int, fd)
 {
-    struct fd f = fdget(fd);
+    CLASS(fd, f)(fd);              /* scope-guarded fd, released on return */
     struct super_block *sb;
     int ret, ret2;
 
-    if (!f.file)
+    if (fd_empty(f))
         return -EBADF;
-
-    sb = f.file->f_path.dentry->d_sb;
+    sb = fd_file(f)->f_path.dentry->d_sb;
 
     down_read(&sb->s_umount);
     ret = sync_filesystem(sb);
     up_read(&sb->s_umount);
 
-    fdput(f);
-
-    ret2 = errseq_check_and_advance(&sb->s_wb_err, &f.file->f_sb_err);
+    /* report any writeback error seen since this fd last checked */
+    ret2 = errseq_check_and_advance(&sb->s_wb_err, &fd_file(f)->f_sb_err);
     return ret ? ret : ret2;
 }
 ```
@@ -390,17 +393,20 @@ write(fd, record, len);  /* blocks until data is on stable storage */
 When `O_SYNC` or `O_DSYNC` is set on the file, the VFS sets corresponding flags in the `kiocb` struct before calling `write_iter`:
 
 ```c
-/* fs/read_write.c — simplified from generic_write_checks */
-static int kiocb_set_rw_flags(struct kiocb *ki, rwf_t flags)
+/* include/linux/fs.h — open flags become kiocb flags */
+static inline int iocb_flags(struct file *file)
 {
-    /* ... */
-    if (ki->ki_filp->f_flags & O_SYNC)
-        ki->ki_flags |= IOCB_SYNC | IOCB_DSYNC;
-    if (ki->ki_filp->f_flags & O_DSYNC)
-        ki->ki_flags |= IOCB_DSYNC;
-    /* ... */
+    int res = 0;
+    /* ... O_APPEND -> IOCB_APPEND, O_DIRECT -> IOCB_DIRECT ... */
+    if (file->f_flags & O_DSYNC)
+        res |= IOCB_DSYNC;   /* both O_DSYNC and O_SYNC set the O_DSYNC bit */
+    if (file->f_flags & __O_SYNC)
+        res |= IOCB_SYNC;    /* only full O_SYNC sets the __O_SYNC bit */
+    return res;
 }
 ```
+
+(`O_SYNC` is defined as `__O_SYNC | O_DSYNC`, so a full `O_SYNC` file gets *both* `IOCB_DSYNC` and `IOCB_SYNC`, while `O_DSYNC` gets only `IOCB_DSYNC` — which is why the sync check must test `__O_SYNC`, not `O_SYNC`.)
 
 After `write_iter` completes, `generic_file_write_iter()` checks these flags and calls `generic_write_sync()`:
 
