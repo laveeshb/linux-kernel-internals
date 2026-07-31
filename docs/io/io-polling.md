@@ -285,7 +285,7 @@ CQ ring (4 entries):
   Driver detects it: phase bit at cq_head matches expected phase → new entry
 ```
 
-On the interrupt path, the driver does the same `nvme_process_cq()` work — but triggered by the interrupt handler rather than the poll loop. The code path from `nvme_process_cq()` onward is shared.
+On the interrupt path, the driver does the same `nvme_poll_cq()` work — but triggered by the interrupt handler (`nvme_irq()`) rather than the poll loop. The code path from `nvme_poll_cq()` onward is shared.
 
 ---
 
