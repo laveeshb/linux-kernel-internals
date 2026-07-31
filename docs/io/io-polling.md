@@ -138,37 +138,28 @@ Once `IOCB_HIPRI` is set on the kiocb, it propagates to the bio and then to the 
 ```c
 /* fs/iomap/direct-io.c — iomap DIO path */
 static void iomap_dio_submit_bio(const struct iomap_iter *iter,
-                                  struct iomap_dio *dio, struct bio *bio)
+        struct iomap_dio *dio, struct bio *bio, loff_t pos)
 {
-    /* Propagate HIPRI from the kiocb to the bio */
-    if (dio->iocb->ki_flags & IOCB_HIPRI)
-        bio->bi_opf |= REQ_HIPRI | REQ_NOWAIT;
+    struct kiocb *iocb = dio->iocb;
 
-    submit_bio(bio);
+    atomic_inc(&dio->ref);
+
+    /* Sync dio can't be polled reliably */
+    if ((iocb->ki_flags & IOCB_HIPRI) && !is_sync_kiocb(iocb)) {
+        bio->bi_opf |= REQ_POLLED;         /* mark the bio for polling */
+        WRITE_ONCE(iocb->private, bio);    /* stash it so ->iopoll can find it */
+    }
+
+    if (dio->dops && dio->dops->submit_io)
+        dio->dops->submit_io(iter, bio, pos);
+    else
+        submit_bio(bio);
 }
 ```
 
-In the block layer, `REQ_HIPRI` requests are allocated from a reserved tag set:
+In the block layer, a `REQ_POLLED` bio is steered to a **poll hardware queue** — a separate set of hardware queues (`HCTX_TYPE_POLL`) that have no interrupt assigned. Drivers opt in by carving out some of their queues for polling: NVMe, for example, dedicates part of its queue pool to the poll map, controlled by the `nvme.poll_queues` module parameter. The block layer maintains up to three per-device queue maps — `HCTX_TYPE_DEFAULT`, `HCTX_TYPE_READ`, and `HCTX_TYPE_POLL` — and a `REQ_POLLED` request is dispatched to the poll map.
 
-```c
-/* block/blk-mq.c */
-struct request *blk_mq_alloc_request_hctx(struct request_queue *q,
-                                            unsigned int opf,
-                                            blk_mq_req_flags_t flags,
-                                            unsigned int hctx_idx)
-{
-    /*
-     * HIPRI requests go to a dedicated hardware queue that is not
-     * used by the interrupt-driven completion path. This allows
-     * polling that queue without racing with the interrupt handler.
-     */
-    if (op_is_hipri(opf))
-        flags |= BLK_MQ_REQ_RESERVED;
-    ...
-}
-```
-
-The dedicated queue is important: if HIPRI and non-HIPRI requests shared a hardware queue, the poll function would find completions for non-HIPRI requests and either miss them or process them in the wrong context.
+Keeping poll queues interrupt-free is what makes polling safe: because no interrupt handler ever touches a poll queue's completion ring, the polling thread can read and advance it without racing the IRQ path. If polled and non-polled I/O shared a queue, the poll loop and the interrupt handler could both try to reap the same completion.
 
 ---
 
@@ -191,45 +182,56 @@ struct file_operations {
 Both ext4 and XFS delegate to the iomap layer, which stores the bio pointer in `kiocb->private` at submission time:
 
 ```c
-/* fs/iomap/direct-io.c */
-/* Called at submission: stash the bio so iopoll can find it */
-iocb->private = bio;
+/* At DIO submission time the originating bio is stashed in the kiocb */
+kiocb->private = bio;
 
-/* fs/iomap/direct-io.c */
+/* block/blk-core.c — the ->iopoll handler shared by ext4, XFS, f2fs, ... */
 int iocb_bio_iopoll(struct kiocb *kiocb, struct io_comp_batch *iob,
-                     unsigned int flags)
+                    unsigned int flags)
 {
-    struct bio *bio = READ_ONCE(kiocb->private);
+    struct bio *bio;
+    int ret = 0;
 
-    if (!bio)
-        return 0;   /* already completed */
+    rcu_read_lock();
+    bio = READ_ONCE(kiocb->private);   /* NULL if the I/O already completed */
+    if (bio)
+        ret = bio_poll(bio, iob, flags);
+    rcu_read_unlock();
 
-    return bio_poll(bio, iob, flags);
+    return ret;
 }
 EXPORT_SYMBOL_GPL(iocb_bio_iopoll);
 ```
 
-The bio_poll function walks down to the block layer:
+The `bio_poll` function walks down to the block layer:
 
 ```c
-/* block/bio.c */
+/* block/blk-core.c */
 int bio_poll(struct bio *bio, struct io_comp_batch *iob, unsigned int flags)
 {
-    struct request_queue *q = bdev_get_queue(bio->bi_bdev);
     blk_qc_t cookie = READ_ONCE(bio->bi_cookie);
+    struct request_queue *q;
+    int ret = 0;
 
-    if (cookie == BLK_QC_T_NONE ||
-        !test_bit(QUEUE_FLAG_POLL, &q->queue_flags))
+    if (!bio->bi_bdev)
+        return 0;
+    q = bdev_get_queue(bio->bi_bdev);
+    if (cookie == BLK_QC_T_NONE)         /* not a polled submission */
         return 0;
 
-    if (current->plug)
-        blk_flush_plug(current->plug, false);
+    blk_flush_plug(current->plug, false);
 
-    return q->mq_ops->poll(q->queue_hw_ctx[blk_qc_t_to_queue_num(cookie)], iob);
+    /* Take a queue usage ref so the hctx and requests stay valid */
+    if (!percpu_ref_tryget(&q->q_usage_counter))
+        return 0;
+    if (queue_is_mq(q))
+        ret = blk_mq_poll(q, cookie, iob, flags);   /* NVMe: check the CQ */
+    blk_queue_exit(q);
+    return ret;
 }
 ```
 
-The `cookie` here is the hardware queue index encoded in the `blk_qc_t` that was returned from `submit_bio()`. It tells the poll function exactly which NVMe completion queue to check.
+The `cookie` is the hardware-queue identifier recorded on the bio at submission time. Since the `blk_qc_t` rework (5.16) it is simply the hardware queue number, so `blk_mq_poll()` can go straight to the right queue — and thus the right NVMe completion queue — to check for completions.
 
 ---
 
@@ -248,25 +250,25 @@ static inline bool nvme_cqe_pending(struct nvme_queue *nvmeq)
 static int nvme_poll(struct blk_mq_hw_ctx *hctx, struct io_comp_batch *iob)
 {
     struct nvme_queue *nvmeq = hctx->driver_data;
-    bool found = false;
+    bool found;
 
-    if (!nvme_cqe_pending(nvmeq))
+    if (!test_bit(NVMEQ_POLLED, &nvmeq->flags) ||
+        !nvme_cqe_pending(nvmeq))
         return 0;
 
     /*
-     * Poll lock: multiple poll callers (e.g. multiple threads sharing
-     * an io_uring ring) must serialize CQ processing to avoid double-
-     * completing the same entry.
+     * Poll lock: multiple poll callers (e.g. threads sharing an io_uring
+     * ring) must serialize CQ processing to avoid double-completing an entry.
      */
     spin_lock(&nvmeq->cq_poll_lock);
-    found = nvme_process_cq(nvmeq, iob);
+    found = nvme_poll_cq(nvmeq, iob);
     spin_unlock(&nvmeq->cq_poll_lock);
 
     return found;
 }
 ```
 
-`nvme_process_cq` walks pending CQ entries, calls `blk_mq_complete_request()` for each, and updates the head pointer. The phase bit check is a single memory read — no MMIO, no PCI transaction. This is why polling is so fast: detecting completion is a load from a DMA-mapped memory region that the controller writes to.
+`nvme_poll_cq` walks pending CQ entries, completes each request, and updates the head pointer. The phase bit check is a single memory read — no MMIO, no PCI transaction. This is why polling is so fast: detecting completion is a load from a DMA-mapped memory region that the controller writes to.
 
 ### Phase bit mechanics
 
@@ -337,38 +339,49 @@ io_uring_cqe_seen(&ring, cqe);
 When `io_uring_enter()` is called with `IORING_ENTER_GETEVENTS` on a IOPOLL ring, the kernel enters the poll loop:
 
 ```c
-/* io_uring/io_uring.c */
-static int io_do_iopoll(struct io_ring_ctx *ctx, bool force_nonspin)
+/* io_uring/rw.c */
+int io_do_iopoll(struct io_ring_ctx *ctx, bool force_nonspin)
 {
-    struct io_kiocb *req;
-    struct io_comp_batch iob = {};
+    DEFINE_IO_COMP_BATCH(iob);
+    struct io_kiocb *req, *tmp;
+    unsigned int poll_flags = 0;
     int nr_events = 0;
 
-    /*
-     * Walk the list of in-flight IOPOLL requests.
-     * Each request has a kiocb with an iopoll method on its file.
-     */
-    list_for_each_entry(req, &ctx->iopoll_list, inflight_entry) {
-        const struct file_operations *fops = req->file->f_op;
+    if (ctx->poll_multi_queue || force_nonspin)
+        poll_flags |= BLK_POLL_ONESHOT;
 
-        if (!fops->iopoll)
-            break;  /* not a pollable file — should not be in this list */
+    /* Poll each in-flight request's file (its ->iopoll method) */
+    list_for_each_entry(req, &ctx->iopoll_list, iopoll_node) {
+        int ret;
 
-        ret = fops->iopoll(&req->rw.kiocb, &iob, 0);
+        if (READ_ONCE(req->iopoll_completed))
+            break;
+
+        ret = io_uring_classic_poll(req, &iob, poll_flags);  /* → file->f_op->iopoll */
         if (unlikely(ret < 0))
             return ret;
+        else if (ret)
+            poll_flags |= BLK_POLL_ONESHOT;
 
-        if (ret)
-            nr_events++;
+        if (!rq_list_empty(&iob.req_list) ||
+            READ_ONCE(req->iopoll_completed))
+            break;
     }
 
-    /*
-     * Drain completed requests from iob: post CQEs, remove from
-     * iopoll_list, release resources.
-     */
-    if (!wq_list_empty(&iob.req_list))
-        io_iopoll_complete(ctx, &iob);
+    if (!rq_list_empty(&iob.req_list))
+        iob.complete(&iob);
 
+    /* Second pass: reap completed requests and queue their CQEs */
+    list_for_each_entry_safe(req, tmp, &ctx->iopoll_list, iopoll_node) {
+        if (!smp_load_acquire(&req->iopoll_completed))
+            continue;
+        list_del(&req->iopoll_node);
+        wq_list_add_tail(&req->comp_list, &ctx->submit_state.compl_reqs);
+        nr_events++;
+    }
+
+    if (nr_events)
+        __io_submit_flush_completions(ctx);
     return nr_events;
 }
 ```
@@ -377,19 +390,21 @@ The loop iterates `ctx->iopoll_list`, calling each file's `iopoll` method, until
 
 ```c
 /* io_uring/io_uring.c */
-static int io_iopoll_check(struct io_ring_ctx *ctx, long min)
+static int io_iopoll_check(struct io_ring_ctx *ctx, unsigned int min_events)
 {
-    int iters, ret = 0;
+    /* Already have completions pending? Don't bother spinning. */
+    if (io_cqring_events(ctx))
+        return 0;
 
     do {
-        ret = io_do_iopoll(ctx, !iters);
-        if (ret < 0)
+        int ret = io_do_iopoll(ctx, !min_events);
+        if (unlikely(ret < 0))
+            return ret;
+        if (need_resched())
             break;
-        if (!iters && !io_cqring_events(ctx))
-            break;
-    } while (io_cqring_events(ctx) < min);
+    } while (io_cqring_events(ctx) < min_events);
 
-    return ret;
+    return 0;
 }
 ```
 
@@ -401,7 +416,7 @@ io_uring_submit()
     → io_issue_sqe()        ← submit the I/O with IOCB_HIPRI set
       → vfs_iocb_iter_read() / vfs_iocb_iter_write()
         → file->f_op->read_iter / write_iter
-          → iomap_dio_rw()  ← submits bio with REQ_HIPRI | REQ_NOWAIT
+          → iomap_dio_rw()  ← submits bio with REQ_POLLED set
             → iocb->private = bio  ← stash bio for iopoll
       → req added to ctx->iopoll_list  ← tracked for polling
 
@@ -411,7 +426,7 @@ io_uring_enter(IORING_ENTER_GETEVENTS)
       → file->f_op->iopoll()  ← per-request: reads NVMe CQ
         → bio_poll()
           → nvme_poll()       ← reads phase bit, processes CQ entry
-      → io_iopoll_complete()  ← post CQE, remove from iopoll_list
+      → reap completed reqs   ← post CQEs, remove from iopoll_list
 ```
 
 ---
@@ -444,7 +459,8 @@ static int io_sq_thread(void *data)
          * new SQEs. Submit any found.
          */
         list_for_each_entry(ctx, &sqd->ctx_list, sqd_list)
-            io_submit_sqes(ctx, cap_entries ? 4 : UINT_MAX);
+            io_submit_sqes(ctx, cap_entries ? IORING_SQPOLL_CAP_ENTRIES_VALUE
+                                            : UINT_MAX);
 
         if (list_empty(&sqd->ctx_list) ||
             (!io_sqring_entries(ctx) && time_after(jiffies, timeout))) {
@@ -524,32 +540,27 @@ if (iocb->ki_flags & IOCB_NOWAIT) {
 
 ### NOWAIT in io_uring's fast path
 
-io_uring's performance depends heavily on NOWAIT. io_uring always tries the fast path first with `IOCB_NOWAIT` set:
+io_uring's performance depends heavily on NOWAIT. Each read is first issued on the submitting task in non-blocking mode: on that initial issue io_uring sets `IOCB_NOWAIT`, so the filesystem returns `-EAGAIN` rather than sleeping.
 
 ```c
-/* io_uring/rw.c */
-static int io_read(struct io_kiocb *req, unsigned int issue_flags)
+/* io_uring/rw.c — condensed from io_read()/__io_read() */
+static int __io_read(struct io_kiocb *req, unsigned int issue_flags)
 {
-    struct kiocb *kiocb = &req->rw.kiocb;
+    struct io_rw *rw = io_kiocb_to_cmd(req, struct io_rw);
+    bool force_nonblock = issue_flags & IO_URING_F_NONBLOCK;
 
-    /* Always try NOWAIT first */
-    kiocb->ki_flags |= IOCB_NOWAIT;
+    /* On the initial, non-blocking issue, tell the fs not to sleep */
+    if (force_nonblock)
+        rw->kiocb.ki_flags |= IOCB_NOWAIT;
 
-    ret = vfs_iocb_iter_read(req->file, kiocb, &iter);
+    ret = io_iter_do_read(rw, &iter);   /* → file->f_op->read_iter() */
 
-    if (ret == -EAGAIN) {
-        /*
-         * Fast path failed. If the caller said it's OK to block
-         * (i.e. we're not in a context that forbids sleeping),
-         * fall back to the io-wq thread pool.
-         */
-        if (issue_flags & IO_URING_F_NONBLOCK)
-            return -EAGAIN;
-
-        /* Re-issue without NOWAIT: will sleep in io-wq thread */
-        kiocb->ki_flags &= ~IOCB_NOWAIT;
-        return io_read_prep_async(req);  /* queues to io-wq */
-    }
+    /*
+     * If the fast path would block, read_iter returns -EAGAIN. io_read()
+     * propagates it to the core, which re-queues the request to the io-wq
+     * thread pool — where it is re-issued without IO_URING_F_NONBLOCK and
+     * is allowed to sleep.
+     */
     return ret;
 }
 ```

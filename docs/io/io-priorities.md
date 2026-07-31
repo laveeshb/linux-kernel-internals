@@ -174,20 +174,24 @@ Scheduler (BFQ) enqueue
 ### get_current_ioprio()
 
 ```c
-/* kernel/sched/core.c */
-int get_current_ioprio(void)
+/* include/linux/ioprio.h */
+static inline int get_current_ioprio(void)
 {
-    struct io_context *ioc = current->io_context;
+    return __get_task_ioprio(current);
+}
 
-    if (ioc) {
-        int ioprio = ioc->ioprio;
+static inline int __get_task_ioprio(struct task_struct *p)
+{
+    struct io_context *ioc = p->io_context;
+    int prio;
 
-        if (ioprio != IOPRIO_DEFAULT)
-            return ioprio;
-    }
-    /* Fall back to deriving from CPU nice */
-    return IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE,
-                             task_nice_ioclass(current));
+    if (!ioc)   /* no io_context: derive class + level from CPU nice */
+        return IOPRIO_PRIO_VALUE(task_nice_ioclass(p), task_nice_ioprio(p));
+
+    prio = ioc->ioprio;
+    if (IOPRIO_PRIO_CLASS(prio) == IOPRIO_CLASS_NONE)  /* class NONE: use nice */
+        prio = IOPRIO_PRIO_VALUE(task_nice_ioclass(p), task_nice_ioprio(p));
+    return prio;
 }
 ```
 
@@ -196,29 +200,17 @@ If the process has an `io_context` with an explicit ioprio set via `ioprio_set()
 ### bio->bi_ioprio assignment
 
 ```c
-/* block/blk-core.c — bio inherits ioprio from the submitting kiocb */
-void bio_set_ioprio(struct bio *bio)
+/* block/blk-core.c — a bio inherits ioprio from the submitting task */
+static void bio_set_ioprio(struct bio *bio)
 {
-    /* If the bio already has an explicit ioprio, keep it */
-    if (bio->bi_ioprio)
-        return;
-    blkcg_set_ioprio(bio);  /* try cgroup-level ioprio first */
-}
-
-/* fs/iomap/direct-io.c — DIO path */
-static void iomap_dio_submit_bio(const struct iomap_iter *iter,
-                                  struct iomap_dio *dio,
-                                  struct bio *bio)
-{
-    /* Copy ioprio from the originating kiocb into the bio */
-    if (dio->iocb->ki_flags & IOCB_HIPRI)
-        bio_set_polled(bio);
-    bio->bi_ioprio = dio->iocb->ki_ioprio;
-    submit_bio(bio);
+    /* Nobody set ioprio yet? Initialize from the task's (nice-derived) ioprio */
+    if (IOPRIO_PRIO_CLASS(bio->bi_ioprio) == IOPRIO_CLASS_NONE)
+        bio->bi_ioprio = get_current_ioprio();
+    blkcg_set_ioprio(bio);   /* then apply any cgroup I/O-priority policy */
 }
 ```
 
-For buffered writes the path is slightly different: the bio is created by the writeback path from a `struct writeback_control`, and the ioprio comes from the cgroup rather than the originating process.
+For direct I/O the bio carries the originating kiocb's `ki_ioprio` (copied when the DIO bio is built in `fs/iomap/direct-io.c`); for buffered writes the bio is created later by the writeback path, so its ioprio comes from the cgroup/writeback context rather than the originating process.
 
 ---
 
@@ -246,22 +238,7 @@ echo "200" > /sys/fs/cgroup/highprio/io.weight
 echo "50"  > /sys/fs/cgroup/background/io.weight
 ```
 
-The cgroup weight maps to a BE ioprio level via:
-
-```c
-/*
- * Map cgroup io.weight (1–10000) to IOPRIO_CLASS_BE level (0–7).
- * Higher weight → lower ioprio level number → more bandwidth from BFQ.
- */
-static int blkcg_weight_to_ioprio(int weight)
-{
-    return IOPRIO_BE_NR - DIV_ROUND_CLOSEST(
-        weight * IOPRIO_BE_NR,
-        IOPRIO_WEIGHT_MAX);
-}
-```
-
-A cgroup with `io.weight 100` (default) maps to BE level 4. A cgroup with `io.weight 1000` maps to BE level 0 (most bandwidth).
+`io.weight` is **not** translated into a per-task ioprio level — it is a separate, proportional mechanism. The value (1–10000, default 100) is consumed directly by the block I/O controller (BFQ, or the `blk-iocost` cost model that backs `io.weight` on other schedulers) to divide device bandwidth among sibling cgroups in proportion to their weights: a cgroup with weight 200 gets roughly twice the share of one with weight 100. Per-task `ioprio` (via `ionice`) and per-cgroup `io.weight` are independent knobs — the former orders requests within BFQ's priority classes, the latter partitions bandwidth between cgroups.
 
 ### io.bfq.weight
 
@@ -377,87 +354,45 @@ BFQ maintains a `bfq_queue` for each process (or cgroup entity):
 ```c
 /* block/bfq-iosched.h */
 struct bfq_queue {
-    struct bfq_data     *bfqd;          /* owning scheduler */
-    struct rb_root       sort_list;     /* requests sorted by sector */
-    struct request      *next_rq;       /* next request to dispatch */
-    int                  ioprio;        /* ioprio class + level */
-    int                  ioprio_class;  /* IOPRIO_CLASS_* */
-    u32                  max_budget;    /* sectors to serve this round */
-    u32                  budget_timeout;
+    struct bfq_data     *bfqd;           /* owning scheduler */
+    struct rb_root       sort_list;      /* requests sorted by sector */
+    struct request      *next_rq;        /* next request to dispatch */
+    unsigned short       ioprio;         /* ioprio level */
+    unsigned short       ioprio_class;   /* IOPRIO_CLASS_* */
+    int                  max_budget;     /* sectors to serve this round */
+    unsigned long        budget_timeout;
     /* ... */
 };
 ```
 
-Each `bfq_queue` is assigned a budget (in sectors) proportional to its weight. When the budget is exhausted, BFQ moves to the next queue.
+Each `bfq_queue` is served for at most `max_budget` sectors per activation; when the budget is exhausted (or times out), BFQ moves on to the next queue. `max_budget` itself is auto-tuned by BFQ (starting from `bfq_default_max_budget`, 16K sectors) — it is *not* derived from the ioprio level. What the ioprio level controls is the queue's **weight**, which sets its share of disk time in BFQ's proportional-share (WF2Q+) scheduler.
 
-### Budget allocation and weight
+### From ioprio level to weight
 
 ```
-weight → max_budget:
+weight ← ioprio level  (block/bfq-wf2q.c):
 
-  bfqq->max_budget = BFQ_DEFAULT_MAX_BUDGET
-                   × (bfqq->weight / BFQ_DEFAULT_WEIGHT)
+  weight = (IOPRIO_NR_LEVELS − level) × BFQ_WEIGHT_CONVERSION_COEFF
+         = (8 − level) × 10
 
-  default weight = 100
-  BE level 0 → weight 320
-  BE level 4 → weight 100 (default)
-  BE level 7 → weight  10
+  BE level 0 → weight 80
+  BE level 4 → weight 40   ← default ioprio
+  BE level 7 → weight 10
 ```
 
-A process at BE level 0 therefore gets roughly 32× the budget of one at BE level 7.
+A process at BE level 0 therefore carries 8× the weight of one at BE level 7 (80 vs 10), and receives a correspondingly larger share of the device.
 
 ### Priority class ordering
 
-BFQ enforces a strict class hierarchy: RT before BE before IDLE.
-
-```c
-/* block/bfq-iosched.c */
-static struct bfq_queue *bfq_select_queue(struct bfq_data *bfqd)
-{
-    /* First: any RT queue with pending requests */
-    bfqq = bfq_get_next_queue(bfqd, IOPRIO_CLASS_RT);
-    if (bfqq)
-        return bfqq;
-
-    /* Then: BE queues in weighted-fair order */
-    bfqq = bfq_get_next_queue(bfqd, IOPRIO_CLASS_BE);
-    if (bfqq)
-        return bfqq;
-
-    /* Finally: IDLE queues only when nothing else is pending */
-    return bfq_get_next_queue(bfqd, IOPRIO_CLASS_IDLE);
-}
-```
+BFQ enforces a strict class hierarchy: RT before BE before IDLE. This ordering is not a simple `if` ladder — it falls out of BFQ's hierarchical scheduler. `bfq_select_queue()` (in `block/bfq-iosched.c`) picks the next queue to serve by walking BFQ's service-tree hierarchy via `bfq_get_next_queue()`, and that hierarchy is ordered by class: an RT queue with pending I/O is always chosen before any BE queue, and BE queues before IDLE. Within the BE class, queues are served in weighted-fair order according to their per-queue weights (derived from the ioprio level).
 
 ### Soft real-time detection
 
-BFQ heuristically detects **interactive** applications (web browsers, text editors) by observing short think times between bursts of I/O. These are temporarily boosted to near-RT priority even if they are in BE class. This is the "soft real-time" promotion:
-
-```c
-/* bfq detects soft-RT if:
- *   - queue has short bursts (small budget used)
- *   - followed by idle periods (think time > threshold)
- *
- * Boosted queues skip ahead of ordinary BE queues.
- */
-static bool bfq_bfqq_is_soft_rt(struct bfq_queue *bfqq)
-{
-    return bfqq->wr_coeff > 1 &&
-           bfq_bfqq_in_large_burst(bfqq) == false;
-}
-```
+BFQ heuristically detects **interactive** applications (web browsers, text editors) by observing short bursts of I/O separated by idle periods (think time above a threshold). Such queues are temporarily boosted even while in the BE class — the "soft real-time" promotion. Internally this is implemented as **weight raising**: BFQ multiplies the queue's weight by a coefficient (`bfqq->wr_coeff > 1`) for a bounded interval, so a boosted queue is scheduled ahead of ordinary BE queues. Queues flagged as part of a "large burst" of process creation (`bfq_bfqq_in_large_burst()`) are excluded, since a storm of short-lived processes is not the interactive pattern the heuristic targets.
 
 ### Seeky detection
 
-BFQ tracks whether a queue submits **sequential** or **random** (seeky) I/O. Random-access queues get a smaller budget to prevent them from monopolising the disk's seek time:
-
-```c
-/* A queue is considered seeky if its average seek distance
- * exceeds BFQ_BFQQ_MAX_SEQ_SECTORS.
- * Seeky queues get max_budget reduced proportionally. */
-if (BFQQ_SEEKY(bfqq))
-    bfqq->max_budget >>= BFQ_SEEKY_BUDGET_SHIFT;
-```
+BFQ tracks whether a queue submits **sequential** or **random** (seeky) I/O, classifying a queue as seeky via the `BFQQ_SEEKY()` macro when its average seek distance is large. Seeky queues are budgeted differently: because random I/O cannot make good use of a long, uninterrupted service slot, BFQ caps their budget so a seeky queue cannot hold the device while doing little useful work. This protects sequential workloads — which benefit from sustained access — from being starved by a random-access queue.
 
 ### io_uring and BFQ
 
@@ -488,11 +423,15 @@ enum dd_prio {
     DD_PRIO_MAX  = 2,
 };
 
+/* One set of queues per priority class (DD_DIR_COUNT = 2: read, write) */
+struct dd_per_prio {
+    struct rb_root       sort_list[DD_DIR_COUNT];  /* sorted by sector (merging) */
+    struct list_head     fifo_list[DD_DIR_COUNT];  /* sorted by deadline (anti-starvation) */
+    /* ... */
+};
+
 struct deadline_data {
-    /* Sorted by sector (for merging) */
-    struct rb_root       sort_list[DD_DIR_COUNT][DD_PRIO_MAX + 1];
-    /* Sorted by deadline (for anti-starvation) */
-    struct list_head     fifo_list[DD_DIR_COUNT][DD_PRIO_MAX + 1];
+    struct dd_per_prio   per_prio[DD_PRIO_COUNT];  /* RT, BE, IDLE (DD_PRIO_COUNT = 3) */
     /* ... */
 };
 ```
@@ -625,7 +564,7 @@ io_uring uses `IOCB_NOWAIT` by default for all non-blocking operations, falling 
 
 ### cgroup io.latency as a compensating mechanism
 
-`io.latency` helps indirectly: if priority inversion causes a high-priority cgroup's latency to spike, BFQ will boost that cgroup's weight in subsequent rounds, partially recovering from the inversion. This is a recovery mechanism, not prevention.
+`io.latency` can help indirectly. It is implemented by the **blk-iolatency** controller (independent of BFQ): you set a target latency for a protected cgroup, and when that cgroup's observed latency exceeds the target, the controller throttles the *competing* cgroups — reducing their allowed I/O depth — until the protected cgroup recovers. It cannot undo a lock-based inversion, but by squeezing lower-priority I/O it keeps a latency-sensitive cgroup's delays bounded. This is a containment mechanism, not prevention.
 
 ---
 
@@ -633,10 +572,10 @@ io_uring uses `IOCB_NOWAIT` by default for all non-blocking operations, falling 
 
 ```
 task_struct
-  └── ioprio (u16)            ← set by ioprio_set(), read by get_current_ioprio()
+  └── io_context->ioprio (u16) ← set by ioprio_set(), read by get_current_ioprio()
 
 struct kiocb
-  └── ki_ioprio (u16)         ← copied from task_struct at I/O submission
+  └── ki_ioprio (u16)         ← copied from the task's ioprio at I/O submission
 
 struct bio
   └── bi_ioprio (u16)         ← copied from kiocb; carries priority to block layer
@@ -647,7 +586,8 @@ struct request
 struct bfq_queue
   └── ioprio                  ← derived from request->ioprio on queue creation
   └── ioprio_class            ← RT / BE / IDLE
-  └── max_budget              ← sectors per round, proportional to weight(ioprio)
+  └── weight                  ← (8 − level) × 10; sets share of disk time
+  └── max_budget              ← sectors per round (auto-tuned, not weight-derived)
 ```
 
 ---
