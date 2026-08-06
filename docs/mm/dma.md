@@ -172,10 +172,9 @@ The IOMMU driver in Linux lives under [`drivers/iommu/`](https://git.kernel.org/
 
 ### LWN coverage
 
-The evolution of the IOMMU subsystem is well documented on LWN:
+LWN's coverage of bounce buffering and device isolation:
 
-- [A new DMA mapping API](https://lwn.net/Articles/753027/) (2018) -- restructuring the DMA API for better IOMMU integration
-- [The IOMMU API](https://lwn.net/Articles/610073/) (2014) -- overview of the IOMMU framework
+- [Restricted DMA](https://lwn.net/Articles/841916/) (2021) -- using SWIOTLB bounce buffering to isolate untrusted devices on systems without an IOMMU
 
 ## SWIOTLB Bounce Buffers
 
@@ -214,7 +213,7 @@ The SWIOTLB pool size can be configured at boot with `swiotlb=N` (number of 2KB 
 
 ### Confidential computing and SWIOTLB
 
-SWIOTLB gained renewed importance with confidential computing (AMD SEV, Intel TDX). In these environments, device DMA cannot access encrypted guest memory directly. The guest must use decrypted bounce buffers for all DMA operations. Commit [1a1a8b7495b8](https://git.kernel.org/linus/1a1a8b7495b8) ("swiotlb: Add restricted DMA pool initialization") added support for restricted DMA pools to handle these scenarios.
+SWIOTLB gained renewed importance with confidential computing (AMD SEV, Intel TDX). In these environments, device DMA cannot access encrypted guest memory directly. The guest must use decrypted bounce buffers for all DMA operations. Commit [0b84e4f8b793](https://git.kernel.org/linus/0b84e4f8b793) ("swiotlb: Add restricted DMA pool initialization") added support for restricted DMA pools to handle these scenarios.
 
 ## DMA Memory Pools
 
@@ -381,9 +380,7 @@ find /sys/kernel/debug/ -name "*dma*" 2>/dev/null
 - [DMA API Guide](https://docs.kernel.org/core-api/dma-api.html) -- the authoritative kernel documentation on the DMA API
 - [DMA API HOWTO](https://docs.kernel.org/core-api/dma-api-howto.html) -- practical guide for driver developers
 - [Dynamic DMA mapping Guide](https://docs.kernel.org/core-api/dma-api-howto.html) -- when and how to use each mapping type
-- [LWN: A new DMA mapping API](https://lwn.net/Articles/753027/) (2018) -- restructuring the DMA API
-- [LWN: The IOMMU API](https://lwn.net/Articles/610073/) (2014) -- overview of the IOMMU framework
-- [LWN: Bounce-buffer problems](https://lwn.net/Articles/808916/) (2020) -- SWIOTLB challenges in the CMA era
+- [LWN: Restricted DMA](https://lwn.net/Articles/841916/) (2021) -- SWIOTLB bounce buffering to isolate untrusted devices
 
 ### Related
 
@@ -398,8 +395,6 @@ find /sys/kernel/debug/ -name "*dma*" 2>/dev/null
 - [Kernel docs: DMA API HOWTO](https://docs.kernel.org/core-api/dma-api-howto.html) — practical guide covering when and how to use each mapping type
 - [`Documentation/core-api/dma-api.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/core-api/dma-api.rst) — kernel source for the DMA API documentation
 - [`kernel/dma/`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma) — the full DMA subsystem source directory: mapping, direct, swiotlb, pool
-- [LWN: A new DMA mapping API](https://lwn.net/Articles/753027/) — restructuring the DMA mapping layer for better IOMMU integration (2018)
-- [LWN: The IOMMU API](https://lwn.net/Articles/610073/) — overview of how the IOMMU framework plugs into the kernel (2014)
-- [LWN: Bounce-buffer problems](https://lwn.net/Articles/808916/) — SWIOTLB challenges with large-memory and confidential computing systems (2020)
+- [LWN: Restricted DMA](https://lwn.net/Articles/841916/) — SWIOTLB bounce buffering to isolate untrusted devices without an IOMMU (2021)
 - [Device Memory Coherency](device-coherency.md) — cache maintenance rules that govern every DMA mapping
 - [CMA](cma.md) — how `dma_alloc_coherent()` sources physically contiguous memory via the Contiguous Memory Allocator
