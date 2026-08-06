@@ -367,10 +367,10 @@ No single mitigation is complete. The value is in the combination: an attacker w
 
 ### LWN coverage
 
-- [The Dirty COW vulnerability](https://lwn.net/Articles/704231/) (2016) — root cause and initial fix
-- [Kernel page-table isolation](https://lwn.net/Articles/741878/) (2018) — KPTI design and performance
-- [Revisiting get_user_pages() and COW](https://lwn.net/Articles/849638/) (2020) — John Hubbard's analysis
-- [Tracking page state with PG_anon_exclusive](https://lwn.net/Articles/893906/) (2022) — David Hildenbrand's solution
+- [Dirty COW and clean commit messages](https://lwn.net/Articles/704231/) (2016) — Jonathan Corbet on the Dirty COW race and its fix
+- [The current state of kernel page-table isolation](https://lwn.net/Articles/741878/) (2017) — KPTI design, the Meltdown mitigation
+- [Patching until the COWs come home (part 1)](https://lwn.net/Articles/849638/) (2021) — Vlastimil Babka on the GUP-pin vs. COW problem
+- [get_user_pages() and COW, 2022 edition](https://lwn.net/Articles/895439/) (2022) — David Hildenbrand's PG_anon_exclusive solution
 
 ### Key kernel commits
 
