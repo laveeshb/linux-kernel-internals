@@ -15,9 +15,8 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 ## Documentation
 
 ### General
-| Document | Description |
-|----------|-------------|
-| [Linux Evolution](linux-evolution.md) | From hobby project to world infrastructure |
+
+- [Linux Evolution](linux-evolution.md) — from hobby project to world infrastructure
 
 ### Subsystems
 
