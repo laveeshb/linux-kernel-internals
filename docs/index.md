@@ -20,34 +20,55 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 | [Linux Evolution](linux-evolution.md) | From hobby project to world infrastructure |
 
 ### Subsystems
-| Subsystem | Status |
-|-----------|--------|
-| [Memory Management (mm/)](mm/README.md) | Available |
-| [Scheduler (sched/)](sched/README.md) | Available |
-| [Networking (net/)](net/network-stack-overview.md) | Available |
-| [Locking (locking/)](locking/README.md) | Available |
-| [Interrupts (interrupts/)](interrupts/README.md) | Available |
-| [Security (security/)](security/README.md) | Available |
-| [VFS (vfs/)](vfs/README.md) | Available |
-| [BPF (bpf/)](bpf/README.md) | Available |
-| [Block Layer (block/)](block/README.md) | Available |
-| [Filesystems (filesystems/)](filesystems/README.md) | Available |
-| [Drivers (drivers/)](drivers/README.md) | Available |
-| [Cgroups (cgroups/)](cgroups/README.md) | Available |
-| [Tracing (tracing/)](tracing/README.md) | Available |
-| [Debugging (debugging/)](debugging/README.md) | Available |
-| [IPC (ipc/)](ipc/README.md) | Available |
-| [Architecture (arch/)](arch/arm64/README.md) | Available |
-| [Modules (modules/)](modules/README.md) | Available |
-| [Virtualization (virtualization/)](virtualization/README.md) | Available |
-| [Power Management (power/)](power/README.md) | Available |
-| [Time (time/)](time/README.md) | Available |
-| [Syscalls (syscalls/)](syscalls/README.md) | Available |
-| [IO (io/)](io/README.md) | Available |
-| [io_uring (io-uring/)](io-uring/README.md) | Available |
-| [Crypto (crypto/)](crypto/README.md) | Available |
-| [Livepatch (livepatch/)](livepatch/README.md) | Available |
-| [IOMMU (iommu/)](iommu/README.md) | Available |
+
+Organized the same way as the site navigation.
+
+**Foundations**
+
+- [Architecture (arch/)](arch/arm64/README.md)
+- [System Calls (syscalls/)](syscalls/README.md)
+- [Modules (modules/)](modules/README.md)
+- [Time (time/)](time/README.md)
+
+**Memory**
+
+- [Memory Management (mm/)](mm/README.md)
+- [IOMMU (iommu/)](iommu/README.md)
+
+**Scheduling & Concurrency**
+
+- [Scheduler (sched/)](sched/README.md)
+- [Locking (locking/)](locking/README.md)
+- [Interrupts (interrupts/)](interrupts/README.md)
+- [IPC (ipc/)](ipc/README.md)
+
+**Storage & I/O**
+
+- [VFS (vfs/)](vfs/README.md)
+- [Filesystems (filesystems/)](filesystems/README.md)
+- [Block Layer (block/)](block/README.md)
+- [I/O Patterns (io/)](io/README.md)
+- [io_uring (io-uring/)](io-uring/README.md)
+- [Drivers (drivers/)](drivers/README.md)
+
+**Networking & BPF**
+
+- [Networking (net/)](net/network-stack-overview.md)
+- [BPF (bpf/)](bpf/README.md)
+
+**Isolation & Security**
+
+- [Cgroups (cgroups/)](cgroups/README.md)
+- [Security (security/)](security/README.md)
+- [Virtualization (virtualization/)](virtualization/README.md)
+- [Crypto (crypto/)](crypto/README.md)
+- [Livepatch (livepatch/)](livepatch/README.md)
+
+**Observability**
+
+- [Tracing (tracing/)](tracing/README.md)
+- [Debugging (debugging/)](debugging/README.md)
+- [Power Management (power/)](power/README.md)
 
 ## Community
 
