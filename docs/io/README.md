@@ -6,10 +6,6 @@
 
 This documentation explains how Linux handles I/O — not just the system call API, but the implementation decisions underneath: where data lives at each stage, what copies happen (or don't), what the kernel defers, and what trade-offs each interface forces on application developers.
 
-<div class="github-only" markdown>
-> **Browsing on GitHub?** See the [full site index](../site-index.md) for a complete listing of all documentation.
-</div>
-
 ### Prerequisites
 
 This documentation assumes familiarity with:
