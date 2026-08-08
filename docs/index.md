@@ -21,8 +21,6 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 
 ### Subsystems
 
-Organized the same way as the site navigation.
-
 **Foundations**
 
 - [Architecture (arch/)](arch/arm64/README.md)
