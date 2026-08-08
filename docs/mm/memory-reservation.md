@@ -415,7 +415,6 @@ Visible in:
 - [`arch/x86/kernel/setup.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/setup.c) — `setup_arch()` orchestrating all x86 boot reservations in sequence
 - [`kernel/crash_reserve.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/crash_reserve.c) — `reserve_crashkernel_generic()` implementation
 - [LWN: memblock and early memory management](https://lwn.net/Articles/438225/) — how memblock replaced the earlier bootmem allocator and why flat arrays work for boot-time allocation (2011)
-- [LWN: kdump and crashkernel](https://lwn.net/Articles/249508/) — the crashkernel reservation and kexec-based capture kernel design (2007)
 - [memblock.md](memblock.md) — detailed coverage of the memblock allocator lifecycle, region merging, and transition to the buddy allocator
 - [cma.md](cma.md) — how `dma_contiguous_reserve()` carves out CMA regions within the memblock reservation phase
 - [memory-hotplug.md](memory-hotplug.md) — runtime counterpart to boot reservations: adding and removing physical memory after `memblock_free_all()`

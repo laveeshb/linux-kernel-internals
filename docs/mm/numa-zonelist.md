@@ -411,8 +411,6 @@ for (node = 0; node < nr_nodes; node++)
 
 ### LWN articles
 
-- [NUMA zonelist ordering](https://lwn.net/Articles/251063/) — the history of zonelist ordering modes and why node-order won out over zone-order
-- [Memory policies and the allocator](https://lwn.net/Articles/207848/) — how `MPOL_BIND`, `MPOL_INTERLEAVE`, and `MPOL_PREFERRED` map to zonelist traversal
 - [GFP flags and memory zones](https://lwn.net/Articles/629925/) — how GFP flags select zones and interact with the fallback list
 
 ### Related docs
