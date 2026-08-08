@@ -28,4 +28,4 @@ The site is open source — the full source and history live on **[GitHub](https
 
 ---
 
-Created and maintained by [Laveesh Bansal](https://github.com/laveeshb).
+Created and maintained by [Laveesh Bansal](https://laveeshb.com).
