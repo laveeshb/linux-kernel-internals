@@ -537,7 +537,5 @@ nav:
       - War Stories: power/war-stories.md
   - About:
     - about.md
-    - Index: site-index.md
-    - Guide: navigation.md
     - Contributing: contributing.md
 

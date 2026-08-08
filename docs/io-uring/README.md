@@ -6,10 +6,6 @@
 
 This documentation explains how io_uring works — not just the API, but the design decisions behind the ring layout, the trade-offs that shaped it, and the real-world patterns used in databases, storage engines, and network servers.
 
-<div class="github-only" markdown>
-> **Browsing on GitHub?** See the [full site index](../site-index.md) for a complete listing of all documentation.
-</div>
-
 ### Prerequisites
 
 This documentation assumes familiarity with:
