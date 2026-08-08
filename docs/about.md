@@ -15,7 +15,7 @@ This site pulls that reasoning together and organizes it by subsystem, so you ca
 
 ## Getting involved
 
-It is open source, and contributions are welcome.
+The site is open source — the full source and history live on **[GitHub](https://github.com/laveeshb/linux-kernel-internals)**. Contributions are welcome:
 
 - **Corrections** — if a *why* is wrong, please say so. A confidently wrong explanation is worse than none.
 - **Requests** — a subsystem or topic you would like covered? [Start a discussion](https://github.com/laveeshb/linux-kernel-internals/discussions).
@@ -25,3 +25,7 @@ It is open source, and contributions are welcome.
 
 - Documentation: [CC BY-SA 4.0](https://github.com/laveeshb/linux-kernel-internals/blob/main/LICENSE-CC-BY-SA-4.0)
 - Code snippets: [GPL-2.0](https://github.com/laveeshb/linux-kernel-internals/blob/main/LICENSE-GPL-2.0)
+
+---
+
+Created and maintained by [Laveesh Bansal](https://github.com/laveeshb).
