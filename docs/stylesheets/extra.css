@@ -25,9 +25,9 @@
    Scale the whole UI ~1.3x — content, header tabs, sidebars, and TOC alike —
    by bumping the root font-size at each of Material's responsive breakpoints.
    Everything Material sizes is in rem, so this zooms the interface uniformly. */
-html { font-size: 162.5%; }                                            /* 125%   x1.3 */
-@media screen and (min-width: 100em) { html { font-size: 178.75%; } }  /* 137.5% x1.3 */
-@media screen and (min-width: 125em) { html { font-size: 195%; } }     /* 150%   x1.3 */
+html { font-size: 150%; }                                              /* 125%   x1.2 */
+@media screen and (min-width: 100em) { html { font-size: 165%; } }     /* 137.5% x1.2 */
+@media screen and (min-width: 125em) { html { font-size: 180%; } }     /* 150%   x1.2 */
 
 /* Tables: a touch smaller than body, in em so they scale with the base above. */
 .md-typeset table:not([class]) {

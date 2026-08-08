@@ -1,3 +1,8 @@
+---
+hide:
+  - navigation
+---
+
 # Linux Kernel Internals
 
 A community hub for understanding the Linux kernel — documentation and discussions about design decisions, internals, and the journey of contributing.
