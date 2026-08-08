@@ -27,9 +27,9 @@
    noticeable on the many comparison / version-notes / bit-layout tables.
    Nudge those specific spots up; body prose stays at Material's 16px/1.6. */
 
-/* Tables: 0.64rem -> 0.72rem  (~12.8px -> ~14.4px), roomier rows */
+/* Tables: 0.64rem -> 0.78rem  (~12.8px -> ~15.6px), roomier rows */
 .md-typeset table:not([class]) {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   line-height: 1.5;
 }
 .md-typeset table:not([class]) th,
@@ -37,8 +37,8 @@
   padding: 0.5em 0.8em;
 }
 
-/* Inline code identifiers -> 0.9em (~14.4px). Scoped to inline only so the
+/* Inline code identifiers -> 0.95em (~15.2px). Scoped to inline only so the
    wide ASCII-diagram code blocks are left exactly as-is. */
 .md-typeset :not(pre) > code {
-  font-size: 0.9em;
+  font-size: 0.95em;
 }
