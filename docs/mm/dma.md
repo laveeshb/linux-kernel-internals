@@ -172,8 +172,10 @@ The IOMMU driver in Linux lives under [`drivers/iommu/`](https://git.kernel.org/
 
 ### LWN coverage
 
-LWN's coverage of bounce buffering and device isolation:
+LWN's coverage of DMA addressing, cache coherency, and device isolation:
 
+- [The trouble with 64-bit DMA](https://lwn.net/Articles/904210/) (2022) -- DMA addressing masks, IOVAs, and how the IOMMU maps device addresses
+- [Noncoherent DMA mappings](https://lwn.net/Articles/855328/) (2021) -- coherent vs. streaming mappings and cache-coherency management
 - [Restricted DMA](https://lwn.net/Articles/841916/) (2021) -- using SWIOTLB bounce buffering to isolate untrusted devices on systems without an IOMMU
 
 ## SWIOTLB Bounce Buffers
@@ -380,6 +382,8 @@ find /sys/kernel/debug/ -name "*dma*" 2>/dev/null
 - [DMA API Guide](https://docs.kernel.org/core-api/dma-api.html) -- the authoritative kernel documentation on the DMA API
 - [DMA API HOWTO](https://docs.kernel.org/core-api/dma-api-howto.html) -- practical guide for driver developers
 - [Dynamic DMA mapping Guide](https://docs.kernel.org/core-api/dma-api-howto.html) -- when and how to use each mapping type
+- [LWN: The trouble with 64-bit DMA](https://lwn.net/Articles/904210/) (2022) -- DMA addressing masks, IOVAs, and the IOMMU
+- [LWN: Noncoherent DMA mappings](https://lwn.net/Articles/855328/) (2021) -- coherent vs. streaming mappings and cache coherency
 - [LWN: Restricted DMA](https://lwn.net/Articles/841916/) (2021) -- SWIOTLB bounce buffering to isolate untrusted devices
 
 ### Related
@@ -395,6 +399,8 @@ find /sys/kernel/debug/ -name "*dma*" 2>/dev/null
 - [Kernel docs: DMA API HOWTO](https://docs.kernel.org/core-api/dma-api-howto.html) — practical guide covering when and how to use each mapping type
 - [`Documentation/core-api/dma-api.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/core-api/dma-api.rst) — kernel source for the DMA API documentation
 - [`kernel/dma/`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma) — the full DMA subsystem source directory: mapping, direct, swiotlb, pool
+- [LWN: The trouble with 64-bit DMA](https://lwn.net/Articles/904210/) — DMA addressing masks, IOVAs, and how the IOMMU maps device addresses (2022)
+- [LWN: Noncoherent DMA mappings](https://lwn.net/Articles/855328/) — coherent vs. streaming DMA mappings and cache-coherency management (2021)
 - [LWN: Restricted DMA](https://lwn.net/Articles/841916/) — SWIOTLB bounce buffering to isolate untrusted devices without an IOMMU (2021)
 - [Device Memory Coherency](device-coherency.md) — cache maintenance rules that govern every DMA mapping
 - [CMA](cma.md) — how `dma_alloc_coherent()` sources physically contiguous memory via the Contiguous Memory Allocator
