@@ -22,13 +22,12 @@
 }
 
 /* --- Typography readability -------------------------------------------------
-   Larger reading text. Scale the content area ~1.5x (Material's body is ~16px,
-   so 1.2rem ≈ 24px). Scoped to .md-typeset (the content) so the header tab bar
-   and sidebar chrome are unaffected — the grouped tabs keep their width and
-   don't re-overflow. Headings, code, and tables inherit and scale with it. */
-.md-typeset {
-  font-size: 1.2rem;
-}
+   Scale the whole UI ~1.3x — content, header tabs, sidebars, and TOC alike —
+   by bumping the root font-size at each of Material's responsive breakpoints.
+   Everything Material sizes is in rem, so this zooms the interface uniformly. */
+html { font-size: 162.5%; }                                            /* 125%   x1.3 */
+@media screen and (min-width: 100em) { html { font-size: 178.75%; } }  /* 137.5% x1.3 */
+@media screen and (min-width: 125em) { html { font-size: 195%; } }     /* 150%   x1.3 */
 
 /* Tables: a touch smaller than body, in em so they scale with the base above. */
 .md-typeset table:not([class]) {
