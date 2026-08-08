@@ -358,6 +358,7 @@ nav:
     - Block Layer:
       - Getting Started: block/README.md
       - Block Layer Overview: block/block-overview.md
+      - Life of a Block I/O: block/life-of-block-io.md
       - bio and request structures: block/bio-request.md
       - blk-mq (Multi-Queue): block/blk-mq.md
       - I/O Schedulers: block/io-schedulers.md
