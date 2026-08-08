@@ -734,8 +734,8 @@ Typical configurations achieve well under 1% CPU overhead. The `DAMON_RECLAIM` d
 
 ### LWN articles
 
-- [DAMON: Data Access MONitor](https://lwn.net/Articles/870594/) — overview of DAMON's design and its introduction to the mainline in Linux 5.15 (2021)
-- [DAMON-based proactive reclaim](https://lwn.net/Articles/863753/) — how `DAMON_RECLAIM` was developed and evaluated against `kswapd`-only reclaim
+- [Memory-management optimization with DAMON](https://lwn.net/Articles/812707/) — Jonathan Corbet's overview of DAMON's design and access-monitoring approach (2020)
+- [Using DAMON for proactive reclaim](https://lwn.net/Articles/863753/) — how `DAMON_RECLAIM` was developed and evaluated against `kswapd`-only reclaim (2021)
 
 ### Related docs
 
