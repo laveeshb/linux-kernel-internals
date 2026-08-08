@@ -13,6 +13,12 @@ An I/O scheduler (also called an elevator) sits between the block layer submissi
 
 On modern blk-mq hardware (NVMe, virtio-blk), schedulers are optional — for NVMe with many queues, "none" (no scheduler) is often optimal.
 
+### How a scheduler plugs into blk-mq
+
+A blk-mq scheduler is an `elevator_type` exposing a small set of hooks — chiefly `bio_merge` (try to merge an incoming bio), `insert_requests` (accept requests into the scheduler's own queues), and `dispatch_request` (hand the next request to the hardware queue when it has room). Requests inserted into the scheduler *wait there* rather than going straight to hardware; the scheduler's `dispatch_request` decides the order they leave. A device has at most one scheduler, and it can be switched at runtime through sysfs — atomically with respect to live I/O, a property that has historically been a source of use-after-free bugs.
+
+The key insight is that a scheduler only earns its keep when reordering is worth more than its overhead. On a spinning disk, reordering saves milliseconds of seek time; on an NVMe device with no seek penalty and millions of IOPS, the scheduler's per-request bookkeeping can *cost* more than it saves — which is why `none` exists and is frequently the right answer.
+
 ## Available schedulers
 
 ```bash
@@ -57,6 +63,8 @@ struct deadline_data {
 };
 ```
 
+**How it decides.** Each direction keeps the same requests in *two* structures: a red-black tree sorted by **sector** and a FIFO list sorted by **deadline**. Normally mq-deadline dispatches from the rb-tree in sector order, sweeping forward like an elevator to minimize seeks. Before each batch it peeks at the FIFO head: if the oldest request has passed its deadline, it switches to deadline order and services that request, guaranteeing no request starves. `fifo_batch` sets how many requests it dispatches in one sweep before re-evaluating direction and deadlines. Reads are favored over writes — reads are usually synchronous (something is waiting on them) while writes are buffered — and `writes_starved` bounds how many read batches may run before a write batch is forced. Later versions added I/O-priority support, giving RT / BE / IDLE classes their own queues so higher-priority I/O is served first within the deadline framework.
+
 Tuning:
 ```bash
 # Deadline for reads (ms, default 500)
@@ -84,6 +92,8 @@ Key properties:
 - cgroups integration: `/sys/block/sda/queue/iosched/` exposes per-group weights
 - `CONFIG_BFQ_GROUP_IOSCHED` enables cgroup-based I/O isolation
 
+**Under the hood.** BFQ is a proportional-share scheduler built on **WF2Q+**, an accurate fair-queueing algorithm that services queues in *virtual-time* order so that, over any interval, each process or cgroup receives bandwidth proportional to its weight. Each queue is granted a **budget** in sectors; BFQ serves it until the budget is spent or the queue goes idle, then picks the next queue by virtual time. On top of this fairness core, BFQ layers heuristics: it detects **interactive** and **soft-real-time** applications — short I/O bursts separated by think-time — and temporarily multiplies their weight ("weight raising") so a desktop stays responsive even under a heavy background copy. All of this accuracy has a price: the per-request virtual-time and heuristic bookkeeping is expensive, which is exactly why BFQ shines on HDDs and interactive desktops but becomes a throughput bottleneck on high-IOPS NVMe.
+
 ```bash
 echo bfq > /sys/block/sda/queue/scheduler
 
@@ -104,6 +114,8 @@ Rather than reordering, kyber:
 - Limits in-flight requests per category to hit target latencies
 - Doesn't do merging (relies on hardware)
 - Very low overhead
+
+**Under the hood.** Kyber is a feedback controller, not an elevator. It groups requests by type (read, write, discard, other) and caps the number of in-flight requests per type — its "tokens." It continuously *measures* the latency each type is actually achieving and raises or lowers the token counts to keep each near its target (`read_lat_nsec`, `write_lat_nsec`). Fewer tokens means shallower queues and lower latency at some cost to throughput, and vice-versa; Kyber finds the balance automatically. Because it never sorts by sector and does almost no bookkeeping, its overhead is tiny — the point is latency *control* on a device that's already fast, not seek reduction.
 
 ```bash
 echo kyber > /sys/block/nvme0n1/queue/scheduler
