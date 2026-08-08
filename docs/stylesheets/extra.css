@@ -22,14 +22,17 @@
 }
 
 /* --- Typography readability -------------------------------------------------
-   This site is table- and code-dense. Material renders tables at ~12.8px and
-   inline code at ~13.6px, which reads small against the 16px body prose — most
-   noticeable on the many comparison / version-notes / bit-layout tables.
-   Nudge those specific spots up; body prose stays at Material's 16px/1.6. */
+   Larger reading text. Scale the content area ~1.5x (Material's body is ~16px,
+   so 1.2rem ≈ 24px). Scoped to .md-typeset (the content) so the header tab bar
+   and sidebar chrome are unaffected — the grouped tabs keep their width and
+   don't re-overflow. Headings, code, and tables inherit and scale with it. */
+.md-typeset {
+  font-size: 1.2rem;
+}
 
-/* Tables: 0.64rem -> 0.78rem  (~12.8px -> ~15.6px), roomier rows */
+/* Tables: a touch smaller than body, in em so they scale with the base above. */
 .md-typeset table:not([class]) {
-  font-size: 0.78rem;
+  font-size: 0.9em;
   line-height: 1.5;
 }
 .md-typeset table:not([class]) th,
@@ -37,8 +40,7 @@
   padding: 0.5em 0.8em;
 }
 
-/* Inline code identifiers -> 0.95em (~15.2px). Scoped to inline only so the
-   wide ASCII-diagram code blocks are left exactly as-is. */
+/* Inline code identifiers, em-relative so they track the body size. */
 .md-typeset :not(pre) > code {
   font-size: 0.95em;
 }
