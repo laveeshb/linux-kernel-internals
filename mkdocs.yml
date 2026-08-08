@@ -361,6 +361,7 @@ nav:
       - bio and request structures: block/bio-request.md
       - blk-mq (Multi-Queue): block/blk-mq.md
       - I/O Schedulers: block/io-schedulers.md
+      - Block Cgroup (I/O Control): block/blk-cgroup.md
       - NVMe Driver: block/nvme.md
       - dm-verity (Integrity): block/dm-verity.md
     - I/O Patterns:
