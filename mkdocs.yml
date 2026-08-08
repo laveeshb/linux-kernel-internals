@@ -21,11 +21,9 @@ theme:
         name: Switch to light mode
   features:
     - navigation.tabs
-    - navigation.sections
-    - navigation.expand
+    - navigation.indexes
     - navigation.top
     - navigation.footer
-    - toc.integrate
     - content.code.copy
     - search.highlight
     - search.share
@@ -76,6 +74,7 @@ extra_javascript:
 nav:
   - Home: index.md
   - Foundations:
+    - categories/foundations.md
     - Background:
       - Linux Evolution: linux-evolution.md
     - Kernel Internals:
@@ -137,6 +136,7 @@ nav:
       - Dynamic Debug: modules/dynamic-debug.md
       - War Stories: modules/war-stories.md
   - Memory:
+    - categories/memory.md
     - Memory Management:
       - Getting Started: mm/README.md
       - Overview: mm/overview.md
@@ -255,6 +255,7 @@ nav:
       - VFIO Internals: iommu/vfio-internals.md
       - IOMMU War Stories: iommu/war-stories.md
   - Scheduling & Concurrency:
+    - categories/scheduling-concurrency.md
     - Scheduler:
       - Getting Started: sched/README.md
       - Fundamentals:
@@ -330,6 +331,7 @@ nav:
       - SysV Semaphores and Message Queues: ipc/sysv-semaphores.md
       - IPC War Stories: ipc/war-stories.md
   - Storage & I/O:
+    - categories/storage-io.md
     - VFS:
       - Getting Started: vfs/README.md
       - Fundamentals:
@@ -406,6 +408,7 @@ nav:
       - Device Tree: drivers/device-tree.md
       - I2C and SPI Drivers: drivers/i2c-spi.md
   - Networking & BPF:
+    - categories/networking-bpf.md
     - Networking:
       - Getting Started: net/README.md
       - Fundamentals:
@@ -453,6 +456,7 @@ nav:
       - BPF Ring Buffer: bpf/bpf-ringbuf.md
       - BPF Networking (TC, cgroup, sockmap): bpf/bpf-networking.md
   - Isolation & Security:
+    - categories/isolation-security.md
     - Cgroups & Namespaces:
       - Getting Started: cgroups/README.md
       - Cgroup v2 Architecture: cgroups/cgroup-v2.md
@@ -502,6 +506,7 @@ nav:
       - kexec: livepatch/kexec.md
       - War Stories: livepatch/war-stories.md
   - Observability:
+    - categories/observability.md
     - Tracing:
       - Getting Started: tracing/README.md
       - ftrace: tracing/ftrace.md
@@ -534,3 +539,4 @@ nav:
     - Index: site-index.md
     - Guide: navigation.md
     - Contributing: contributing.md
+
