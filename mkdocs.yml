@@ -355,6 +355,7 @@ nav:
       - btrfs: filesystems/btrfs.md
       - XFS: filesystems/xfs.md
       - OverlayFS: filesystems/overlayfs.md
+      - Crash Consistency and Recovery: filesystems/crash-consistency.md
     - Block Layer:
       - Getting Started: block/README.md
       - Block Layer Overview: block/block-overview.md
