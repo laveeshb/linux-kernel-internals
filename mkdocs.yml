@@ -364,6 +364,7 @@ nav:
       - I/O Schedulers: block/io-schedulers.md
       - NVMe Driver: block/nvme.md
       - dm-verity (Integrity): block/dm-verity.md
+      - War Stories: block/war-stories.md
     - I/O Patterns:
       - Getting Started: io/README.md
       - Life of a Write: io/life-of-a-write.md
