@@ -2,7 +2,7 @@
 
 > The modern, filesystem-agnostic layer that maps file offsets to device blocks and drives buffered, direct, and DAX I/O over them — what it is, what it replaced, and why
 
-For most of Linux's history, the generic code that turned a `read()` or `write()` into block I/O was built on the **`buffer_head`**: one small descriptor per filesystem block. iomap is the framework that replaced it, and it is now the shared I/O engine under XFS, gfs2, zonefs, and — for their direct-I/O and DAX paths — ext4 and btrfs. Understanding iomap is understanding how a modern Linux filesystem actually moves data.
+For most of Linux's history, the generic code that turned a `read()` or `write()` into block I/O was built on the **`buffer_head`**: one small descriptor per filesystem block. iomap is the framework that replaced it, and it is now the shared I/O engine under XFS, gfs2, zonefs, and the direct-I/O path of ext4 and btrfs (plus ext4's DAX path). Understanding iomap is understanding how a modern Linux filesystem actually moves data.
 
 ## The problem with `buffer_head`
 
@@ -52,7 +52,7 @@ iomap was introduced in 2016 by Christoph Hellwig ([`ae259a9c8593`](https://git.
 - **ext4** — uses iomap for DAX and direct I/O.
 - **btrfs** — moved its direct-I/O path onto iomap.
 
-iomap was also designed around **folios** from early on, which is why the kernel's folio conversion advanced first through the iomap-based filesystems: the generic paths that needed converting were already centralized in `fs/iomap/` rather than duplicated behind per-filesystem `buffer_head` code.
+iomap was also **converted to folios early**, and — crucially — its generic paths were already centralized in `fs/iomap/` rather than duplicated behind per-filesystem `buffer_head` code. That is why the kernel's folio conversion advanced first through the iomap-based filesystems: there was one place to convert, not one per filesystem.
 
 ## Further reading
 
