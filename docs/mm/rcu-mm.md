@@ -520,6 +520,7 @@ No `mmap_lock` is taken in the common case. The VMA tree walk, the VMA stability
 
 - [`Documentation/RCU/whatisRCU.rst`](https://docs.kernel.org/RCU/whatisRCU.html) — the authoritative introduction to RCU semantics and the read-copy-update contract
 - [`Documentation/RCU/rcu_dereference.rst`](https://docs.kernel.org/RCU/rcu_dereference.html) — rules for safely dereferencing RCU-protected pointers
+- [`Documentation/RCU/Design/Requirements/Requirements.rst` — Sleepable RCU](https://docs.kernel.org/RCU/Design/Requirements/Requirements.html#sleepable-rcu) — when and why to use sleepable RCU (as used by MMU notifiers)
 
 ### Related pages
 

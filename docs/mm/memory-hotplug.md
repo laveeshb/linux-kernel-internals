@@ -555,6 +555,7 @@ The `MHP_MEMMAP_ON_MEMORY` flag and `memory_hotplug.memmap_on_memory` parameter 
 ## Further reading
 
 - [Kernel docs: Memory hotplug](https://docs.kernel.org/admin-guide/mm/memory-hotplug.html) — official kernel documentation covering sysfs interface, zone selection, and the online/offline state machine
+- [Kernel docs: Memory hotplug notifier](https://docs.kernel.org/core-api/memory-hotplug.html) — `memory_notify()`, `MEM_GOING_ONLINE`/`MEM_CANCEL_OFFLINE`, and `struct memory_notify`
 - [`Documentation/admin-guide/mm/memory-hotplug.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/admin-guide/mm/memory-hotplug.rst) — kernel source for the memory hotplug admin guide
 - [`mm/memory_hotplug.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memory_hotplug.c) — core implementation: `add_memory()`, `remove_memory()`, `online_pages()`, `offline_pages()`
 - [`mm/page_isolation.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_isolation.c) — `start_isolate_page_range()` and `page_is_unmovable()` used during offline
