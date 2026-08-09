@@ -277,5 +277,5 @@ df -i /var/lib/docker
 - [VFS: Filesystem Registration and Mounting](../vfs/mounting.md) — how overlayfs registers
 - [VFS: Path Resolution](../vfs/namei.md) — dentry lookup through overlayfs
 - [Memory Management: Copy-on-Write](../mm/cow.md) — page-level CoW vs file-level CoW
+- [Kernel docs: overlay filesystem](https://docs.kernel.org/filesystems/overlayfs.html) — semantics, copy-up, and multiple lower layers
 - `fs/overlayfs/` in the kernel tree — OverlayFS implementation
-- `Documentation/filesystems/overlayfs.rst` in the kernel tree

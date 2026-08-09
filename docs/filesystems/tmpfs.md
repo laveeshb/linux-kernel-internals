@@ -172,3 +172,4 @@ docker run --tmpfs /tmp:size=512m,mode=1777 ubuntu bash
 - [btrfs](btrfs.md) — CoW persistent alternative
 - [Memory Management: mmap](../mm/mmap.md) — How tmpfs pages are faulted in
 - [IPC: Shared Memory](../ipc/shared-memory.md) — POSIX shm backed by tmpfs
+- [Kernel docs: tmpfs](https://docs.kernel.org/filesystems/tmpfs.html) — mount options (`size`, `nr_inodes`, `huge`) and semantics

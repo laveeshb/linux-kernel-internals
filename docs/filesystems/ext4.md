@@ -270,4 +270,5 @@ cat /proc/fs/ext4/sda1/mb_groups  # buddy allocator per-group state
 - [tmpfs and ramfs](tmpfs.md) — Memory-backed alternative
 - [btrfs](btrfs.md) — Copy-on-Write alternative
 - [VFS: Life of a write()](../vfs/life-of-write.md) — How writes reach ext4
-- `Documentation/filesystems/ext4/` — detailed on-disk format
+- [Kernel docs: ext4 data structures and algorithms](https://docs.kernel.org/filesystems/ext4/index.html) — the detailed on-disk format
+- [Kernel docs: ext4 high-level design](https://docs.kernel.org/filesystems/ext4/overview.html) — blocks, extents, and inodes
