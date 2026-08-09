@@ -419,6 +419,7 @@ nav:
       - I2C and SPI Drivers: drivers/i2c-spi.md
     - USB:
       - Getting Started: usb/README.md
+      - Enumeration and Descriptors: usb/enumeration.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
