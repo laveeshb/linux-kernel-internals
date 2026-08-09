@@ -48,6 +48,10 @@ Familiarity with the [VFS](../vfs/README.md) (the layer above, which dispatches 
 4. **[btrfs](btrfs.md)** — the copy-on-write B-tree, subvolumes, and snapshots
 5. **[tmpfs and ramfs](tmpfs.md)** — a filesystem with no disk at all
 6. **[overlayfs](overlayfs.md)** — union mounts and copy-up, the basis of container images
+7. **[Crash Consistency and Recovery](crash-consistency.md)** — journaling vs. copy-on-write, and what `fsync()` really promises
+8. **[iomap](iomap.md)** — the modern extent-based I/O framework that replaced `buffer_head`
+9. **[FUSE](fuse.md)** — filesystems implemented in userspace
+10. **[War Stories](war-stories.md)** — ext4's `O_PONIES` saga, an overlayfs privilege escalation, and the btrfs write hole
 
 ### What you'll learn
 
@@ -68,6 +72,10 @@ Familiarity with the [VFS](../vfs/README.md) (the layer above, which dispatches 
 | [btrfs](btrfs.md) | Copy-on-Write B-tree, subvolumes, snapshots |
 | [tmpfs and ramfs](tmpfs.md) | Memory-backed filesystems, size limits |
 | [overlayfs](overlayfs.md) | Union mounts, copy-up, container layers |
+| [Crash Consistency and Recovery](crash-consistency.md) | Journaling vs CoW, flush/FUA, and `fsync()` durability |
+| [iomap](iomap.md) | The extent-based I/O framework behind XFS, ext4, and btrfs |
+| [FUSE](fuse.md) | Userspace filesystems: the `/dev/fuse` protocol and its costs |
+| [War Stories](war-stories.md) | ext4 `O_PONIES`, overlayfs CVE-2023-0386, the btrfs write hole |
 
 ## Choosing a filesystem
 
