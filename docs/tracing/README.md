@@ -76,11 +76,15 @@ Comfort with the shell and basic kernel concepts (processes, syscalls, interrupt
 | Page | What it covers |
 |------|----------------|
 | [ftrace](ftrace.md) | Function tracing, tracefs, ring buffer, trace-cmd |
-| [ftrace Advanced](ftrace-advanced.md) | Function graph, trigger actions, boot-time tracing |
+| [ftrace Advanced](ftrace-advanced.md) | Function graph, triggers, and how ftrace patches functions |
+| [Ring Buffer and tracefs](ring-buffer.md) | The lockless per-CPU buffer and the tracefs control surface |
+| [Trace Events and Dynamic Events](trace-events.md) | TRACE_EVENT, filters, triggers, and runtime kprobe/uprobe events |
 | [Kprobes and Tracepoints](kprobes-tracepoints.md) | kprobe/kretprobe, static tracepoints, TRACE_EVENT |
 | [uprobes and USDT](uprobes-usdt.md) | Userspace probes and static markers |
+| [BPF for Tracing](bpf-tracing.md) | bpftrace and BCC — in-kernel aggregation of events |
 | [perf Events](perf-events.md) | perf_event_open, PMU counters, sampling, flamegraphs |
 | [perf Profiling](perf-profiling.md) | CPU profiling workflows, flamegraph recipes |
+| [War Stories](war-stories.md) | Real tracing/observability incidents and their lessons |
 
 ## Quick reference
 

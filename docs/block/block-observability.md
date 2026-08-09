@@ -21,7 +21,7 @@ iostat -x 1 /dev/nvme0n1
 
 ## Level 2: per-request tracing — blktrace
 
-When the aggregates say "await is high" but not *where* the time went, `blktrace` records an event for **every stage of every request**. `blkparse` renders the trace, and each line is tagged with an action letter — the stages a request passes through on its way down the [block layer](block-overview.md):
+When the aggregates say "await is high" but not *where* the time went, `blktrace` records an event for **every stage of every request**. `blkparse` renders the trace, and each line is tagged with an action letter — the stages a request passes through on its way down, exactly as traced in [Life of a Block I/O](life-of-block-io.md):
 
 | Action | Meaning |
 |---|---|
@@ -59,7 +59,7 @@ bpftrace -e 'tracepoint:block:block_rq_complete { @[args->dev] = avg(nsecs); }'
 A practical diagnosis flow:
 
 1. **`iostat -x`** first. High `await` with low throughput and modest `%util` → the time is *upstream* (queuing, throttling, scheduler). High throughput at the device's known limit → simply saturated.
-2. If it looks upstream, **`blktrace | btt`** and compare **Q2D vs D2C**. Large Q2D means the block layer is holding the I/O — check the [I/O scheduler](io-schedulers.md) and any [cgroup I/O throttling](../cgroups/io-cgroup.md). Large D2C means the device (or its firmware) is the bottleneck.
+2. If it looks upstream, **`blktrace | btt`** and compare **Q2D vs D2C**. Large Q2D means the block layer is holding the I/O — check the [I/O scheduler](io-schedulers.md) and any [cgroup I/O throttling](blk-cgroup.md). Large D2C means the device (or its firmware) is the bottleneck.
 3. To attribute latency to *processes*, reach for **`biosnoop`** / **`biotop`**.
 
 ## Further reading

@@ -43,11 +43,15 @@ The relevant directories are `block/` (core, blk-mq, schedulers), `drivers/nvme/
 ### Suggested reading order
 
 1. **[Block Layer Overview](block-overview.md)** — the key structures and the submission path end to end
-2. **[bio and request structures](bio-request.md)** — the I/O descriptor objects, and how a `bio` becomes a `request`
-3. **[blk-mq: Multi-Queue Block Layer](blk-mq.md)** — software/hardware queues, tag allocation, and the driver interface
-4. **[I/O Schedulers](io-schedulers.md)** — BFQ, mq-deadline, and Kyber: what each optimizes for
-5. **[NVMe Driver](nvme.md)** — how a real modern driver plugs into blk-mq via submission/completion queues
-6. **[Device Mapper: dm-verity](dm-verity.md)** — stacking a virtual block device for integrity verification
+2. **[Life of a Block I/O](life-of-block-io.md)** — one I/O traced from `submit_bio()` down to the device and back
+3. **[bio and request structures](bio-request.md)** — the I/O descriptor objects, and how a `bio` becomes a `request`
+4. **[blk-mq: Multi-Queue Block Layer](blk-mq.md)** — software/hardware queues, tag allocation, and the driver interface
+5. **[I/O Schedulers](io-schedulers.md)** — BFQ, mq-deadline, and Kyber: what each optimizes for
+6. **[Block Cgroup (I/O Control)](blk-cgroup.md)** — dividing a device's bandwidth between cgroups
+7. **[NVMe Driver](nvme.md)** — how a real modern driver plugs into blk-mq via submission/completion queues
+8. **[Device Mapper: dm-verity](dm-verity.md)** — stacking a virtual block device for integrity verification
+9. **[Observability](block-observability.md)** — seeing what the block layer is doing, from counters to blktrace
+10. **[War Stories](war-stories.md)** — real block-layer bugs and what they taught
 
 ### What you'll learn
 
@@ -63,11 +67,15 @@ The relevant directories are `block/` (core, blk-mq, schedulers), `drivers/nvme/
 | Document | What you'll learn |
 |---|---|
 | [Block Layer Overview](block-overview.md) | Key structures (`bio`, `request`, `request_queue`) and the submission path |
+| [Life of a Block I/O](life-of-block-io.md) | One I/O traced end to end, submission through completion |
 | [bio and request structures](bio-request.md) | The I/O descriptor objects and their lifecycle |
 | [blk-mq: Multi-Queue Block Layer](blk-mq.md) | Software/hardware queues, tags, and the modern driver interface |
 | [I/O Schedulers](io-schedulers.md) | BFQ, mq-deadline, and Kyber |
+| [Block Cgroup (I/O Control)](blk-cgroup.md) | Dividing device bandwidth per cgroup (`io.max` / `io.weight` / `io.latency`) |
 | [NVMe Driver](nvme.md) | PCIe SSD architecture, submission/completion queues, blk-mq integration |
 | [Device Mapper: dm-verity](dm-verity.md) | Merkle-tree block integrity verification (Android, ChromeOS) |
+| [Observability](block-observability.md) | `/proc/diskstats`, `blktrace`, and BPF for block I/O |
+| [War Stories](war-stories.md) | Real block-layer incidents and their lessons |
 
 ## Further reading
 
