@@ -555,6 +555,7 @@ nav:
       - Power Domains and genpd: power/power-domains.md
       - Power Capping and RAPL: power/power-capping.md
       - War Stories: power/war-stories.md
+  - What's New: changelog.md
   - About:
     - about.md
     - Contributing: contributing.md
