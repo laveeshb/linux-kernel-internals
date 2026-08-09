@@ -547,7 +547,6 @@ The `MHP_MEMMAP_ON_MEMORY` flag and `memory_hotplug.memmap_on_memory` parameter 
 
 - [LWN: Memory hotplug](https://lwn.net/Articles/197855/) — early overview of the hot-remove design
 - [LWN: virtio-mem](https://lwn.net/Articles/820428/) — virtio-mem design and use cases
-- [Kernel docs: Memory hotplug](https://docs.kernel.org/mm/memory-hotplug.html) — official kernel documentation
 - [numa](numa.md) — NUMA topology and how hotplug interacts with node online/offline
 - [cma](cma.md) — CMA and `MIGRATE_CMA`, related movable memory machinery
 - [compaction](compaction.md) — page migration used by `do_migrate_range()` during offline

@@ -938,7 +938,6 @@ done
 
 - [`Documentation/block/stat.rst`](https://docs.kernel.org/block/stat.html) — official documentation for `/proc/diskstats` and `/sys/block/<dev>/stat` fields
 - [`Documentation/admin-guide/sysctl/vm.rst`](https://docs.kernel.org/admin-guide/sysctl/vm.html) — all `vm.*` sysctl parameters including dirty writeback tuning
-- [`Documentation/block/blktrace.rst`](https://docs.kernel.org/block/blktrace.html) — blktrace usage guide and action code reference
 - [`Documentation/accounting/psi.rst`](https://docs.kernel.org/accounting/psi.html) — PSI design, interpretation, and notification interface
 
 ### Related pages

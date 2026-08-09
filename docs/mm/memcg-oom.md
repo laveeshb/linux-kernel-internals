@@ -368,7 +368,7 @@ cgroup v2 removed `memory.oom_control` disable functionality by design. The v2 p
 ### Kernel Documentation
 
 - [`Documentation/admin-guide/cgroup-v2.rst`](https://docs.kernel.org/admin-guide/cgroup-v2.html) — memory interface files, oom.group
-- [`Documentation/admin-guide/oom-kill.rst`](https://docs.kernel.org/admin-guide/oom-kill.html) — oom_score_adj semantics
+- [`Documentation/filesystems/proc.rst`](https://docs.kernel.org/filesystems/proc.html) — `/proc/<pid>/oom_score_adj` and `oom_score` semantics
 
 ### LWN Articles
 

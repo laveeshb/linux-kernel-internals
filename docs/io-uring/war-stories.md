@@ -472,7 +472,6 @@ Bugs in io_uring tend to be discovered not through fuzzing the normal path but t
 - [Linux 5.12 LSM io_uring hooks](https://lwn.net/Articles/853478/) — SELinux and AppArmor io_uring object class
 - [io_uring/rsrc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/io_uring/rsrc.c) — Fixed file and buffer registration (site of both CVE-2022-29582 and CVE-2023-2598)
 - [io_uring/io-wq.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/io_uring/io-wq.c) — Worker thread pool (async execution path underlying the seccomp bypass)
-- [Kernel docs: io_uring](https://docs.kernel.org/driver-api/io_uring.html) — Official io_uring documentation
 - [io_uring man page](https://man7.org/linux/man-pages/man7/io_uring.7.html) — `io_uring_params`, ring flags, and feature bits
 
 ## Further reading
