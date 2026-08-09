@@ -421,6 +421,7 @@ nav:
       - Getting Started: usb/README.md
       - Enumeration and Descriptors: usb/enumeration.md
       - URBs and Transfer Types: usb/urbs.md
+      - Host Controllers and Gadget Mode: usb/xhci-gadget.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
