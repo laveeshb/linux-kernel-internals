@@ -420,6 +420,7 @@ nav:
     - USB:
       - Getting Started: usb/README.md
       - Enumeration and Descriptors: usb/enumeration.md
+      - URBs and Transfer Types: usb/urbs.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
