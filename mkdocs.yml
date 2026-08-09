@@ -515,6 +515,7 @@ nav:
       - Getting Started: tracing/README.md
       - ftrace: tracing/ftrace.md
       - ftrace Advanced: tracing/ftrace-advanced.md
+      - Ring Buffer and tracefs: tracing/ring-buffer.md
       - Kprobes and Tracepoints: tracing/kprobes-tracepoints.md
       - perf Events: tracing/perf-events.md
       - perf Profiling Advanced: tracing/perf-profiling.md
