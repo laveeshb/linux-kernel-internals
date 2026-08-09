@@ -55,7 +55,7 @@ Familiarity with the [VFS](../vfs/README.md) (the layer above, which dispatches 
 |---|---|
 | "The filesystem writes files to disk" | It writes to the [page cache](../mm/page-cache.md); the real disk write is deferred to writeback, which is why [`fsync()`](../io/page-cache-writeback.md) exists |
 | "A journal logs everything" | ext4 defaults to journaling *metadata* only (`data=ordered`); full data journaling exists but roughly halves write throughput |
-| "Copy-on-write means snapshots" | CoW is a *crash-consistency* strategy first; snapshots fall out of it for free, because old tree roots are never overwritten |
+| "Copy-on-write means snapshots" | CoW is a *crash-consistency* strategy first; snapshots then come cheap — a snapshot is just an old tree root kept instead of reclaimed |
 | "Deleting a file frees its space" | Only the metadata immediately; actual reclamation on SSDs involves discard/TRIM, and on CoW filesystems, reference counting |
 
 ## Documentation
@@ -74,7 +74,7 @@ Familiarity with the [VFS](../vfs/README.md) (the layer above, which dispatches 
 | Filesystem | Use case | Key feature |
 |-----------|---------|-------------|
 | ext4 | General purpose, servers | Stable, journaled |
-| btrfs | Desktop, NAS | CoW, snapshots, RAID |
+| btrfs | Desktop, NAS | CoW, snapshots, RAID (0/1/10) |
 | xfs | High-performance servers | High scalability |
 | tmpfs | /tmp, /run, shared memory | RAM-backed, fast |
 | overlayfs | Container images | Union of layers |
