@@ -358,6 +358,7 @@ nav:
       - Crash Consistency and Recovery: filesystems/crash-consistency.md
       - "iomap: Extent-Based I/O": filesystems/iomap.md
       - "FUSE: Filesystems in Userspace": filesystems/fuse.md
+      - War Stories: filesystems/war-stories.md
     - Block Layer:
       - Getting Started: block/README.md
       - Block Layer Overview: block/block-overview.md
