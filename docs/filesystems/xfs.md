@@ -340,6 +340,8 @@ xfs_db -c 'freesp -d' /dev/sda1
 - [Btrfs](btrfs.md) — CoW filesystem comparison
 - [blk-mq](../block/blk-mq.md) — block layer XFS submits I/O through
 - [Page Cache](../mm/page-cache.md) — XFS uses page cache for buffered I/O
+- [Kernel docs: XFS](https://docs.kernel.org/filesystems/xfs/index.html) — XFS developer documentation
+- [Kernel docs: XFS delayed logging design](https://docs.kernel.org/filesystems/xfs/xfs-delayed-logging-design.html) — the log architecture in depth
+- [Kernel docs: XFS self-describing metadata](https://docs.kernel.org/filesystems/xfs/xfs-self-describing-metadata.html) — v5 on-disk format with per-block CRCs
 - `fs/xfs/` — XFS implementation
-- `Documentation/filesystems/xfs/` — XFS developer documentation
 - `xfsprogs` — mkfs.xfs, xfs_info, xfs_repair, xfs_scrub, xfs_io

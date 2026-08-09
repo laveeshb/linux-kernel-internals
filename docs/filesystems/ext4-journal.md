@@ -314,6 +314,6 @@ blktrace -d /dev/sda1 -o - | blkparse -i - | grep -v "Q  W" | head -50
 - [Life of a write() Syscall](../vfs/life-of-write.md) — write path ending at JBD2
 - [Page Cache](../mm/page-cache.md) — dirty pages that JBD2 journals
 - [IOMMU DMA](../mm/dma.md) — journal I/O uses DMA
+- [Kernel docs: ext4 journal (jbd2)](https://docs.kernel.org/filesystems/ext4/journal.html) — the on-disk journal format
 - `fs/jbd2/` — JBD2 implementation
 - `fs/ext4/` — ext4 JBD2 integration
-- `Documentation/filesystems/ext4/` — ext4 on-disk format

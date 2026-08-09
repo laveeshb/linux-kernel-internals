@@ -334,5 +334,6 @@ bpftrace -e 'kprobe:btrfs_file_write_iter { @[comm] = count(); }'
 - [Page Cache](../mm/page-cache.md) — page cache that Btrfs CoW writes through
 - [Copy-on-Write](../mm/cow.md) — process CoW vs filesystem CoW
 - [xattr](../vfs/xattr.md) — Btrfs stores xattrs in the subvolume tree
+- [Kernel docs: btrfs](https://docs.kernel.org/filesystems/btrfs.html) — features, RAID5/6 status, and administration
+- [A short history of btrfs (LWN)](https://lwn.net/Articles/342892/) — the design rationale, by Valerie Aurora
 - `fs/btrfs/` — Btrfs implementation
-- `Documentation/filesystems/btrfs.rst`
