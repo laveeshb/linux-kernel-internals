@@ -2,7 +2,7 @@
 
 > The kernel's thousands of built-in instrumentation points — how they're defined, filtered, and triggered — and how to add your own at runtime
 
-The [ftrace](ftrace.md) ring buffer records events; **trace events** are what fills it. The kernel ships with thousands of them, and lets you attach your own. Understanding this layer is what turns "I can run a canned trace" into "I can ask the kernel a precise question."
+The [ring buffer](ring-buffer.md) records events; **trace events** are what fills it. The kernel ships with thousands of them, and lets you attach your own. Understanding this layer is what turns "I can run a canned trace" into "I can ask the kernel a precise question."
 
 ## Static trace events: `TRACE_EVENT`
 
