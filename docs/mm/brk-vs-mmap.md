@@ -370,7 +370,6 @@ watch -n 0.5 "grep -E 'VmRSS|VmData' /proc/<pid>/status"
 ### LWN articles
 
 - [LWN: Fun with `mmap()`](https://lwn.net/Articles/657338/) — deep dive into anonymous and file-backed mappings
-- [LWN: malloc() internals](https://lwn.net/Articles/250967/) — historical context for the `brk`/`mmap` split in allocators
 
 ### External
 

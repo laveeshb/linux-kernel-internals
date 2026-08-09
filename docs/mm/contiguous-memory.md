@@ -315,5 +315,4 @@ Background compaction based on fragmentation levels, reducing direct compaction 
 - [Page allocator](page-allocator.md) - Buddy system and migrate types
 - [LWN: CMA](https://lwn.net/Articles/486301/) - CMA design and rationale
 - [LWN: Memory compaction](https://lwn.net/Articles/368869/) - Original compaction proposal
-- [LWN: In defense of fragmentation avoidance](https://lwn.net/Articles/226419/) - Mel Gorman's 2007 explanation of the approach
 - [Kernel docs: DMA API](https://docs.kernel.org/core-api/dma-api.html) - Using the DMA API correctly
