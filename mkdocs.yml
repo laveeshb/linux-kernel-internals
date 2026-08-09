@@ -512,6 +512,7 @@ nav:
       - ftrace: tracing/ftrace.md
       - ftrace Advanced: tracing/ftrace-advanced.md
       - Kprobes and Tracepoints: tracing/kprobes-tracepoints.md
+      - Trace Events and Dynamic Events: tracing/trace-events.md
       - perf Events: tracing/perf-events.md
       - perf Profiling Advanced: tracing/perf-profiling.md
       - uprobes and USDT: tracing/uprobes-usdt.md
