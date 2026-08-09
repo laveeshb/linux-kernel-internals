@@ -32,7 +32,7 @@ Each request carries an opcode (`FUSE_LOOKUP`, `FUSE_OPEN`, `FUSE_READ`, `FUSE_W
 A single `read()` that a native filesystem answers with a page-cache hit becomes, under FUSE, a round trip out to userspace and back:
 
 - **Context switches.** The calling task blocks; the daemon must be scheduled to read the request; then control comes back. That's at least two extra scheduling boundaries per uncached operation.
-- **Data copies.** Historically the reply data was copied from the daemon's buffer through `/dev/fuse` into the kernel's page. `splice()` and shared memory later removed some of these copies, but the boundary crossing remains.
+- **Data copies.** Historically the reply data was copied from the daemon's buffer through `/dev/fuse` into the kernel's page. `splice()` later removed some of these copies, but the boundary crossing remains.
 - **Serialization.** Every operation is marshaled into the FUSE protocol format and unmarshaled again.
 
 FUSE mitigates rather than eliminates this. The kernel side caches aggressively — dentries, attributes, and page data are cached with negotiated timeouts, so repeated lookups and cached reads never leave the kernel. Writeback caching batches dirty data. `max_pages` and readahead let one request move up to a megabyte at a time. But the fundamental "cross to userspace for a cache miss" cost is inherent to the model, which is why FUSE filesystems trail native ones on metadata-heavy and small-I/O workloads.
