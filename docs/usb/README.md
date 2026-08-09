@@ -79,6 +79,13 @@ When a device is plugged in, the hub driver sees the port change, the host **res
 
 Everything above is the **host** side. Linux can also *be* a USB peripheral — a phone presenting itself as storage, an embedded board exposing a serial console or Ethernet over USB. That is the **gadget** side: a USB Device Controller (UDC) driver plus a gadget function, usually composed through configfs. It's a separate stack, covered with the host-controller page.
 
+## The rest of this section
+
+1. **[Enumeration and Descriptors](enumeration.md)** — how a device announces itself and gets a driver bound
+2. **[URBs and Transfer Types](urbs.md)** — the unit of USB I/O and what each of the four transfer types guarantees
+3. **[Host Controllers and Gadget Mode](xhci-gadget.md)** — inside xHCI, and Linux acting as a USB *device*
+4. **[War Stories](war-stories.md)** — BadUSB, a MIDI double-free, and fuzzing the host stack from the device side
+
 ## Further reading
 
 - [Kernel docs: USB driver API](https://docs.kernel.org/driver-api/usb/index.html) — the authoritative reference for usbcore and HCDs
