@@ -4,3 +4,4 @@ How the kernel discovers hardware, binds drivers to it, and exposes the big devi
 
 - [Drivers (drivers/)](../drivers/README.md) — the device model and how drivers bind to hardware (buses, PCI, device tree, platform, I2C/SPI)
 - [USB (usb/)](../usb/README.md) — the host-scheduled, hot-pluggable peripheral bus: descriptors, endpoints, and URBs
+- [GPU / DRM (drm/)](../drm/README.md) — the graphics and display stack: KMS modesetting, GEM buffers, and command submission
