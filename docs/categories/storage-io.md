@@ -7,4 +7,3 @@ The path data takes from an application's read or write down to a physical devic
 - [Block Layer (block/)](../block/README.md) — the path from a filesystem request to a physical device
 - [I/O Patterns (io/)](../io/README.md) — buffered vs. direct, sync vs. async, and the tradeoffs between them
 - [io_uring (io-uring/)](../io-uring/README.md) — the ring-based interface for high-performance asynchronous I/O
-- [Drivers (drivers/)](../drivers/README.md) — the device model and how drivers bind to hardware

@@ -407,6 +407,8 @@ nav:
       - io_uring vs epoll: io-uring/io-uring-vs-epoll.md
       - Security Model: io-uring/security.md
       - War Stories: io-uring/war-stories.md
+  - Devices & Drivers:
+    - categories/devices.md
     - Device Drivers:
       - Getting Started: drivers/README.md
       - Linux Device Model: drivers/device-model.md
@@ -415,6 +417,8 @@ nav:
       - PCI Drivers: drivers/pci-driver.md
       - Device Tree: drivers/device-tree.md
       - I2C and SPI Drivers: drivers/i2c-spi.md
+    - USB:
+      - Getting Started: usb/README.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
