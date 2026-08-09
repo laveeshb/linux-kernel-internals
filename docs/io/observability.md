@@ -10,7 +10,7 @@ The Linux kernel exposes I/O activity through several overlapping layers: pseudo
 
 `/proc/diskstats` is the canonical source of per-device I/O statistics. Every tool that reports disk throughput or latency — `iostat`, `sar`, `dstat`, Prometheus `node_exporter` — reads this file and computes deltas.
 
-**Source**: [`block/genhd.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/block/genhd.c) and [`block/diskstats.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/block/diskstats.c); the per-disk counters live in `struct disk_stats` inside `struct gendisk`.
+**Source**: [`block/genhd.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/block/genhd.c); the per-disk counters live in `struct disk_stats` inside `struct gendisk`.
 
 ```bash
 $ cat /proc/diskstats
@@ -280,7 +280,7 @@ These can be observed via `bpftrace` against the `writeback` tracepoint group, w
 
 **Installation**: usually in the `blktrace` package.
 
-**Source**: [`block/blktrace.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/block/blktrace.c).
+**Source**: [`kernel/trace/blktrace.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/trace/blktrace.c) (in-kernel tracing infrastructure); [`include/uapi/linux/blktrace_api.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/blktrace_api.h) (the `BLK_TA_*` action codes); [`blktrace` documentation](https://git.kernel.org/pub/scm/linux/kernel/git/axboe/blktrace.git/tree/doc) (usage guide, man pages).
 
 ### Recording a trace
 
@@ -919,8 +919,8 @@ done
 
 | File | Description |
 |------|-------------|
-| [`block/diskstats.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/block/diskstats.c) | `/proc/diskstats` output generation |
-| [`block/blktrace.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/block/blktrace.c) | blktrace in-kernel tracing infrastructure |
+| [`block/genhd.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/block/genhd.c) | `/proc/diskstats` output generation |
+| [`kernel/trace/blktrace.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/trace/blktrace.c) | blktrace in-kernel tracing infrastructure |
 | [`include/trace/events/block.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/block.h) | Block layer tracepoint definitions |
 | [`include/trace/events/writeback.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/writeback.h) | Writeback tracepoint definitions |
 | [`include/trace/events/filemap.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/filemap.h) | Page cache tracepoint definitions |
@@ -938,7 +938,6 @@ done
 
 - [`Documentation/block/stat.rst`](https://docs.kernel.org/block/stat.html) — official documentation for `/proc/diskstats` and `/sys/block/<dev>/stat` fields
 - [`Documentation/admin-guide/sysctl/vm.rst`](https://docs.kernel.org/admin-guide/sysctl/vm.html) — all `vm.*` sysctl parameters including dirty writeback tuning
-- [`Documentation/block/blktrace.rst`](https://docs.kernel.org/block/blktrace.html) — blktrace usage guide and action code reference
 - [`Documentation/accounting/psi.rst`](https://docs.kernel.org/accounting/psi.html) — PSI design, interpretation, and notification interface
 
 ### Related pages

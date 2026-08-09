@@ -312,7 +312,7 @@ dmesg -w | grep -i oom
 
 ### Kernel documentation
 
-- [`Documentation/admin-guide/mm/overcommit-accounting.rst`](https://docs.kernel.org/admin-guide/mm/overcommit-accounting.html) — official explanation of the three modes and commit limit formula
+- [`Documentation/mm/overcommit-accounting.rst`](https://docs.kernel.org/mm/overcommit-accounting.html) — official explanation of the three modes and commit limit formula
 - [`Documentation/admin-guide/sysctl/vm.rst`](https://docs.kernel.org/admin-guide/sysctl/vm.html#overcommit-memory) — sysctl knobs: `overcommit_memory`, `overcommit_ratio`, `overcommit_kbytes`
 
 ### Related pages

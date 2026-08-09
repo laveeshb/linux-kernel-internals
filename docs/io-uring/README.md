@@ -253,7 +253,6 @@ io_uring_submit(&ring);
 
 ### Kernel Documentation
 
-- [`Documentation/filesystems/io_uring.rst`](https://docs.kernel.org/filesystems/io_uring.html) — in-tree documentation
 - [`include/uapi/linux/io_uring.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/io_uring.h) — the definitive ABI reference
 
 ### Textbooks and Background
