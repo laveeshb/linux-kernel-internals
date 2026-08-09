@@ -22,7 +22,7 @@ xHCI's key design move was to **push transfer scheduling into the controller**. 
 - **Command ring** — the driver issues controller commands (enable a device slot, configure an endpoint, set address).
 - **Event ring** — the controller posts completions and port events here; the driver consumes them, typically off an **MSI-X** interrupt.
 - **Doorbell registers** — how the driver tells the controller "I added work to this ring," avoiding a poll.
-- **Device Context Base Address Array (DCBAA)** — per-device *slot* and *endpoint* context structures in memory that hold each endpoint's state (type, max packet, ring pointer). The controller owns and updates them.
+- **Device Context Base Address Array (DCBAA)** — an array of *pointers* to per-device **device context** structures; each device context holds that device's *slot* context plus its *endpoint* contexts, which carry each endpoint's state (type, max packet, ring dequeue pointer). The controller owns and updates the contexts.
 
 The result: enqueuing a URB becomes "append TRBs to the endpoint's transfer ring and ring the doorbell," and completions arrive as events — a lockless, memory-resident hand-off rather than register poking per packet. The driver lives in `drivers/usb/host/xhci*`.
 
