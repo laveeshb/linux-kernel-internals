@@ -2,7 +2,7 @@
 
 > Three incidents that all trace back to one fact: USB is a bus where an *untrusted physical device* hands the kernel complex data to parse — and for years the kernel believed it
 
-USB's conveniences — self-describing devices, hot-plug, drivers auto-loaded by the IDs a device claims — are all forms of the kernel *trusting whatever plugs in*. Every story below is that trust being abused: a device lying about what it is, or feeding a descriptor parser input no real device would ever send.
+USB's conveniences — self-describing devices, hot-plug, drivers auto-loaded by the IDs a device claims — are all forms of the kernel *trusting whatever plugs in*. Every story below is that trust being abused: a device lying about what it is, or feeding a [descriptor](enumeration.md) parser input no real device would ever send.
 
 ## 1. BadUSB: the device that lies about what it is (2014)
 

@@ -41,7 +41,7 @@ Everything above is the **host**. But a phone presenting itself as a flash drive
 ```
 
 - A **UDC (USB Device Controller) driver** is the device-side counterpart of the HCD: it drives the peripheral controller and presents endpoints to the gadget layer.
-- The **composite framework** lets a device be built from reusable **function** drivers, assembling their interface/endpoint descriptors into the configuration a host will read during enumeration — the same descriptors, now *served* rather than read.
+- The **composite framework** lets a device be built from reusable **function** drivers, assembling their interface/endpoint descriptors into the configuration a host will read during enumeration — the same descriptors from the [enumeration](enumeration.md) page, now *served* rather than read.
 - Functions can be bound at runtime through **configfs** under `/sys/kernel/config/usb_gadget/`: create a gadget, set its vendor/product IDs, instantiate functions (`mass_storage.0`, `acm.0`, `ecm.0`), link them into a configuration, and bind to a UDC to go live. **FunctionFS** goes further, letting a *userspace* program implement a function's endpoints (this is how Android's adb works).
 
 ## Dual-role and OTG

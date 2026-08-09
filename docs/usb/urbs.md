@@ -49,7 +49,7 @@ For one-shot transfers where blocking is fine, usbcore provides synchronous wrap
 
 ## The four transfer types
 
-The endpoint's type (from its descriptor) determines how the core schedules the URB and what guarantees it gets.
+The endpoint's type (from its [descriptor](enumeration.md)) determines how the core schedules the URB and what guarantees it gets.
 
 ### Control — setup, configuration, small commands
 
@@ -84,4 +84,4 @@ Isochronous transfers reserve **guaranteed bandwidth** at configuration time and
 
 - [Kernel docs: USB Request Block (URB)](https://docs.kernel.org/driver-api/usb/URB.html) — the authoritative URB lifecycle reference
 - [Kernel docs: the USB core API](https://docs.kernel.org/driver-api/usb/usb.html) — the submit/complete interface
-- [USB overview](README.md) — where endpoints and their types come from
+- [USB overview](README.md) · [Enumeration and Descriptors](enumeration.md) — where endpoints and their types come from
