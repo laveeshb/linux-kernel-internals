@@ -20,7 +20,7 @@ Storage hardware
 
 ### A brief history: why blk-mq
 
-The original block layer used a single request queue per device, protected by a single lock — fine for a rotational disk doing a few hundred IOPS, but a scaling wall for SSDs doing millions. The multi-queue block layer (`blk-mq`) was introduced in Linux 3.13 to fix this ([`320ae51feed5`](https://git.kernel.org/linus/320ae51feed5), "blk-mq: new multi-queue block IO queueing mechanism"): each CPU gets its own software queue that maps onto the device's hardware queues, removing the shared lock. Drivers migrated over the following years, and the legacy single-queue path — including the old CFQ and deadline schedulers — was finally removed in Linux 5.0 ([`f382fb0bcef4`](https://git.kernel.org/linus/f382fb0bcef4), "block: remove legacy IO schedulers"). Every block driver today is blk-mq.
+The original block layer used a single request queue per device, protected by a single lock — fine for a rotational disk doing a few hundred IOPS, but a scaling wall for SSDs doing millions. The multi-queue block layer (`blk-mq`) was introduced in Linux 3.13 to fix this ([`320ae51feed5`](https://git.kernel.org/linus/320ae51feed5), "blk-mq: new multi-queue block IO queueing mechanism"): each CPU gets its own software queue that maps onto the device's hardware queues, removing the shared lock. Drivers migrated over the following years, until blk-mq became the *only* path: the legacy single-queue I/O schedulers (CFQ, deadline) were removed in Linux 5.0 ([`f382fb0bcef4`](https://git.kernel.org/linus/f382fb0bcef4), "block: remove legacy IO schedulers"), and the old request path went with them. Every block driver today is blk-mq.
 
 ### Prerequisites
 
