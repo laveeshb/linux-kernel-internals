@@ -1,6 +1,6 @@
 # Btrfs: B-tree Filesystem
 
-> Copy-on-write B-tree layout, snapshots, subvolumes, and RAID. Created by Chris Mason at Oracle and merged into Linux 2.6.29 [(LWN)](https://lwn.net/Articles/342892/).
+> Copy-on-write B-tree layout, snapshots, subvolumes, and RAID. Created by Chris Mason at Oracle and merged into the mainline kernel in Linux 2.6.29. See [A short history of btrfs](https://lwn.net/Articles/342892/) (LWN) for the design story.
 
 ## Why Btrfs?
 
