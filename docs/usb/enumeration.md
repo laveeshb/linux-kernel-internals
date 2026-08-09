@@ -28,7 +28,7 @@ Device descriptor              idVendor, idProduct, bDeviceClass,
 - **Endpoint descriptor** — one data pipe: its address and direction, its [transfer type](README.md), its max packet size, and `bInterval` (the polling period for interrupt/isochronous endpoints).
 - **String descriptors** — optional human-readable UTF-16 strings (manufacturer, product, serial) referenced by index.
 
-Class drivers layer their own **class-specific descriptors** into this tree — the HID report descriptor, the CDC union descriptor — which the class driver, not usbcore, interprets.
+Class drivers layer their own **class-specific descriptors** into this tree — for example the CDC union descriptor, or the short HID descriptor — which the class driver, not usbcore, interprets. Some class data lives *outside* the tree entirely: a HID device's actual **report descriptor** isn't packed into the configuration blob but fetched separately with a class-specific `GET_DESCRIPTOR(Report)`.
 
 ## The standard control requests
 
@@ -49,7 +49,7 @@ These are the same requests `usb_control_msg()` issues, and they work *before* a
 The hub driver, not the target device, orchestrates this:
 
 1. **Attach + debounce.** A downstream hub port signals a status change; the hub driver debounces it (a device isn't "there" until the line is stable).
-2. **Speed detection.** Before any packet, speed is read from the electrical signaling — pull-up resistors on D+ (full-speed) or D− (low-speed), a chirp handshake for high-speed, and separate SuperSpeed lanes for USB 3. The host now knows how fast to talk.
+2. **Speed detection.** Before any packet, the idle pull-up resistors reveal the basic speed — D+ pulled up = full-speed, D− = low-speed (USB 3 uses separate SuperSpeed lanes). A high-speed-capable device attaches as full-speed and only negotiates high-speed via a **chirp handshake during the reset** in the next step.
 3. **Reset.** The host resets the port. The device wakes at the **default address 0**.
 4. **First read.** The host does `GET_DESCRIPTOR(device)` to learn `bMaxPacketSize0` — it must know endpoint 0's packet size before it can reliably read anything longer.
 5. **Address.** `SET_ADDRESS` moves the device off address 0 to a unique address (1–127). Because *only one device can sit at address 0 at a time*, hubs enumerate their ports **one at a time** — this serialization is why plugging in a big hub full of devices takes a visible moment.
