@@ -4,7 +4,7 @@
 
 ## ftrace recap
 
-The basic ftrace interface lives at `/sys/kernel/debug/tracing/`. The [ftrace basics page](ftrace.md) covers the foundational setup. This page covers advanced features: in-kernel histograms, triggers, synthetic events, and the `function_graph` tracer.
+The basic ftrace interface lives at `/sys/kernel/tracing/` (also reachable at the older `/sys/kernel/debug/tracing/`). The [ftrace basics page](ftrace.md) covers the foundational setup. This page covers advanced features: in-kernel histograms, triggers, synthetic events, and the `function_graph` tracer.
 
 ## Event triggers
 
@@ -186,6 +186,16 @@ echo '*alloc*page*' > set_ftrace_filter
 # Show available functions:
 cat available_filter_functions | grep 'ext4_'
 ```
+
+## Under the hood: how ftrace patches functions
+
+The reason function tracing can be switched on and off at runtime with *zero* overhead when off is that ftrace rewrites the kernel's own machine code.
+
+When the kernel is built with function tracing (`CONFIG_FUNCTION_TRACER`), the compiler inserts a call to a special stub — `__fentry__` (or the older `mcount`) — at the entry of nearly every function. Leaving those calls in would be ruinously expensive, so at boot **dynamic ftrace** records the location of every one of them and patches them all into `NOP`s. A function-traceable kernel therefore runs at full speed until you actually ask for tracing.
+
+When you enable a filter, ftrace patches the `NOP` at each selected function back into a call — into a small **trampoline** that saves registers and invokes the registered callbacks; turning tracing off patches them back to `NOP`s. This live modification of running kernel text is done SMP-safely (historically via a breakpoint-based three-step update) so that no other CPU ever executes a half-written instruction.
+
+The registration side is `struct ftrace_ops` (`include/linux/ftrace.h`): a callback plus a filter hash naming which functions it wants. Crucially, many subsystems register their own `ftrace_ops` on the *same* infrastructure — the function and `function_graph` tracers, kprobes placed on function entries, [live patching](../livepatch/klp.md), and BPF `fentry`/`fexit` programs all ride the single `__fentry__` hook. That shared mechanism is why "attach something to the entry of a kernel function" is one cheap, well-worn path rather than a dozen separate hacks.
 
 ## Stack tracer: find stack depth offenders
 
