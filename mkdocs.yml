@@ -423,6 +423,8 @@ nav:
       - URBs and Transfer Types: usb/urbs.md
       - Host Controllers and Gadget Mode: usb/xhci-gadget.md
       - War Stories: usb/war-stories.md
+    - GPU / DRM:
+      - Getting Started: drm/README.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
