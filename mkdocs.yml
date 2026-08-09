@@ -520,6 +520,7 @@ nav:
       - Trace Events and Dynamic Events: tracing/trace-events.md
       - perf Events: tracing/perf-events.md
       - perf Profiling Advanced: tracing/perf-profiling.md
+      - War Stories: tracing/war-stories.md
       - uprobes and USDT: tracing/uprobes-usdt.md
       - BPF for Tracing: tracing/bpf-tracing.md
     - Kernel Debugging:
