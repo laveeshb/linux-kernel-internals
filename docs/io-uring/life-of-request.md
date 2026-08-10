@@ -1064,5 +1064,4 @@ The common thread: **io_uring's performance comes from eliminating synchronizati
 - [Ringing in a new asynchronous I/O API](https://lwn.net/Articles/776703/) (2019) — Original io_uring introduction by Jonathan Corbet
 - [The rapid growth of io_uring](https://lwn.net/Articles/810414/) (2020) — Feature expansion through 5.7
 - [io_uring and security](https://lwn.net/Articles/902466/) (2022) — Security concerns and mitigations
-- [io_uring in Android](https://lwn.net/Articles/945584/) (2023) — Production deployment considerations
-- [Avoiding the page cache with io_uring](https://lwn.net/Articles/863071/) (2021) — Direct I/O and fixed buffers
+- [Buffered I/O without page-cache thrashing](https://lwn.net/Articles/806980/) (2019) — Direct I/O and avoiding page-cache thrashing

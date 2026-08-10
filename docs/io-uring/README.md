@@ -243,9 +243,9 @@ io_uring_submit(&ring);
 
 ### LWN Articles
 
-- [*The rapid growth of io_uring*](https://lwn.net/Articles/810414/) (2019) — early overview of capabilities and design rationale
-- [*An introduction to the io_uring asynchronous I/O framework*](https://lwn.net/Articles/776703/) (2019) — how it compares to existing async interfaces
-- [*io_uring and seccomp*](https://lwn.net/Articles/877165/) (2021) — security model and seccomp interaction
+- [*The rapid growth of io_uring*](https://lwn.net/Articles/810414/) (2020) — early overview of capabilities and design rationale
+- [*Ringing in a new asynchronous I/O API*](https://lwn.net/Articles/776703/) (2019) — how it compares to existing async interfaces
+- [*Operations restrictions for io_uring*](https://lwn.net/Articles/826053/) (2020) — security model and seccomp interaction
 
 ### Userspace Library
 

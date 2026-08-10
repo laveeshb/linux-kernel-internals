@@ -199,5 +199,5 @@ The kernel audit subsystem emits records for `io_uring_setup` and `io_uring_regi
 - `io_uring/rsrc.c` — fixed buffer and credential registration, CVE-2023-2598 site
 - `io_uring/io-wq.c` — worker thread pool implementation
 - `include/uapi/linux/io_uring.h` — `IORING_RESTRICTION_*` constants and `struct io_uring_restriction`
-- [Linux 5.12 LSM io_uring hooks](https://lwn.net/Articles/853478/) — LWN article on SELinux/AppArmor io_uring object class
+- [Auditing io_uring](https://lwn.net/Articles/858023/) — LWN article on LSM/audit hooks for io_uring, including SELinux and AppArmor
 - [CVE-2022-29582 writeup (Qualys)](https://www.qualys.com/2022/05/02/cve-2022-29582/lpe-io-uring.txt) — detailed exploitation analysis
