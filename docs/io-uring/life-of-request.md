@@ -1062,7 +1062,6 @@ The common thread: **io_uring's performance comes from eliminating synchronizati
 ### LWN articles
 
 - [Ringing in a new asynchronous I/O API](https://lwn.net/Articles/776703/) (2019) — Original io_uring introduction by Jonathan Corbet
-- [The rapid growth of io_uring](https://lwn.net/Articles/810414/) (2020) — Feature expansion through 5.7
-- [io_uring and security](https://lwn.net/Articles/902466/) (2022) — Security concerns and mitigations
-- [io_uring in Android](https://lwn.net/Articles/945584/) (2023) — Production deployment considerations
-- [Avoiding the page cache with io_uring](https://lwn.net/Articles/863071/) (2021) — Direct I/O and fixed buffers
+- [The rapid growth of io_uring](https://lwn.net/Articles/810414/) (2020) — Feature expansion through 5.6
+- [Security requirements for new kernel features](https://lwn.net/Articles/902466/) (2022) — What new-feature submissions (io_uring included) are expected to address on the security front
+- [Buffered I/O without page-cache thrashing](https://lwn.net/Articles/806980/) (2019) — `RWF_UNCACHED`, a buffered-I/O mode that avoids polluting the page cache

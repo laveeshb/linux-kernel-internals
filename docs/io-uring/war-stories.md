@@ -468,8 +468,8 @@ Bugs in io_uring tend to be discovered not through fuzzing the normal path but t
 - [CVE-2022-29582 — NVD entry](https://nvd.nist.gov/vuln/detail/CVE-2022-29582) — Affected versions and CVSS scoring
 - [Qualys CVE-2022-29582 exploitation writeup](https://www.qualys.com/2022/05/02/cve-2022-29582/lpe-io-uring.txt) — Detailed analysis of the UAF and privilege escalation technique
 - [CVE-2023-2598 — NVD entry](https://nvd.nist.gov/vuln/detail/CVE-2023-2598) — Fixed buffer integer overflow
-- [LWN: Some io_uring security concerns](https://lwn.net/Articles/902466/) — LWN coverage of the seccomp bypass and platform responses
-- [Linux 5.12 LSM io_uring hooks](https://lwn.net/Articles/853478/) — SELinux and AppArmor io_uring object class
+- [Security topics: io_uring, VM attestation, and random-reseed notifications](https://lwn.net/Articles/943239/) — LWN coverage of Google's "safe only for use by trusted components" stance and the `kernel.io_uring_disabled` sysctl
+- [Auditing io_uring](https://lwn.net/Articles/858023/) — LWN article on adding LSM and audit hooks to io_uring
 - [io_uring/rsrc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/io_uring/rsrc.c) — Fixed file and buffer registration (site of both CVE-2022-29582 and CVE-2023-2598)
 - [io_uring/io-wq.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/io_uring/io-wq.c) — Worker thread pool (async execution path underlying the seccomp bypass)
 - [io_uring man page](https://man7.org/linux/man-pages/man7/io_uring.7.html) — `io_uring_params`, ring flags, and feature bits
