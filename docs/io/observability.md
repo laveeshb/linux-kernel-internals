@@ -949,6 +949,6 @@ done
 
 ### LWN articles
 
-- [LWN: Pressure stall information](https://lwn.net/Articles/759781/) — design and motivation for PSI, by Johannes Weiner
-- [LWN: Block I/O bandwidth management](https://lwn.net/Articles/806396/) — cgroup v2 I/O controller and `io.pressure`
-- [LWN: The multiqueue block layer](https://lwn.net/Articles/552904/) — blk-mq design and how it changed queue depth semantics for NVMe
+- [Tracking pressure-stall information](https://lwn.net/Articles/759781/) — design and motivation for PSI
+- [LWN: The io.weight I/O-bandwidth controller](https://lwn.net/Articles/792256/) — cgroup v2 I/O-bandwidth controller
+- [LWN: The multiqueue block layer](https://lwn.net/Articles/552904/) — blk-mq design
