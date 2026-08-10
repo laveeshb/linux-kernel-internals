@@ -169,7 +169,7 @@ Or start with the key structures:
 
 ### LWN articles
 
-- [The NAPI model (2003)](https://lwn.net/Articles/30107/) — Original introduction to NAPI and the move away from pure interrupt-driven receive
-- [Generic Receive Offload (2009)](https://lwn.net/Articles/358910/) — How GRO merges segments in software, analogous to hardware LRO
+- [Driver porting: Network drivers (2003)](https://lwn.net/Articles/30107/) — Original introduction to NAPI and the move away from pure interrupt-driven receive
+- [JLS2009: Generic receive offload](https://lwn.net/Articles/358910/) — How GRO merges segments in software, analogous to hardware LRO
 - [BPF: the universal in-kernel virtual machine (2014)](https://lwn.net/Articles/599755/) — The role of eBPF in the network stack, from socket filters to XDP
-- [XDP (eXpress Data Path) documentation (2016)](https://lwn.net/Articles/701224/) — XDP design goals and the hook-before-skb model
+- [Early packet drop — and more — with BPF (2016)](https://lwn.net/Articles/682538/) — XDP design goals and the hook-before-skb model
