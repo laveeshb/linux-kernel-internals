@@ -627,8 +627,8 @@ A second theme is **coherency across abstraction boundaries**: the page cache is
 
 - [LWN: Flushing out pdflush](https://lwn.net/Articles/326552/) — Background on writeback thread design leading to the dirty throttling rework
 - [LWN: When writeback goes wrong](https://lwn.net/Articles/384093/) — Dirty throttling and BDI writeback problems
-- [LWN: Toward better I/O control](https://lwn.net/Articles/442355/) — Fengguang Wu's dirty throttling improvements in v3.1
-- [LWN: ext4 data modes](https://lwn.net/Articles/282520/) — ext4 journaling modes and their crash semantics
+- [LWN: No-I/O dirty throttling](https://lwn.net/Articles/456904/) — Fengguang Wu's dirty throttling improvements in v3.1
+- [LWN: Ext4 breaking the promise of data=ordered?](https://lwn.net/Articles/326524/) — ext4 journaling modes and their crash semantics
 - [Kernel docs: ext4](https://docs.kernel.org/filesystems/ext4/index.html) — Official ext4 documentation including journaling mode descriptions
 - [open(2) man page](https://man7.org/linux/man-pages/man2/open.2.html) — O_DIRECT documentation including the mixed-mode coherency warning
 - [fsync(2) man page](https://man7.org/linux/man-pages/man2/fsync.2.html) — fsync semantics and the note on directory syncing

@@ -167,10 +167,10 @@ If you want to read the actual kernel code:
 
 - Jens Axboe's blog — [https://axboe.dk/](https://axboe.dk/) — Axboe is the author of io_uring and the block layer; his posts explain design decisions directly from the source
 - LWN.net I/O coverage:
-    - [Rethinking the page cache](https://lwn.net/Articles/752765/) — folio conversion and the move away from raw page pointers
-    - [io_uring in 5.1](https://lwn.net/Articles/776703/) — the original io_uring introduction
-    - [Buffered vs. direct I/O](https://lwn.net/Articles/580031/) — when O_DIRECT actually helps
-    - [Writeback and the dirty limit](https://lwn.net/Articles/456528/) — how dirty throttling was redesigned
+    - [Folio-enabling the page cache](https://lwn.net/Articles/860537/) — folio conversion and the move away from raw page pointers
+    - [Ringing in a new asynchronous I/O API](https://lwn.net/Articles/776703/) — the original io_uring introduction
+    - [RFC: Clarifying Direct I/O Semantics](https://lwn.net/Articles/348739/) — when O_DIRECT actually helps
+    - [per device dirty throttling](https://lwn.net/Articles/244443/) — how dirty throttling was redesigned
 
 ### Kernel Documentation
 
