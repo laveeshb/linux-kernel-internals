@@ -626,7 +626,7 @@ A second theme is **coherency across abstraction boundaries**: the page cache is
 ## External references
 
 - [LWN: Flushing out pdflush](https://lwn.net/Articles/326552/) — Background on writeback thread design leading to the dirty throttling rework
-- [LWN: When writeback goes wrong](https://lwn.net/Articles/384093/) — Dirty throttling and BDI writeback problems
+- [LWN: When writeback goes wrong](https://lwn.net/Articles/384093/) — Direct reclaim recursing into filesystem writeback and overflowing the kernel stack
 - [LWN: No-I/O dirty throttling](https://lwn.net/Articles/456904/) — Fengguang Wu's dirty throttling improvements in v3.1
 - [ext4 and data loss](https://lwn.net/Articles/322823/) — ext4 journaling modes and their crash semantics
 - [Kernel docs: ext4](https://docs.kernel.org/filesystems/ext4/index.html) — Official ext4 documentation including journaling mode descriptions

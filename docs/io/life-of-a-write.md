@@ -1090,6 +1090,6 @@ cat /sys/class/bdi/*/stats
 
 - [Writeback and control groups](https://lwn.net/Articles/648292/) (2015) — per-cgroup writeback accounting
 - [Dynamic writeback throttling](https://lwn.net/Articles/405076/) (2010) — dirty throttling history
-- [Flushing out pdflush](https://lwn.net/Articles/326552/) — writeback throttling redesign
+- [Flushing out pdflush](https://lwn.net/Articles/326552/) — replacing the single pdflush thread with per-BDI flusher threads
 - [The end of block barriers](https://lwn.net/Articles/400541/) — the move from I/O barriers to the FLUSH/FUA model
-- [The rapid growth of io_uring](https://lwn.net/Articles/810414/) (2020) — async buffered writes via io_uring
+- [The rapid growth of io_uring](https://lwn.net/Articles/810414/) (2020) — the first year of io_uring's feature growth
