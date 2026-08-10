@@ -628,7 +628,7 @@ A second theme is **coherency across abstraction boundaries**: the page cache is
 - [LWN: Flushing out pdflush](https://lwn.net/Articles/326552/) — Background on writeback thread design leading to the dirty throttling rework
 - [LWN: When writeback goes wrong](https://lwn.net/Articles/384093/) — Dirty throttling and BDI writeback problems
 - [LWN: No-I/O dirty throttling](https://lwn.net/Articles/456904/) — Fengguang Wu's dirty throttling improvements in v3.1
-- [LWN: Ext4 breaking the promise of data=ordered?](https://lwn.net/Articles/326524/) — ext4 journaling modes and their crash semantics
+- [ext4 and data loss](https://lwn.net/Articles/322823/) — ext4 journaling modes and their crash semantics
 - [Kernel docs: ext4](https://docs.kernel.org/filesystems/ext4/index.html) — Official ext4 documentation including journaling mode descriptions
 - [open(2) man page](https://man7.org/linux/man-pages/man2/open.2.html) — O_DIRECT documentation including the mixed-mode coherency warning
 - [fsync(2) man page](https://man7.org/linux/man-pages/man2/fsync.2.html) — fsync semantics and the note on directory syncing
@@ -645,4 +645,4 @@ A second theme is **coherency across abstraction boundaries**: the page cache is
 - [war-stories-regressions.md](../mm/war-stories-regressions.md) — Memory management regressions: THP compaction stalls, NUMA balancing overhead, khugepaged CPU storms, and swap readahead mismatch; the same "optimization correct in theory, wrong for this workload" pattern applies to I/O
 - [Tuning storage I/O](tuning-storage.md) — Practical guidance for dirty ratio tuning, O_DIRECT configuration, and sendfile/splice tuning for production workloads
 - [Filesystem observability](observability.md) — The `/proc/vmstat` counters (`nr_dirty`, `nr_writeback`, `pgpgout`) and tracepoints for diagnosing all five cases documented here
-- [LWN: No `fsync` on a freshly created directory?](https://lwn.net/Articles/457671/) — Further discussion of the directory fsync requirement and filesystem behavior differences across Linux filesystem implementations
+- [Ensuring data reaches disk](https://lwn.net/Articles/457667/) — Jeff Moyer on the directory fsync requirement and filesystem behavior differences across Linux filesystem implementations

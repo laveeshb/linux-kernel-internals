@@ -169,7 +169,7 @@ If you want to read the actual kernel code:
 - LWN.net I/O coverage:
     - [Folio-enabling the page cache](https://lwn.net/Articles/860537/) — folio conversion and the move away from raw page pointers
     - [Ringing in a new asynchronous I/O API](https://lwn.net/Articles/776703/) — the original io_uring introduction
-    - [RFC: Clarifying Direct I/O Semantics](https://lwn.net/Articles/348739/) — when O_DIRECT actually helps
+    - [Buffered I/O without page-cache thrashing](https://lwn.net/Articles/806980/) — `RWF_UNCACHED`, a buffered-I/O mode that avoids polluting the page cache
     - [per device dirty throttling](https://lwn.net/Articles/244443/) — how dirty throttling was redesigned
 
 ### Kernel Documentation
