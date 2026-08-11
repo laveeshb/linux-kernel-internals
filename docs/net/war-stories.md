@@ -53,6 +53,8 @@ Three separate commits addressed the three CVEs:
 - **CVE-2019-11478** — [`f070ef2ac667`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f070ef2ac66716357066b683fb0baf55f8191a2e) ("tcp: tcp_fragment() should apply sane memory limits") makes `tcp_fragment()` refuse to split a packet once `sk_wmem_queued` exceeds twice `sk_sndbuf` (`(sk->sk_wmem_queued >> 1) > sk->sk_sndbuf`), returning `-ENOMEM` and incrementing a new `TCPWqueueTooBig` SNMP counter instead.
 - **CVE-2019-11479** — [`967c05aee439`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=967c05aee439e6e5d7d805e195b3a20ef5c433d6) enforces a new `net.ipv4.tcp_min_snd_mss` sysctl in `tcp_mtu_probing()`, and a companion commit, [`5f3e2bf008c2`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5f3e2bf008c2221478101ee72f5cb4654b9fc363) ("tcp: add tcp_min_snd_mss sysctl"), adds the sysctl itself. The default stays at 48 for compatibility, but administrators can now raise it.
 
+These patches were posted to netdev on June 17, 2019 as part of the public disclosure, and the CVE-2019-11478 fix immediately surfaced a real regression: Christoph Paasch reported a packetdrill test that used to pass but now stalled indefinitely, because a connection with `SO_SNDBUF` forced artificially low could no longer fragment its retransmit queue at all once `sk_wmem_queued` exceeded the new limit. Eric Dumazet's response — "I guess it is WAI :)" — offered a follow-up guard anyway, skipping the new check when the retransmit queue is empty (`!tcp_rtx_queue_empty(sk)`), which Paasch confirmed fixed his test; he also flagged an open question about whether a connection could get permanently stuck if `sk_wmem_queued` grew large enough that even a legitimate retransmit couldn't fragment.
+
 All three shipped in the 4.4.182, 4.9.182, 4.14.127, 4.19.52, and 5.1.11 stable releases on June 17, 2019. Operators unable to upgrade immediately had interim mitigations: disable MTU probing (`net.ipv4.tcp_mtu_probing=0`) and disable SACK (`net.ipv4.tcp_sack=0`) to blunt CVE-2019-11477/78, or filter out unreasonably small advertised MSS values at the firewall for CVE-2019-11479.
 
 ```bash
@@ -108,6 +110,8 @@ The `tcp-robust-ooo` series made the OFO queue economics attacker-resistant rath
 - `tcp: avoid collapses in tcp_prune_queue() if possible` skips calling `tcp_collapse_ofo_queue()` entirely if `sk_rmem_alloc` is already within `sk_rcvbuf`, removing an O(N²) attack surface for freshly-opened connections.
 - `tcp: detect malicious patterns in tcp_collapse_ofo_queue()` refuses to attempt collapsing when the accumulated range is still made of tiny (sub-`SK_MEM_QUANTUM`-sized) SKBs, and bails out of the whole collapse pass once the sum of skipped tiny ranges exceeds `sk_rcvbuf >> 3` — capping the CPU spent on a queue that will never usefully collapse.
 - `tcp: call tcp_drop() from tcp_data_queue_ofo()` and `tcp: add tcp_ooo_try_coalesce() helper` improve drop accounting (`sk->sk_drops`) so operators can actually observe an attack in progress.
+
+David Miller's reply when applying the series on netdev captured how non-obvious the fix was even to a maintainer familiar with the code: "Sucky... It took me a while to understand the sums_tiny logic, every time I read that function I forget that we reset all of the state and restart the loop after a coalesce inside the loop." He queued the full series for -stable the same day. The fifth patch (the `tcp_ooo_try_coalesce()` helper) initially missed the 4.9-stable backport anyway — David Woodhouse noticed it was absent from 4.9.116 two weeks later, Greg Kroah-Hartman confirmed it simply hadn't applied cleanly ("Odds are it did not apply and so I didn't backport it"), and Woodhouse sent a working backport.
 
 ```bash
 # Watch for OFO-queue pruning/drop activity indicative of this pattern
@@ -165,6 +169,8 @@ WRITE_ONCE(challenge_count, half + prandom_u32_max(sysctl_tcp_challenge_ack_limi
 
 The fix landed in mainline for 4.7. Existing per-socket rate limiting (`tcp_oow_rate_limited()`) was left in place and noted as a candidate for eventually removing the global limit altogether. Operators on kernels without the fix had a documented interim mitigation: raise `net.ipv4.tcp_challenge_ack_limit` to a very large value (e.g. `999999999`) to make the counter effectively unlimited and therefore uninformative to an attacker.
 
+The fix went through a real back-and-forth with Yue Cao on netdev before landing. Dumazet's first posting only randomized the per-second *reset boundary* (a window between 0.5s and 1.5s); Cao replied that his attack could adapt by sending a short burst reliably contained within one window and repeating the guess to resolve edge cases, which is what prompted the "v2" patch that randomizes the *count* instead — the version that shipped. Cao then described a further refinement of his attack against v2 (sending well over 1,000 probes and using the number of returned challenge ACKs to infer a correct guess) and asked whether the global limit should simply be removed, noting that neither FreeBSD nor Windows enforced one. Dumazet's reply explained why the kernel kept it anyway: the limit exists to blunt the "ACK storms" caused by "buggy firewalls and appliances" that plagued servers before rate limiting was added in 3.6, he judged the residual side channel a "small nuisance" by comparison, and he pointed out that establishing the roughly 500 connections the refined attack needs is itself hard to do quietly against a real server — with session-hijacking risk better addressed by TLS than by closing every last bit of the timing channel.
+
 ### What it taught us
 
 **A rate limiter is also a covert channel.** Any shared counter that an attacker can both perturb and observe — even indirectly, even without reading any protected data — can leak information about state the attacker shouldn't be able to infer.
@@ -214,6 +220,8 @@ memset(newinfo->entries, 0, size);   /* added to translate_compat_table() in ip_
 ```
 
 This sidesteps the bounds-tracking problem completely — there's no longer a separate, per-entry write that can land outside the buffer, because every byte of the buffer is already zero before any entry-specific data is copied in. The fix was merged upstream in April 2021 and backported across stable kernels.
+
+The patch drew no pushback on netfilter-devel — Pablo Neira Ayuso applied Westphal's post within a week, replying simply "Applied."
 
 ```bash
 # Compat netfilter is only reachable via 32-bit setsockopt() paths;
@@ -273,6 +281,8 @@ if (po->tp_version >= TPACKET_V3 &&
 
 The fix landed in mainline in March 2017 and was backported to stable kernels; distributions shipped it in their 4.10.x and earlier stable branches shortly after.
 
+Konovalov originally posted this fix as part of a five-patch series addressing multiple overflow and signedness issues across the AF_PACKET ring-buffer code. Willem de Bruijn, reviewing on netdev, pushed back on the scope: "These are a lot of changes to backport to stable kernels. Can we separate the minimal patch set needed to address known overflow to send to net... and follow up with the larger cleanup to net-next." Konovalov agreed and split two of the five patches — the `tp_frame_size` checks and a reordering cleanup — out into a separate net-next series, leaving this fix and two related overflow fixes as the minimal `net` submission that actually needed to reach stable.
+
 ### What it taught us
 
 **Signed/unsigned casts around a subtraction are a recurring bug class.** "Cast the difference of two unsigned values to `int` and check the sign" is a pattern that looks correct and reads naturally, but only actually works if the difference can never wrap — a property that has to be proven, not assumed, whenever either operand is attacker-influenced.
@@ -320,6 +330,8 @@ if ((skb && skb_is_gso(skb)) ||
 
 The `skb_queue_len(queue) <= 1` condition handles the reverse direction: once a datagram has already been split across more than one SKB by the fragmentation path, UFO is no longer considered, so the path cannot switch *into* UFO partway through either. A related change in `udp_send_skb()` also stops honoring `sk->sk_no_check_tx` (checksum-disable) once a packet is already GSO, since a GSO SKB must carry a partial checksum. The fix landed in mainline in August 2017 and was backported to stable kernels; Debian shipped it as DSA-3981.
 
+David Miller applied the patch the same day it was posted to netdev ("Applied and queued up for -stable"). A few days later Vasily Averin (Virtuozzo) asked on the list whether the new logic might now route non-UDP traffic through `ip_ufo_append_data()`. De Bruijn clarified that `__ip_append_data()`'s GSO branch is reachable only for UDP sockets — TCP and other segmentable protocols call `ip_queue_xmit()` instead and never enter this path — confirming the fix hadn't inadvertently widened what code the change could affect.
+
 ### What it taught us
 
 **Multi-call APIs need invariants that survive across calls, not just per-call correctness.** Each individual `send(MSG_MORE)` call's path-selection logic was locally reasonable; the bug only existed in the transition between two calls that each made a locally-correct but mutually inconsistent decision.
@@ -366,18 +378,24 @@ The other recurring shape is **an assumption that held for years until an advers
 - [git.kernel.org: f070ef2ac667](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f070ef2ac66716357066b683fb0baf55f8191a2e) — "tcp: tcp_fragment() should apply sane memory limits"
 - [git.kernel.org: 967c05aee439](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=967c05aee439e6e5d7d805e195b3a20ef5c433d6) and [5f3e2bf008c2](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5f3e2bf008c2221478101ee72f5cb4654b9fc363) — "tcp: enforce tcp_min_snd_mss in tcp_mtu_probing()" and the sysctl that backs it
 - [LWN: The TCP SACK panic](https://lwn.net/Articles/791409/) — Jake Edge's coverage of CVE-2019-11477/78/79
+- [lore.kernel.org: tcp: make sack processing more robust](https://lore.kernel.org/netdev/20190617170354.37770-1-edumazet@google.com/) — the netdev disclosure thread, including Christoph Paasch's regression report against the CVE-2019-11478 fix and Eric Dumazet's follow-up guard
 - [NVD: CVE-2018-5390](https://nvd.nist.gov/vuln/detail/CVE-2018-5390) — SegmentSmack CVE record
 - [git.kernel.org: 1a4f14bab186](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1a4f14bab1868b443f0dd3c55b689a478f82e72e) — "Merge branch 'tcp-robust-ooo'", the SegmentSmack fix series
+- [lore.kernel.org: tcp: more robust ooo handling](https://lore.kernel.org/netdev/20180723162821.11556-1-edumazet@google.com/) — the netdev submission thread, including David Miller's merge reply and the follow-up about the missing 4.9-stable backport
 - [LWN: CVE-2018-5390 and "embargoes"](https://lwn.net/Articles/762512/) — Jake Edge's coverage of the SegmentSmack disclosure
 - [NVD: CVE-2016-5696](https://nvd.nist.gov/vuln/detail/CVE-2016-5696) — TCP challenge-ACK side channel CVE record
 - [git.kernel.org: 75ff39ccc1bd](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=75ff39ccc1bd5d3c455b6822ab09e533c551f758) — "tcp: make challenge acks less predictable"
+- [lore.kernel.org: tcp: make challenge acks less predictable (v2)](https://lore.kernel.org/netdev/1468137842.30694.58.camel@edumazet-glaptop3.roam.corp.google.com/) — the netdev thread with reporter Yue Cao, showing the v1-to-v2 iteration and Dumazet's rationale for accepting a residual side channel
 - [LWN: The TCP "challenge ACK" side channel](https://lwn.net/Articles/696868/) — Jake Edge's coverage, including the USENIX Security 2016 paper details
 - [NVD: CVE-2021-22555](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) — Netfilter x_tables heap overflow CVE record
 - [git.kernel.org: b29c457a6511](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b29c457a6511435960115c0f548c4360d5f4801d) — "netfilter: x_tables: fix compat match/target pad out-of-bound write"
+- [lore.kernel.org: netfilter: x_tables: fix compat match/target pad out-of-bound write](https://lore.kernel.org/netfilter-devel/20210407193857.21120-1-fw@strlen.de/) — Florian Westphal's patch as posted to netfilter-devel
 - [Andy Nguyen: CVE-2021-22555: Turning \x00\x00 into 10000$](https://google.github.io/security-research/pocs/linux/cve-2021-22555/writeup.html) — the primary-source exploit writeup, including the kCTF container-escape use
 - [LWN: CVE-2021-22555: Turning \x00\x00 into 10000$](https://lwn.net/Articles/862955/) — LWN's brief on Nguyen's writeup
 - [NVD: CVE-2017-7308](https://nvd.nist.gov/vuln/detail/CVE-2017-7308) — AF_PACKET TPACKET_V3 CVE record
 - [GitHub mirror: 2b6867c2ce76](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e2) — "net/packet: fix overflow in check for priv area size"
+- [lore.kernel.org: net/packet: fix multiple overflow issues in ring buffers](https://lore.kernel.org/netdev/cover.1490709552.git.andreyknvl@google.com/) — the cover-letter thread showing Willem de Bruijn's request to split the minimal overflow fix from the broader ring-buffer cleanup
 - [Project Zero: Exploiting the Linux kernel via packet sockets](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html) — Andrey Konovalov's writeup of CVE-2017-7308
 - [NVD: CVE-2017-1000112](https://nvd.nist.gov/vuln/detail/CVE-2017-1000112) — UDP UFO path-switch CVE record
 - [GitHub mirror: 85f1bd9a7b5a](https://github.com/torvalds/linux/commit/85f1bd9a7b5a79d5baa8bf44af19658f7bf77bfa) — "udp: consistently apply ufo or fragmentation"
+- [lore.kernel.org: udp: consistently apply ufo or fragmentation](https://lore.kernel.org/netdev/20170810162919.50577-1-willemdebruijn.kernel@gmail.com/) — the netdev thread, including David Miller's same-day merge and a follow-up correctness question from Vasily Averin
