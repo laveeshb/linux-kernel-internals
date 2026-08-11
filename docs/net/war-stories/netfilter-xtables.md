@@ -20,13 +20,13 @@ if (pad > 0)
 
 ## The trigger
 
-This per-entry padding zero used an offset (`m->data + match->matchsize`) computed independently for each match/target, without re-checking it against the actual size of the destination buffer allocated for the *whole* translated ruleset. By choosing targets whose `matchsize`/`targetsize` isn't 8-byte aligned (Andy Nguyen's exploit writeup cites `NFLOG` as one such target, achievable via a controllable out-of-bounds offset reaching up to `0x4C` bytes past the buffer), a local process able to load such a compat ruleset could cause the `memset()` to write a small number of zero bytes **past the end of the allocated ruleset blob** — a heap out-of-bounds write.
+This per-entry padding zero used an offset (`m->data + match->matchsize`) computed independently for each match/target, without re-checking it against the actual size of the destination buffer allocated for the *whole* translated ruleset. By choosing targets whose `matchsize`/`targetsize` isn't 8-byte aligned ([Andy Nguyen's exploit writeup](https://google.github.io/security-research/pocs/linux/cve-2021-22555/writeup.html) cites `NFLOG` as one such target, achievable via a controllable out-of-bounds offset reaching up to `0x4C` bytes past the buffer), a local process able to load such a compat ruleset could cause the `memset()` to write a small number of zero bytes **past the end of the allocated ruleset blob** — a heap out-of-bounds write.
 
 Reaching this code path requires only being able to call `setsockopt(IPT_SO_SET_REPLACE)` (or the IPv6/ARP equivalents) from a 32-bit compat context, which requires `CAP_NET_ADMIN` — a capability routinely available to an unprivileged user inside a user *and* network namespace.
 
 ## Observed behavior
 
-The bug had existed since **2.6.19-rc1** (2006) — roughly fifteen years — reachable via `net/netfilter/x_tables.c`. It was reported to the kernel by syzbot and independently by Andy Nguyen (Google).
+The bug had existed since **2.6.19-rc1** (2006) — roughly fifteen years — reachable via `net/netfilter/x_tables.c`. It was reported to the kernel by [syzbot](https://syzkaller.appspot.com/bug?extid=cfc0247ac173f597aaaa) and independently by [Andy Nguyen](https://google.github.io/security-research/pocs/linux/cve-2021-22555/writeup.html) (Google).
 
 Its severity came less from the bug itself (a write of a handful of zero bytes) than from what that primitive enabled. Andy Nguyen's public writeup, [`CVE-2021-22555: Turning \x00\x00 into 10000$`](https://google.github.io/security-research/pocs/linux/cve-2021-22555/writeup.html), demonstrates using the four-zero-byte out-of-bounds write to corrupt an in-flight `msg_msg` object via heap spraying, build a use-after-free, leak kernel heap and code addresses, hijack a `pipe_buffer`'s function-pointer table, and ultimately execute a ROP chain that calls `commit_creds()` and switches namespaces — turning a tiny OOB write into full kernel code execution. Nguyen used the exploit to escape a Kubernetes pod's isolation in Google's kCTF cluster, as covered by LWN (["CVE-2021-22555: Turning \x00\x00 into 10000$", July 2021](https://lwn.net/Articles/862955/)).
 

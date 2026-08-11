@@ -20,7 +20,7 @@ if (po->tp_version >= TPACKET_V3 &&
 
 ## The trigger
 
-Both `tp_block_size` and the result of `BLK_PLUS_PRIV()` are unsigned. Casting their subtraction to `(int)` before comparing to zero is unsafe: Project Zero's Andrey Konovalov, using syzkaller (a coverage-guided syscall fuzzer) together with KASAN, found that by supplying a `tp_sizeof_priv` value with its high bit set, the unsigned subtraction wraps to a large value that, when reinterpreted as a signed `int`, appears positive — silently passing a check that was supposed to reject an oversized private-header request.
+Both `tp_block_size` and the result of `BLK_PLUS_PRIV()` are unsigned. Casting their subtraction to `(int)` before comparing to zero is unsafe: [Project Zero's Andrey Konovalov](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html), using syzkaller (a coverage-guided syscall fuzzer) together with KASAN, found that by supplying a `tp_sizeof_priv` value with its high bit set, the unsigned subtraction wraps to a large value that, when reinterpreted as a signed `int`, appears positive — silently passing a check that was supposed to reject an oversized private-header request.
 
 This let `blk_sizeof_priv` end up set to an attacker-chosen value, corrupting the block layout computed in `init_prb_bdqc()` and `prb_open_block()` and, downstream of that, the `max_frame_len` calculation used in `__packet_lookup_frame_in_block()` — leaving the kernel's view of the ring's frame layout disagreeing with the actual size of the mapped blocks.
 

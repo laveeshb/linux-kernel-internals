@@ -18,7 +18,7 @@ When the non-UFO path then continued appending onto an SKB that had already grow
 
 ## Observed behavior
 
-A negative `copy` length fed directly into `skb_copy_and_csum_bits()`, which performs an **out-of-bounds write** using that length as a copy size. The NVD entry describes the same defect present in the IPv6 code path. The bug was traced back to the original UFO scatter-gather implementation, commit `e89e9cf539a2` ("[IPv4/IPv6]: UFO Scatter-gather approach") from October 2005 — meaning it had existed for roughly twelve years before syzkaller found it.
+A negative `copy` length fed directly into `skb_copy_and_csum_bits()`, which performs an **out-of-bounds write** using that length as a copy size. [The NVD entry](https://nvd.nist.gov/vuln/detail/CVE-2017-1000112) describes the same defect present in the IPv6 code path. The bug was traced back to the original UFO scatter-gather implementation, commit [`e89e9cf539a2`](https://github.com/torvalds/linux/commit/e89e9cf539a28df7d0eb1d0a545368e9920b34ac) ("[IPv4/IPv6]: UFO Scatter-gather approach") from October 2005 — meaning it had existed for roughly twelve years before syzkaller found it.
 
 ## Why it happened
 
@@ -67,6 +67,7 @@ But it meant the kernel had two fixes in flight at once for the same underlying 
 ## External references
 
 - [NVD: CVE-2017-1000112](https://nvd.nist.gov/vuln/detail/CVE-2017-1000112) — UDP UFO path-switch CVE record
+- [GitHub mirror: e89e9cf539a2](https://github.com/torvalds/linux/commit/e89e9cf539a28df7d0eb1d0a545368e9920b34ac) — "[IPv4/IPv6]: UFO Scatter-gather approach" (2005), the original implementation this bug traces back to
 - [GitHub mirror: 85f1bd9a7b5a](https://github.com/torvalds/linux/commit/85f1bd9a7b5a79d5baa8bf44af19658f7bf77bfa) — "udp: consistently apply ufo or fragmentation"
 - [lore.kernel.org: udp: consistently apply ufo or fragmentation](https://lore.kernel.org/netdev/20170810162919.50577-1-willemdebruijn.kernel@gmail.com/) — the netdev thread, including David Miller's same-day merge and a follow-up correctness question from Vasily Averin
 - [Andrey Konovalov: CVE-2017-1000112](https://xairy.io/articles/cve-2017-1000112) — the reporter's own writeup and disclosure timeline
