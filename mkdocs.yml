@@ -425,6 +425,7 @@ nav:
       - War Stories: usb/war-stories.md
     - GPU / DRM:
       - Getting Started: drm/README.md
+      - Kernel Mode Setting (KMS): drm/kms.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
