@@ -125,7 +125,7 @@ struct dma_fence_ops {
 };
 ```
 
-`enable_signaling` exists because interrupts cost something. Its kerneldoc explains the intent: implementations that can do hardware-to-hardware signaling can *"implement this op to enable the necessary interrupts, or insert commands into cmdstream, etc, to avoid these costly operations for the common case where only hw->hw synchronization is required."* Nothing calls it directly; it is invoked lazily by `__dma_fence_enable_signaling()` the first time somebody actually needs a software notification — which happens from `dma_fence_add_callback()`, from `dma_fence_wait_timeout()`, or explicitly via `dma_fence_enable_sw_signaling()`. If the callback returns `false`, the fence is already done and `__dma_fence_enable_signaling()` signals it immediately.
+`enable_signaling` exists because interrupts cost something. Its kerneldoc explains the intent: implementations that can do hardware-to-hardware signaling can *"implement this op to enable the necessary interrupts, or insert commands into cmdstream, etc, to avoid these costly operations for the common case where only hw->hw synchronization is required."* Nothing calls it directly; it is invoked lazily by `__dma_fence_enable_signaling()` the first time somebody actually needs a software notification — which happens from `dma_fence_add_callback()`, or via `dma_fence_enable_sw_signaling()` — which `dma_fence_wait_timeout()` calls unconditionally before it starts waiting. If the callback returns `false`, the fence is already done and `__dma_fence_enable_signaling()` signals it immediately.
 
 amdgpu's hardware fence shows the pattern in miniature. `amdgpu_fence_ops` implements `enable_signaling` as nothing more than arming a fallback timer:
 
