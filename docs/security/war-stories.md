@@ -28,7 +28,7 @@ A bounds check written as a subtraction instead of a sum underflowed in unsigned
 
 ### [Nested User Namespace UID/GID Mapping](war-stories/nested-userns-uid-mapping.md)
 **November 2018 · CVE-2018-18955 · CVSS 7.0**
-A performance optimization kept two sorted copies of a namespace's ID mapping table but only translated one of them, an inconsistency invisible except two levels deep with more than five mapped ID ranges — reachable with nothing more than the setuid `newuidmap` helper any desktop user already has. An unprivileged process inside a nested namespace could read `/etc/shadow` on the host.
+A performance optimization kept two sorted copies of a namespace's ID mapping table but only translated one of them, an inconsistency invisible except two levels deep with more than five mapped ID ranges — reachable with nothing more than the setuid `newuidmap` helper from the `uidmap` package. An unprivileged process inside a nested namespace could read `/etc/shadow` on the host.
 
 ## Common threads
 
