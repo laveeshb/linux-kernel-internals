@@ -199,7 +199,7 @@ ls -l /usr/bin/newuidmap                  # the setuid helper that grants a >1-I
 
 - [User Namespaces and uid Mapping](../user-namespaces.md) — `uid_map`/`gid_map`, `make_kuid()`/`from_kuid()`, and the nesting model this bug exploited
 - [Credentials and User Namespaces](../credentials.md) — where `kuid_t` lives in `struct cred` and how ID translation reaches access checks
-- [Capabilities](../capabilities.md) — why namespaced `CAP_DAC_OVERRIDE` is safe only as long as unmapped IDs stay unmapped
+- [Capabilities](../capabilities.md) — the capability model behind `CAP_DAC_OVERRIDE` and `CAP_SYS_ADMIN`, and how `capable()`/`ns_capable()` checks are written
 - [Netfilter x_tables Heap Overflow](../../net/war-stories/netfilter-xtables.md) — another bug whose severity came from being reachable inside an unprivileged user namespace
 
 ## External references
