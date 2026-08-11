@@ -465,7 +465,7 @@ nav:
         - Understanding /proc/net/snmp: net/proc-snmp.md
         - Network Buffer Tuning: net/net-buffer-tuning.md
       - War Stories:
-        - Overview: net/war-stories.md
+        - Network War Stories: net/war-stories.md
         - The TCP SACK Panic: net/war-stories/sack-panic.md
         - SegmentSmack: net/war-stories/segmentsmack.md
         - The Challenge-ACK Side Channel: net/war-stories/challenge-ack.md
