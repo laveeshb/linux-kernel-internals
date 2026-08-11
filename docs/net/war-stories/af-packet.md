@@ -2,7 +2,7 @@
 
 > CVE-2017-7308 — a single `(int)` cast around an unsigned subtraction defeated a ring-buffer bounds check, found by syzkaller and turned into local root by Project Zero
 
-**Disclosed:** March 29, 2017 &nbsp;·&nbsp; **Reported by:** Andrey Konovalov, Google Project Zero (via syzkaller + KASAN) &nbsp;·&nbsp; **CVSS:** 7.8 HIGH &nbsp;·&nbsp; **Fixed in:** mainline March 2017, backported to 4.10.x and earlier stable branches
+**Disclosed:** March 29, 2017 &nbsp;·&nbsp; **Reported by:** Andrey Konovalov, Google Project Zero (via syzkaller + KASAN) &nbsp;·&nbsp; **CVSS:** 7.8 HIGH &nbsp;·&nbsp; **Fixed in:** mainline March 2017, backported to 4.10.x and earlier stable branches &nbsp;·&nbsp; **Exploit tool:** yes (2 Exploit-DB entries, incl. a [Metasploit module](https://www.exploit-db.com/exploits/44654)) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 
@@ -29,6 +29,8 @@ This let `blk_sizeof_priv` end up set to an attacker-chosen value, corrupting th
 The mismatch between the computed frame layout and the real block boundaries let a caller drive a **heap out-of-bounds write** when the kernel populated ring-buffer frames — a local integer-signedness bug that Project Zero's [writeup](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html), "Exploiting the Linux kernel via packet sockets," turned into a working local root exploit.
 
 Creating an `AF_PACKET` socket at all requires `CAP_NET_RAW` — ordinarily a meaningful barrier, but, as the writeup notes, one "which can be acquired by an unprivileged user inside a user namespaces" on any system where `CONFIG_USER_NS=y` and unprivileged user namespace creation is allowed, a common default on Ubuntu at the time (the writeup explicitly notes Android disallows untrusted code from creating `AF_PACKET` sockets at all).
+
+Beyond Project Zero's own writeup, the bug was independently weaponized twice more: two separate proof-of-concept exploits were catalogued on [Exploit-DB](https://www.exploit-db.com/exploits/44654) — one of them a [Metasploit module](https://www.exploit-db.com/exploits/44654) (`exploit/linux/local/af_packet_packet_set_ring_priv_esc`), turning a research bug into a one-command local-root tool available to anyone running the framework. There's no public evidence of it being caught in active exploitation against real targets (it isn't on CISA's KEV catalog), but "no confirmed attack" and "no practical way to attack" are different claims — this one had the latter closed within months of disclosure.
 
 ## Why it happened
 
@@ -73,3 +75,4 @@ Konovalov [originally posted this fix](https://lore.kernel.org/netdev/cover.1490
 - [GitHub mirror: 2b6867c2ce76](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e2) — "net/packet: fix overflow in check for priv area size"
 - [lore.kernel.org: net/packet: fix multiple overflow issues in ring buffers](https://lore.kernel.org/netdev/cover.1490709552.git.andreyknvl@google.com/) — the cover-letter thread showing Willem de Bruijn's request to split the minimal overflow fix from the broader ring-buffer cleanup
 - [Project Zero: Exploiting the Linux kernel via packet sockets](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html) — Andrey Konovalov's writeup of CVE-2017-7308
+- [Exploit-DB 41994](https://www.exploit-db.com/exploits/41994) and [44654](https://www.exploit-db.com/exploits/44654) — two independently catalogued local-root exploits; 44654 is a Metasploit module

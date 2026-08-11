@@ -2,7 +2,7 @@
 
 > CVE-2019-11477 / CVE-2019-11478 / CVE-2019-11479 — a remote peer could crash any Linux TCP endpoint with a carefully crafted sequence of SACK blocks
 
-**Disclosed:** June 17, 2019 &nbsp;·&nbsp; **Reported by:** Jonathan Looney (Netflix) &nbsp;·&nbsp; **CVSS:** 7.5 HIGH (all three) &nbsp;·&nbsp; **Fixed in:** 4.4.182, 4.9.182, 4.14.127, 4.19.52, 5.1.11
+**Disclosed:** June 17, 2019 &nbsp;·&nbsp; **Reported by:** Jonathan Looney (Netflix) &nbsp;·&nbsp; **CVSS:** 7.5 HIGH (all three) &nbsp;·&nbsp; **Fixed in:** 4.4.182, 4.9.182, 4.14.127, 4.19.52, 5.1.11 &nbsp;·&nbsp; **Exploit tool:** none published — the crafted-packet sequence is the whole attack &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 
@@ -69,6 +69,8 @@ Two months after that, [Databricks published an account](https://www.databricks.
 
 All three original fixes shipped in the 4.4.182, 4.9.182, 4.14.127, 4.19.52, and 5.1.11 stable releases on June 17, 2019, with the two follow-up `tcp_fragment()` refinements landing over the following month. Operators unable to upgrade immediately had interim mitigations: disable MTU probing (`net.ipv4.tcp_mtu_probing=0`) and disable SACK (`net.ipv4.tcp_sack=0`) to blunt CVE-2019-11477/78, or filter out unreasonably small advertised MSS values at the firewall for CVE-2019-11479.
 
+No published exploit tool or Metasploit module exists for this one — a remote kernel panic doesn't need one; the crafted-SACK sequence Netflix documented in its own advisory is the entire "exploit." The real measure of its reach is the vendor response: NVD lists over 25 distinct downstream advisories, spanning Cisco, Oracle, VMware, F5, Huawei, Aruba, Pulse Secure, McAfee, SonicWall, NetApp, Synology — and a [Siemens ProductCERT advisory](https://cert-portal.siemens.com/productcert/pdf/ssa-462066.pdf) plus a dedicated [CISA ICS advisory](https://www.cisa.gov/news-events/ics-advisories/icsa-19-253-03), meaning this reached into industrial control systems, not just cloud and enterprise gear.
+
 ```bash
 # Check whether the fixed sysctl is present and what it's set to
 sysctl net.ipv4.tcp_min_snd_mss
@@ -105,3 +107,4 @@ sysctl net.ipv4.tcp_min_snd_mss
 - [git.kernel.org: 0a6b2a1dc2a2](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=0a6b2a1dc2a2105f178255fe495eb914b09cb37a) — "tcp: switch to GSO being always on" (February 2018), the unrelated performance fix that widened the SACK panic's later reach
 - [git.kernel.org: b6653b3629e5](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b6653b3629e5b88202be3c9abc44713973f5c4b4) and [b617158dc096](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b617158dc096709d8600c53b6052144d12b89fab) — the two follow-up refinements to the CVE-2019-11478 `tcp_fragment()` fix, prompted by real-world regression reports
 - [Databricks: Adventures in the TCP stack](https://www.databricks.com/blog/2019/09/16/adventures-in-the-tcp-stack-performance-regressions-vulnerability-fixes.html) — an account of hitting the CVE-2019-11478 fix's 64&nbsp;KB `SO_SNDBUF` overshoot allowance, causing a 6x S3-write slowdown, traced to `tcp_fragment()`'s memory-limit check
+- [Siemens ProductCERT: SSA-462066](https://cert-portal.siemens.com/productcert/pdf/ssa-462066.pdf) and [CISA ICS Advisory ICSA-19-253-03](https://www.cisa.gov/news-events/ics-advisories/icsa-19-253-03) — evidence of reach into industrial control system products

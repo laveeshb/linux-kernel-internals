@@ -2,7 +2,7 @@
 
 > CVE-2016-5696 — a global rate-limit counter meant as an internal implementation detail became an off-path attacker's window into a victim's TCP connections
 
-**Disclosed:** August 2016 &nbsp;·&nbsp; **Reported by:** Yue Cao, Zhiyun Qian, et al. (UC Riverside, with Lisa Marvel, US Army Research Laboratory) &nbsp;·&nbsp; **CVSS:** 4.8 MEDIUM &nbsp;·&nbsp; **Fixed in:** mainline 4.7
+**Disclosed:** August 2016 &nbsp;·&nbsp; **Reported by:** Yue Cao, Zhiyun Qian, et al. (UC Riverside, with Lisa Marvel, US Army Research Laboratory) &nbsp;·&nbsp; **CVSS:** 4.8 MEDIUM &nbsp;·&nbsp; **Fixed in:** mainline 4.7 &nbsp;·&nbsp; **Exploit tool:** yes ([`mountain_goat`](https://github.com/Gnoxter/mountain_goat) PoC) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 
@@ -27,6 +27,8 @@ By repeating this with different guesses, the attacker narrows in on whether a g
 LWN's coverage (["The TCP 'challenge ACK' side channel", August 2016](https://lwn.net/Articles/696868/)) summarized the paper's results: "it takes only 10 seconds to successfully infer whether they are communicating. If there is a connection, subsequently, it takes also only tens of seconds to infer the TCP sequence numbers."
 
 The researchers demonstrated both blind connection reset (against SSH and Tor connections) and, more seriously, blind data injection into long-lived connections such as video streams — including injecting attacker-controlled JavaScript into an unencrypted web session. The paper was presented at USENIX Security 2016.
+
+The technique didn't stay confined to the paper: a standalone proof-of-concept tool, [`mountain_goat`](https://github.com/Gnoxter/mountain_goat), was published separately implementing the off-path inference attack. As with the other locally-weaponized bugs on this page, there's no public record of it being caught in active exploitation against real targets — no CISA KEV listing, no confirmed incident report — but the side channel was demonstrably practical to exploit, not just theoretically real.
 
 Because Linux was, at the time, the only major OS to faithfully implement RFC 5961's challenge-ACK behavior, it was also the only one vulnerable to this specific side channel.
 
@@ -72,3 +74,4 @@ Cao then described a further refinement of his attack against v2 (sending well o
 - [git.kernel.org: 75ff39ccc1bd](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=75ff39ccc1bd5d3c455b6822ab09e533c551f758) — "tcp: make challenge acks less predictable"
 - [lore.kernel.org: tcp: make challenge acks less predictable (v2)](https://lore.kernel.org/netdev/1468137842.30694.58.camel@edumazet-glaptop3.roam.corp.google.com/) — the netdev thread with reporter Yue Cao, showing the v1-to-v2 iteration and Dumazet's rationale for accepting a residual side channel
 - [LWN: The TCP "challenge ACK" side channel](https://lwn.net/Articles/696868/) — Jake Edge's coverage, including the USENIX Security 2016 paper details
+- [Gnoxter/mountain_goat](https://github.com/Gnoxter/mountain_goat) — a published proof-of-concept exploit implementing the off-path inference attack

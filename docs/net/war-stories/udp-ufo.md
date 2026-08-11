@@ -2,7 +2,7 @@
 
 > CVE-2017-1000112 — a per-call heuristic that should have been a per-datagram invariant let two `send()` calls disagree about how a UDP datagram was being built, syzkaller-found and embargo-disclosed in one week
 
-**Disclosed:** August 10, 2017 &nbsp;·&nbsp; **Reported by:** Andrey Konovalov (via syzkaller) &nbsp;·&nbsp; **CVSS:** 7.0 HIGH &nbsp;·&nbsp; **Bug present since:** October 2005
+**Disclosed:** August 10, 2017 &nbsp;·&nbsp; **Reported by:** Andrey Konovalov (via syzkaller) &nbsp;·&nbsp; **CVSS:** 7.0 HIGH &nbsp;·&nbsp; **Bug present since:** October 2005 &nbsp;·&nbsp; **Exploit tool:** yes (Konovalov's own PoC + a [Metasploit module](https://www.exploit-db.com/exploits/45147)) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 
@@ -19,6 +19,8 @@ When the non-UFO path then continued appending onto an SKB that had already grow
 ## Observed behavior
 
 A negative `copy` length fed directly into `skb_copy_and_csum_bits()`, which performs an **out-of-bounds write** using that length as a copy size. [The NVD entry](https://nvd.nist.gov/vuln/detail/CVE-2017-1000112) describes the same defect present in the IPv6 code path. The bug was traced back to the original UFO scatter-gather implementation, commit [`e89e9cf539a2`](https://github.com/torvalds/linux/commit/e89e9cf539a28df7d0eb1d0a545368e9920b34ac) ("[IPv4/IPv6]: UFO Scatter-gather approach") from October 2005 — meaning it had existed for roughly twelve years before syzkaller found it.
+
+Konovalov didn't stop at reporting it: he published his own [proof-of-concept local privilege escalation exploit](https://github.com/xairy/kernel-exploits/tree/master/CVE-2017-1000112), and the bug was independently turned into a [Metasploit module](https://www.exploit-db.com/exploits/45147) (`exploit/linux/local/ufo_privilege_escalation`) as well. As with AF_PACKET, there's no public evidence of it being caught in active exploitation against real targets — it isn't on CISA's KEV catalog — but the out-of-bounds write was demonstrably weaponizable into full local root, not just a crash.
 
 ## Why it happened
 
@@ -71,5 +73,7 @@ But it meant the kernel had two fixes in flight at once for the same underlying 
 - [GitHub mirror: 85f1bd9a7b5a](https://github.com/torvalds/linux/commit/85f1bd9a7b5a79d5baa8bf44af19658f7bf77bfa) — "udp: consistently apply ufo or fragmentation"
 - [lore.kernel.org: udp: consistently apply ufo or fragmentation](https://lore.kernel.org/netdev/20170810162919.50577-1-willemdebruijn.kernel@gmail.com/) — the netdev thread, including David Miller's same-day merge and a follow-up correctness question from Vasily Averin
 - [Andrey Konovalov: CVE-2017-1000112](https://xairy.io/articles/cve-2017-1000112) — the reporter's own writeup and disclosure timeline
+- [xairy/kernel-exploits: CVE-2017-1000112](https://github.com/xairy/kernel-exploits/tree/master/CVE-2017-1000112) — Konovalov's own published local-root proof-of-concept
+- [Exploit-DB 45147](https://www.exploit-db.com/exploits/45147) — a Metasploit module for the same bug
 - [oss-security: CVE-2017-1000112 disclosure](https://seclists.org/oss-sec/2017/q3/277) — Konovalov's public announcement, including the reference to David Miller's parallel UFO-removal RFC
 - [Wayback Machine: [PATCH v2 RFC 0/13] Remove UDP Fragmentation Offload support](https://web.archive.org/web/20250414125717/https://www.spinics.net/lists/netdev/msg443815.html) — David Miller's RFC series to remove software UFO entirely, in flight a month before this CVE was reported (spinics.net's live site is currently unreachable)

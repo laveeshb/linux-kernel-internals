@@ -2,7 +2,7 @@
 
 > CVE-2018-5390 — tiny, deliberately-scattered out-of-order TCP segments could pin a CPU core at 100% with roughly 2 kpps of traffic
 
-**Disclosed:** August 6, 2018 &nbsp;·&nbsp; **Reported by:** Juha-Matti Tilli (Aalto University / Nokia Bell Labs) &nbsp;·&nbsp; **CVSS:** 7.5 HIGH &nbsp;·&nbsp; **Fixed in:** 4.9.116, 4.14.59, 4.17.11, mainline 4.18
+**Disclosed:** August 6, 2018 &nbsp;·&nbsp; **Reported by:** Juha-Matti Tilli (Aalto University / Nokia Bell Labs) &nbsp;·&nbsp; **CVSS:** 7.5 HIGH &nbsp;·&nbsp; **Fixed in:** 4.9.116, 4.14.59, 4.17.11, mainline 4.18 &nbsp;·&nbsp; **Exploit tool:** none published — a documented traffic pattern is the whole attack &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 
@@ -54,6 +54,8 @@ Alexander Peslyak ("Solar Designer"), who moderates the distros/linux-distros/os
 
 [LWN's coverage of the episode](https://lwn.net/Articles/762512/) drew the conclusion that once a fix is public and being pointed at by security researchers, further "embargo" delay mostly just leaves defenders in the dark while the code itself is already exploitable by anyone reading netdev — "the horse is loose, so the state of the barn door is immaterial."
 
+No published exploit tool or Metasploit module exists for this one either — the attack is a documented traffic pattern (tiny, scattered out-of-order segments), not a memory-corruption primitive that needs weaponizing. The vendor response gives the clearest measure of real-world reach: NVD lists roughly 30 downstream advisories, including a dedicated [Cisco security advisory](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-20180824-linux-tcp) and a [Siemens ProductCERT advisory](https://cert-portal.siemens.com/productcert/pdf/ssa-377115.pdf) covering industrial products, plus Oracle, F5, Debian, and multiple rounds of Ubuntu security notices.
+
 ```bash
 # Watch for OFO-queue pruning/drop activity indicative of this pattern
 nstat -az | grep -i 'TcpExtOfoPruned\|TcpExtTCPOFOMerge'
@@ -84,3 +86,4 @@ nstat -az | grep -i 'TcpExtOfoPruned\|TcpExtTCPOFOMerge'
 - [LWN: CVE-2018-5390 and "embargoes"](https://lwn.net/Articles/762512/) — Jake Edge's coverage of the SegmentSmack disclosure controversy, including Alexander Peslyak's full timeline
 - [Red Hat: SegmentSmack and FragmentSmack](https://access.redhat.com/articles/3553061) — the ~2 kpps attack-traffic figure and impact summary for CVE-2018-5390
 - [Aalto University: Juha-Matti Tilli could not sleep](https://www.aalto.fi/en/news/juha-matti-tilli-could-not-sleep-instead-he-had-an-idea-that-took-him-to-the-vulnerabilities) — the reporter's own account of how the bug was found, alongside the sibling FragmentSmack finding
+- [Cisco Security Advisory: cisco-sa-20180824-linux-tcp](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-20180824-linux-tcp) and [Siemens ProductCERT SSA-377115](https://cert-portal.siemens.com/productcert/pdf/ssa-377115.pdf) — evidence of the downstream vendor response's breadth
