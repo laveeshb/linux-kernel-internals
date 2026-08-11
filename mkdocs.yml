@@ -508,6 +508,12 @@ nav:
       - SELinux: security/selinux.md
       - Kernel Hardening: security/kernel-hardening.md
       - Landlock Sandboxing: security/landlock.md
+      - War Stories:
+        - Security War Stories: security/war-stories.md
+        - Dirty Pipe: security/war-stories/dirty-pipe.md
+        - The fs_context Legacy Parameter Overflow: security/war-stories/fscontext-overflow.md
+        - Stale ptracer Credentials: security/war-stories/stale-ptracer-creds.md
+        - Nested User Namespace UID/GID Mapping: security/war-stories/nested-userns-uid-mapping.md
     - Virtualization:
       - Getting Started: virtualization/README.md
       - KVM Architecture: virtualization/kvm-arch.md

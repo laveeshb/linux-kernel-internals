@@ -50,3 +50,9 @@ Syscall entry
 |------|----------------|
 | [fscrypt](fscrypt.md) | Filesystem-level encryption (ext4/f2fs) |
 | [dm-crypt](dm-crypt.md) | Block-level encryption, LUKS |
+
+### War stories
+
+| Page | What it covers |
+|------|----------------|
+| [Security War Stories](war-stories.md) | Four real CVEs — Dirty Pipe, the fs_context overflow, stale ptracer credentials, and nested user-namespace UID mapping — root-caused and traced through whatever real disclosure record actually exists for each |
