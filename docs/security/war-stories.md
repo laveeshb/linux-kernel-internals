@@ -24,7 +24,7 @@ A bounds check written as a subtraction instead of a sum underflowed in unsigned
 
 ### [Stale ptracer Credentials](war-stories/stale-ptracer-creds.md)
 **July 2019 · CVE-2019-13272 · CVSS 7.8**
-`PTRACE_TRACEME` recorded the *parent's* credentials as the tracer's rather than the requesting child's, so an unprivileged process could attach to its own privileged parent, wait for that parent to drop privilege and exec something attacker-reachable, and keep the ptrace relationship's original, still-privileged authority. Weaponized against polkit's `pkexec` on twenty-odd tested distributions within a week.
+`PTRACE_TRACEME` recorded the *parent's* credentials as the tracer's rather than the requesting child's, so an unprivileged process could make its own privileged parent its ptracer, wait for that parent to drop privilege and exec something attacker-reachable, and keep the ptrace relationship's original, still-privileged authority. Weaponized against polkit's `pkexec` on twenty-odd tested distributions within a week.
 
 ### [Nested User Namespace UID/GID Mapping](war-stories/nested-userns-uid-mapping.md)
 **November 2018 · CVE-2018-18955 · CVSS 7.0**

@@ -10,7 +10,7 @@
 
 Linux 5.1 shipped David Howells' filesystem context work, merged as [`3e1aeb00e6d1`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3e1aeb00e6d132efc151dacc062b38269bc9eccc) ("vfs: Implement a filesystem superblock creation/configuration context") — the `fs_context` infrastructure and `legacy_parse_param()`. Linux 5.2 then added the new mount API syscalls that actually drive it from userspace — `fsopen()`, `fsconfig()`, `fsmount()`, `move_mount()`. Instead of handing the kernel one opaque option string at `mount()` time, userspace now opens a *context* and feeds it parameters one at a time, each as a separate syscall.
 
-Almost no filesystem was converted to the new interface at once. `alloc_fs_context()` still carries Howells' original comment on the fallback:
+Almost no filesystem was converted to the new interface at once. Until the legacy path was deleted in 7.0, `alloc_fs_context()` carried Howells' original comment on the fallback:
 
 ```c
 /* TODO: Make all filesystems support this unconditionally */
@@ -19,7 +19,7 @@ if (!init_fs_context)
     init_fs_context = legacy_init_fs_context;
 ```
 
-For every filesystem that hasn't implemented `init_fs_context` — ext4 among them, for years — parameters flow into `legacy_parse_param()` in `fs/fs_context.c`, whose job is to rebuild the comma-separated option string the old `->mount()` hook still expects. It accumulates that string in a single `kmalloc(PAGE_SIZE)` buffer, tracking how much it has written in `ctx->data_size`:
+For every filesystem that had not implemented `init_fs_context` — ext4 among them, from 5.1 until its conversion in 5.17 — parameters flowed into `legacy_parse_param()` in `fs/fs_context.c`, whose job was to rebuild the comma-separated option string the old `->mount()` hook still expects. It accumulated that string in a single `kmalloc(PAGE_SIZE)` buffer, tracking how much it had written in `ctx->data_size`:
 
 ```c
 static int legacy_parse_param(struct fs_context *fc, struct fs_parameter *param)
@@ -48,7 +48,7 @@ static int legacy_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	ctx->data_size = size;
 ```
 
-The `- 2` reserves room for the separating comma and the trailing NUL (the `=` is already folded into `len` itself for string-valued params). `size` is an `unsigned int`; `PAGE_SIZE` is an unsigned long. There is no signed value anywhere in that expression.
+The `- 2` reserves room for the separating comma and the trailing NUL (the `=` is already folded into `len` itself for string-valued params). `size` is an `unsigned int`; `PAGE_SIZE` is an unsigned long; `len` is a `size_t`. Every operand is converted to unsigned long before the subtraction runs, so the result can never be negative.
 
 ## The trigger
 
@@ -82,7 +82,7 @@ The buggy address is located 0 bytes to the right of
  4096-byte region [ffff88802d7d8000, ffff88802d7d9000)
 ```
 
-What made it a privilege-escalation bug rather than a crash is where that write lands. In [their writeup](https://www.willsroot.io/2022/01/cve-2022-0185.html), William Liu and the Crusaders of Rust describe placing a `msg_msg` object immediately after the legacy-data allocation, corrupting its size field, and using `MSG_COPY` to read out of bounds — leaking `seq_operations` pointers sprayed via `open("/proc/self/stat")` to defeat KASLR. For the arbitrary write they needed to stall a `usercopy` mid-flight; with unprivileged `userfaultfd` disabled by default since 5.11, they used a FUSE filesystem of their own instead, whose read handler simply hangs. The final chain sprays a fake `pipe_buffer` operations table and ROPs through `prepare_kernel_cred()`/`commit_creds()` and `switch_task_namespaces()` — the last of which is what converts root-in-a-container into root on the host.
+What made it a privilege-escalation bug rather than a crash is where that write lands. In [their writeup](https://www.willsroot.io/2022/01/cve-2022-0185.html), William Liu and the Crusaders of Rust describe placing a `msg_msg` object immediately after the legacy-data allocation, corrupting its size field, and using `MSG_COPY` to read out of bounds — leaking `seq_operations` pointers sprayed via `open("/proc/self/stat")` to defeat KASLR. For the arbitrary write in their Ubuntu exploit they needed to stall a `usercopy` mid-flight; with unprivileged `userfaultfd` disabled by default since 5.11, they used a FUSE filesystem of their own instead, whose read handler simply hangs, and finished by overwriting `modprobe_path`. Google's kCTF containers had a stripped `/dev` with no FUSE and no `userfaultfd`, so the escape exploit used `msg_msg`'s unlink primitive instead: it points a `pipe_buffer`'s operations pointer at a sprayed fake table and ROPs through `prepare_kernel_cred()`/`commit_creds()` and `switch_task_namespaces(find_task_by_vpid(1), init_nsproxy)` — the last of which is what converts root-in-a-container into root on the host.
 
 The writeup notes an irony worth recording: an anti-exploitation hardening change made the exploit *more* reliable. Because SLUB has stored its freelist pointer in the middle of each object rather than at its start since 5.7, a string-shaped overflow through the first `0x30` bytes of the following chunk — exactly the region `msg_msg` cares about — no longer corrupts slab metadata, so the overflow could be repeated with a fresh `fsopen()` context until it succeeded.
 
