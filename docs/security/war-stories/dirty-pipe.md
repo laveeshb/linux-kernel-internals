@@ -14,8 +14,8 @@ The relevant optimization is **merging**. If the last write to a pipe didn't fil
 
 So the kernel has always had a "can this buffer be merged into?" check. What changed over the years is *where that check reads its answer from*:
 
-- **2.6.16 (2006)** — [`5274f052e7b3`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5274f052e7b3dbd81935772eb551dfd0325dfa9d) introduced `splice()` along with `page_cache_pipe_buf_ops`, the first `struct pipe_buf_operations` with `can_merge = 0`. The answer lived in the **ops vector**.
-- **5.0 (2019)** — [`01e7187b4119`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=01e7187b41191376cee8bea8de9f907b001e87b4) ("pipe: stop using ->can_merge", Jann Horn, at Al Viro's suggestion) dropped the flag and replaced it with a pointer comparison, since only one ops vector had ever set it. The answer still came from the **ops pointer**:
+- **2.6.17 (2006)** — [`5274f052e7b3`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5274f052e7b3dbd81935772eb551dfd0325dfa9d) introduced `splice()` along with `page_cache_pipe_buf_ops`, the first `struct pipe_buf_operations` with `can_merge = 0`. The answer lived in the **ops vector**.
+- **5.1 (2019)** — [`01e7187b4119`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=01e7187b41191376cee8bea8de9f907b001e87b4) ("pipe: stop using ->can_merge", Jann Horn, at Al Viro's suggestion) dropped the flag and replaced it with a pointer comparison, since only one ops vector had ever set it. The answer still came from the **ops pointer**:
 
     ```c
     static bool pipe_buf_can_merge(struct pipe_buffer *buf)
@@ -85,7 +85,7 @@ The corruption had a signature. Every affected file ended with the same eight wr
 
 A full-disk scan turned up 37 corrupt files over three months, clustered hard on the last day of each month — because the download loop sends days in order, so the last day's file is always the one immediately followed by the `PK` header. Only the server actually serving HTTP downloads was affected; its standby, running the identical log-splitting job, had zero corruptions.
 
-Kellermann's minimal reproducer is two programs of about six lines each: one that loops `write(1, "AAAAA", 5)` into a file, and one that loops `splice()` from that file into a pipe followed by `write(1, "BBBBB", 5)`. "BBBBB" started appearing inside the file. A bisect across the 185,011 commits between v4.19 and v5.10 took 17 steps and landed on `f6dd975583bd`.
+Kellermann's minimal reproducer is two small programs: one that loops `write(1, "AAAAA", 5)` into a file, and one that loops `splice()` from that file into a pipe followed by `write(1, "BBBBB", 5)`. "BBBBB" started appearing inside the file. A bisect across the 185,011 commits between v4.19 and v5.10 took 17 steps and landed on `f6dd975583bd`.
 
 His initial read was that this required a concurrent privileged writer and won a race. Once he understood the actual mechanism, the hole widened enormously: no writer, no race, arbitrary data at almost arbitrary offsets in any file the attacker can read. `/etc/passwd`, a setuid binary, `authorized_keys` — anything.
 
@@ -132,7 +132,7 @@ The commit carries `Fixes: 241699cd72a8 ("new iov_iter flavour: pipe-backed")` a
 
 > Applied, will push to Linus...
 
-That brevity is the story rather than an absence of one. Per Kellermann's timeline, the bug report, exploit, and patch went to the closed `security@kernel.org` list on February 20; the LKML posting the next day was made **"without vulnerability details) as suggested by Linus Torvalds, Willy Tarreau and Al Viro"** — a patch that reads as a trivial missing-initializer cleanup, merged on its own merits, with the exploitability discussion kept off the public archive until fixes had shipped. Anyone searching lore for a design argument about this CVE will not find one, and that is the intended outcome of the [kernel's security-bug process](https://docs.kernel.org/process/security-bugs.html), not a gap in the record.
+That brevity is the story rather than an absence of one. Per Kellermann's timeline, the bug report, exploit, and patch went to the closed `security@kernel.org` list on February 20; the LKML posting the next day was made **"(without vulnerability details) as suggested by Linus Torvalds, Willy Tarreau and Al Viro"** — a patch that reads as a trivial missing-initializer cleanup, merged on its own merits, with the exploitability discussion kept off the public archive until fixes had shipped. Anyone searching lore for a design argument about this CVE will not find one, and that is the intended outcome of the [kernel's security-bug process](https://docs.kernel.org/process/security-bugs.html), not a gap in the record.
 
 The rest of the timeline, from Kellermann's disclosure:
 
@@ -190,7 +190,7 @@ uname -r
 - [lore.kernel.org: the LKML patch thread](https://lore.kernel.org/lkml/20220221100313.1504449-1-max.kellermann@ionos.com/) — the entire public discussion: Kellermann's patch and Al Viro's "Applied, will push to Linus..."
 - [git.kernel.org: 241699cd72a8](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=241699cd72a8489c9446ae3910ddd243e9b9061b) — "new iov_iter flavour: pipe-backed" (4.9, 2016), the commit the fix's `Fixes:` tag names as the origin
 - [git.kernel.org: f6dd975583bd](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f6dd975583bd8ce088400648fd9819e4691c8958) — "pipe: merge anon_pipe_buf*_ops" (5.8, 2020), which moved the merge check onto `flags` and made the dormant bug exploitable
-- [git.kernel.org: 01e7187b4119](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=01e7187b41191376cee8bea8de9f907b001e87b4) — "pipe: stop using ->can_merge" (5.0, 2019), the intermediate refactor that replaced the ops flag with a pointer comparison
+- [git.kernel.org: 01e7187b4119](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=01e7187b41191376cee8bea8de9f907b001e87b4) — "pipe: stop using ->can_merge" (5.1, 2019), the intermediate refactor that replaced the ops flag with a pointer comparison
 - [git.kernel.org: 84588a93d097](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=84588a93d097bace24b9233930f82511d4f34210) — "fuse: fix uninitialized flags in pipe_buffer" (2017), the same bug class found and fixed in a sibling caller five years earlier
 - [CISA: Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — lists CVE-2022-0847 as actively exploited, added April 25, 2022, remediation due May 16, 2022
 - [Android Security Bulletin, May 2022](https://source.android.com/docs/security/bulletin/2022-05-01) — lists CVE-2022-0847 (`pipes`, EoP, High) and notes indications of "limited, targeted exploitation"

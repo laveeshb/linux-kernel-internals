@@ -24,7 +24,7 @@ A bounds check written as a subtraction instead of a sum underflowed in unsigned
 
 ### [Stale ptracer Credentials](war-stories/stale-ptracer-creds.md)
 **July 2019 · CVE-2019-13272 · CVSS 7.8**
-`PTRACE_TRACEME` recorded the *parent's* credentials as the tracer's rather than the requesting child's, so an unprivileged process could attach to its own privileged parent, wait for that parent to drop privilege and exec something attacker-reachable, and keep the ptrace relationship's original, still-privileged authority. Weaponized against polkit's `pkexec` on dozens of distributions within a week.
+`PTRACE_TRACEME` recorded the *parent's* credentials as the tracer's rather than the requesting child's, so an unprivileged process could attach to its own privileged parent, wait for that parent to drop privilege and exec something attacker-reachable, and keep the ptrace relationship's original, still-privileged authority. Weaponized against polkit's `pkexec` on twenty-odd tested distributions within a week.
 
 ### [Nested User Namespace UID/GID Mapping](war-stories/nested-userns-uid-mapping.md)
 **November 2018 · CVE-2018-18955 · CVSS 7.0**
@@ -49,7 +49,7 @@ The stale-value pattern is the strongest thread running through three of the fou
 
 The fs_context bug is the exception on almost every row, and it's exactly the row it's an exception on that makes it the most severe of the four by CVSS: a classic unsigned-underflow bounds check, exactly the kind of thing KASAN and syzkaller are built to catch — and syzbot did catch it, independently, six days before the CTF team that got credit for the public disclosure, sitting unanswered on an Android-tree bug tracker the same way the netfilter x_tables report sat unanswered for eight months on the [networking side of this site](../net/war-stories/netfilter-xtables.md). Detection was never the bottleneck for any of these four bugs; triage was — and for the three private, embargoed disclosures here, the record shows the kernel's security process worked as designed, even where it left little for a mailing-list archaeologist to find later.
 
-Three of the four have been confirmed under real-world active exploitation by CISA's KEV catalog — a strikingly high fraction, compared to the two out of six on the networking page. Local privilege-escalation primitives are directly useful to an attacker who already has a foothold, in a way a remote crash usually isn't; that's a plausible reason KEV inclusion runs higher here even though every bug on this page requires local access first.
+Three of the four have been confirmed under real-world active exploitation by CISA's KEV catalog — a strikingly high fraction, compared to the one out of six on the networking page. Local privilege-escalation primitives are directly useful to an attacker who already has a foothold, in a way a remote crash usually isn't; that's a plausible reason KEV inclusion runs higher here even though every bug on this page requires local access first.
 
 ## See also
 
