@@ -8,40 +8,40 @@ The incidents below, each with its own page: root-cause analysis grounded in the
 
 ## Incidents
 
-Ordered chronologically by disclosure date.
-
-### [The TCP Challenge-ACK Side Channel](war-stories/challenge-ack.md)
-**August 2016 · CVE-2016-5696 · CVSS 4.8**
-A global rate-limit counter, meant purely as an internal implementation detail, let an off-path attacker infer TCP sequence numbers by watching how much of the shared quota a victim connection consumed.
-
-### [AF_PACKET TPACKET_V3 Privilege Escalation](war-stories/af-packet.md)
-**March 2017 · CVE-2017-7308 · CVSS 7.8**
-A single `(int)` cast around an unsigned subtraction defeated a ring-buffer bounds check — found by syzkaller, turned into local root by Project Zero.
-
-### [UDP Fragmentation-Offload Path-Switch Corruption](war-stories/udp-ufo.md)
-**August 2017 · CVE-2017-1000112 · CVSS 7.0**
-Two `send()` calls building the same datagram could disagree about which code path was building it, twelve years after the bug was introduced. Embargo-disclosed and fixed in one week.
-
-### [SegmentSmack](war-stories/segmentsmack.md)
-**August 2018 · CVE-2018-5390 · CVSS 7.5**
-Tiny, deliberately-scattered out-of-order TCP segments could pin a CPU core at 100% with roughly 2 kilopackets/second of traffic. The public disclosure process became its own controversy, chronicled in detail on LWN.
-
-### [The TCP SACK Panic](war-stories/sack-panic.md)
-**June 2019 · CVE-2019-11477/78/79 · CVSS 7.5 (all three)**
-A remote peer could crash any Linux TCP endpoint by overflowing a 16-bit segment counter with a crafted sequence of SACK blocks. The fix itself then collided with legitimate high-throughput and small-buffer workloads twice more before it stopped causing production stalls.
+Ordered reverse chronologically by disclosure date — newest first.
 
 ### [Netfilter x_tables Heap Overflow](war-stories/netfilter-xtables.md)
 **Fixed April 2021, disclosed July 2021 · CVE-2021-22555 · CVSS 8.3 (Google) / 7.8 (NVD)**
 A 15-year-old bounds-check gap, sitting unanswered in a syzbot report for 8 months, became "Turning \x00\x00 into 10000$" and a real Kubernetes pod escape once someone built an exploit chain for it.
 
+### [The TCP SACK Panic](war-stories/sack-panic.md)
+**June 2019 · CVE-2019-11477/78/79 · CVSS 7.5 (all three)**
+A remote peer could crash any Linux TCP endpoint by overflowing a 16-bit segment counter with a crafted sequence of SACK blocks. The fix itself then collided with legitimate high-throughput and small-buffer workloads twice more before it stopped causing production stalls.
+
+### [SegmentSmack](war-stories/segmentsmack.md)
+**August 2018 · CVE-2018-5390 · CVSS 7.5**
+Tiny, deliberately-scattered out-of-order TCP segments could pin a CPU core at 100% with roughly 2 kilopackets/second of traffic. The public disclosure process became its own controversy, chronicled in detail on LWN.
+
+### [UDP Fragmentation-Offload Path-Switch Corruption](war-stories/udp-ufo.md)
+**August 2017 · CVE-2017-1000112 · CVSS 7.0**
+Two `send()` calls building the same datagram could disagree about which code path was building it, twelve years after the bug was introduced. Embargo-disclosed and fixed in one week.
+
+### [AF_PACKET TPACKET_V3 Privilege Escalation](war-stories/af-packet.md)
+**March 2017 · CVE-2017-7308 · CVSS 7.8**
+A single `(int)` cast around an unsigned subtraction defeated a ring-buffer bounds check — found by syzkaller, turned into local root by Project Zero.
+
+### [The TCP Challenge-ACK Side Channel](war-stories/challenge-ack.md)
+**August 2016 · CVE-2016-5696 · CVSS 4.8**
+A global rate-limit counter, meant purely as an internal implementation detail, let an off-path attacker infer TCP sequence numbers by watching how much of the shared quota a victim connection consumed.
+
 ## Common threads
 
-| Pattern | Challenge-ACK | AF_PACKET | UFO path-switch | SegmentSmack | SACK panic | Netfilter x_tables |
-|---------|:--------------:|:----------:|:-----------------:|:-------------:|:----------:|:-------------------:|
-| Remotely triggerable, no local access needed | Yes | No | No | Yes | Yes | No |
-| Root cause is an integer/width assumption | No | Yes | Yes | No | Yes | No |
-| Found via fuzzing (syzkaller) or automated tooling | No | Yes | Yes | No | No | Partial |
-| Capability check defeated by user namespaces | No | Yes | No | No | No | Yes |
+| Pattern | Netfilter x_tables | SACK panic | SegmentSmack | UFO path-switch | AF_PACKET | Challenge-ACK |
+|---------|:-------------------:|:----------:|:-------------:|:-----------------:|:----------:|:--------------:|
+| Remotely triggerable, no local access needed | No | Yes | Yes | No | No | Yes |
+| Root cause is an integer/width assumption | No | Yes | No | Yes | Yes | No |
+| Found via fuzzing (syzkaller) or automated tooling | Partial | No | No | Yes | Yes | No |
+| Capability check defeated by user namespaces | Yes | No | No | No | Yes | No |
 | Fix added an explicit cap/invariant, not just a patch to one call site | Yes | Yes | Yes | Yes | Yes | Yes |
 
 Half of these cases are reachable by an attacker who has never authenticated to anything — they only need to be able to route packets to the target, which is the defining characteristic of network-stack bugs as a category. The other half (Netfilter x_tables, AF_PACKET, and the UDP UFO bug) require local execution, but all three are gated only by capabilities (`CAP_NET_ADMIN`, `CAP_NET_RAW`, or an ordinary `sendmsg()` sequence) that are either trivially available or handed out routinely by unprivileged user namespaces — which is why the first two ended up cited as container-escape primitives rather than filed away as low-severity local bugs.
@@ -50,7 +50,7 @@ The other recurring shape is **an assumption that held for years until an advers
 
 ## See also
 
-- [TCP Implementation](tcp.md) — SACK, the retransmit queue, and the receive path involved in the Challenge-ACK, SegmentSmack, and SACK panic cases
+- [TCP Implementation](tcp.md) — SACK, the retransmit queue, and the receive path involved in the SACK panic, SegmentSmack, and Challenge-ACK cases
 - [TCP Congestion Control](tcp-congestion.md) — how MSS and segment sizing interact with the send path
 - [Netfilter Architecture](netfilter.md) — x_tables, hooks, and the compat translation layer
 - [AF_PACKET Raw Sockets](packet-socket.md) — the ring-buffer mechanics behind the AF_PACKET case
