@@ -89,9 +89,9 @@ The exploitation window is the gap in a privileged parent's lifetime between "is
 
 ## Observed behavior
 
-The privilege half of this bug produced no crash, no memory corruption, no fuzzer-visible artifact — its only symptom is a permission decision coming out wrong. (A separate object-lifetime half of the same report is louder: Horn's other proof-of-concept races `setresuid()` against `PTRACE_TRACEME` and trips `put_cred_rcu()`'s panic.) A traced process could be manipulated (registers rewritten, `/proc/<pid>/mem` written, syscalls intercepted) by a "tracer" that the kernel believed was still privileged, when in fact the flesh-and-blood process behind that tracer role had long since dropped privileges via `setuid()`/`setgid()` and moved on to executing attacker-reachable code. NVD scores it CVSS 3.1 **7.8 HIGH** (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`) — local, low complexity, low privileges required, full confidentiality/integrity/availability impact, because the end state is arbitrary code execution as root.
+The privilege half of this bug produced no crash, no memory corruption, no fuzzer-visible artifact — its only symptom is a permission decision coming out wrong. (A separate object-lifetime half of the same report is louder: Horn's other proof-of-concept races `setresuid()` against `PTRACE_TRACEME` and trips `put_cred_rcu()`'s panic.) A traced process could be manipulated (registers rewritten, `/proc/<pid>/mem` written, syscalls intercepted) by a "tracer" the kernel had marked privileged on the strength of credentials it never volunteered — and by the time the manipulation happened, the flesh-and-blood process behind that tracer role had dropped privileges via `setuid()`/`setgid()` and moved on to executing attacker-reachable code. NVD scores it CVSS 3.1 **7.8 HIGH** (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`) — local, low complexity, low privileges required, full confidentiality/integrity/availability impact, because the end state is arbitrary code execution as root.
 
-The bug had been present since Linux **4.10** (November 2016), when [`64b875f7ac8a`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64b875f7ac8a5d60a4e191479299e931ee949b67) introduced `ptracer_cred` — nearly three years before Jann Horn's report. Distributions each caught up on their own schedule once the fix and CVE were public: Debian's DSA-4484 followed on July 20, Red Hat's RHSA-2019:2405 on August 7, and Ubuntu's five kernel advisories (USN-4093-1 through USN-4118-1, see External references) landed in two batches, August 13 and September 2 — a seven-week tail rather than a coordinated same-week release.
+The bug had been present since Linux **4.10** (commit `64b875f7ac8a`, November 2016), when [`64b875f7ac8a`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64b875f7ac8a5d60a4e191479299e931ee949b67) introduced `ptracer_cred` — nearly three years before Jann Horn's report. Distributions each caught up on their own schedule once the fix and CVE were public: Debian's DSA-4484 followed on July 20, Red Hat's RHSA-2019:2405 on August 7, and Ubuntu's five kernel advisories (USN-4093-1 through USN-4118-1, see External references) landed in two batches, August 13 and September 2 — a seven-week tail rather than a coordinated same-week release.
 
 ## Why it happened
 
@@ -141,7 +141,7 @@ sysctl -w kernel.yama.ptrace_scope=3   # 0/1 do not stop this bug (1 = Ubuntu/De
 
 - [Credentials and User Namespaces](../credentials.md) — `struct cred`, its copy-on-write discipline, and what happens to credentials across `execve()`
 - [Linux Capabilities](../capabilities.md) — the privilege-dropping pattern (`setuid()` then `execve()`) this bug undermined
-- [Nested User Namespace UID Mapping Bug](nested-userns-uid-mapping.md) — another Jann Horn-reported credential/identity bug in the same era
+- [Nested User Namespace UID/GID Mapping](nested-userns-uid-mapping.md) — another Jann Horn-reported credential/identity bug in the same era
 
 ## External references
 
