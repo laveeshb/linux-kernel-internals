@@ -464,7 +464,14 @@ nav:
         - Network Tracing: net/net-tracing.md
         - Understanding /proc/net/snmp: net/proc-snmp.md
         - Network Buffer Tuning: net/net-buffer-tuning.md
-      - War Stories: net/war-stories.md
+      - War Stories:
+        - Network War Stories: net/war-stories.md
+        - Netfilter x_tables Heap Overflow: net/war-stories/netfilter-xtables.md
+        - The TCP SACK Panic: net/war-stories/sack-panic.md
+        - SegmentSmack: net/war-stories/segmentsmack.md
+        - UDP UFO Path-Switch Corruption: net/war-stories/udp-ufo.md
+        - AF_PACKET Privilege Escalation: net/war-stories/af-packet.md
+        - The Challenge-ACK Side Channel: net/war-stories/challenge-ack.md
     - BPF/eBPF:
       - Getting Started: bpf/README.md
       - Architecture & Program Types: bpf/bpf-overview.md

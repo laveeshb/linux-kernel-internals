@@ -92,3 +92,9 @@ Every packet is carried by an [sk_buff](sk-buff.md) — start there if you read 
 | [Network Tracing](net-tracing.md) | Tracepoints and BPF on the data path |
 | [Buffer Tuning](net-buffer-tuning.md) | Socket buffers, rmem/wmem, autotuning |
 | [/proc/net/snmp Reference](proc-snmp.md) | Reading the protocol counters |
+
+### War stories
+
+| Page | What it covers |
+|------|----------------|
+| [Network War Stories](war-stories.md) | Six real CVEs, root-caused and traced through the actual mailing-list discussion behind each fix |
