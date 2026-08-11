@@ -49,7 +49,7 @@ memset(newinfo->entries, 0, size);   /* added to translate_compat_table() in ip_
 
 This sidesteps the bounds-tracking problem completely — there's no longer a separate, per-entry write that can land outside the buffer, because every byte of the buffer is already zero before any entry-specific data is copied in. The fix was merged upstream in April 2021 and backported across stable kernels.
 
-The patch drew no pushback on netfilter-devel — Pablo Neira Ayuso applied Westphal's post within a week, replying simply "Applied."
+The [patch drew no pushback on netfilter-devel](https://lore.kernel.org/netfilter-devel/20210407193857.21120-1-fw@strlen.de/) — Pablo Neira Ayuso applied Westphal's post within a week, replying simply "Applied."
 
 The fix itself wasn't the end of the discussion, though. Two weeks later Westphal [posted a follow-up](https://lore.kernel.org/netfilter-devel/20210426101440.25335-1-fw@strlen.de/), "netfilter: allow to turn off xtables compat layer," adding a `CONFIG_NETFILTER_XTABLES_COMPAT` Kconfig knob (default `y`, for compatibility) so the 32-bit compat translation code could be compiled out entirely. His stated reasoning was blunt: "The compat layer needs to parse untrusted input (the ruleset) to translate it to a 64bit compatible format. We had a number of bugs in this department in the past, so allow users to turn this feature off."
 

@@ -14,7 +14,7 @@ Each SKB carries a `struct tcp_skb_cb` control block (`include/net/tcp.h`) that 
 
 ## The trigger
 
-Linux enforces a minimum MSS floor, but as of the vulnerable code that floor was hardcoded to 48 bytes in `__tcp_mtu_to_mss()` in `net/ipv4/tcp_output.c` — and TCP options can consume up to 40 of those bytes, leaving as little as **8 bytes of real payload per segment**. Jonathan Looney at Netflix found that a remote peer could advertise this minimal MSS and then send a carefully crafted sequence of SACK blocks. Because SACK processing causes `tcp_shift_skb_data()` in `net/ipv4/tcp_input.c` to coalesce retransmit-queue SKBs via `skb_shift()`, an attacker could drive one SKB's accumulated segment count past 65,535 — silently overflowing the 16-bit `tcp_gso_segs` field.
+Linux enforces a minimum MSS floor, but as of the vulnerable code that floor was hardcoded to 48 bytes in `__tcp_mtu_to_mss()` in `net/ipv4/tcp_output.c` — and TCP options can consume up to 40 of those bytes, leaving as little as **8 bytes of real payload per segment**. Jonathan Looney at Netflix found that a remote peer could advertise this minimal MSS and then send a carefully crafted sequence of SACK blocks — published as [Netflix's own advisory](https://github.com/Netflix/security-bulletins/blob/master/advisories/third-party/2019-001.md) (NFLX-2019-001), the primary source for all three CVEs. Because SACK processing causes `tcp_shift_skb_data()` in `net/ipv4/tcp_input.c` to coalesce retransmit-queue SKBs via `skb_shift()`, an attacker could drive one SKB's accumulated segment count past 65,535 — silently overflowing the 16-bit `tcp_gso_segs` field.
 
 ## Observed behavior
 
@@ -53,7 +53,7 @@ Three separate commits addressed the three CVEs:
 - **CVE-2019-11478** — [`f070ef2ac667`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f070ef2ac66716357066b683fb0baf55f8191a2e) ("tcp: tcp_fragment() should apply sane memory limits") makes `tcp_fragment()` refuse to split a packet once `sk_wmem_queued` exceeds twice `sk_sndbuf` (`(sk->sk_wmem_queued >> 1) > sk->sk_sndbuf`), returning `-ENOMEM` and incrementing a new `TCPWqueueTooBig` SNMP counter instead.
 - **CVE-2019-11479** — [`967c05aee439`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=967c05aee439e6e5d7d805e195b3a20ef5c433d6) enforces a new `net.ipv4.tcp_min_snd_mss` sysctl in `tcp_mtu_probing()`, and a companion commit, [`5f3e2bf008c2`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5f3e2bf008c2221478101ee72f5cb4654b9fc363) ("tcp: add tcp_min_snd_mss sysctl"), adds the sysctl itself. The default stays at 48 for compatibility, but administrators can now raise it.
 
-These patches were posted to netdev on June 17, 2019 as part of the public disclosure, and the CVE-2019-11478 fix immediately surfaced a real regression: Christoph Paasch reported a packetdrill test that used to pass but now stalled indefinitely, because a connection with `SO_SNDBUF` forced artificially low could no longer fragment its retransmit queue at all once `sk_wmem_queued` exceeded the new limit.
+These patches were [posted to netdev](https://lore.kernel.org/netdev/20190617170354.37770-1-edumazet@google.com/) on June 17, 2019 as part of the public disclosure, and the CVE-2019-11478 fix immediately surfaced a real regression: Christoph Paasch reported a packetdrill test that used to pass but now stalled indefinitely, because a connection with `SO_SNDBUF` forced artificially low could no longer fragment its retransmit queue at all once `sk_wmem_queued` exceeded the new limit.
 
 Eric Dumazet's initial response — "I guess it is WAI :)" — offered a quick guard anyway, skipping the new check when the retransmit queue was empty (`!tcp_rtx_queue_empty(sk)`), which Paasch confirmed fixed his test. But he also flagged an open question: could a connection get permanently stuck if `sk_wmem_queued` grew large enough that even a legitimate retransmit couldn't fragment? Dumazet's answer at the time was blunt: "Really TCP can not work well with tiny sndbuf limits. There is really no point trying to be nice."
 
@@ -95,6 +95,7 @@ sysctl net.ipv4.tcp_min_snd_mss
 
 ## External references
 
+- [Netflix: NFLX-2019-001](https://github.com/Netflix/security-bulletins/blob/master/advisories/third-party/2019-001.md) — Jonathan Looney's original advisory, including patches and workarounds for all three CVEs
 - [NVD: CVE-2019-11477](https://nvd.nist.gov/vuln/detail/CVE-2019-11477), [CVE-2019-11478](https://nvd.nist.gov/vuln/detail/CVE-2019-11478), [CVE-2019-11479](https://nvd.nist.gov/vuln/detail/CVE-2019-11479) — the TCP SACK panic CVE records
 - [git.kernel.org: 3b4929f65b0d](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3b4929f65b0d8249f19a50245cd88ed1a2f78cff) — "tcp: limit payload size of sacked skbs"
 - [git.kernel.org: f070ef2ac667](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f070ef2ac66716357066b683fb0baf55f8191a2e) — "tcp: tcp_fragment() should apply sane memory limits"
