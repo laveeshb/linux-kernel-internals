@@ -48,11 +48,11 @@ The pages that follow go deeper on each piece summarized above:
 
 - **[KMS modesetting](kms.md)** — the object model (CRTC, plane, connector, encoder) and how atomic modesetting commits a whole display configuration as one indivisible transaction instead of the old per-property, get-it-wrong-and-flicker interface.
 - **[GEM buffer objects and dma-buf](gem-dmabuf.md)** — how GPU memory is allocated and refcounted (GEM), and how buffers are shared *across* devices and subsystems — GPU to display, a V4L2 camera's captured frame handed to the GPU — via dma-buf.
-- **Command submission, fences, and the scheduler** — how a batch of GPU work gets from an ioctl to hardware execution, and how fences let the kernel track "is this buffer still in use" across asynchronous, pipelined GPU work.
+- **[Command submission, fences, and the GPU scheduler](command-submission.md)** — how a batch of GPU work gets from a driver-specific ioctl to hardware execution via `drm_sched`, how `dma_fence` lets the kernel track "is this buffer still in use" across asynchronous, pipelined GPU work, and what happens when a job hangs.
 
 ### Prerequisites and neighbors
 
-On desktops and servers, GPUs are usually [PCIe devices](../drivers/pci-driver.md); on SoCs, the GPU and display controller are typically platform devices bound through the same driver core. Either way, buffer objects that the GPU reads or writes are subject to the same [DMA](../mm/dma.md) coherency rules as any other DMA-capable device. Reading order: this page, then [KMS](kms.md), then [GEM/dma-buf](gem-dmabuf.md), then command submission — each builds on device/memory-management concepts from the one before.
+On desktops and servers, GPUs are usually [PCIe devices](../drivers/pci-driver.md); on SoCs, the GPU and display controller are typically platform devices bound through the same driver core. Either way, buffer objects that the GPU reads or writes are subject to the same [DMA](../mm/dma.md) coherency rules as any other DMA-capable device. Reading order: this page, then [KMS](kms.md), then [GEM/dma-buf](gem-dmabuf.md), then [command submission](command-submission.md) — each builds on device/memory-management concepts from the one before.
 
 ## Further reading
 
