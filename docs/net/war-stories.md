@@ -50,7 +50,7 @@ The `BUG_ON()` in `tcp_shifted_skb()` was a defensive assertion written on the a
 Three separate commits addressed the three CVEs:
 
 - **CVE-2019-11477** — [`3b4929f65b0d`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3b4929f65b0d8249f19a50245cd88ed1a2f78cff) ("tcp: limit payload size of sacked skbs") introduces `tcp_skb_shift()`, a wrapper around `skb_shift()` that refuses to shift if the result would push `to->len` past `65535 * TCP_MIN_GSO_SIZE` bytes or `tcp_skb_pcount()` past 65,535 segments, and downgrades the `BUG_ON()` to `WARN_ON_ONCE()` so an inconsistency no longer panics the box.
-- **CVE-2019-11478** — [`f070ef2ac667`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f070ef2ac66716357066b683fb0baf55f8191a2e) ("tcp: tcp_fragment() should apply sane memory limits") makes `tcp_fragment()` refuse to split a packet once `sk_wmem_queued` exceeds half of `sk_sndbuf`, returning `-ENOMEM` and incrementing a new `TCPWqueueTooBig` SNMP counter instead.
+- **CVE-2019-11478** — [`f070ef2ac667`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f070ef2ac66716357066b683fb0baf55f8191a2e) ("tcp: tcp_fragment() should apply sane memory limits") makes `tcp_fragment()` refuse to split a packet once `sk_wmem_queued` exceeds twice `sk_sndbuf` (`(sk->sk_wmem_queued >> 1) > sk->sk_sndbuf`), returning `-ENOMEM` and incrementing a new `TCPWqueueTooBig` SNMP counter instead.
 - **CVE-2019-11479** — [`967c05aee439`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=967c05aee439e6e5d7d805e195b3a20ef5c433d6) enforces a new `net.ipv4.tcp_min_snd_mss` sysctl in `tcp_mtu_probing()`, and a companion commit, [`5f3e2bf008c2`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5f3e2bf008c2221478101ee72f5cb4654b9fc363) ("tcp: add tcp_min_snd_mss sysctl"), adds the sysctl itself. The default stays at 48 for compatibility, but administrators can now raise it.
 
 All three shipped in the 4.4.182, 4.9.182, 4.14.127, 4.19.52, and 5.1.11 stable releases on June 17, 2019. Operators unable to upgrade immediately had interim mitigations: disable MTU probing (`net.ipv4.tcp_mtu_probing=0`) and disable SACK (`net.ipv4.tcp_sack=0`) to blunt CVE-2019-11477/78, or filter out unreasonably small advertised MSS values at the firewall for CVE-2019-11479.
@@ -94,7 +94,7 @@ Sustained, attacker-controlled **CPU pinning**: a single low-bandwidth connectio
 
 ### Why it happened
 
-The merge fix for CVE-2018-5390 landed as a five-commit series merged via [`1a4f14bab186`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1a4f14bab1868b443f0dd3c55b689a478f82e72) ("Merge branch 'tcp-robust-ooo'"), all authored by Eric Dumazet and reported by Tilli. The underlying issues:
+The merge fix for CVE-2018-5390 landed as a five-commit series merged via [`1a4f14bab186`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1a4f14bab1868b443f0dd3c55b689a478f82e72e) ("Merge branch 'tcp-robust-ooo'"), all authored by Eric Dumazet and reported by Tilli. The underlying issues:
 
 - `tcp_prune_ofo_queue()` freed one SKB at a time, calling `sk_mem_reclaim()` and re-checking memory pressure after *every single node* — expensive when thousands of nodes needed to go.
 - `tcp_collapse_ofo_queue()` had no early-exit: it would keep scanning and attempting collapses across the whole rbtree even when the "ranges" being merged were single tiny packets that could never coalesce into anything useful.
@@ -123,7 +123,7 @@ nstat -az | grep -i 'TcpExtOfoPruned\|TcpExtTCPOFOMerge'
 **Cheap traffic, expensive processing, is the classic algorithmic-complexity attack shape.** ~2 kbps of crafted segments pinning a CPU core is a textbook complexity attack — the fix wasn't "block the traffic," it was bounding the kernel's own work per unit of attacker-controlled input.
 
 !!! warning "Pattern to watch for"
-    Watch `TcpExtOfoPruned` and `TcpExtTCPOFOMerge` in `nstat`/`/proc/net/netstat` for unusual spikes correlated with a specific peer — that's the observable signature of an out-of-order queue under this kind of pressure. Kernels before 4.9.113/4.14.36/4.18 (depending on stable branch) are exposed if `tcp-robust-ooo` hasn't been backported.
+    Watch `TcpExtOfoPruned` and `TcpExtTCPOFOMerge` in `nstat`/`/proc/net/netstat` for unusual spikes correlated with a specific peer — that's the observable signature of an out-of-order queue under this kind of pressure. Kernels before 4.9.116/4.14.59/4.17.11 (4.18 in mainline) are exposed if `tcp-robust-ooo` hasn't been backported.
 
 ---
 
@@ -194,7 +194,7 @@ if (pad > 0)
 
 ### The trigger
 
-This per-entry padding zero used an offset (`m->data + match->matchsize`) computed independently for each match/target, without re-checking it against the actual size of the destination buffer allocated for the *whole* translated ruleset. By choosing targets whose `matchsize`/`targetsize` isn't 8-byte aligned (the netfilter x_tables bug report cites `NFLOG` as one such target, with padding reaching up to `0x4C` bytes), a local process able to load such a compat ruleset could cause the `memset()` to write a small number of zero bytes **past the end of the allocated ruleset blob** — a heap out-of-bounds write. Reaching this code path requires only being able to call `setsockopt(IPT_SO_SET_REPLACE)` (or the IPv6/ARP equivalents) from a 32-bit compat context, which requires `CAP_NET_ADMIN` — a capability routinely available to an unprivileged user inside a user *and* network namespace.
+This per-entry padding zero used an offset (`m->data + match->matchsize`) computed independently for each match/target, without re-checking it against the actual size of the destination buffer allocated for the *whole* translated ruleset. By choosing targets whose `matchsize`/`targetsize` isn't 8-byte aligned (Andy Nguyen's exploit writeup cites `NFLOG` as one such target, with padding reaching up to `0x4C` bytes), a local process able to load such a compat ruleset could cause the `memset()` to write a small number of zero bytes **past the end of the allocated ruleset blob** — a heap out-of-bounds write. Reaching this code path requires only being able to call `setsockopt(IPT_SO_SET_REPLACE)` (or the IPv6/ARP equivalents) from a 32-bit compat context, which requires `CAP_NET_ADMIN` — a capability routinely available to an unprivileged user inside a user *and* network namespace.
 
 ### Observed behavior
 
@@ -209,7 +209,7 @@ The root cause is a **local, per-entry bounds check standing in for a missing gl
 [`b29c457a6511`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b29c457a6511435960115c0f548c4360d5f4801d) ("netfilter: x_tables: fix compat match/target pad out-of-bound write") removes the per-entry padding `memset()` entirely and instead **zeroes the whole destination buffer up front**, before any entries are translated into it:
 
 ```c
-newinfo->entries = ...;
+newinfo = xt_alloc_table_info(size);
 memset(newinfo->entries, 0, size);   /* added to translate_compat_table() in ip_tables.c, ip6_tables.c, arp_tables.c */
 ```
 
@@ -250,11 +250,11 @@ if (po->tp_version >= TPACKET_V3 &&
 
 ### The trigger
 
-Both `tp_block_size` and the result of `BLK_PLUS_PRIV()` are unsigned. Casting their subtraction to `(int)` before comparing to zero is unsafe: Project Zero's Andrey Konovalov found that by supplying a `tp_sizeof_priv` value with its high bit set, the unsigned subtraction wraps to a large value that, when reinterpreted as a signed `int`, appears positive — silently passing a check that was supposed to reject an oversized private-header request. This let `blk_sizeof_priv` end up set to an attacker-chosen value that made the kernel's later `max_frame_len` calculation (used throughout `init_prb_bdqc()`, `prb_open_block()`, and `__packet_lookup_frame_in_block()`) disagree with the actual size of the mapped ring blocks.
+Both `tp_block_size` and the result of `BLK_PLUS_PRIV()` are unsigned. Casting their subtraction to `(int)` before comparing to zero is unsafe: Project Zero's Andrey Konovalov found that by supplying a `tp_sizeof_priv` value with its high bit set, the unsigned subtraction wraps to a large value that, when reinterpreted as a signed `int`, appears positive — silently passing a check that was supposed to reject an oversized private-header request. This let `blk_sizeof_priv` end up set to an attacker-chosen value, corrupting the block layout computed in `init_prb_bdqc()` and `prb_open_block()` and, downstream of that, the `max_frame_len` calculation used in `__packet_lookup_frame_in_block()` — leaving the kernel's view of the ring's frame layout disagreeing with the actual size of the mapped blocks.
 
 ### Observed behavior
 
-The mismatch between the computed frame layout and the real block boundaries let a caller drive a **heap out-of-bounds write** when the kernel populated ring-buffer frames — a local integer-signedness bug (CVSS 7.8, "HIGH") that Project Zero's [writeup](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html), "Exploiting the Linux kernel via packet sockets," turned into a working local root exploit. Creating an `AF_PACKET` socket at all requires `CAP_NET_RAW` — ordinarily a meaningful barrier, but, as the writeup notes, one "which can be acquired by an unprivileged user inside a user namespace" on any system where `CONFIG_USER_NS=y` and unprivileged user namespace creation is allowed — a common default on Ubuntu and Android at the time.
+The mismatch between the computed frame layout and the real block boundaries let a caller drive a **heap out-of-bounds write** when the kernel populated ring-buffer frames — a local integer-signedness bug (CVSS 7.8, "HIGH") that Project Zero's [writeup](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html), "Exploiting the Linux kernel via packet sockets," turned into a working local root exploit. Creating an `AF_PACKET` socket at all requires `CAP_NET_RAW` — ordinarily a meaningful barrier, but, as the writeup notes, one "which can be acquired by an unprivileged user inside a user namespaces" on any system where `CONFIG_USER_NS=y` and unprivileged user namespace creation is allowed, a common default on Ubuntu at the time (the writeup explicitly notes Android disallows untrusted code from creating `AF_PACKET` sockets at all).
 
 ### Why it happened
 
@@ -262,7 +262,7 @@ A single unsigned-to-signed cast, applied to a subtraction of two attacker-influ
 
 ### Resolution
 
-[`2b6867c2ce76`](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e) ("net/packet: fix overflow in check for priv area size"), authored by Andrey Konovalov, drops the signed cast and instead casts `tp_sizeof_priv` to `u64` before the comparison — comparing both sides in a wide-enough, correctly-signed domain that wraparound can no longer occur:
+[`2b6867c2ce76`](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e2) ("net/packet: fix overflow in check for priv area size"), authored by Andrey Konovalov, drops the signed cast and instead casts `tp_sizeof_priv` to `u64` before the comparison — comparing both sides in a wide-enough, correctly-signed domain that wraparound can no longer occur:
 
 ```c
 if (po->tp_version >= TPACKET_V3 &&
@@ -306,7 +306,7 @@ The bug is a **state-consistency bug across a multi-call API**: `sendmsg(MSG_MOR
 
 ### Resolution
 
-[`85f1bd9a7b5a`](https://github.com/torvalds/linux/commit/85f1bd9a7b5a79d5baa8bf44af19658f7bf77bf) ("udp: consistently apply ufo or fragmentation"), authored by Willem de Bruijn and reported by Andrey Konovalov, enforces the invariant explicitly in both `__ip_append_data()` and `__ip6_append_data()`: **once an SKB is GSO (`skb_is_gso(skb)`), always continue appending via the UFO path** for the rest of that datagram, regardless of what the size/MTU heuristic would otherwise choose:
+[`85f1bd9a7b5a`](https://github.com/torvalds/linux/commit/85f1bd9a7b5a79d5baa8bf44af19658f7bf77bfa) ("udp: consistently apply ufo or fragmentation"), authored by Willem de Bruijn and reported by Andrey Konovalov, enforces the invariant explicitly in both `__ip_append_data()` and `__ip6_append_data()`: **once an SKB is GSO (`skb_is_gso(skb)`), always continue appending via the UFO path** for the rest of that datagram, regardless of what the size/MTU heuristic would otherwise choose:
 
 ```c
 if ((skb && skb_is_gso(skb)) ||
@@ -318,7 +318,7 @@ if ((skb && skb_is_gso(skb)) ||
         err = ip_ufo_append_data(...);
 ```
 
-The `skb_queue_len(queue) <= 1` condition additionally ensures the non-UFO fragmentation path is only chosen on the *first* call of a sequence, not switched into partway through. A related change in `udp_send_skb()` also stops honoring `sk->sk_no_check_tx` (checksum-disable) once a packet is already GSO, since a GSO SKB must carry a partial checksum. The fix landed in mainline in August 2017 and was backported to stable kernels; Debian shipped it as DSA-3981.
+The `skb_queue_len(queue) <= 1` condition handles the reverse direction: once a datagram has already been split across more than one SKB by the fragmentation path, UFO is no longer considered, so the path cannot switch *into* UFO partway through either. A related change in `udp_send_skb()` also stops honoring `sk->sk_no_check_tx` (checksum-disable) once a packet is already GSO, since a GSO SKB must carry a partial checksum. The fix landed in mainline in August 2017 and was backported to stable kernels; Debian shipped it as DSA-3981.
 
 ### What it taught us
 
@@ -337,13 +337,13 @@ The `skb_queue_len(queue) <= 1` condition additionally ensures the non-UFO fragm
 
 | Pattern | SACK panic | SegmentSmack | Challenge-ACK | Netfilter x_tables | AF_PACKET | UFO path-switch |
 |---------|:----------:|:-------------:|:--------------:|:-------------------:|:----------:|:-----------------:|
-| Remotely triggerable, no local access needed | Yes | Yes | Yes | No | No | Partial |
+| Remotely triggerable, no local access needed | Yes | Yes | Yes | No | No | No |
 | Root cause is an integer/width assumption | Yes | No | No | No | Yes | Yes |
 | Found via fuzzing (syzkaller) or automated tooling | No | No | No | Partial | No | Yes |
 | Capability check defeated by user namespaces | No | No | No | Yes | Yes | No |
 | Fix added an explicit cap/invariant, not just a patch to one call site | Yes | Yes | Yes | Yes | Yes | Yes |
 
-Two-thirds of these cases are reachable by an attacker who has never authenticated to anything — they only need to be able to route packets to the target, which is the defining characteristic of network-stack bugs as a category. The other third (Netfilter x_tables and AF_PACKET) are nominally "local," but both are gated by capabilities (`CAP_NET_ADMIN`, `CAP_NET_RAW`) that unprivileged user namespaces hand out routinely, which is why both ended up cited as container-escape primitives rather than filed away as low-severity local bugs.
+Half of these cases are reachable by an attacker who has never authenticated to anything — they only need to be able to route packets to the target, which is the defining characteristic of network-stack bugs as a category. The other half (Netfilter x_tables, AF_PACKET, and the UDP UFO bug) require local execution, but all three are gated only by capabilities (`CAP_NET_ADMIN`, `CAP_NET_RAW`, or an ordinary `sendmsg()` sequence) that are either trivially available or handed out routinely by unprivileged user namespaces — which is why the first two ended up cited as container-escape primitives rather than filed away as low-severity local bugs.
 
 The other recurring shape is **an assumption that held for years until an adversary specifically targeted it**: a 16-bit segment counter, a per-second reset boundary, a per-entry padding write, a signed cast, a per-call path decision — each was locally reasonable and had shipped for anywhere from months (SegmentSmack) to fifteen years (Netfilter x_tables) before someone deliberately constructed the input that broke the assumption. Fuzzing (syzkaller, in the UFO case) and dedicated security research (Netflix, Project Zero, academic researchers) each found different corners of this space; neither alone would have caught all six.
 
@@ -367,7 +367,7 @@ The other recurring shape is **an assumption that held for years until an advers
 - [git.kernel.org: 967c05aee439](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=967c05aee439e6e5d7d805e195b3a20ef5c433d6) and [5f3e2bf008c2](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5f3e2bf008c2221478101ee72f5cb4654b9fc363) — "tcp: enforce tcp_min_snd_mss in tcp_mtu_probing()" and the sysctl that backs it
 - [LWN: The TCP SACK panic](https://lwn.net/Articles/791409/) — Jake Edge's coverage of CVE-2019-11477/78/79
 - [NVD: CVE-2018-5390](https://nvd.nist.gov/vuln/detail/CVE-2018-5390) — SegmentSmack CVE record
-- [git.kernel.org: 1a4f14bab186](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1a4f14bab1868b443f0dd3c55b689a478f82e72) — "Merge branch 'tcp-robust-ooo'", the SegmentSmack fix series
+- [git.kernel.org: 1a4f14bab186](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1a4f14bab1868b443f0dd3c55b689a478f82e72e) — "Merge branch 'tcp-robust-ooo'", the SegmentSmack fix series
 - [LWN: CVE-2018-5390 and "embargoes"](https://lwn.net/Articles/762512/) — Jake Edge's coverage of the SegmentSmack disclosure
 - [NVD: CVE-2016-5696](https://nvd.nist.gov/vuln/detail/CVE-2016-5696) — TCP challenge-ACK side channel CVE record
 - [git.kernel.org: 75ff39ccc1bd](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=75ff39ccc1bd5d3c455b6822ab09e533c551f758) — "tcp: make challenge acks less predictable"
@@ -377,7 +377,7 @@ The other recurring shape is **an assumption that held for years until an advers
 - [Andy Nguyen: CVE-2021-22555: Turning \x00\x00 into 10000$](https://google.github.io/security-research/pocs/linux/cve-2021-22555/writeup.html) — the primary-source exploit writeup, including the kCTF container-escape use
 - [LWN: CVE-2021-22555: Turning \x00\x00 into 10000$](https://lwn.net/Articles/862955/) — LWN's brief on Nguyen's writeup
 - [NVD: CVE-2017-7308](https://nvd.nist.gov/vuln/detail/CVE-2017-7308) — AF_PACKET TPACKET_V3 CVE record
-- [GitHub mirror: 2b6867c2ce76](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e) — "net/packet: fix overflow in check for priv area size"
+- [GitHub mirror: 2b6867c2ce76](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e2) — "net/packet: fix overflow in check for priv area size"
 - [Project Zero: Exploiting the Linux kernel via packet sockets](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html) — Andrey Konovalov's writeup of CVE-2017-7308
 - [NVD: CVE-2017-1000112](https://nvd.nist.gov/vuln/detail/CVE-2017-1000112) — UDP UFO path-switch CVE record
-- [GitHub mirror: 85f1bd9a7b5a](https://github.com/torvalds/linux/commit/85f1bd9a7b5a79d5baa8bf44af19658f7bf77bf) — "udp: consistently apply ufo or fragmentation"
+- [GitHub mirror: 85f1bd9a7b5a](https://github.com/torvalds/linux/commit/85f1bd9a7b5a79d5baa8bf44af19658f7bf77bfa) — "udp: consistently apply ufo or fragmentation"
