@@ -95,7 +95,7 @@ Exploitation in the wild followed quickly and is well documented:
 
 - **CISA** [added CVE-2022-0847 to the Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) on **April 25, 2022**, seven weeks after disclosure, with a federal remediation deadline of May 16, 2022.
 - **Google's [Android Security Bulletin for May 2022](https://source.android.com/docs/security/bulletin/2022-05-01)** lists CVE-2022-0847 (component: `pipes`, EoP, High, bug A-220741611) and flags it under "There are indications that the following may be under limited, targeted exploitation." Kellermann had reproduced the bug on a Google Pixel 6 the day after reporting it.
-- **Exploit-DB** carries entry [50808](https://www.exploit-db.com/exploits/50808), "Linux Kernel 5.8 < 5.16.11 — Local Privilege Escalation (DirtyPipe)," published March 8, 2022 — the day after public disclosure. NVD's reference list additionally tags three Packet Storm entries as `Exploit`, covering SUID-binary hijack variants.
+- **Exploit-DB** carries entry [50808](https://www.exploit-db.com/exploits/50808), "Linux Kernel 5.8 < 5.16.11 — Local Privilege Escalation (DirtyPipe)," published March 8, 2022 — the day after public disclosure. NVD's reference list additionally tags three Packet Storm entries as `Exploit`, one of them a SUID-binary hijack variant and the other two generic local-privilege-escalation writeups of the same bug.
 
 The rough analogy is CVE-2016-5195, Dirty COW, which Kellermann invokes in the name — but he is explicit that this one "is easier to exploit," and it is: Dirty COW needed a race window, this needs four syscalls in a fixed order.
 
@@ -148,7 +148,7 @@ The rest of the timeline, from Kellermann's disclosure:
 | 2022-02-28 | `linux-distros` notified |
 | 2022-03-07 | Public disclosure |
 
-Four days from private report to shipped stable kernels; sixteen days to public disclosure. Because the fix is a two-line initializer with no behavioral risk, there were no follow-up regressions to walk back — a rare case where the corrective patch needed no corrections.
+Three days from private report to shipped stable kernels; fifteen days to public disclosure. Because the fix is a two-line initializer with no behavioral risk, there were no follow-up regressions to walk back — a rare case where the corrective patch needed no corrections.
 
 There is no meaningful runtime mitigation. `splice()` and `pipe()` are unprivileged core syscalls used by ordinary software, and the bug needs neither capabilities nor namespaces; blocking the syscalls via [seccomp BPF](../seccomp.md) protects only sandboxed processes that opt in. Patching was the only real answer, which is exactly why CISA attached a three-week federal deadline to it.
 

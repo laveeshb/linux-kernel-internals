@@ -20,7 +20,7 @@ A single missing `buf->flags = 0;`, dormant for six years across two unrelated r
 
 ### [The fs_context Legacy Parameter Overflow](war-stories/fscontext-overflow.md)
 **January 2022 · CVE-2022-0185 · CVSS 8.4**
-A bounds check written as a subtraction instead of a sum underflowed in unsigned arithmetic, and `unshare -Urm` was all it took to reach it from an unprivileged account. Two independent teams weaponized it into a Kubernetes pod escape within days, one of them for a $31,337 bounty.
+A bounds check written as a subtraction instead of a sum underflowed in unsigned arithmetic, and `unshare -Urm` was all it took to reach it from an unprivileged account. One team weaponized it into a Kubernetes pod escape within days for a $31,337 bounty; a second, independent exploit targeting a different distribution followed a week later.
 
 ### [Stale ptracer Credentials](war-stories/stale-ptracer-creds.md)
 **July 2019 · CVE-2019-13272 · CVSS 7.8**
