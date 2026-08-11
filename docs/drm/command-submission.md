@@ -56,7 +56,7 @@ The chunk IDs are what carry the actual meaning:
 #define AMDGPU_CHUNK_ID_CP_GFX_SHADOW		0x0a
 ```
 
-An **IB chunk** (`struct drm_amdgpu_cs_chunk_ib`) is the command buffer itself — but note what it actually contains: `va_start` (a GPU *virtual* address to begin executing at), `ib_bytes`, and `ip_type`/`ip_instance`/`ring` naming which hardware engine to run on. The kernel never reads the packets at that address; it just needs the buffers to be resident and the page tables to be right, which is exactly the isolation model the [overview](README.md) describes. **`BO_HANDLES`** is the residency list. **`DEPENDENCIES`** names fences to wait for by `(ctx_id, ip_type, ip_instance, ring, handle)` — amdgpu's own per-context sequence numbers, the same values earlier submissions got back in `cs_out.handle`. The **`SYNCOBJ_*`** chunks are the driver-independent equivalent: `SYNCOBJ_IN` for fences to wait on, `SYNCOBJ_OUT` for fences to signal, with the `TIMELINE_` variants adding a `point` for timeline `drm_syncobj`s.
+An **IB chunk** (`struct drm_amdgpu_cs_chunk_ib`) is the command buffer itself — but note what it actually contains: `va_start` (a GPU *virtual* address to begin executing at), `ib_bytes`, and `ip_type`/`ip_instance`/`ring` naming which hardware engine to run on. On the graphics and compute rings the kernel never reads the packets at that address; it just needs the buffers to be resident and the page tables to be right, which is exactly the isolation model the [overview](README.md) describes. (UVD/VCE video rings are the exception: `amdgpu_cs_patch_jobs()` — next in the call sequence below — actually parses or in-place patches those command streams, since that hardware needs it.) **`BO_HANDLES`** is the residency list. **`DEPENDENCIES`** names fences to wait for by `(ctx_id, ip_type, ip_instance, ring, handle)` — amdgpu's own per-context sequence numbers, the same values earlier submissions got back in `cs_out.handle`. The **`SYNCOBJ_*`** chunks are the driver-independent equivalent: `SYNCOBJ_IN` for fences to wait on, `SYNCOBJ_OUT` for fences to signal, with the `TIMELINE_` variants adding a `point` for timeline `drm_syncobj`s.
 
 `amdgpu_cs_ioctl()` (`drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c`) runs the whole thing as a fixed pipeline, and the function names read like a table of contents:
 
@@ -65,7 +65,7 @@ An **IB chunk** (`struct drm_amdgpu_cs_chunk_ib`) is the command buffer itself �
 	r = amdgpu_cs_pass1(&parser, data);                     /* copy chunks in, allocate jobs */
 	r = amdgpu_cs_pass2(&parser);                           /* interpret each chunk */
 	r = amdgpu_cs_parser_bos(&parser, data);                /* lock + validate the BO list */
-	r = amdgpu_cs_patch_jobs(&parser);
+	r = amdgpu_cs_patch_jobs(&parser);                      /* parse/patch IBs -- UVD/VCE only */
 	r = amdgpu_cs_vm_handling(&parser);                     /* page-table updates */
 	r = amdgpu_cs_sync_rings(&parser);                      /* collect dependencies */
 	r = amdgpu_cs_submit(&parser, data);                    /* arm + push to the scheduler */
@@ -75,7 +75,7 @@ The two-pass split exists because pass 1 has to know how many distinct engines t
 
 ### What a "job" is
 
-`amdgpu_job_alloc()` bottoms out in `drm_sched_job_init()`, which is where a driver-private submission becomes a scheduler-visible object. That is the definition of a job worth holding on to: **a job is one unit of work that the scheduler hands to the driver's `run_job()` callback, that carries its own list of dependency fences, and whose completion is represented by a fence other code can wait on.** (The deprecated `drm_sched_resubmit_jobs()` can call `run_job()` a second time for the same job — its own kerneldoc warns that doing so "violates dma_fence rules"; see [timeout detection and recovery](#timeout-detection-and-recovery) below.) Everything hardware-specific stays in the driver's containing struct (amdgpu's `struct amdgpu_job` embeds `struct drm_sched_job base` as its first member, the same embedding pattern GEM uses for buffer objects).
+`amdgpu_job_alloc()` bottoms out in `drm_sched_job_init()`, which is where a driver-private submission becomes a scheduler-visible object. That is the definition of a job worth holding on to: **a job is one unit of work that the scheduler hands to the driver's `run_job()` callback, that carries its own list of dependency fences, and whose completion is represented by a fence other code can wait on.** (The deprecated `drm_sched_resubmit_jobs()` can call `run_job()` a second time for the same job — the `run_job()` kerneldoc warns that doing so "violates dma_fence rules"; see [timeout detection and recovery](#timeout-detection-and-recovery) below.) Everything hardware-specific stays in the driver's containing struct (amdgpu's `struct amdgpu_job` embeds `struct drm_sched_job base` as its first member, the same embedding pattern GEM uses for buffer objects).
 
 ## `struct dma_fence`, in detail
 
@@ -110,7 +110,7 @@ That property is what makes fence *deduplication* cheap. `drm_sched_job_add_depe
 
 ### Signaling
 
-`struct dma_fence_ops` is small, and only two callbacks are mandatory (`get_driver_name` and `get_timeline_name`, both purely for debugging output). The interesting one is optional:
+`struct dma_fence_ops` is small, and only two callbacks are mandatory (`get_driver_name` and `get_timeline_name`, both informational — surfaced through `SYNC_IOC_FILE_INFO` as well as debug output). The interesting one is optional:
 
 ```c
 // include/linux/dma-fence.h
@@ -150,7 +150,7 @@ Because a fence created by one driver can be waited on by a completely different
 
 > *Fences must complete in a reasonable time. Fences which represent kernels and shaders submitted by userspace, which could run forever, must be backed up by timeout and gpu hang recovery code. Minimally that code must prevent further command submission and force complete all in-flight fences... Ideally the driver supports gpu recovery which only affects the offending userspace context, and no other userspace submissions.*
 
-The remaining rules are locking constraints that follow from it: drivers may call `dma_fence_wait()` while holding a `dma_resv` lock, from a shrinker callback, and from an MMU notifier — so any code on the path to `dma_fence_signal()` must not take a `dma_resv` lock, must not allocate with `GFP_KERNEL`, and must not allocate with `GFP_NOFS`/`GFP_NOIO` either. `dma_fence_begin_signalling()`/`dma_fence_end_signalling()` exist to let lockdep police exactly this.
+The remaining rules are mostly locking constraints that follow from it: drivers may call `dma_fence_wait()` while holding a `dma_resv` lock, from a shrinker callback, and from an MMU notifier — so any code on the path to `dma_fence_signal()` must not take a `dma_resv` lock, must not allocate with `GFP_KERNEL`, and must not allocate with `GFP_NOFS`/`GFP_NOIO` either. `dma_fence_begin_signalling()`/`dma_fence_end_signalling()` exist to let lockdep police exactly this.
 
 The mirror image of the rule is [**"Indefinite DMA Fences"**](https://docs.kernel.org/driver-api/dma-buf.html) in the dma-buf documentation, which enumerates proposals that would have allowed a fence whose completion is under userspace's control (future fences, proxy fences, userspace fences, long-running compute batches) and explains why they are rejected: *"Mixing indefinite fences with normal in-kernel DMA fences does not work, even when a fallback timeout is included to protect against malicious userspace."* The reason a GPU hang must be *recovered from* rather than merely waited out is this contract — memory reclaim is allowed to block on a fence.
 
@@ -299,7 +299,7 @@ amdgpu's `amdgpu_cs_submit()` shows all of this with the gang wrinkle: it arms e
 **Execution side** — `drm_sched_run_job_work()`, a work item on `submit_wq`:
 
 1. **`drm_sched_select_entity()`** walks run-queues from `DRM_SCHED_PRIORITY_KERNEL` downward and returns the first ready entity. Crucially, if a run-queue has a ready entity but the scheduler is out of credits, the per-run-queue selector helper returns `ERR_PTR(-ENOSPC)` rather than `NULL`, the priority loop stops, and `drm_sched_select_entity()` hands back `NULL` — so a busy ring does not let low-priority work jump ahead of blocked high-priority work.
-2. **`drm_sched_entity_pop_job()`** resolves dependencies. It loops `drm_sched_job_dependency()`, which returns the next unsignaled fence from the job's xarray (or, once those are exhausted, calls the driver's optional `prepare_job()` callback, which can return yet another fence — amdgpu uses it to grab a VMID). For each, `drm_sched_entity_add_dependency_cb()` registers `drm_sched_entity_wakeup` and the worker returns; the entity is re-examined when that fence signals.
+2. **`drm_sched_entity_pop_job()`** resolves dependencies. It loops `drm_sched_job_dependency()`, which returns the next fence from the job's xarray (already-signaled ones fall straight through the loop below) — or, once the xarray is exhausted, calls the driver's optional `prepare_job()` callback, which can return yet another fence — amdgpu uses it to grab a VMID. For each, `drm_sched_entity_add_dependency_cb()` registers `drm_sched_entity_wakeup` and the worker returns; the entity is re-examined when that fence signals.
 3. The job is added to `sched->pending_list` and the timeout is (re)armed by `drm_sched_job_begin()`.
 4. **`sched->ops->run_job(job)`** — the driver actually writes the ring. It returns the **hardware fence**, and the scheduler *inherits* the caller's reference: *"the scheduler expects to 'inherit' its own reference to this fence from the callback. It does not invoke an extra `dma_fence_get()` on it."*
 5. `drm_sched_fence_scheduled()` stores the hardware fence as `s_fence->parent` and signals `scheduled`. A `dma_fence_add_callback()` on the hardware fence arms `drm_sched_job_done_cb()`; the `-ENOENT` case (already signaled) is handled by calling `drm_sched_job_done()` directly.
