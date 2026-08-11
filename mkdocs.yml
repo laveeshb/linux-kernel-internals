@@ -426,6 +426,7 @@ nav:
     - GPU / DRM:
       - Getting Started: drm/README.md
       - Kernel Mode Setting (KMS): drm/kms.md
+      - GEM Buffer Objects and dma-buf: drm/gem-dmabuf.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
