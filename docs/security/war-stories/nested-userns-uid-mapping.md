@@ -2,7 +2,7 @@
 
 > CVE-2018-18955 — a performance optimization kept two sorted copies of the ID map, the kernel translated only one of them, and a desktop user could read `/etc/shadow`
 
-**Disclosed:** November 16, 2018 (fixed upstream November 5, 2018) &nbsp;·&nbsp; **Reported by:** Jann Horn, Google Project Zero (issue 1712) &nbsp;·&nbsp; **CVSS:** 7.0 HIGH (NVD primary, `CVSS:3.0/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`) &nbsp;·&nbsp; **Bug present since:** 4.15 (commit `6397fac4915a`, October 2017) &nbsp;·&nbsp; **Fixed in:** 4.18.19, 4.19.2 (mainline `d2f007dbe7e4`) &nbsp;·&nbsp; **Exploit tool:** yes — Exploit-DB 45886 (Project Zero PoC) and 45915 (Metasploit module) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+**Disclosed:** November 16, 2018 (fix authored November 5, 2018; mainline in v4.20-rc2) &nbsp;·&nbsp; **Reported by:** Jann Horn, Google Project Zero (issue 1712) &nbsp;·&nbsp; **CVSS:** 7.0 HIGH (NVD primary, `CVSS:3.0/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`) &nbsp;·&nbsp; **Bug present since:** 4.15 (commit `6397fac4915a`, October 2017) &nbsp;·&nbsp; **Fixed in:** 4.18.19, 4.19.2 (mainline `d2f007dbe7e4`) &nbsp;·&nbsp; **Exploit tool:** yes — Exploit-DB 45886 (Project Zero PoC) and 45915 (Metasploit module) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Linux Security Bugs and CVEs](../war-stories.md).*
 
