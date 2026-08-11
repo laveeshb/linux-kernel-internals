@@ -1,6 +1,6 @@
 # SegmentSmack
 
-> CVE-2018-5390 — tiny, deliberately-scattered out-of-order TCP segments could pin a CPU core at 100% with less than 2 kpps of traffic
+> CVE-2018-5390 — tiny, deliberately-scattered out-of-order TCP segments could pin a CPU core at 100% with roughly 2 kpps of traffic
 
 **Disclosed:** August 6, 2018 &nbsp;·&nbsp; **Reported by:** Juha-Matti Tilli (Aalto University / Nokia Bell Labs) &nbsp;·&nbsp; **CVSS:** 7.5 HIGH &nbsp;·&nbsp; **Fixed in:** 4.9.116, 4.14.59, 4.17.11, mainline 4.18
 

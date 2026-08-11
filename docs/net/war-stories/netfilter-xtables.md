@@ -1,8 +1,8 @@
 # Netfilter x_tables Heap Overflow
 
-> CVE-2021-22555 — a 15-year-old bounds-check gap in the iptables compat layer, sitting unactioned in syzbot's inbox for 8 months, became "Turning \x00\x00 into $10000" and a Kubernetes pod escape
+> CVE-2021-22555 — a 15-year-old bounds-check gap in the iptables compat layer, sitting unactioned in syzbot's inbox for 8 months, became "Turning \x00\x00 into 10000$" and a Kubernetes pod escape
 
-**Disclosed:** July 2021 (fixed April 2021) &nbsp;·&nbsp; **Reported by:** syzbot (August 2020, unanswered) and Andy Nguyen, Google (April 2021) &nbsp;·&nbsp; **CVSS:** 8.3 HIGH &nbsp;·&nbsp; **Bug present since:** 2.6.19-rc1 (2006)
+**Disclosed:** July 2021 (fixed April 2021) &nbsp;·&nbsp; **Reported by:** syzbot (August 2020, unanswered) and Andy Nguyen, Google (April 2021) &nbsp;·&nbsp; **CVSS:** 8.3 HIGH (Google's CNA score) / 7.8 HIGH (NVD primary) &nbsp;·&nbsp; **Bug present since:** 2.6.19-rc1 (2006)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 

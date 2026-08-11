@@ -9,20 +9,20 @@ Six incidents below, each with its own page: root-cause analysis grounded in the
 ## The six incidents
 
 ### [The TCP SACK Panic](war-stories/sack-panic.md)
-**June 2019 · CVE-2019-11477/78/79 · CVSS 7.5**
+**June 2019 · CVE-2019-11477/78/79 · CVSS 7.5 (all three)**
 A remote peer could crash any Linux TCP endpoint by overflowing a 16-bit segment counter with a crafted sequence of SACK blocks. The fix itself then collided with legitimate high-throughput and small-buffer workloads twice more before it stopped causing production stalls.
 
 ### [SegmentSmack](war-stories/segmentsmack.md)
 **August 2018 · CVE-2018-5390 · CVSS 7.5**
-Tiny, deliberately-scattered out-of-order TCP segments could pin a CPU core at 100% with less than 2 kilopackets/second of traffic. The public disclosure process became its own controversy, chronicled in detail on LWN.
+Tiny, deliberately-scattered out-of-order TCP segments could pin a CPU core at 100% with roughly 2 kilopackets/second of traffic. The public disclosure process became its own controversy, chronicled in detail on LWN.
 
 ### [The TCP Challenge-ACK Side Channel](war-stories/challenge-ack.md)
 **August 2016 · CVE-2016-5696 · CVSS 4.8**
 A global rate-limit counter, meant purely as an internal implementation detail, let an off-path attacker infer TCP sequence numbers by watching how much of the shared quota a victim connection consumed.
 
 ### [Netfilter x_tables Heap Overflow](war-stories/netfilter-xtables.md)
-**Fixed April 2021, disclosed July 2021 · CVE-2021-22555 · CVSS 8.3**
-A 15-year-old bounds-check gap, sitting unanswered in a syzbot report for 8 months, became "Turning \x00\x00 into $10000" and a real Kubernetes pod escape once someone built an exploit chain for it.
+**Fixed April 2021, disclosed July 2021 · CVE-2021-22555 · CVSS 8.3 (Google) / 7.8 (NVD)**
+A 15-year-old bounds-check gap, sitting unanswered in a syzbot report for 8 months, became "Turning \x00\x00 into 10000$" and a real Kubernetes pod escape once someone built an exploit chain for it.
 
 ### [AF_PACKET TPACKET_V3 Privilege Escalation](war-stories/af-packet.md)
 **March 2017 · CVE-2017-7308 · CVSS 7.8**
