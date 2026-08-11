@@ -112,13 +112,13 @@ static void ptrace_link(struct task_struct *child, struct task_struct *new_paren
 
 `current_cred()` — the credentials of whichever process is actually executing the syscall that requests the ptrace relationship — replaces `__task_cred(new_parent)` unconditionally. For `PTRACE_ATTACH` this is a no-op, since `current` and `new_parent` were already the same process. For `PTRACE_TRACEME` it's the actual fix: the recorded credentials now belong to the child making the request, not the parent it's asking to be traced by, so a later privilege change in the parent can no longer retroactively upgrade a ptrace relationship the child itself established while unprivileged. It also sidesteps the RCU/`get_cred()` lifetime issue, since `current_cred()` needs no RCU dereference at all.
 
-The commit carries `Fixes: 64b875f7ac8a` and `Acked-by: Oleg Nesterov <oleg@redhat.com>` — Nesterov being one of ptrace's longtime maintainers — but **no `Link:` trailer**, and no pre-merge public LKML/lore.kernel.org review thread exists for this patch — its first appearance on a public list was July 8, as one patch in each of Greg Kroah-Hartman's five stable-review series, four days after the merge. It was handled privately and merged directly: Linus committed it to mainline on July 4, it shipped in the v5.2 release on July 7, and Jann Horn's Project Zero writeup followed on July 17 — the fix itself was in public git history nearly two weeks before the CVE, the writeup, and the distro advisories caught up to it.
+The commit carries `Fixes: 64b875f7ac8a` and `Acked-by: Oleg Nesterov <oleg@redhat.com>` — Nesterov being one of ptrace's longtime maintainers — but **no `Link:` trailer**, and no pre-merge public LKML/lore.kernel.org review thread exists for this patch — its first appearance on a public list was July 8, as one patch in each of Greg Kroah-Hartman's five stable-review series, four days after the merge. It was handled privately and merged directly: Linus committed it to mainline on July 4, it shipped in the v5.2 release on July 7, and Jann Horn's Project Zero report went public on July 17 — the fix itself was in public git history nearly two weeks before the CVE, the writeup, and the distro advisories caught up to it.
 
 The fix landed in mainline for 5.2 and was backported within a week to 5.1.17, 4.19.58, 4.14.133, 4.9.185, 4.4.185, and later 3.16.71 — a wide stable-tree spread reflecting how long-lived the bug was (present in mainline since 4.10, but `64b875f7ac8a` carried `Cc: stable`, so the vulnerable code reached the 4.4, 4.9 and 3.16 stable trees too).
 
 ```bash
 # Interim mitigation while unpatched: only scope 3 blocks PTRACE_TRACEME unconditionally
-sysctl -w kernel.yama.ptrace_scope=3   # 0/1 do not stop this bug (1 = Ubuntu/Debian default,
+sysctl -w kernel.yama.ptrace_scope=3    # 0/1 do not stop this bug (1 = Ubuntu/Debian default,
                                         # restricts PTRACE_ATTACH only); 2 rejects TRACEME only
                                         # when the parent lacks CAP_SYS_PTRACE. Setting 3 is irreversible
                                         # until reboot; lower values can still be changed either way.
@@ -147,7 +147,7 @@ sysctl -w kernel.yama.ptrace_scope=3   # 0/1 do not stop this bug (1 = Ubuntu/De
 
 - [NVD: CVE-2019-13272](https://nvd.nist.gov/vuln/detail/CVE-2019-13272) — CVSS 3.1 7.8 HIGH, published July 17, 2019
 - [git.kernel.org: 6994eefb0053](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=6994eefb0053799d2e07cd140df6c2ea106c41ee) — "ptrace: Fix ->ptracer_cred handling for PTRACE_TRACEME"
-- [git.kernel.org: 64b875f7ac8a](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64b875f7ac8a5d60a4e191479299e931ee949b67) — "ptrace: Capture the ptracer's creds not PT_PTRACE_CAP" (2016), the commit whose `PTRACE_TRACEME` handling this bug fixed
+- [git.kernel.org: 64b875f7ac8a](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64b875f7ac8a5d60a4e191479299e931ee949b67) — "ptrace: Capture the ptracer's creds not PT_PTRACE_CAP" (2016), the commit whose `PTRACE_TRACEME` handling this bug's fix corrected
 - [Google Project Zero: Issue 1903](https://project-zero.issues.chromium.org/issues/42450993) — Jann Horn's original report, including the polkit `pkexec` exploitation path (formerly `bugs.chromium.org/p/project-zero/issues/detail?id=1903`)
 - [CISA: Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — CVE-2019-13272 added December 10, 2021
 - [Exploit-DB 47133](https://www.exploit-db.com/exploits/47133), [47163](https://www.exploit-db.com/exploits/47163), [50541](https://www.exploit-db.com/exploits/50541) — Horn's original report and PoC (47133), plus two derivatives: bcoles's automated helper-targeting version of it (47163, 2019-07-24) and Ujas Dhami's modification of bcoles's (50541, 2021-11-23)
