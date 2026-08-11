@@ -6,7 +6,7 @@ The bugs on this page live in a different part of the trust model than most of t
 
 What makes this territory distinctive is *how* that happens. Only one of these four is a classic memory-safety failure found by KASAN on a fuzzed input. Three are quieter than that: a struct field that keeps a stale value from a previous owner, a derived copy taken a few lines before the source it was copied from changed, a credential pointer captured from the wrong process entirely, and still trusted after that process's privileges changed. The fourth is a one-line arithmetic mistake, but even that one only matters because Linux's unprivileged user-namespace model hands an ordinary desktop user a namespace-scoped `CAP_SYS_ADMIN` that the vulnerable code was never audited against. Capabilities, credentials, and namespaces are exactly the primitives this page's bugs corrupt — which is also exactly what makes them dangerous: a bug in `net/` usually crashes something, a bug here usually hands over root.
 
-There's a second recurring pattern worth calling out before the incidents themselves: unlike several of the openly-debated fixes on the [network stack's war-stories page](../net/war-stories.md), every fix below went through the kernel's private `security@kernel.org` process before it ever reached a public list. Where a real LKML or lore.kernel.org discussion thread exists for a fix, each page below cites and quotes it; where none does — which is the norm here, not the exception — the page says so explicitly rather than inventing a debate that never happened.
+There's a second recurring pattern worth calling out before the incidents themselves: unlike several of the openly-debated fixes on the [network stack's war-stories page](../net/war-stories.md), every fix below was reviewed privately under embargo before it ever reached a public list — via `security@kernel.org` for three of them, and through a distributor-coordinated channel for the fs_context overflow. Where a real LKML or lore.kernel.org discussion thread exists for a fix, each page below cites and quotes it; where none does — which is the norm here, not the exception — the page says so explicitly rather than inventing a debate that never happened.
 
 Each incident below has its own page: root-cause analysis grounded in the actual patches, real primary sourcing (NVD, CISA's KEV catalog, Exploit-DB, and whatever mailing-list record actually exists), and a no-blame retrospective on the design decisions that made the bug possible.
 
@@ -41,7 +41,7 @@ A performance optimization kept two sorted copies of a namespace's ID mapping ta
 | An automated fuzzer (syzbot) found it first, independently, and went unanswered | No | Yes | No | No |
 | Published exploit tool exists (PoC or Metasploit module) | Yes | Yes | Yes | Yes |
 | Confirmed active exploitation (CISA KEV) | Yes | Yes | Yes | No |
-| Fix reviewed privately via security@kernel.org, no substantive public LKML debate | Yes | Yes | Yes | Yes |
+| Fix reviewed privately under embargo, no substantive public LKML debate | Yes | Yes | Yes | Yes |
 
 "Partial" on the first row means no *capability* is checked, but the bug still needs a specific structural precondition to be present — a privileged parent process for the ptrace bug, a namespace nested at least two levels deep with more than five mapped ID ranges for the UID-mapping bug. Dirty Pipe is the outlier that needed none of that: ordinary read access to a target file, on a kernel built any time between 2020 and February 2022, was the entire precondition.
 
@@ -53,7 +53,7 @@ Three of the four have been confirmed under real-world active exploitation by CI
 
 ## See also
 
-- [LSM Framework](lsm.md) — the hook architecture none of these four bugs went through, because each operates below or around the LSM layer (DAC, credentials, ptrace's own permission model)
+- [LSM Framework](lsm.md) — the hook layer that sits alongside these bugs rather than in front of them: `security_ptrace_traceme()` is an LSM hook, but the decisions these bugs got wrong live in the DAC/credential/capability layers beneath it
 - [Linux Capabilities](capabilities.md) — the privilege-splitting model that `CAP_SYS_ADMIN`-in-a-namespace and privilege-dropping-then-exec both depend on being sound
 - [Credentials and User Namespaces](credentials.md) — `struct cred`, its lifecycle, and the RCU/reference-counting discipline two of these bugs violated
 - [User Namespaces and uid Mapping](user-namespaces.md) — the unprivileged-namespace mechanism that turns "requires CAP_SYS_ADMIN" into "requires nothing" for two of these four bugs
