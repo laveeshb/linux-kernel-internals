@@ -466,12 +466,12 @@ nav:
         - Network Buffer Tuning: net/net-buffer-tuning.md
       - War Stories:
         - Network War Stories: net/war-stories.md
-        - The TCP SACK Panic: net/war-stories/sack-panic.md
-        - SegmentSmack: net/war-stories/segmentsmack.md
         - The Challenge-ACK Side Channel: net/war-stories/challenge-ack.md
-        - Netfilter x_tables Heap Overflow: net/war-stories/netfilter-xtables.md
         - AF_PACKET Privilege Escalation: net/war-stories/af-packet.md
         - UDP UFO Path-Switch Corruption: net/war-stories/udp-ufo.md
+        - SegmentSmack: net/war-stories/segmentsmack.md
+        - The TCP SACK Panic: net/war-stories/sack-panic.md
+        - Netfilter x_tables Heap Overflow: net/war-stories/netfilter-xtables.md
     - BPF/eBPF:
       - Getting Started: bpf/README.md
       - Architecture & Program Types: bpf/bpf-overview.md
