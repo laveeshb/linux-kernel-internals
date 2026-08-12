@@ -110,7 +110,7 @@ What did change, structurally, is that this batch marks the point where the veri
 ## See also
 
 - [BPF Verifier](../bpf-verifier.md) — how the verifier models register values and why a wrong constant poisons everything downstream
-- [Architecture & Program Types](../bpf-overview.md) — the BPF instruction set, including the `BPF_ALU` / `BPF_ALU64` split at the heart of this bug
+- [Architecture & Program Types](../bpf-overview.md) — the eBPF instruction format and register model this bug's `MOV` sits in
 - [The jmp32 Bounds Regression](jmp32-bounds.md) — the same failure mode (verifier model diverging from run-time value) a little over two years later
 - [Unprivileged BPF Off by Default](unprivileged-bpf-off.md) — the sysctl this bug's exploitability depended on
 - [Kernel Hardening](../../security/kernel-hardening.md) — the mitigation layer that local privilege escalations like this one have to get through

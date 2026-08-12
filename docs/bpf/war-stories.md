@@ -63,9 +63,9 @@ The first row is the page's spine. Four of the five bugs are the same disagreeme
 
 ## See also
 
-- [BPF Verifier](bpf-verifier.md) — register state tracking, tnums, path exploration, and dead-code elimination: the machinery every bug on this page lives inside
-- [Architecture & Program Types](bpf-overview.md) — the BPF instruction set, including the `BPF_ALU` / `BPF_ALU64` split behind the 2017 bug
-- [BPF Maps](bpf-maps.md) — array maps, whose index handling the 2018 Spectre mitigation rewrote
+- [BPF Verifier](bpf-verifier.md) — register state tracking, bounds, path exploration, and dead-code elimination: the machinery every bug on this page lives inside
+- [Architecture & Program Types](bpf-overview.md) — the eBPF instruction format, registers, and program types: the vocabulary the 2017 bug is written in
+- [BPF Maps](bpf-maps.md) — array maps and the other map types the pointers these bugs forge are aimed at
 - [Linux Capabilities](../security/capabilities.md) — `CAP_BPF` and the privilege split that gave administrators an option between "root" and "anyone"
 - [Kernel Hardening](../security/kernel-hardening.md) — where default-off knobs and speculation mitigations sit in the wider picture
 - [Security War Stories](../security/war-stories.md) — local privilege escalations in the capabilities/namespaces/credentials layer, with a very different KEV profile
