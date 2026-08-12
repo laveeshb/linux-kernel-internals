@@ -122,4 +122,4 @@ What did change, structurally, is that this batch marks the point where the veri
 - [GitHub mirror: 484611357c19](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) — "bpf: allow access into map value arrays" (v4.9), the commit named by the fix's `Fixes:` tag
 - [oss-security: Linux >=4.9: eBPF memory corruption bugs](https://www.openwall.com/lists/oss-security/2017/12/21/2) — Jann Horn's December 21, 2017 announcement of all eight verifier bugs, with per-bug technical descriptions
 - [Exploit-DB 44298](https://www.exploit-db.com/exploits/44298), [45010](https://www.exploit-db.com/exploits/45010), and [45058](https://www.exploit-db.com/exploits/45058) — three catalogued local-root exploits; 45058 is the Metasploit module `exploit/linux/local/bpf_sign_extension_priv_esc`
-- [CISA: Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — does not list CVE-2017-16995
+- [CISA: Known Exploited Vulnerabilities Catalog](https://nvd.nist.gov/vuln/detail/CVE-2017-16995) — does not list CVE-2017-16995

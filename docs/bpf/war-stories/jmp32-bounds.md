@@ -140,4 +140,4 @@ That is the right design, and it is also the commit named in the `Fixes:` tags o
 - [GitHub mirror: 3f50f132d840](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking", the design that superseded both, in the same release
 - [lore.kernel.org: `[PATCH bpf-next 0/3] Fix __reg_bound_offset32 handling`](https://lore.kernel.org/all/20200330160324.15259-1-daniel@iogearbox.net/) — the three-patch thread and Starovoitov's two-word reply
 - [oss-security: CVE-2020-8835](https://www.openwall.com/lists/oss-security/2020/03/30/3) — Steve Beattie's announcement, March 30, 2020; the Pwn2Own attribution, the 5.4-stable backport hash, and the sysctl reachability note
-- [CISA: Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — does not list CVE-2020-8835
+- [CISA: Known Exploited Vulnerabilities Catalog](https://nvd.nist.gov/vuln/detail/CVE-2020-8835) — does not list CVE-2020-8835
