@@ -3,7 +3,7 @@
 > A hung-GPU recovery worker allocated memory while holding the very lock the job-running thread needed, and that allocation triggered a shrinker that waited on the fences the stuck job would have signaled
 
 Landed
-:   March 2026 (Linux 7.1)
+:   April 2026 (Linux 7.1)
 
 Driver
 :   msm (Qualcomm Adreno)
@@ -56,6 +56,7 @@ drm_sched_main+0x514/0x938
 And the recovery worker, itself blocked waiting on a fence inside memory reclaim, while still holding that same mutex:
 
 ```
+...
 task:gpu-worker state:D stack:0 pid:154 ppid:2 flags:0x00000008
 Call trace:
 ...

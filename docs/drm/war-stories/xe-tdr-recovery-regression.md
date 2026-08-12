@@ -3,7 +3,7 @@
 > A fix for one TDR bug on Intel Lunar Lake regressed a second time, and the fix for *that* regression crashed the kernel — three commits, twenty months, one driver
 
 Landed
-:   October 2024 – June 2026 (three-commit chain)
+:   October 2024 – July 2026 (three-commit chain)
 
 Driver
 :   Intel Xe (Lunar Lake and later)
@@ -34,7 +34,7 @@ The revised handler now silently errored out an unstarted job instead of ever tr
 
 That fix itself had a sharp edge, caught in review: an unstarted job on a queue that was *already* banned had to be left alone. Clearing the ban or forcing a GT reset on an intentionally-banned queue would resurrect userspace work the kernel had deliberately killed, and could turn a single bad queue into a GT-reset storm. The v3 revision added that carve-out explicitly.
 
-Two days after `770031ec2312` landed, it produced a crash of its own. [`d42df9dce7b3`](https://github.com/torvalds/linux/commit/d42df9dce7b374079c5c41691bd62d8765768a80) ("drm/xe: wedge from the timeout handler only after releasing the queue", June 12, 2026) quotes the fault directly:
+Two days after Rodrigo Vivi wrote `770031ec2312`, it produced a crash of its own. [`d42df9dce7b3`](https://github.com/torvalds/linux/commit/d42df9dce7b374079c5c41691bd62d8765768a80) ("drm/xe: wedge from the timeout handler only after releasing the queue", June 12, 2026) quotes the fault directly:
 
 ```
 Oops: general protection fault ... 0x6b6b6b6b6b6b6c3b

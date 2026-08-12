@@ -13,15 +13,15 @@ The other two are policy, not bugs: two changes to how `drm_sched` decides *whic
 Ordered reverse chronologically by when the fix landed — newest first.
 
 ### [The Xe TDR Recovery Regression Chain](war-stories/xe-tdr-recovery-regression.md)
-**October 2024 – June 2026 · not a CVE**
-A fix for one Xe TDR bug on Lunar Lake regressed unstarted-job recovery twenty months later; the fix for *that* regression then dereferenced freed job memory, two days after landing. Three commits, one function; the last two each carry a `Fixes:` tag pointing at the one before them.
+**October 2024 – July 2026 · not a CVE**
+A fix for one Xe TDR bug on Lunar Lake regressed unstarted-job recovery twenty months later; the fix for *that* regression then dereferenced freed job memory, written two days later. Three commits, one function; the last two each carry a `Fixes:` tag pointing at the one before them.
 
 ### [The Scheduler Fairness Evolution](war-stories/scheduler-fairness-evolution.md)
 **Linux 6.2 (2022) → Linux 7.2 (2026) · not a CVE**
 Round robin starved entities with long job queues. FIFO fixed that and starved low-priority entities under sustained high-priority load instead. Fair scheduling, borrowing CFS's virtual-runtime model, is the current answer to both.
 
 ### [The msm GPU Recovery/Shrinker Deadlock](war-stories/msm-shrinker-deadlock.md)
-**March 2026 (Linux 7.1) · not a CVE**
+**April 2026 (Linux 7.1) · not a CVE**
 A GPU-hang recovery worker allocated memory for a crash dump while holding the lock the stuck ring's job thread needed — and that allocation triggered a shrinker that waited on the exact fence the stuck job would have signaled.
 
 ### [The `drm_sched_entity_kill_jobs_cb` Lockdep Deadlock](war-stories/entity-kill-jobs-deadlock.md)
