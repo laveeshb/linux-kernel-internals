@@ -484,6 +484,14 @@ nav:
       - libbpf and Skeletons: bpf/libbpf.md
       - BPF Ring Buffer: bpf/bpf-ringbuf.md
       - BPF Networking (TC, cgroup, sockmap): bpf/bpf-networking.md
+      - War Stories:
+        - BPF War Stories: bpf/war-stories.md
+        - Spectre in the BPF Verifier: bpf/war-stories/spectre-verifier.md
+        - 32-Bit Unsigned Bounds Propagation: bpf/war-stories/alu32-unsigned-bounds.md
+        - Unprivileged BPF Off by Default: bpf/war-stories/unprivileged-bpf-off.md
+        - ALU32 Bitwise Bounds Tracking: bpf/war-stories/alu32-bitwise-bounds.md
+        - The jmp32 Bounds Regression: bpf/war-stories/jmp32-bounds.md
+        - Sign Extension in check_alu_op(): bpf/war-stories/sign-extension.md
   - Isolation & Security:
     - categories/isolation-security.md
     - Cgroups & Namespaces:
