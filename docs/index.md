@@ -51,7 +51,12 @@ The kernel has extensive API documentation, but understanding the *rationale* re
 - [Block Layer (block/)](block/README.md) — the path from a filesystem request to a physical device
 - [I/O Patterns (io/)](io/README.md) — buffered vs. direct, sync vs. async, and the tradeoffs between them
 - [io_uring (io-uring/)](io-uring/README.md) — the ring-based interface for high-performance asynchronous I/O
+
+**Devices & Drivers**
+
 - [Drivers (drivers/)](drivers/README.md) — the device model and how drivers bind to hardware
+- [USB (usb/)](usb/README.md) — the host-scheduled, hot-pluggable peripheral bus: descriptors, endpoints, and URBs
+- [GPU / DRM (drm/)](drm/README.md) — the graphics and display stack: KMS modesetting, GEM buffers, and command submission
 
 **Networking & BPF**
 
