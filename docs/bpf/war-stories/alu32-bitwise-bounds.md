@@ -122,5 +122,5 @@ The fix reached mainline in v5.13-rc4 and the 5.12.4, 5.11.21, and 5.10.37 stabl
 - [GitHub mirror: 049c4e13714e](https://github.com/torvalds/linux/commit/049c4e13714ecbca567b4d5f6d563f05d431c80e) — "bpf: Fix alu32 const subreg bound tracking on bitwise operations", the fix, with before/after verifier traces
 - [GitHub mirror: 3f50f132d840](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking" (v5.7-rc1), the first `Fixes:` target
 - [GitHub mirror: 2921c90d4718](https://github.com/torvalds/linux/commit/2921c90d471889242c24cff529043afb378937fa) — "bpf: Fix a verifier failure with xor" (v5.10-rc1), the second `Fixes:` target, which copied the flawed shortcut into a new function
-- [oss-security: CVE-2021-3490](https://www.openwall.com/lists/oss-security/2021/05/11/11) — Thadeu Lima de Souza Cascardo's announcement, May 11, 2021, crediting Manfred Paul and noting no LTS backport was needed
+- [oss-security: CVE-2021-3490](https://www.openwall.com/lists/oss-security/2021/05/11/11) — Thadeu Lima de Souza Cascardo's announcement, May 11, 2021, crediting Manfred Paul and noting the introducing commits never reached the older LTS series
 - [CISA: Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — does not list CVE-2021-3490

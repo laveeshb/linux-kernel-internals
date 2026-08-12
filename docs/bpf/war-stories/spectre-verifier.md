@@ -31,7 +31,7 @@ Three and a half years later, that gap was the bug.
 
 The verifier enumerates only paths that are reachable in the architectural machine. If it can prove a branch is always taken, it follows the taken side and discards the other. Under speculation, the CPU may execute the discarded side anyway.
 
-Daniel Borkmann's fix commit opens with a six-instruction program that makes this concrete:
+Daniel Borkmann's fix commit opens with a six-line program that makes this concrete:
 
 ```
 // r0 = pointer to a map array entry
@@ -107,7 +107,7 @@ In `check_cond_jmp_op()`, both the `pred == 1` and `pred == 0` cases now call it
 
 The commit gives two reasons for marking the pushed branch's state as *speculative* rather than pushing it unlabelled: so that dead-code elimination can still sanitize those instructions with `jmp-1`s afterwards, and so that paths walked in the non-speculative domain are not pruned by earlier walks of the speculative domain.
 
-**The commit also documents the alternative that was considered and rejected**, which is unusually candid for a security fix. The other option was to record a `BPF_JMP_TAKEN` state plus a direction encoding (always-goto, always-fall-through, unknown) in `aux->alu_state`, and reject programs that mix directions — which would have rejected ordinary constructs like `if (...) { x = 0; } else { x = 1; }` followed by `if (x == 1)`. Borkmann lists two downsides: valid programs doing no pointer arithmetic would be broken, and path pruning would have to be disabled for unprivileged programs. Pushing the speculative branch avoids both.
+**The commit also documents the alternative that was considered and rejected**, which is unusually candid for a security fix. The other option was to record a `BPF_JMP_TAKEN` state plus a direction encoding (always-goto, always-fall-through, unknown) in `aux->alu_state`, and reject programs that mix directions — which would have rejected ordinary constructs like `if (...) { x = 0; } else { x = 1; }` followed by `if (x == 1)`. Borkmann lists two downsides: valid programs doing no pointer arithmetic would potentially be rejected, and path pruning would have to be disabled for unprivileged programs. Pushing the speculative branch avoids both.
 
 Corbet's assessment of the changelog, in the LWN writeup: *"the changelog for this patch is an outstanding example of how to document a vulnerability and its fix; it's worth reading in full."*
 

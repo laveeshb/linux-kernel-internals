@@ -53,7 +53,7 @@ The reachability caveat is in the fix commit itself:
 
 > Starting with v4.14, this is exploitable by unprivileged users as long as the `unprivileged_bpf_disabled` sysctl isn't set.
 
-The bug was introduced in v4.9 by [`484611357c19`](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", Josef Bacik, September 2016) — but only became reachable from an unprivileged process in 4.14, which is what turned a verifier defect into a privilege escalation.
+The bug was introduced in v4.9 by [`484611357c19`](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", Josef Bacik, September 2016) — but, per the fix commit, only became exploitable by unprivileged users starting with v4.14, which is what turned a verifier defect into a privilege escalation.
 
 ## Why it happened
 
@@ -100,7 +100,7 @@ What did change, structurally, is that this batch marks the point where the veri
 
 **Signed-to-unsigned promotion at a function boundary deserves an explicit cast even when the default is right.** `__mark_reg_known(reg, insn->imm)` relies on the reader knowing that `imm` is `s32`, that the parameter is `u64`, and that sign extension is intended. Writing the intended conversion out — as the fix does with `(u32)` on one side — makes the two cases distinguishable at the call site instead of at the language-standard level.
 
-**A verifier bug's severity is set by who can reach the verifier.** This defect shipped in v4.9 and was a privilege escalation from v4.14, because that is when the relevant path became reachable without privileges. The code did not change; the exposure did. That relationship is exactly what the [unprivileged-BPF-off-by-default](unprivileged-bpf-off.md) change would eventually act on, three and a half years later.
+**A verifier bug's severity is set by what an unprivileged program can build on top of it.** This defect shipped in v4.9 and was a privilege escalation from v4.14 — the fix commit states that boundary without explaining it, and the offending line did not change in between. The code did not change; the exposure did. That relationship is exactly what the [unprivileged-BPF-off-by-default](unprivileged-bpf-off.md) change would eventually act on, three and a half years later.
 
 **Systematic adversarial review finds bug *classes*, not bugs.** Eight verifier bugs in one announcement, from one researcher, in one pass. The individual fixes are each a few lines. The finding that mattered was that the verifier's integer arithmetic had never been examined by someone actively trying to break it.
 

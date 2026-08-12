@@ -96,7 +96,7 @@ The corrected version does nothing the verifier wasn't already doing. So [`f2d67
 
 The commit message even shows the reverted verifier correctly rejecting Trosinenko's reproducer.
 
-**The "significantly more complex approach" arrived in the same series.** [The three-patch posting](https://lore.kernel.org/all/20200330160324.15259-1-daniel@iogearbox.net/) to `bpf@vger.kernel.org` on March 30, 2020 was Borkmann's revert plus two patches by **Jann Horn**. Horn's [`604dca5e3af1`](https://github.com/torvalds/linux/commit/604dca5e3af1db98bd123b7bfc02b017af99e3a0) ("bpf: Fix tnum constraints for 32-bit comparisons") diagnoses the original defect in one sentence:
+**A replacement implementation arrived in the same series.** [The three-patch posting](https://lore.kernel.org/all/20200330160324.15259-1-daniel@iogearbox.net/) to `bpf@vger.kernel.org` on March 30, 2020 was Borkmann's revert plus two patches by **Jann Horn**. Horn's [`604dca5e3af1`](https://github.com/torvalds/linux/commit/604dca5e3af1db98bd123b7bfc02b017af99e3a0) ("bpf: Fix tnum constraints for 32-bit comparisons") diagnoses the original defect in one sentence:
 
 > However, the implementation from `581738a681b6` didn't compute the tnum constraint based on the fixed operand, but instead derives it from the arithmetic-range-based tracking.
 
@@ -106,7 +106,7 @@ Alexei Starovoitov's entire public reply to the series:
 
 > Applied. Thanks
 
-**And then the fix was itself replaced, within the same merge window.** John Fastabend's [`3f50f132d840`](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) ("bpf: Verifier, do explicit ALU32 bounds tracking") was authored the same day and landed in the same release, v5.7-rc1. It deletes Horn's `set_upper_bound()`/`set_lower_bound()` and abandons the tnum-abuse approach entirely, giving every register a genuine second set of 32-bit bounds (`s32_min_value`, `s32_max_value`, `u32_min_value`, `u32_max_value`) instead of encoding 32-bit knowledge into the tnum.
+**And then the fix was itself replaced, within the same merge window — by the work Borkmann's revert had already footnoted as "currently being worked."** John Fastabend's [`3f50f132d840`](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) ("bpf: Verifier, do explicit ALU32 bounds tracking") was authored the same day and landed in the same release, v5.7-rc1. It deletes Horn's `set_upper_bound()`/`set_lower_bound()` and abandons the tnum-abuse approach entirely, giving every register a genuine second set of 32-bit bounds (`s32_min_value`, `s32_max_value`, `u32_min_value`, `u32_max_value`) instead of encoding 32-bit knowledge into the tnum.
 
 That is the right design, and it is also the commit named in the `Fixes:` tags of [CVE-2021-3490](alu32-bitwise-bounds.md) and [CVE-2021-31440](alu32-unsigned-bounds.md) a year later. The direct lineage runs: a precision improvement → a CVE → a revert plus a proper implementation → a better proper implementation → two more CVEs.
 

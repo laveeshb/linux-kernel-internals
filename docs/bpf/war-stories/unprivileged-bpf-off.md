@@ -22,7 +22,7 @@ The runtime switch for it was `/proc/sys/kernel/unprivileged_bpf_disabled`, and 
 
 `extra1 == extra2 == 1` means the only value the handler would accept was 1. You could turn unprivileged BPF off; you could never turn it back on without rebooting. And the compiled-in default was 0 — on.
 
-A partial answer had already shipped a year earlier. [`2c78ee898d8f`](https://github.com/torvalds/linux/commit/2c78ee898d8f10ae6fb2fa23a3fbaec96b1b7366) ("bpf: Implement CAP_BPF", May 2020) split the verifier's single `allow_ptr_leaks` flag into four — `allow_ptr_leaks`, `bypass_spec_v1`, `bypass_spec_v4`, `bpf_capable` — so that a process could be granted the ability to load BPF programs without also being granted the ability to bypass speculative-execution mitigations. That gave administrators a middle setting between "root" and "anyone." It did not change what happened on a machine where nobody had configured anything.
+A partial answer had already landed a year earlier. [`2c78ee898d8f`](https://github.com/torvalds/linux/commit/2c78ee898d8f10ae6fb2fa23a3fbaec96b1b7366) ("bpf: Implement CAP_BPF", merged May 2020) split the verifier's single `allow_ptr_leaks` flag into four — `allow_ptr_leaks`, `bypass_spec_v1`, `bypass_spec_v4`, `bpf_capable` — so that a process could be granted the ability to load BPF programs without also being granted the ability to bypass speculative-execution mitigations. That gave administrators a middle setting between "root" and "anyone." It did not change what happened on a machine where nobody had configured anything.
 
 ## The trigger
 
@@ -30,19 +30,19 @@ The argument that produced this change is older than the change, and LWN documen
 
 > A recent discussion has made it clear, though, that the goal of opening up BPF to unprivileged users has been abandoned as unachievable, and that further work in that direction will not be accepted by the BPF maintainer.
 
-BPF maintainer Alexei Starovoitov's position, quoted in the article:
-
-> When we say 'unprivileged bpf' we really mean arbitrary malicious bpf program. It's been a constant source of pain. The constant blinding, randomization, verifier speculative analysis, all spectre v1, v2, v4 mitigations are simply not worth it. It's a lot of complex kernel code without users. There is not a single use case to allow arbitrary malicious bpf program to be loaded and executed.
-
-Andy Lutomirski pushed back, and the disagreement is worth preserving because it was never actually resolved on the merits — it was resolved by shipping a knob. Lutomirski's objection:
+Andy Lutomirski's objection is worth preserving because the disagreement was never actually resolved on the merits — it was resolved by shipping a knob:
 
 > I hope not. There are a couple setsockopt uses right now, and and seccomp will surely want it someday. And the bpf-inside-container use case really is unprivileged bpf -- containers are, in many (most?) cases, explicitly not trusted by the host.
 
-Starovoitov's counter, per LWN, was that "Linux has become a single-user system" where anybody who can run code at all can escape containment and get root. Lutomirski's counter-counter: "There aren't major unprivileged eBPF users because the kernel support isn't there."
+BPF maintainer Alexei Starovoitov's reply opened by asserting that "Linux has become a single-user system" where anybody who can run any code at all can break out of containment and obtain root privileges, and went on:
+
+> When we say 'unprivileged bpf' we really mean arbitrary malicious bpf program. It's been a constant source of pain. The constant blinding, randomization, verifier speculative analysis, all spectre v1, v2, v4 mitigations are simply not worth it. It's a lot of complex kernel code without users. There is not a single use case to allow arbitrary malicious bpf program to be loaded and executed.
+
+Lutomirski's counter-counter: "There aren't major unprivileged eBPF users because the kernel support isn't there."
 
 Corbet ends the 2019 article without picking a side, but names the stakes precisely:
 
-> At its core, it's a fundamental difference of opinion over whether a Linux system can ever be truly hardened against an unprivileged user. If the answer is "no", then there is little point in maintaining a lot of complex code in the BPF subsystem to try to effect that hardening. Accepting that answer, though, is tantamount to saying that the Linux privilege model just doesn't work in the end.
+> At its core, it's a fundamental difference of opinion over whether a Linux system can ever be truly hardened against an unprivileged user. If the answer is "no", then there is little point in maintaining a lot of complex code in the BPF subsystem to try to effect that hardening. Accepting that answer, though, is tantamount to saying that the Linux privilege model just doesn't work in the end: the combination of software bugs and hardware vulnerabilities will always undermine it, so we might as well just give up. That would be a discouraging conclusion to say the least.
 
 Then came 2021. Within five weeks the subsystem authored fixes for [CVE-2021-31440](alu32-unsigned-bounds.md) (April 23), [CVE-2021-3490](alu32-bitwise-bounds.md) (May 10, publicly announced May 11), and [CVE-2021-33624](spectre-verifier.md) (May 28) — all reachable by an unprivileged process on a default-configured kernel.
 
@@ -134,7 +134,7 @@ The commit also points at the middle path the subsystem had already built: "Eith
 
 **Two-way switches get used; one-way switches get avoided.** The original latch was well-intentioned: once disabled, an attacker cannot re-enable it. In practice it meant an administrator who might need BPF later had to leave it on, because turning it off was irreversible without a reboot. Adding value 2 — off, but recoverable — cost one small purpose-built sysctl handler and made the safe default adoptable. The irreversible state stayed available for those who wanted it.
 
-**Capabilities are the right granularity, but only if the default is right.** `CAP_BPF` shipped in May 2020 and split BPF loading from `CAP_SYS_ADMIN` and from Spectre-mitigation bypass. It did not help a single unconfigured machine. The default is the security posture for almost everyone; the capability is the security posture for the people who read the documentation.
+**Capabilities are the right granularity, but only if the default is right.** `CAP_BPF` merged in May 2020 and split BPF loading from `CAP_SYS_ADMIN` and from Spectre-mitigation bypass. It did not help a single unconfigured machine. The default is the security posture for almost everyone; the capability is the security posture for the people who read the documentation.
 
 !!! warning "Pattern to watch for"
     Check what your kernels actually do, since this is a build-time choice your distributor makes for you, not an upstream default:

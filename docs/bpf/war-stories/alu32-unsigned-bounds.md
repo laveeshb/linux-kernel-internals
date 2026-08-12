@@ -73,7 +73,7 @@ And its diff fixes exactly one of the two adjacent blocks:
 
 The unsigned block is right there in the diff context, immediately below the change, with identical structure — and it was left alone. The signed variant was the one that had been reported, so the signed variant was the one that got fixed.
 
-Both blocks trace back to the same parent commit, `3f50f132d840`, which introduced explicit ALU32 tracking in v5.7-rc1. That commit is also the `Fixes:` target of [CVE-2021-3490](alu32-bitwise-bounds.md), disclosed eighteen days after this one's fix landed. Adding a second, parallel representation of a register's value created a whole family of "keep the two in sync" obligations, and the bugs came in one at a time.
+Both blocks trace back to the same parent commit, `3f50f132d840`, which introduced explicit ALU32 tracking in v5.7-rc1. That commit is also the `Fixes:` target of [CVE-2021-3490](alu32-bitwise-bounds.md), disclosed eighteen days after this one's fix was written. Adding a second, parallel representation of a register's value created a whole family of "keep the two in sync" obligations, and the bugs came in one at a time.
 
 ## Resolution
 
