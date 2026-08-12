@@ -1,6 +1,6 @@
 # Sequoia: The seq_file Size-Truncation Overflow
 
-> CVE-2021-33909 — a `size_t` buffer size, silently narrowed to a 32-bit `int` since the day `dentry_path()` was written, sat unreachable for seven years until a 2014 fix for an unrelated allocation-failure bug made it possible to grow a buffer large enough to trigger it — turning "make a very long directory path" into an exact, attacker-chosen out-of-bounds write
+> CVE-2021-33909 — a `size_t` buffer size, silently narrowed to a 32-bit `int` since the day `dentry_path()` was written, stayed unreachable until a 2014 fix for an unrelated allocation-failure bug made it possible to grow a buffer large enough to trigger it — and then sat unreachable-in-practice for seven more years until someone went looking, turning "make a very long directory path" into an exact, attacker-chosen out-of-bounds write
 
 Disclosed
 :   July 20, 2021 (coordinated with Red Hat, kernel security list, and linux-distros)

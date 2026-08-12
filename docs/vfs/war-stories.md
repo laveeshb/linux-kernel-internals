@@ -14,7 +14,7 @@ Copy-up read a lower file's UID/GID through the mounter's namespace mapping and 
 
 ### [Sequoia: The seq_file Size-Truncation Overflow](war-stories/sequoia-seq-file-overflow.md)
 **Disclosed July 2021, fixed in Linux 5.14 · CVE-2021-33909**
-A `size_t` buffer size, silently narrowed to a 32-bit `int` since the day `dentry_path()` was written, sat unreachable for seven years until an unrelated 2014 fix made it possible to grow a buffer large enough to trigger it — turning "make a very long directory path" into an exact, attacker-chosen out-of-bounds write.
+A `size_t` buffer size, silently narrowed to a 32-bit `int` since the day `dentry_path()` was written, stayed unreachable until an unrelated 2014 fix made it possible to grow a buffer large enough to trigger it — and then sat unreachable-in-practice for seven more years until someone went looking, turning "make a very long directory path" into an exact, attacker-chosen out-of-bounds write.
 
 ### [OverlayFS: The Capability Check That Only One Caller Made](war-stories/overlayfs-capability-bypass.md)
 **Fixed December 2020, shipped in Linux 5.11 (February 2021) · CVE-2021-3493**
@@ -37,9 +37,9 @@ The permission check for setting a namespaced capability xattr lived in the `set
 | CISA KEV-listed | Yes (Jun 2025) | No | Yes (Oct 2022) | No |
 | Public exploit tool published | Yes | Crasher PoC public; full exploit private | Yes | No |
 
-**Two of four are the same OverlayFS mistake wearing different clothes.** The UID-confusion bug and the capability-check bypass both involve copy-up acting on a value — an ownership ID, a capability xattr — that had already been through one transformation or that a sibling code path already validated, without OverlayFS's own copy-up re-confirming that validation actually held. Neither is a logic error in the classic sense; both are a *trust boundary drawn one layer too early*.
+**Two of four are the same OverlayFS mistake wearing different clothes.** The UID-confusion bug and the capability-check bypass both involve copy-up setting something security-relevant on the new upper file — an ownership ID, a capability xattr — without a security check on that specific value actually running and succeeding at copy-up time. In the UID case the mapping ran but nobody checked it hadn't silently degraded to the overflow placeholder; in the capability case the permission check never ran on that path at all. Neither is a logic error in the classic sense; both are a *trust boundary drawn one layer too early*.
 
-**The dentry livelock is the odd one out, and the only one caught by tooling before it shipped a fix.** Jaegeuk Kim's lockdep report predates the eventual CVE assignment by eight months — an independent discovery that traced the exact same root cause Red Hat's later bug report described, without either report causing the other. Sequoia and the two OverlayFS bugs were all found by researchers reading code and reasoning about attacker-controlled inputs, not by a detector firing during ordinary testing.
+**The dentry livelock is the odd one out, and the only one caught by tooling before it shipped a fix.** Jaegeuk Kim's lockdep report predates Red Hat's later bug report by eight months — an independent discovery that traced the exact same root cause, without either report causing the other. Sequoia and the two OverlayFS bugs were all found by researchers reading code and reasoning about attacker-controlled inputs, not by a detector firing during ordinary testing.
 
 **Sequoia stands alone as a pure integer-width bug, and has the longest documented dormancy of the incidents on this page that state one.** The vulnerable narrowing conversion in `dentry_path()` existed from the function's original design; it took a 2014 fix to a completely unrelated allocation-failure problem to make it reachable at all, and seven more years before anyone went looking for exactly this class of bug.
 

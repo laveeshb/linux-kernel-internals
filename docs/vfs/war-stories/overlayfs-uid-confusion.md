@@ -3,7 +3,7 @@
 > CVE-2023-0386 — OverlayFS's copy-up path never checked whether a lower file's owning UID/GID actually had a mapping in the mounter's user namespace, so an attacker could smuggle a capability-bearing file through an unprivileged overlay mount and end up with root
 
 Disclosed
-:   March 22, 2023 (kernel.org Bugzilla #217050; NVD record)
+:   March 22, 2023 (NVD record)
 
 CVSS
 :   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`)
