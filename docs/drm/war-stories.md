@@ -21,7 +21,7 @@ A fix for one Xe TDR bug on Lunar Lake regressed unstarted-job recovery twenty m
 Round robin starved entities with long job queues. FIFO fixed that and starved low-priority entities under sustained high-priority load instead. Fair scheduling, borrowing CFS's virtual-runtime model, is the current answer to both.
 
 ### [The msm GPU Recovery/Shrinker Deadlock](war-stories/msm-shrinker-deadlock.md)
-**January 2026 · not a CVE**
+**March 2026 (Linux 7.1) · not a CVE**
 A GPU-hang recovery worker allocated memory for a crash dump while holding the lock the stuck ring's job thread needed — and that allocation triggered a shrinker that waited on the exact fence the stuck job would have signaled.
 
 ### [The `drm_sched_entity_kill_jobs_cb` Lockdep Deadlock](war-stories/entity-kill-jobs-deadlock.md)

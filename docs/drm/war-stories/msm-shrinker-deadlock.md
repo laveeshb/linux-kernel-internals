@@ -3,7 +3,7 @@
 > A hung-GPU recovery worker allocated memory while holding the very lock the job-running thread needed, and that allocation triggered a shrinker that waited on the fences the stuck job would have signaled
 
 Landed
-:   January 2026
+:   March 2026 (Linux 7.1)
 
 Driver
 :   msm (Qualcomm Adreno)
@@ -42,6 +42,7 @@ The commit message also includes the hung-task dump for both blocked threads. Th
 
 ```
 INFO: task ring0:155 blocked for more than 122 seconds.
+...
 task:ring0 state:D stack:0 pid:155 ppid:2 flags:0x00000008
 Call trace:
 ...
