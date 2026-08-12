@@ -348,6 +348,12 @@ nav:
         - inotify and fanotify: vfs/inotify.md
         - Extended Attributes (xattr): vfs/xattr.md
         - procfs and sysfs: vfs/procfs-sysfs.md
+      - War Stories:
+        - VFS War Stories: vfs/war-stories.md
+        - The Dentry-Cache Walk Livelock: vfs/war-stories/dentry-cache-livelock.md
+        - "Sequoia: The seq_file Size-Truncation Overflow": vfs/war-stories/sequoia-seq-file-overflow.md
+        - "OverlayFS: UID Mapping Confusion": vfs/war-stories/overlayfs-uid-confusion.md
+        - "OverlayFS: Capability-Xattr Bypass": vfs/war-stories/overlayfs-capability-bypass.md
     - Filesystems:
       - Getting Started: filesystems/README.md
       - ext4: filesystems/ext4.md
