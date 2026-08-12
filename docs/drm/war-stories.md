@@ -14,7 +14,7 @@ Ordered reverse chronologically by when the fix landed — newest first.
 
 ### [The Xe TDR Recovery Regression Chain](war-stories/xe-tdr-recovery-regression.md)
 **October 2024 – June 2026 · not a CVE**
-A fix for one Xe TDR bug on Lunar Lake regressed unstarted-job recovery twenty months later; the fix for *that* regression then dereferenced freed job memory, two days after landing. Three commits, one function, each carrying a `Fixes:` tag pointing at the last.
+A fix for one Xe TDR bug on Lunar Lake regressed unstarted-job recovery twenty months later; the fix for *that* regression then dereferenced freed job memory, two days after landing. Three commits, one function; the last two each carry a `Fixes:` tag pointing at the one before them.
 
 ### [The Scheduler Fairness Evolution](war-stories/scheduler-fairness-evolution.md)
 **Linux 6.2 (2022) → Linux 7.2 (2026) · not a CVE**
