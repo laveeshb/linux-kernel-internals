@@ -44,6 +44,9 @@ Userspace                          Kernel
 | [BPF Verifier](bpf-verifier.md) | Safety proofs, register tracking, pointer restrictions |
 | [BTF and CO-RE](btf-core.md) | Type information, portable programs across kernel versions |
 | [libbpf and Skeletons](libbpf.md) | Userspace API, BPF skeleton workflow |
+| [BPF Ring Buffer](bpf-ringbuf.md) | `BPF_MAP_TYPE_RINGBUF`, reservation model, epoll notification |
+| [BPF Networking](bpf-networking.md) | TC, cgroup hooks, sockmap |
+| [War Stories](war-stories.md) | Verifier CVEs, Spectre in BPF, and why unprivileged BPF was turned off by default |
 
 ## Quick orientation
 
