@@ -6,7 +6,7 @@ Disclosed
 :   July 20, 2021 (coordinated with Red Hat, kernel security list, and linux-distros)
 
 Reported by
-:   Qualys Research Labs
+:   Qualys Research Team
 
 CVSS
 :   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`)
