@@ -30,7 +30,7 @@ Matthew Brost's fix, [`fe05cee4d953`](https://github.com/torvalds/linux/commit/f
 
 ## Observed behavior
 
-The revised handler now silently errored out an unstarted job instead of ever triggering a GT reset to actually recover the hardware. Rodrigo Vivi's fix nearly twenty months later, [`770031ec2312`](https://github.com/torvalds/linux/commit/770031ec2312bfab307d05db5469f24fd297e758) ("drm/xe: fix job timeout recovery for unstarted jobs and kernel queues", June 10, 2026), states the problem plainly: "A job that GuC never scheduled (never started) indicates a GuC scheduling failure; previously such jobs were silently errored out instead of triggering a GT reset to recover." Kernel queues — internal driver work, not user submissions — got no recovery path at all and had to be able to wedge the device outright once retries were exhausted, since kernel work failing silently isn't an option the way a banned user queue is.
+The revised handler now silently errored out an unstarted job instead of ever triggering a GT reset to actually recover the hardware. Rodrigo Vivi's fix nearly twenty months later, [`770031ec2312`](https://github.com/torvalds/linux/commit/770031ec2312bfab307d05db5469f24fd297e758) ("drm/xe: fix job timeout recovery for unstarted jobs and kernel queues", June 10, 2026), states the problem plainly: "A job that GuC never scheduled (never started) indicates a GuC scheduling failure; previously such jobs were silently errored out instead of triggering a GT reset to recover." For kernel queues — internal driver work, not user submissions — the fix goes further: they are "always recovered this way and wedge the device once recovery attempts are exhausted, since kernel work must not silently fail," in the commit's own words, unconditionally in a way a banned user queue's recovery isn't.
 
 That fix itself had a sharp edge, caught in review: an unstarted job on a queue that was *already* banned had to be left alone. Clearing the ban or forcing a GT reset on an intentionally-banned queue would resurrect userspace work the kernel had deliberately killed, and could turn a single bad queue into a GT-reset storm. The v3 revision added that carve-out explicitly.
 
@@ -51,7 +51,7 @@ Control then returned to the handler, which kept using the now-stale job and sch
 
 ## Resolution
 
-`d42df9dce7b3` moved the wedge call to fire only after the handler is done operating on the queue, immediately before returning `DRM_GPU_SCHED_STAT_NO_HANG`, so the teardown can no longer race the handler's own use of the job and scheduler. All three commits touch the same function, `guc_exec_queue_timedout_job()` in `drivers/gpu/drm/xe/xe_guc_submit.c`, and each carries a `Fixes:` tag pointing at the previous one in the chain.
+`d42df9dce7b3` moved the wedge call to fire only after the handler is done operating on the queue, immediately before returning `DRM_GPU_SCHED_STAT_NO_HANG`, so the teardown can no longer race the handler's own use of the job and scheduler. All three commits touch the same function, `guc_exec_queue_timedout_job()` in `drivers/gpu/drm/xe/xe_guc_submit.c`; the last two each carry a `Fixes:` tag pointing at the commit immediately before them in this chain (the first commit's own `Fixes:` tag points further back, to the original job-timeout-sampling commit this whole chain works around).
 
 ## What it taught us
 
