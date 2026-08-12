@@ -49,7 +49,7 @@ if (po->tp_version >= TPACKET_V3 &&
 
 The fix landed in mainline in March 2017 and was backported to stable kernels; distributions shipped it in their 4.10.x and earlier stable branches shortly after.
 
-Konovalov [originally posted this fix](https://lore.kernel.org/netdev/cover.1490709552.git.andreyknvl@google.com/) as part of a five-patch series addressing multiple overflow and signedness issues across the AF_PACKET ring-buffer code. Willem de Bruijn, reviewing on netdev, pushed back on the scope: "These are a lot of changes to backport to stable kernels. Can we separate the minimal patch set needed to address known overflow to send to net... and follow up with the larger cleanup to net-next." Konovalov agreed and split two of the five patches — the `tp_frame_size` checks and a reordering cleanup — out into a separate net-next series, leaving this fix and two related overflow fixes as the minimal `net` submission that actually needed to reach stable.
+Konovalov [originally posted this fix](https://lore.kernel.org/netdev/cover.1490709552.git.andreyknvl@google.com/) as part of a five-patch series addressing multiple overflow and signedness issues across the AF_PACKET ring-buffer code. Willem de Bruijn, reviewing on netdev, pushed back on the scope: "These are a lot of changes to backport to stable kernels. Can we separate the minimal patch set needed to address known overflow to send to net... and follow up with the larger cleanup to net-next." Konovalov agreed and split two of the five patches — the `tp_frame_size` checks and a reordering cleanup — out into a separate net-next series, [reposting the trimmed three-patch v2](https://lore.kernel.org/netdev/cover.1490796500.git.andreyknvl@google.com/) the next day as the minimal `net` submission that actually needed to reach stable. David Miller applied it within 24 hours.
 
 ## What it taught us
 
@@ -73,6 +73,7 @@ Konovalov [originally posted this fix](https://lore.kernel.org/netdev/cover.1490
 
 - [NVD: CVE-2017-7308](https://nvd.nist.gov/vuln/detail/CVE-2017-7308) — AF_PACKET TPACKET_V3 CVE record
 - [GitHub mirror: 2b6867c2ce76](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e2) — "net/packet: fix overflow in check for priv area size"
-- [lore.kernel.org: net/packet: fix multiple overflow issues in ring buffers](https://lore.kernel.org/netdev/cover.1490709552.git.andreyknvl@google.com/) — the cover-letter thread showing Willem de Bruijn's request to split the minimal overflow fix from the broader ring-buffer cleanup
+- [lore.kernel.org: net/packet: fix multiple overflow issues in ring buffers (v1)](https://lore.kernel.org/netdev/cover.1490709552.git.andreyknvl@google.com/) — the cover-letter thread showing Willem de Bruijn's request to split the minimal overflow fix from the broader ring-buffer cleanup
+- [lore.kernel.org: v2, the trimmed three-patch series](https://lore.kernel.org/netdev/cover.1490796500.git.andreyknvl@google.com/) — the resubmission David Miller actually merged
 - [Project Zero: Exploiting the Linux kernel via packet sockets](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html) — Andrey Konovalov's writeup of CVE-2017-7308
 - [Exploit-DB 41994](https://www.exploit-db.com/exploits/41994) and [44654](https://www.exploit-db.com/exploits/44654) — two independently catalogued local-root exploits; 44654 is a Metasploit module
