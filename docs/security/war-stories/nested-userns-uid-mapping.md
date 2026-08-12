@@ -121,7 +121,7 @@ root:!:17696:0:99999:7:::
 
 That is an unprivileged local user reading the shadow file on a stock Ubuntu 18.04 kernel, from a normal account with `uidmap` installed and subuid ranges allocated. The CVE affects every kernel from 4.15 through 4.19.1 — roughly a year of releases, covering the kernels shipped in Ubuntu 18.04 LTS, Kubuntu 18.04, Linux Mint 19 and Fedora Workstation 28, all of which the [Metasploit module](https://www.rapid7.com/db/modules/exploit/linux/local/nested_namespace_idmap_limit_priv_esc/) lists as tested targets.
 
-Public tooling followed within two weeks: the Project Zero PoC was mirrored as [Exploit-DB 45886](https://www.exploit-db.com/exploits/45886) on the disclosure date, and `exploit/linux/local/nested_namespace_idmap_limit_priv_esc` (credited to Jann Horn and bcoles) landed as [Exploit-DB 45915](https://www.exploit-db.com/exploits/45915) on November 29, 2018. Despite that, the CVE has never been added to [CISA's Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — no in-the-wild use has been confirmed.
+Public tooling followed within two weeks: the Project Zero PoC was mirrored as [Exploit-DB 45886](https://www.exploit-db.com/exploits/45886) on the disclosure date, and `exploit/linux/local/nested_namespace_idmap_limit_priv_esc` (credited to Jann Horn and bcoles) landed as [Exploit-DB 45915](https://www.exploit-db.com/exploits/45915) on November 29, 2018. Despite that, the CVE has never been added to CISA's Known Exploited Vulnerabilities catalog — [NVD's record](https://nvd.nist.gov/vuln/detail/CVE-2018-18955) shows no KEV listing — no in-the-wild use has been confirmed.
 
 ## Why it happened
 
@@ -215,4 +215,3 @@ ls -l /usr/bin/newuidmap                  # the setuid helper that grants a >1-I
 - [Exploit-DB 45886](https://www.exploit-db.com/exploits/45886) and [45915](https://www.exploit-db.com/exploits/45915) — the Project Zero proof of concept and the Metasploit module derived from it
 - [Rapid7: exploit/linux/local/nested_namespace_idmap_limit_priv_esc](https://www.rapid7.com/db/modules/exploit/linux/local/nested_namespace_idmap_limit_priv_esc/) — module documentation, including the tested distributions and the `uidmap`-package prerequisite
 - [Ubuntu: USN-3832-1](https://usn.ubuntu.com/3832-1/) — one of five Ubuntu advisories issued for this CVE
-- [CISA: Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — does *not* list CVE-2018-18955; no confirmed in-the-wild exploitation
