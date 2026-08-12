@@ -2,7 +2,7 @@
 
 > CVE-2021-33624 — the verifier only walks paths that can actually execute, so it never saw the path the branch predictor would take
 
-**Disclosed:** June 21, 2021 (oss-security; NVD record published June 23, 2021) &nbsp;·&nbsp; **Reported by:** Adam Morrison and Ofek Kirzner, and independently Benedict Schlueter and Piotr Krysiuk (per the fix commit's `Reported-by:` tags) &nbsp;·&nbsp; **CVSS:** 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`, NVD primary) &nbsp;·&nbsp; **Fixed in:** [`9183671af6db`](https://github.com/torvalds/linux/commit/9183671af6dbf60a1219371d4ed73e23f43b49db), mainline v5.13-rc7; stable 5.12.13 and 5.10.46 &nbsp;·&nbsp; **Exploit tool:** multiple proofs-of-concept were sent privately to `security@kernel.org`; NVD's reference list tags a public oss-security post as `Exploit` and links a public PoC repository. No Exploit-DB entry &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+**Disclosed:** June 21, 2021 (oss-security; NVD record published June 23, 2021) &nbsp;·&nbsp; **Reported by:** Adam Morrison and Ofek Kirzner, and independently Benedict Schlueter and Piotr Krysiuk (per the fix commit's `Reported-by:` tags) &nbsp;·&nbsp; **CVSS:** 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`, NVD primary) &nbsp;·&nbsp; **Fixed in:** [`9183671af6db`](https://github.com/torvalds/linux/commit/9183671af6dbf60a1219371d4ed73e23f43b49db), mainline v5.13-rc7; stable 5.12.13 and 5.10.46 &nbsp;·&nbsp; **Exploit tool:** multiple proofs-of-concept were sent privately to `security@kernel.org`; NVD's reference list tags a public oss-security post as `Exploit` and links a public PoC repository. No Exploit-DB entry &nbsp;·&nbsp; **Actively exploited:** no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2021-33624))
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 
@@ -138,7 +138,7 @@ The fix reached mainline in v5.13-rc7 and, per LWN, the 5.12.13 and 5.10.46 stab
 
 ## External references
 
-- [NVD: CVE-2021-33624](https://nvd.nist.gov/vuln/detail/CVE-2021-33624) — CVSS 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`), published June 23, 2021; shows no CISA KEV listing
+- [NVD: CVE-2021-33624](https://nvd.nist.gov/vuln/detail/CVE-2021-33624) — CVSS 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`), published June 23, 2021
 - [GitHub mirror: 9183671af6db](https://github.com/torvalds/linux/commit/9183671af6dbf60a1219371d4ed73e23f43b49db) — "bpf: Fix leakage under speculation on mispredicted branches", the fix, including both crafted programs and the rejected alternative design
 - [GitHub mirror: b2157399cc98](https://github.com/torvalds/linux/commit/b2157399cc9898260d6031c5bfe45fe137c1fbe7) — "bpf: prevent out-of-bounds speculation" (v4.15-rc8), the 2018 index-masking fix for the BPF side of Spectre v1
 - [GitHub mirror: 801c6058d14a](https://github.com/torvalds/linux/commit/801c6058d14a82179a7ee17a4b532cac6fad067f) — "bpf: Fix leakage of uninitialized bpf stack under speculation" (April 2021), the adjacent speculative-leak fix

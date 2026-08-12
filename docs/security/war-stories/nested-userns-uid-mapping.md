@@ -204,7 +204,7 @@ ls -l /usr/bin/newuidmap                  # the setuid helper that grants a >1-I
 
 ## External references
 
-- [NVD: CVE-2018-18955](https://nvd.nist.gov/vuln/detail/CVE-2018-18955) — CVSS 3.0 base score 7.0 HIGH, `AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`, published November 16, 2018; shows no CISA KEV listing
+- [NVD: CVE-2018-18955](https://nvd.nist.gov/vuln/detail/CVE-2018-18955) — CVSS 3.0 base score 7.0 HIGH, `AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`, published November 16, 2018
 - [git.kernel.org: d2f007dbe7e4](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d2f007dbe7e4c9583eea6eb04d60001e85c6f1bd) — "userns: also map extents in the reverse map to kernel IDs", the fix, which self-identifies as CVE-2018-18955
 - [git.kernel.org: 6397fac4915a](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=6397fac4915ab3002dc15aae751455da1a852f25) — "userns: bump idmap limits to 340", the commit named in the `Fixes:` trailer
 - [Project Zero issue 1712](https://project-zero.issues.chromium.org/issues/42450783) — Jann Horn's original report, analysis and reproducer (formerly `bugs.chromium.org/p/project-zero/issues/detail?id=1712`)

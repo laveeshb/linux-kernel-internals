@@ -2,7 +2,7 @@
 
 > CVE-2021-3490 — a comment that checked a 32-bit condition and relied on a 64-bit guarantee
 
-**Disclosed:** May 11, 2021 (oss-security) &nbsp;·&nbsp; **Reported by:** Manfred Paul (@_manfp) of the RedRocket CTF team, working with Trend Micro's Zero Day Initiative (ZDI-CAN-13590), and Thadeu Lima de Souza Cascardo of Canonical — both carried as `Reported-by:` on the fix &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); Ubuntu's secondary score is also 7.8, with a different vector (`AC:H`, `S:C`) &nbsp;·&nbsp; **Fixed in:** [`049c4e13714e`](https://github.com/torvalds/linux/commit/049c4e13714ecbca567b4d5f6d563f05d431c80e), mainline v5.13-rc4; stable 5.12.4, 5.11.21, 5.10.37 &nbsp;·&nbsp; **Exploit tool:** yes — NVD tags a public Packet Storm entry, "Linux eBPF ALU32 32-bit Invalid Bounds Tracking Local Privilege Escalation", as `Exploit`. No Exploit-DB entry &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+**Disclosed:** May 11, 2021 (oss-security) &nbsp;·&nbsp; **Reported by:** Manfred Paul (@_manfp) of the RedRocket CTF team, working with Trend Micro's Zero Day Initiative (ZDI-CAN-13590), and Thadeu Lima de Souza Cascardo of Canonical — both carried as `Reported-by:` on the fix &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); Ubuntu's secondary score is also 7.8, with a different vector (`AC:H`, `S:C`) &nbsp;·&nbsp; **Fixed in:** [`049c4e13714e`](https://github.com/torvalds/linux/commit/049c4e13714ecbca567b4d5f6d563f05d431c80e), mainline v5.13-rc4; stable 5.12.4, 5.11.21, 5.10.37 &nbsp;·&nbsp; **Exploit tool:** yes — NVD tags a public Packet Storm entry, "Linux eBPF ALU32 32-bit Invalid Bounds Tracking Local Privilege Escalation", as `Exploit`. No Exploit-DB entry &nbsp;·&nbsp; **Actively exploited:** no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2021-3490))
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 
@@ -118,7 +118,7 @@ The fix reached mainline in v5.13-rc4 and the 5.12.4, 5.11.21, and 5.10.37 stabl
 
 ## External references
 
-- [NVD: CVE-2021-3490](https://nvd.nist.gov/vuln/detail/CVE-2021-3490) — CVSS 7.8 HIGH, published June 4, 2021; the description names both introducing commits and all three stable releases; shows no CISA KEV listing
+- [NVD: CVE-2021-3490](https://nvd.nist.gov/vuln/detail/CVE-2021-3490) — CVSS 7.8 HIGH, published June 4, 2021; the description names both introducing commits and all three stable releases
 - [GitHub mirror: 049c4e13714e](https://github.com/torvalds/linux/commit/049c4e13714ecbca567b4d5f6d563f05d431c80e) — "bpf: Fix alu32 const subreg bound tracking on bitwise operations", the fix, with before/after verifier traces
 - [GitHub mirror: 3f50f132d840](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking" (v5.7-rc1), the first `Fixes:` target
 - [GitHub mirror: 2921c90d4718](https://github.com/torvalds/linux/commit/2921c90d471889242c24cff529043afb378937fa) — "bpf: Fix a verifier failure with xor" (v5.10-rc1), the second `Fixes:` target, which copied the flawed shortcut into a new function

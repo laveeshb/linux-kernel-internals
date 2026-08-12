@@ -2,7 +2,7 @@
 
 > CVE-2017-16995 — the verifier sign-extended a 32-bit immediate that the machine zero-extends, so its model of the register and the register itself disagreed from the very first instruction
 
-**Disclosed:** December 21, 2017 (oss-security) &nbsp;·&nbsp; **Reported by:** Jann Horn, Google Project Zero &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary) &nbsp;·&nbsp; **Introduced in:** [`484611357c19`](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", v4.9) &nbsp;·&nbsp; **Fixed in:** [`95a762e2c8c9`](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f), mainline v4.15-rc5 &nbsp;·&nbsp; **Exploit tool:** yes — three Exploit-DB entries, including a [Metasploit module](https://www.exploit-db.com/exploits/45058) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+**Disclosed:** December 21, 2017 (oss-security) &nbsp;·&nbsp; **Reported by:** Jann Horn, Google Project Zero &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary) &nbsp;·&nbsp; **Introduced in:** [`484611357c19`](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", v4.9) &nbsp;·&nbsp; **Fixed in:** [`95a762e2c8c9`](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f), mainline v4.15-rc5 &nbsp;·&nbsp; **Exploit tool:** yes — three Exploit-DB entries, including a [Metasploit module](https://www.exploit-db.com/exploits/45058) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2017-16995))
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 
@@ -117,7 +117,7 @@ What did change, structurally, is that this batch marks the point where the veri
 
 ## External references
 
-- [NVD: CVE-2017-16995](https://nvd.nist.gov/vuln/detail/CVE-2017-16995) — CVSS 7.8 HIGH, published December 27, 2017; shows no CISA KEV listing
+- [NVD: CVE-2017-16995](https://nvd.nist.gov/vuln/detail/CVE-2017-16995) — CVSS 7.8 HIGH, published December 27, 2017
 - [GitHub mirror: 95a762e2c8c9](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f) — "bpf: fix incorrect sign extension in check_alu_op()", the fix (7 insertions, 1 deletion)
 - [GitHub mirror: 484611357c19](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) — "bpf: allow access into map value arrays" (v4.9), the commit named by the fix's `Fixes:` tag
 - [oss-security: Linux >=4.9: eBPF memory corruption bugs](https://www.openwall.com/lists/oss-security/2017/12/21/2) — Jann Horn's December 21, 2017 announcement of all eight verifier bugs, with per-bug technical descriptions

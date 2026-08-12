@@ -86,7 +86,7 @@ sysctl kernel.unprivileged_userns_clone   # if present (some distros), 0 blocks 
 
 ## External references
 
-- [NVD: CVE-2021-22555](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) — Netfilter x_tables heap overflow CVE record; confirms the CISA KEV listing, added October 2025
+- [NVD: CVE-2021-22555](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) — Netfilter x_tables heap overflow CVE record
 - [git.kernel.org: b29c457a6511](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b29c457a6511435960115c0f548c4360d5f4801d) — "netfilter: x_tables: fix compat match/target pad out-of-bound write"
 - [lore.kernel.org: netfilter: x_tables: fix compat match/target pad out-of-bound write](https://lore.kernel.org/netfilter-devel/20210407193857.21120-1-fw@strlen.de/) — Florian Westphal's patch as posted to netfilter-devel
 - [syzbot: KASAN: slab-out-of-bounds Write in xt_compat_target_from_user](https://syzkaller.appspot.com/bug?extid=cfc0247ac173f597aaaa) — the syzbot dashboard for the original August 2020 report, showing no reply on the report thread until the fix landed eight months later
