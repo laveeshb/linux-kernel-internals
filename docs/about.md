@@ -12,6 +12,7 @@ This site pulls that reasoning together and organizes it by subsystem, so you ca
 
 - **Every claim traces to a primary source** — a specific commit on [git.kernel.org](https://git.kernel.org), an [LWN](https://lwn.net) article, or a [lore.kernel.org](https://lore.kernel.org) thread. If a claim cannot be cited, it does not belong on the site, and where something is summarized the original is one click away.
 - **Cross-references do not rot** — continuous integration fails the build on any broken internal link or anchor, so as the site grows the links between pages stay honest.
+- **Content reflects a specific kernel snapshot** — pages are fact-checked against Linux mainline as of a point-in-time commit (currently [`f5bbbfec59b4`](https://github.com/torvalds/linux/commit/f5bbbfec59b4e2fb7520a91de3df8a6174325d6a), August 2026, v7.2-rc7), updated periodically. Individual pages cite the specific kernel version each claim is true as of, so a page being slightly behind current mainline doesn't make it wrong — just possibly missing the newest development.
 
 ## Getting involved
 
