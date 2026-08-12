@@ -66,7 +66,7 @@ Kellermann's proof-of-concept, published in full in [the disclosure writeup](htt
 4. `splice()` a single byte from the target file — opened `O_RDONLY` — into the pipe, positioned just before the offset you want to overwrite. `copy_page_to_iter_pipe()` fills in a page-cache reference and leaves the stale merge bit standing.
 5. `write()` your data to the pipe. It merges into the page-cache page instead of allocating a new buffer.
 
-The exploit's own comment on the `open()` call — `O_RDONLY, // yes, read-only! :-)` — is the whole vulnerability in one line. There are only three real constraints, all documented in the PoC: the offset can't sit on a page boundary (one byte before it must be spliced in), the write can't cross a page boundary (the remainder would land in a new anonymous buffer), and the file can't be extended (the pipe never tells the page cache the file grew).
+The exploit's own comment on the `open()` call — `open(path, O_RDONLY); // yes, read-only! :-)` — is the whole vulnerability in one line. There are only three real constraints, all documented in the PoC: the offset can't sit on a page boundary (one byte before it must be spliced in), the write can't cross a page boundary (the remainder would land in a new anonymous buffer), and the file can't be extended (the pipe never tells the page cache the file grew).
 
 As Kellermann put it: it "not only works without write permissions, it also works with immutable files, on read-only btrfs snapshots and on read-only mounts (including CD-ROM mounts). That is because the page cache is always writable (by the kernel), and writing to a pipe never checks any permissions."
 
