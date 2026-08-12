@@ -22,13 +22,13 @@ The 32-bit versions each opened with a shortcut. From `scalar32_min_max_and()`:
 
 The reasoning: if both the source and destination subregisters are known constants, the operation's result is a known constant, and the 64-bit function that runs immediately afterwards will set the register to that constant — so the 32-bit function need not do anything.
 
-The same comment and the same early return appear in `scalar32_min_max_or()`. The `xor` variant is younger: [`2921c90d4718`](https://github.com/torvalds/linux/commit/2921c90d471889242c24cff529043afb378937fa) ("bpf: Fix a verifier failure with xor", v5.10-rc1) added `scalar32_min_max_xor()` months later, and it opens by copying the comment verbatim into the new function.
+A near-identical comment and the same early return appear in `scalar32_min_max_or()`. The `xor` variant is younger: [`2921c90d4718`](https://github.com/torvalds/linux/commit/2921c90d471889242c24cff529043afb378937fa) ("bpf: Fix a verifier failure with xor", v5.10-rc1) added `scalar32_min_max_xor()` months later, and it opens by copying the `or` variant's comment, adjusted only for the function name.
 
 ## The trigger
 
 The shortcut's premise does not survive contact with the function it defers to.
 
-`src_known` and `dst_known` are computed with `tnum_subreg_is_const()` — they are statements about the **low 32 bits**. But `scalar_min_max_and()` only assigns a known constant when the **full 64-bit** source and destination are known. There is a gap between the two conditions, and any register that sits in it gets its 32-bit bounds left untouched, holding whatever they held before the operation.
+`src_known` and `dst_known` are computed with `tnum_subreg_is_const()` — they are statements about the **low 32 bits**. But `scalar_min_max_and()` only assigns a known constant when the **full 64-bit** source and destination are known. There is a gap between the two conditions, and any register that sits in it gets its 32-bit bounds left stale. The generic post-pass at the end of `adjust_scalar_min_max_vals()` (`__update_reg32_bounds()`) then reconciles them against `var_off` — but it can only tighten, never widen, so it pulls the maxima down to the correct value and leaves the stale minima behind.
 
 The fix commit's example:
 
@@ -71,7 +71,7 @@ Cascardo's announcement includes one detail that materially limited blast radius
 
 ```
 Fixes: 3f50f132d840 ("bpf: Verifier, do explicit ALU32 bounds tracking")
-Fixes: 2921c90d4718 ("bpf:Fix a verifier failure with xor")
+Fixes: 2921c90d4718 ("bpf: Fix a verifier failure with xor")
 ```
 
 Five months separate them, and the second one is a fix that propagated the first one's bug into a new call site.
@@ -101,7 +101,7 @@ The fix reached mainline in v5.13-rc4 and the 5.12.4, 5.11.21, and 5.10.37 stabl
 
 **Precondition mismatches between a caller and its delegate are a silent bug class.** This function checked a 32-bit condition and relied on a function that acts on a 64-bit condition. Neither is wrong in isolation. The bug lives entirely in the space between them, which no single-function review would surface — and which no test would catch either, unless someone thought to construct a register that is constant in one half and unknown in the other.
 
-**"The other path handles it" needs to be checked, not assumed, every time the other path changes.** The comment was plausible enough to survive review three separate times, including once when it was copied into a brand-new function by a different author eight months later.
+**"The other path handles it" needs to be checked, not assumed, every time the other path changes.** The comment was plausible enough to survive review three separate times, including once when it was copied into a brand-new function by a different author five months later.
 
 **An impossible register state is a detectable invariant.** `u32_min_value > u32_max_value` cannot describe any real value. That inconsistency was visible in the verifier's own debug output the moment someone looked — and it is the kind of thing a cheap assertion over register state, run at every step of simulation, would have caught immediately regardless of which function introduced it.
 

@@ -1,8 +1,8 @@
 # The 32-Bit Unsigned Bounds Propagation Bug
 
-> CVE-2021-31440 — a fix landed five months earlier had corrected the signed half of a two-line pattern and left the unsigned half standing
+> CVE-2021-31440 — a fix landed four and a half months earlier had corrected the signed half of a two-line pattern and left the unsigned half standing
 
-**Disclosed:** May 2021 (NVD record published May 21, 2021; ZDI-CAN-13661) &nbsp;·&nbsp; **Reported by:** Manfred Paul (per the fix commit's `Reported-by:` tag), via Trend Micro's Zero Day Initiative &nbsp;·&nbsp; **CVSS:** 7.0 HIGH (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); 8.8 HIGH (`CVSS:3.0/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H`) from ZDI as secondary scorer &nbsp;·&nbsp; **Fixed in:** [`10bf4e83167c`](https://github.com/torvalds/linux/commit/10bf4e83167cc68595b85fd73bb91e8f2c086e36), mainline v5.13-rc1 &nbsp;·&nbsp; **Exploit tool:** none catalogued on Exploit-DB; NVD lists no reference tagged `Exploit` &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+**Disclosed:** May 3, 2021 ([ZDI-21-503](https://www.zerodayinitiative.com/advisories/ZDI-21-503/), ZDI-CAN-13661; NVD record published May 21, 2021) &nbsp;·&nbsp; **Reported by:** Manfred Paul (per the fix commit's `Reported-by:` tag), via Trend Micro's Zero Day Initiative &nbsp;·&nbsp; **CVSS:** 7.0 HIGH (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); 8.8 HIGH (`CVSS:3.0/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H`) from ZDI as secondary scorer &nbsp;·&nbsp; **Fixed in:** [`10bf4e83167c`](https://github.com/torvalds/linux/commit/10bf4e83167cc68595b85fd73bb91e8f2c086e36), mainline v5.13-rc1 &nbsp;·&nbsp; **Exploit tool:** none catalogued on Exploit-DB; NVD lists no reference tagged `Exploit` &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 
@@ -20,7 +20,7 @@ if (__reg64_bound_u32(reg->umax_value))
 	reg->u32_max_value = (u32)reg->umax_value;
 ```
 
-`__reg64_bound_u32(a)` is just `a > U32_MIN && a < U32_MAX` — "this value fits in 32 bits."
+`__reg64_bound_u32(a)` is just `a > U32_MIN && a < U32_MAX` — "this value sits strictly inside the 32-bit range" (the strict comparisons exclude 0 and `U32_MAX` themselves).
 
 ## The trigger
 

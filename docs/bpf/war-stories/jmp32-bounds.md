@@ -100,7 +100,7 @@ The commit message even shows the reverted verifier correctly rejecting Trosinen
 
 > However, the implementation from `581738a681b6` didn't compute the tnum constraint based on the fixed operand, but instead derives it from the arithmetic-range-based tracking.
 
-and replaces it with `set_upper_bound()` / `set_lower_bound()` helpers that build the tnum range from the comparison's actual constant operand rather than from the register's existing numeric bounds. His third patch collapsed `reg_set_min_max_inv()` into `reg_set_min_max()` with the opcode flipped, on the grounds that the asymmetry made sense for classic BPF and not for eBPF.
+and replaces it with `set_upper_bound()` / `set_lower_bound()` helpers that build the tnum range from the comparison's actual constant operand rather than from the register's existing numeric bounds. His second patch — 3/3 in the series — collapsed `reg_set_min_max_inv()` into `reg_set_min_max()` with the opcode flipped, on the grounds that the asymmetry made sense for classic BPF and not for eBPF.
 
 Alexei Starovoitov's entire public reply to the series:
 

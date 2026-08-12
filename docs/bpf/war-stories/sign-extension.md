@@ -65,7 +65,7 @@ The bug was introduced in v4.9 by [`484611357c19`](https://github.com/torvalds/l
 
 ## Resolution
 
-The fix is four lines:
+The fix is an if/else:
 
 ```diff
  			regs[insn->dst_reg].type = SCALAR_VALUE;

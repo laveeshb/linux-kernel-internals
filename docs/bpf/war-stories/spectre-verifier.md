@@ -2,7 +2,7 @@
 
 > CVE-2021-33624 — the verifier only walks paths that can actually execute, so it never saw the path the branch predictor would take
 
-**Disclosed:** June 2021 (NVD record published June 23, 2021) &nbsp;·&nbsp; **Reported by:** Adam Morrison and Ofek Kirzner, and independently Benedict Schlueter and Piotr Krysiuk (per the fix commit's `Reported-by:` tags) &nbsp;·&nbsp; **CVSS:** 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`, NVD primary) &nbsp;·&nbsp; **Fixed in:** [`9183671af6db`](https://github.com/torvalds/linux/commit/9183671af6dbf60a1219371d4ed73e23f43b49db), mainline v5.13-rc7; stable 5.12.13 and 5.10.46 &nbsp;·&nbsp; **Exploit tool:** multiple proofs-of-concept were sent privately to `security@kernel.org`; NVD's reference list tags a public oss-security post as `Exploit` and links a public PoC repository. No Exploit-DB entry &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+**Disclosed:** June 21, 2021 (oss-security; NVD record published June 23, 2021) &nbsp;·&nbsp; **Reported by:** Adam Morrison and Ofek Kirzner, and independently Benedict Schlueter and Piotr Krysiuk (per the fix commit's `Reported-by:` tags) &nbsp;·&nbsp; **CVSS:** 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`, NVD primary) &nbsp;·&nbsp; **Fixed in:** [`9183671af6db`](https://github.com/torvalds/linux/commit/9183671af6dbf60a1219371d4ed73e23f43b49db), mainline v5.13-rc7; stable 5.12.13 and 5.10.46 &nbsp;·&nbsp; **Exploit tool:** multiple proofs-of-concept were sent privately to `security@kernel.org`; NVD's reference list tags a public oss-security post as `Exploit` and links a public PoC repository. No Exploit-DB entry &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 
@@ -14,7 +14,7 @@ Spectre broke the premise underneath that. In January 2018, Alexei Starovoitov's
 
 > Under speculation, CPUs may mis-predict branches in bounds checks. Thus, memory accesses under a bounds check may be speculated even if the bounds check fails, providing a primitive for building a side channel.
 
-That patch's answer was masking. For array maps created by an unprivileged process, the allocation is rounded up to a power of two and an `index_mask` is stored alongside it; every index used to compute an element address is ANDed with that mask, in `array_map_lookup_elem()`, in the instruction sequence emitted by `array_map_gen_lookup()`, and in the update paths:
+That patch's answer was masking. Every array map stores an `index_mask` of `roundup_pow_of_two(max_entries) - 1`, and the C paths — `array_map_lookup_elem()`, the percpu variants, the update paths — AND every index with it unconditionally. For maps created by an unprivileged process, two more things happen: the allocation itself is rounded up to `index_mask + 1` so a masked index always lands in allocated memory, and the inlined instruction sequences (`array_map_gen_lookup()`, and the verifier's `bpf_tail_call` patching) emit the AND too:
 
 ```c
 /* kernel/bpf/arraymap.c, after b2157399cc98 */
