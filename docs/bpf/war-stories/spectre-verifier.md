@@ -115,7 +115,7 @@ The cost is accepted openly. LWN:
 
 > This change has the potential to block the loading of correct programs that could be run before, though it is hard to imagine real-world, non-malicious code that would include this kind of pattern. It will, of course, slow the verification process to force it to examine paths that cannot occur in normal program execution, but that's the speculative world we live in.
 
-The fix reached mainline in v5.13-rc7 and, per LWN, the 5.12.13 and 5.10.46 stable updates — but not, at the time of writing of that article, any earlier stable series.
+The fix reached mainline in v5.13-rc7 and, per LWN, the 5.12.13 and 5.10.46 stable updates — but not, at the time of writing of that article, any earlier stable series. The older LTS branches got it two months later, and it wasn't a single patch: Ovidiu Panait manually backported the whole fix stack, [six patches for 5.4](https://lore.kernel.org/all/20210805155343.3618696-1-ovidiu.panait@windriver.com/) and four for 4.19, posting each to the bpf list for a sanity check ("the fixes were manually adjusted to apply to 5.4, so copying bpf@ to see if there are any concerns") before Greg Kroah-Hartman queued them.
 
 ## What it taught us
 
@@ -143,4 +143,5 @@ The fix reached mainline in v5.13-rc7 and, per LWN, the 5.12.13 and 5.10.46 stab
 - [GitHub mirror: b2157399cc98](https://github.com/torvalds/linux/commit/b2157399cc9898260d6031c5bfe45fe137c1fbe7) — "bpf: prevent out-of-bounds speculation" (v4.15-rc8), the 2018 index-masking fix for the BPF side of Spectre v1
 - [GitHub mirror: 801c6058d14a](https://github.com/torvalds/linux/commit/801c6058d14a82179a7ee17a4b532cac6fad067f) — "bpf: Fix leakage of uninitialized bpf stack under speculation" (April 2021), the adjacent speculative-leak fix
 - [LWN: Spectre revisits BPF](https://lwn.net/Articles/860597/) — Jonathan Corbet, June 24, 2021; the walkthrough of the vulnerability, the fix, and its cost
+- [lore.kernel.org: bpf: backport fixes for CVE-2021-33624 (5.4)](https://lore.kernel.org/all/20210805155343.3618696-1-ovidiu.panait@windriver.com/) — the six-patch manual backport that brought the fix to the 5.4 LTS branch two months after mainline
 - [NVD: CVE-2017-5753](https://nvd.nist.gov/vuln/detail/CVE-2017-5753) — Spectre Variant 1, the hardware vulnerability the 2018 BPF masking patch addressed

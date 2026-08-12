@@ -22,7 +22,7 @@ The runtime switch for it was `/proc/sys/kernel/unprivileged_bpf_disabled`, and 
 
 `extra1 == extra2 == 1` means the only value the handler would accept was 1. You could turn unprivileged BPF off; you could never turn it back on without rebooting. And the compiled-in default was 0 — on.
 
-A partial answer had already landed a year earlier. [`2c78ee898d8f`](https://github.com/torvalds/linux/commit/2c78ee898d8f10ae6fb2fa23a3fbaec96b1b7366) ("bpf: Implement CAP_BPF", merged May 2020) split the verifier's single `allow_ptr_leaks` flag into four — `allow_ptr_leaks`, `bypass_spec_v1`, `bypass_spec_v4`, `bpf_capable` — so that a process could be granted the ability to load BPF programs without also being granted the ability to bypass speculative-execution mitigations. That gave administrators a middle setting between "root" and "anyone." It did not change what happened on a machine where nobody had configured anything.
+A partial answer had already landed a year earlier. [`2c78ee898d8f`](https://github.com/torvalds/linux/commit/2c78ee898d8f10ae6fb2fa23a3fbaec96b1b7366) ("bpf: Implement CAP_BPF", merged May 2020) split the verifier's single `allow_ptr_leaks` flag into four — `allow_ptr_leaks`, `bypass_spec_v1`, `bypass_spec_v4`, `bpf_capable` — so that a process could be granted the ability to load BPF programs without also being granted the ability to bypass speculative-execution mitigations. That gave administrators a middle setting between "root" and "anyone." It did not change what happened on a machine where nobody had configured anything. Unlike the default-off knob, `CAP_BPF` got the public argument in full: [Starovoitov's original posting](https://lore.kernel.org/all/20190827205213.456318-1-ast@kernel.org/) in August 2019 drew dozens of replies, and the design was reworked over later postings before merging about eight and a half months later.
 
 ## The trigger
 
@@ -52,7 +52,7 @@ Borkmann posted the knob on **May 11, 2021** — the same day CVE-2021-3490 was 
 
 It went out as a two-patch series to `bpf@vger.kernel.org`. Patch 1/2 ("bpf, kconfig: Add consolidated menu entry for bpf with core options") created `kernel/bpf/Kconfig` and pulled BPF's options together from `init/Kconfig` and `net/Kconfig` into a single `General setup → BPF subsystem` menu, because "all core BPF related options are scattered in different Kconfig locations mainly due to historic reasons." Patch 2/2 added the knob into that new menu.
 
-The [thread](https://lore.kernel.org/all/74ec548079189e4e4dffaeb42b8987bb3c852eee.1620765074.git.daniel@iogearbox.net/) drew no public replies. After two years of argument on the topic, the patch that changed the default went in without one.
+The [thread](https://lore.kernel.org/all/f23f58765a4d59244ebd8037da7b6a6b2fb58446.1620765074.git.daniel@iogearbox.net/) drew no public replies. After two years of argument on the topic, the patch that changed the default went in without one.
 
 ## Why it happened
 
@@ -158,7 +158,7 @@ The commit also points at the middle path the subsystem had already built: "Eith
 ## External references
 
 - [GitHub mirror: 08389d888287](https://github.com/torvalds/linux/commit/08389d888287c3823f80b0216766b71e17f0aba5) — "bpf: Add kconfig knob for disabling unpriv bpf by default", the kconfig option, the three-valued sysctl, and the new handler
-- [lore.kernel.org: the two-patch series](https://lore.kernel.org/all/74ec548079189e4e4dffaeb42b8987bb3c852eee.1620765074.git.daniel@iogearbox.net/) — posted May 11, 2021 to `bpf@vger.kernel.org`; no public replies
+- [lore.kernel.org: the two-patch series](https://lore.kernel.org/all/f23f58765a4d59244ebd8037da7b6a6b2fb58446.1620765074.git.daniel@iogearbox.net/) — posted May 11, 2021 to `bpf@vger.kernel.org`; no public replies
 - [GitHub mirror: 2c78ee898d8f](https://github.com/torvalds/linux/commit/2c78ee898d8f10ae6fb2fa23a3fbaec96b1b7366) — "bpf: Implement CAP_BPF" (May 2020), which split `allow_ptr_leaks` into four separate verifier permissions
 - [LWN: Reconsidering unprivileged BPF](https://lwn.net/Articles/796328/) — Jonathan Corbet, August 16, 2019; the Starovoitov/Lutomirski exchange this change eventually settled
 - [kernel.org: `unprivileged_bpf_disabled`](https://docs.kernel.org/admin-guide/sysctl/kernel.html) — the sysctl documentation this patch rewrote
