@@ -97,7 +97,7 @@ Exploitation in the wild followed quickly and is well documented:
 
 - **CISA** [added CVE-2022-0847 to the Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) on **April 25, 2022**, seven weeks after disclosure, with a federal remediation deadline of May 16, 2022.
 - **Google's [Android Security Bulletin for May 2022](https://source.android.com/docs/security/bulletin/2022-05-01)** lists CVE-2022-0847 (component: `pipes`, EoP, High, bug A-220741611) and flags it under "There are indications that the following may be under limited, targeted exploitation." Kellermann had reproduced the bug on a Google Pixel 6 the day after reporting it.
-- **Exploit-DB** carries entry [50808](https://www.exploit-db.com/exploits/50808), "Linux Kernel 5.8 < 5.16.11 — Local Privilege Escalation (DirtyPipe)," published March 8, 2022 — the day after public disclosure. NVD's reference list additionally tags three Packet Storm entries as `Exploit`, one of them a SUID-binary hijack variant and the other two generic local-privilege-escalation writeups of the same bug.
+- **Exploit-DB** carries entry [50808](https://www.exploit-db.com/exploits/50808), "Linux Kernel 5.8 < 5.16.11 - Local Privilege Escalation (DirtyPipe)," published March 8, 2022 — the day after public disclosure. NVD's reference list additionally tags three Packet Storm entries as `Exploit`, one of them a SUID-binary hijack variant and the other two generic local-privilege-escalation writeups of the same bug.
 
 The rough analogy is CVE-2016-5195, Dirty COW, which Kellermann invokes in the name — but he is explicit that this one "is easier to exploit," and it is: Dirty COW needed a race window, this needs four syscalls in a fixed order.
 
@@ -200,7 +200,7 @@ uname -r
 - [lore.kernel.org: vfs: fix uninitialized flags in splice_to_pipe()](https://lore.kernel.org/linux-fsdevel/20170216164902.GC30656@veci.piliscsaba.szeredi.hu/) — the second, near-identical fix Szeredi posted five minutes after the pull request carrying the fuse one
 - [CISA: Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — lists CVE-2022-0847 as actively exploited, added April 25, 2022, remediation due May 16, 2022
 - [Android Security Bulletin, May 2022](https://source.android.com/docs/security/bulletin/2022-05-01) — lists CVE-2022-0847 (`pipes`, EoP, High) and notes indications of "limited, targeted exploitation"
-- [Exploit-DB 50808](https://www.exploit-db.com/exploits/50808) — "Linux Kernel 5.8 < 5.16.11 — Local Privilege Escalation (DirtyPipe)", published March 8, 2022
+- [Exploit-DB 50808](https://www.exploit-db.com/exploits/50808) — "Linux Kernel 5.8 < 5.16.11 - Local Privilege Escalation (DirtyPipe)", published March 8, 2022
 - [lore.kernel.org: Linux 5.16.11](https://lore.kernel.org/stable/1645618039140207@kroah.com/) and [Linux 5.15.25](https://lore.kernel.org/stable/164561803311588@kroah.com/) — Greg Kroah-Hartman's stable release announcements carrying the fix, February 23, 2022
 - [Red Hat Bugzilla 2060795](https://bugzilla.redhat.com/show_bug.cgi?id=2060795) — the CNA's tracking bug and impact analysis
 - [kernel.org: Security bugs](https://docs.kernel.org/process/security-bugs.html) — the `security@kernel.org` process that kept the exploitability discussion off the public list until fixes shipped
