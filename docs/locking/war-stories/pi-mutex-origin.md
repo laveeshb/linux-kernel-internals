@@ -1,6 +1,6 @@
 # The PI-Mutex Origin Story
 
-> A low-priority lock holder can be starved by a medium-priority task that has nothing to do with the lock at all, indefinitely — priority-inheritance mutexes exist because a plain mutex has no way to stop this, and Linus Torvalds spent most of 2005 telling Ingo Molnar not to bother building one anyway
+> A low-priority lock holder can be starved by a medium-priority task that has nothing to do with the lock at all, indefinitely — priority-inheritance mutexes exist because a plain mutex has no way to stop this, and it took a blunt public objection from Linus Torvalds before the kernel carried a mainline implementation anyway
 
 Landed
 :   Linux 2.6.18 (September 20, 2006)
@@ -50,7 +50,7 @@ The kernel's own `pi-futex.rst` documentation describes the resulting fast path 
 
 - [Locking Overview](../README.md) — mutexes, spinlocks, and where rt_mutex fits among them
 - [The PI-Futex Fixup That Had No Answer for a Permanent Fault](pi-futex-fixup-owner-uaf.md) — a correctness bug in the machinery this page describes being built
-- [Towelroot: The Missing Check That Rooted Millions of Phones](towelroot-futex-requeue.md) — a second PI-futex correctness bug, in the requeue path
+- [Towelroot: The Missing Check on the Requeuer's Half of the Pair](towelroot-futex-requeue.md) — a second PI-futex correctness bug, in the requeue path
 
 ## External references
 

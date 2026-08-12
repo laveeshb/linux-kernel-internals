@@ -1,4 +1,4 @@
-# Towelroot: The Missing Check That Rooted Millions of Phones
+# Towelroot: The Missing Check on the Requeuer's Half of the Pair
 
 > CVE-2014-3153 — `futex_requeue()` never checked that a PI-requeue's source and destination were actually different futexes, and the identical check on the *sibling* function two years earlier hadn't been enough to catch it
 

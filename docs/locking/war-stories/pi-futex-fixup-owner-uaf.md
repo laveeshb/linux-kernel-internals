@@ -29,7 +29,7 @@ Actively exploited
 
 A PI (priority-inheritance) futex ties three things together, and the kernel's own documentation states plainly that they must never disagree: the TID written in the userspace futex word, `pi_state->owner`, and the owner field inside the attached kernel `rt_mutex`. `fixup_pi_state_owner()` exists to restore that agreement at the one place it can legitimately drift — after a fault-handling retry — before the task returns to userspace.
 
-`1b7558e457ed` ("futexes: fix fault handling in futex_lock_pi"), from 2008, gave this function its central retry pattern: write the new owner's TID into the userspace futex word, and if that write faults — because the page was swapped out or a COW fault needs resolving — drop the hash-bucket lock, call `fault_in_user_writeable()` to fault the page back in, and retry. That handled the *transient* case, which was the only case the commit's author had reason to think about: a fault that resolves once the page is back.
+`1b7558e457ed` ("futexes: fix fault handling in futex_lock_pi"), from 2008, gave this function its central retry pattern: write the new owner's TID into the userspace futex word, and if that write faults — because the page was swapped out or a COW fault needs resolving — drop the hash-bucket lock, call `futex_handle_fault()` (later renamed `fault_in_user_writeable()`) to fault the page back in, and retry. That handled the *transient* case, which was the only case the commit's author had reason to think about: a fault that resolves once the page is back.
 
 ## The trigger
 
@@ -65,6 +65,6 @@ The 2008 fix was correct about the problem it set out to solve — a real, obser
 ## External references
 
 - [GitHub mirror: 34b1a1ce1458](https://github.com/torvalds/linux/commit/34b1a1ce1458f50ef27c54e28eb9b1947012907a) — "futex: Handle faults correctly for PI futexes," the fix
-- [GitHub mirror: 1b7558e457ed](https://github.com/torvalds/linux/commit/1b7558e457ed3ec7a67e3d0da5388b445d6e6f21) — "futexes: fix fault handling in futex_lock_pi," the 2008 commit whose retry logic never covered a permanent fault
+- [GitHub mirror: 1b7558e457ed](https://github.com/torvalds/linux/commit/1b7558e457ed0de61023cfc913d2c342c7c3d9f2) — "futexes: fix fault handling in futex_lock_pi," the 2008 commit whose retry logic never covered a permanent fault
 - [oss-security: Linux Kernel local priv escalation via futexes](https://www.openwall.com/lists/oss-security/2021/01/29/1) — Marcus Meissner's CVE request, quoting the merge that introduced the fix
 - [NVD: CVE-2021-3347](https://nvd.nist.gov/vuln/detail/CVE-2021-3347) — CVE record, CVSS 7.8 HIGH, published January 29, 2021

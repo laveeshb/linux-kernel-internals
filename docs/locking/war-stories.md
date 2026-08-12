@@ -2,7 +2,7 @@
 
 > Three CVEs and one origin story, all from the same corner of the kernel — rt_mutex and PI-futexes, the priority-inheritance machinery that keeps a high-priority task from starving behind a low-priority lock holder, and the three separate ways getting that machinery's bookkeeping wrong has gone badly
 
-All three CVEs here live in the same subsystem — priority-inheritance futexes and the rt_mutex they're built on — and each is a different flavor of the same underlying hazard: rt_mutex has to keep several pieces of state (a userspace futex word, `pi_state`, the mutex's own owner field, `wait_lock`) consistent across code paths that don't all touch every piece at once. Two of the three are the mirror image of each other — a fixup path leaving state inconsistent after a fault, and a requeue path missing a check its sibling function already had. The fourth page isn't a bug at all: it's why any of this machinery exists.
+All three CVEs here live in the same subsystem — priority-inheritance futexes and the rt_mutex they're built on. Two of the three are the mirror image of each other: rt_mutex has to keep several pieces of state (a userspace futex word, `pi_state`, the mutex's own owner field) consistent across code paths that don't all touch every piece at once, and one bug left that state inconsistent after an unhandled fault while the other missed a precondition check its sibling function already had. The third CVE is a different kind of mistake entirely — a lock-discipline violation, not a state-consistency one. The fourth page isn't a bug at all: it's why any of this machinery exists.
 
 ## Incidents
 
@@ -16,7 +16,7 @@ rt_mutex's own cycle detector confirmed a genuine deadlock and responded by warn
 **Linux 5.11 (January 2021) · CVE-2021-3347**
 When the kernel couldn't write a new owner's TID back into a PI futex word, it gave up without reconciling its own rt_mutex and pi_state — and a subsequent unlock on that mismatch corrupted a waiter structure still resident on another task's kernel stack.
 
-### [Towelroot: The Missing Check That Rooted Millions of Phones](war-stories/towelroot-futex-requeue.md)
+### [Towelroot: The Missing Check on the Requeuer's Half of the Pair](war-stories/towelroot-futex-requeue.md)
 **Linux 3.15 (June 2014) · CVE-2014-3153**
 `futex_requeue()` never checked that a PI-requeue's source and destination were different futexes — the identical check on the sibling function, added two years earlier for an unrelated crash, hadn't been enough to catch it.
 
@@ -32,7 +32,7 @@ A low-priority lock holder can be starved by a medium-priority task that has not
 | Root cause: a lock held across a call that shouldn't happen while holding it | Yes | No | No | — |
 | Root cause: state left inconsistent after an unhandled failure path | No | Yes | No | — |
 | Root cause: a fix applied to one function, needed on its untouched sibling | No | No | Yes | — |
-| Years between the bug's introduction and its fix | 10 (2014→2024) | 13 (2008→2021) | 2 (2012→2014) | — |
+| Years between the bug's introduction and its fix | 10 (2014→2024) | 13 (2008→2021) | ~5 (2009→2014) | — |
 | CISA KEV-listed | No | No | Yes (May 2022) | — |
 | Public exploit tool published | No | No | Yes (Towelroot) | — |
 
@@ -40,7 +40,7 @@ A low-priority lock holder can be starved by a medium-priority task that has not
 
 **The deadlock-detector bug is the odd one out: a lock-discipline violation in error-handling code, not a state-consistency bug.** Unlike the other two, nothing about *what* the code was tracking was wrong — the mistake was scheduling with a spinlock held, in a branch whose entire job was to report that no further progress was possible. It's also the only one of the three not tied to PI-futexes at all: `CONFIG_DEBUG_RT_MUTEXES=y` kernels can hit it through any rt_mutex, not just the futex path.
 
-**None of the three CVEs here have a public exploit tool except Towelroot — and Towelroot's is one of the most consequential local root exploits the kernel has ever shipped.** Read alongside [the origin story](war-stories/pi-mutex-origin.md), there's a certain irony: the mechanism Torvalds worried was "your system is broken anyway" territory became, a decade later, the exact subsystem whose bookkeeping mistakes produced the highest-impact bug on this page.
+**None of the three CVEs here have a public exploit tool except Towelroot — and Towelroot's is one of the most consequential local root exploits the kernel has ever shipped.** Read alongside [the origin story](war-stories/pi-mutex-origin.md), there's a certain irony: the mechanism Torvalds worried was "your system is broken anyway" territory became, about eight years later, the exact subsystem whose bookkeeping mistakes produced the highest-impact bug on this page.
 
 ## See also
 

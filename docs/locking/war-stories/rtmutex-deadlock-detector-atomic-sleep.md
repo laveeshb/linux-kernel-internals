@@ -39,7 +39,7 @@ Calling `schedule()` while holding a raw spinlock is a documented invariant viol
 
 ## Why it happened
 
-The 2014 commit's own description frames its goal precisely: stop silently returning `0` on a detected cycle and instead "yell loudly and stop the task right here." That's a reasonable response to "there's no way to make progress" — but "stop the task right here" was implemented as an infinite scheduling loop, and nobody at the time traced what "right here" meant in terms of which locks were still held across that loop. The bug isn't in the decision to park the task; it's that the parking code was written inside a critical section without re-examining what state the function still held when it got there.
+The 2014 commit's own description frames its goal precisely: stop silently returning `0` on a detected cycle and instead throw a warning and park the task. A comment left in that commit's diff, above the new parking loop, put it more bluntly (typo included): "Yell lowdly and stop the task right here." That's a reasonable response to "there's no way to make progress" — but "stop the task right here" was implemented as an infinite scheduling loop, and nobody at the time traced what "right here" meant in terms of which locks were still held across that loop. The bug isn't in the decision to park the task; it's that the parking code was written inside a critical section without re-examining what state the function still held when it got there.
 
 ## Resolution
 
