@@ -74,7 +74,7 @@ But it meant the kernel had two fixes in flight at once for the same underlying 
 
 - [NVD: CVE-2017-1000112](https://nvd.nist.gov/vuln/detail/CVE-2017-1000112) — UDP UFO path-switch CVE record
 - [GitHub mirror: e89e9cf539a2](https://github.com/torvalds/linux/commit/e89e9cf539a28df7d0eb1d0a545368e9920b34ac) — "[IPv4/IPv6]: UFO Scatter-gather approach" (2005), the original implementation this bug traces back to
-- [lore.kernel.org: original UFO design posting](https://lore.kernel.org/netdev/20050526232006.60E6365005@linux.site/) — the May 2005 thread where the scatter-gather approach was chosen over David Miller's preferred `NETIF_F_FRAGLIST` alternative
+- [lore.kernel.org: original UFO design posting](https://lore.kernel.org/netdev/20050526232006.60E6365005@linux.site/) — the May–June 2005 thread where Miller pushed the `NETIF_F_FRAGLIST` alternative and the two approaches were set up as competing prototypes
 - [lore.kernel.org: Arakali's June 2005 v2 posting](https://lore.kernel.org/netdev/20050603004106.BAB6A7B990@linux.site/) and [Miller's July 2005 review](https://lore.kernel.org/netdev/20050719.142320.52167011.davem@davemloft.net/) flagging that the multi-call `MSG_MORE`/`UDP_CORK` guard broke NFS — the moment the capability this bug later exploited was kept rather than dropped
 - [GitHub mirror: 85f1bd9a7b5a](https://github.com/torvalds/linux/commit/85f1bd9a7b5a79d5baa8bf44af19658f7bf77bfa) — "udp: consistently apply ufo or fragmentation"
 - [lore.kernel.org: udp: consistently apply ufo or fragmentation](https://lore.kernel.org/netdev/20170810162919.50577-1-willemdebruijn.kernel@gmail.com/) — the netdev thread, including David Miller's same-day merge and a follow-up correctness question from Vasily Averin
