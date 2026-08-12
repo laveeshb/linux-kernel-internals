@@ -1,6 +1,6 @@
 # ALU32 Bitwise Bounds Tracking
 
-> CVE-2021-3490 — a comment that said "safe to skip, the 64-bit path handles this" was true for one of the two functions it described
+> CVE-2021-3490 — a comment that checked a 32-bit condition and relied on a 64-bit guarantee
 
 **Disclosed:** May 11, 2021 (oss-security) &nbsp;·&nbsp; **Reported by:** Manfred Paul (@_manfp) of the RedRocket CTF team, working with Trend Micro's Zero Day Initiative (ZDI-CAN-13590), and Thadeu Lima de Souza Cascardo of Canonical — both carried as `Reported-by:` on the fix &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); Ubuntu's secondary score is also 7.8, with a different vector (`AC:H`, `S:C`) &nbsp;·&nbsp; **Fixed in:** [`049c4e13714e`](https://github.com/torvalds/linux/commit/049c4e13714ecbca567b4d5f6d563f05d431c80e), mainline v5.13-rc4; stable 5.12.4, 5.11.21, 5.10.37 &nbsp;·&nbsp; **Exploit tool:** yes — NVD tags a public Packet Storm entry, "Linux eBPF ALU32 32-bit Invalid Bounds Tracking Local Privilege Escalation", as `Exploit`. No Exploit-DB entry &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
 
@@ -8,7 +8,7 @@
 
 ## Before state
 
-After [`3f50f132d840`](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) ("bpf: Verifier, do explicit ALU32 bounds tracking", v5.7-rc1), the verifier simulates every ALU operation twice: once over the 64-bit bounds, once over the separate 32-bit `{s,u}32_{min,max}_value` bounds. For the bitwise ops that means two parallel families of functions — `scalar_min_max_and()` / `scalar_min_max_or()` / `scalar_min_max_xor()`, and their `scalar32_` counterparts.
+After [`3f50f132d840`](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) ("bpf: Verifier, do explicit ALU32 bounds tracking", v5.7-rc1), the verifier simulates the arithmetic and bitwise ALU operations twice: once over the 64-bit bounds, once over the separate 32-bit `{s,u}32_{min,max}_value` bounds. For the bitwise ops that means two parallel families of functions — `scalar_min_max_and()` / `scalar_min_max_or()` / `scalar_min_max_xor()`, and their `scalar32_` counterparts.
 
 The 32-bit versions each opened with a shortcut. From `scalar32_min_max_and()`:
 
@@ -59,7 +59,7 @@ NVD's description agrees and goes one step further: "which could be turned into 
 
 A working local-privilege-escalation exploit is public: NVD's reference list carries a Packet Storm entry titled "Linux eBPF ALU32 32-bit Invalid Bounds Tracking Local Privilege Escalation," tagged `Exploit`. As of CISA's KEV catalog there is no confirmed in-the-wild exploitation — the same gap between "weaponized" and "used" that runs through most of the [network stack's war stories](../../net/war-stories.md).
 
-Cascardo's announcement includes one detail that materially limited blast radius: "There has been no backport to any upstream LTS kernel." The `and`/`or` variants were introduced in 5.7-rc1 and the `xor` variant in 5.10-rc1, and neither reached an older long-term series.
+Cascardo's announcement includes one detail that materially limited blast radius: "There has been no backport to any upstream LTS kernel." That is about backports: 5.10 is itself a long-term series and carried the bug natively (hence the 5.10.37 fix above), but the `and`/`or` variants were introduced in 5.7-rc1 and the `xor` variant in 5.10-rc1, so the older 4.19 and 5.4 long-term series never received these commits at all.
 
 ## Why it happened
 
@@ -101,7 +101,7 @@ The fix reached mainline in v5.13-rc4 and the 5.12.4, 5.11.21, and 5.10.37 stabl
 
 **Precondition mismatches between a caller and its delegate are a silent bug class.** This function checked a 32-bit condition and relied on a function that acts on a 64-bit condition. Neither is wrong in isolation. The bug lives entirely in the space between them, which no single-function review would surface — and which no test would catch either, unless someone thought to construct a register that is constant in one half and unknown in the other.
 
-**"The other path handles it" needs to be checked, not assumed, every time the other path changes.** The comment was plausible enough to survive review three separate times, including once when it was copied into a brand-new function by a different author five months later.
+**"The other path handles it" needs to be checked, not assumed, every time the other path changes.** The comment was plausible enough to survive review in three separate functions, including a brand-new one added by a different author five months later.
 
 **An impossible register state is a detectable invariant.** `u32_min_value > u32_max_value` cannot describe any real value. That inconsistency was visible in the verifier's own debug output the moment someone looked — and it is the kind of thing a cheap assertion over register state, run at every step of simulation, would have caught immediately regardless of which function introduced it.
 

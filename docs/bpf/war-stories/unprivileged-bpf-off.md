@@ -1,6 +1,6 @@
 # Unprivileged BPF Off by Default
 
-> Not a CVE — the hardening response to a decade of them, and an admission that "safely unprivileged BPF" was a goal the subsystem had stopped pursuing
+> Not a CVE — the hardening response to years of them, and an admission that "safely unprivileged BPF" was a goal the subsystem had stopped pursuing
 
 **Landed:** May 11, 2021 &nbsp;·&nbsp; **Author:** Daniel Borkmann &nbsp;·&nbsp; **Merged in:** [`08389d888287`](https://github.com/torvalds/linux/commit/08389d888287c3823f80b0216766b71e17f0aba5), mainline v5.13-rc4 &nbsp;·&nbsp; **Mechanism:** `CONFIG_BPF_UNPRIV_DEFAULT_OFF` &nbsp;·&nbsp; **Context:** [LWN 796328](https://lwn.net/Articles/796328/), "Reconsidering unprivileged BPF" (Jonathan Corbet, August 2019)
 
@@ -8,7 +8,7 @@
 
 ## Before state
 
-BPF's original ambition included a specific, load-bearing claim: that the verifier could make it safe to let an *unprivileged* user load programs into the kernel. Every other incident on this page is a bug in the machinery built to honor that claim.
+BPF's original ambition included a specific, load-bearing claim: that the verifier could make it safe to let an *unprivileged* user load programs into the kernel. Every other incident in [this series](../war-stories.md) is a bug in the machinery built to honor that claim.
 
 The runtime switch for it was `/proc/sys/kernel/unprivileged_bpf_disabled`, and it was a one-way latch. The sysctl table entry says so in a comment:
 
@@ -150,7 +150,7 @@ The commit also points at the middle path the subsystem had already built: "Eith
 
 - [BPF Verifier](../bpf-verifier.md) — including what the verifier does differently for privileged versus unprivileged loaders
 - [Linux Capabilities](../../security/capabilities.md) — the model `CAP_BPF` splits `bpf()` loading out of
-- [Spectre in the BPF Verifier](spectre-verifier.md) — one of the three 2021 CVEs that preceded this change by weeks
+- [Spectre in the BPF Verifier](spectre-verifier.md) — the third of the 2021 verifier CVEs, fixed two weeks after this knob was posted
 - [ALU32 Bitwise Bounds Tracking](alu32-bitwise-bounds.md) — publicly announced the same day this patch was posted
 - [Kernel Hardening](../../security/kernel-hardening.md) — where default-off knobs sit in the wider mitigation picture
 - [seccomp BPF](../../security/seccomp.md) — the classic-BPF user Lutomirski cited as a real unprivileged-BPF use case

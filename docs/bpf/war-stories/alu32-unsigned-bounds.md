@@ -46,7 +46,7 @@ From that point the verifier is reasoning about a register whose real run-time v
 
 The two scorers disagree meaningfully on how hard that is. NVD's primary score puts it at 7.0 with `AC:H` and unchanged scope; ZDI scored it 8.8 with `AC:L` and `S:C`. The disagreement is about attack complexity and blast radius, not about what the bug does.
 
-Unlike its sibling [CVE-2021-3490](alu32-bitwise-bounds.md), no public exploit for this one is catalogued on Exploit-DB, and NVD's reference list carries no `Exploit`-tagged entry.
+Unlike its sibling [CVE-2021-3490](alu32-bitwise-bounds.md), whose public exploit is catalogued on Packet Storm, no packaged public exploit for this one exists: NVD's reference list carries no `Exploit`-tagged entry, and there is no Exploit-DB entry.
 
 ## Why it happened
 
@@ -90,7 +90,7 @@ Both blocks trace back to the same parent commit, `3f50f132d840`, which introduc
 
 It also does one more thing worth noting: it rewrites `__reg64_bound_u32()` from an `if/return true/return false` into a plain `return a > U32_MIN && a < U32_MAX;`, matching how `b02709587ea3` had already restyled `__reg64_bound_s32()`. The commit's own words: "Also, align `__reg64_bound_u32()` similarly to `__reg64_bound_s32()` as done in `b02709587ea3` to make them uniform again." That is the fix explicitly finishing the job of the earlier one, cosmetics included.
 
-The patch carries `Reviewed-by: John Fastabend` and `Acked-by: Alexei Starovoitov`, but no `Link:` trailer to a public posting — consistent with a report handled privately before disclosure, and there is no substantive public review thread to quote. The public record is the CVE and the fix itself.
+The patch carries `Reviewed-by: John Fastabend` and `Acked-by: Alexei Starovoitov`, but no `Link:` trailer to a public posting — consistent with a report handled privately before disclosure. Neither the commit nor NVD's reference list points to a mailing-list posting, so the public record is the CVE and the fix itself.
 
 One line of the diff records the behavioral change better than any of the prose. A BPF selftest that had been asserting the verifier rejected a program with a specific message was updated:
 

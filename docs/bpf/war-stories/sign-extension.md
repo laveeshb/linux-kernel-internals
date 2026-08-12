@@ -61,7 +61,7 @@ The bug was introduced in v4.9 by [`484611357c19`](https://github.com/torvalds/l
 
 **Two instruction classes sharing one code path with different semantics.** `check_alu_op()` handles `BPF_ALU` and `BPF_ALU64` together and branches on `BPF_CLASS(insn->code)` where behavior differs. This was one of the places where behavior differed and the branch was missing.
 
-**It was one of eight.** Horn's December 2017 oss-security post is a single message enumerating eight distinct verifier bugs found in one pass, each with its own fix commit: incorrect signed bounds for `BPF_RSH`; incorrect tracking of register size truncation (CVE-2017-16996); 32-bit ALU op verification operating on 64-bit numbers while the interpreter and JIT do 32-bit arithmetic; a missing error return in `check_stack_boundary()`; missing strict alignment checks for stack pointers; branch pruning when a scalar is replaced with a pointer; and a set of integer overflows in offset arithmetic. The sign-extension bug is not an isolated slip. It is one sample from a subsystem whose arithmetic model had not yet been audited by anyone with an adversarial mindset — and Project Zero was the first to do so systematically.
+**It was one of eight.** Horn's December 2017 oss-security post is a single message enumerating eight distinct verifier bugs found in one pass, each with its own fix commit. Alongside this one: incorrect signed bounds for `BPF_RSH`; incorrect tracking of register size truncation (CVE-2017-16996); 32-bit ALU op verification operating on 64-bit numbers while the interpreter and JIT do 32-bit arithmetic; a missing error return in `check_stack_boundary()`; missing strict alignment checks for stack pointers; branch pruning when a scalar is replaced with a pointer; and a set of integer overflows in offset arithmetic. The sign-extension bug is not an isolated slip. It is one sample from a subsystem whose arithmetic model had not yet been audited by anyone with an adversarial mindset — and Project Zero was the first to do so systematically.
 
 ## Resolution
 
@@ -118,7 +118,7 @@ What did change, structurally, is that this batch marks the point where the veri
 ## External references
 
 - [NVD: CVE-2017-16995](https://nvd.nist.gov/vuln/detail/CVE-2017-16995) — CVSS 7.8 HIGH, published December 27, 2017
-- [GitHub mirror: 95a762e2c8c9](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f) — "bpf: fix incorrect sign extension in check_alu_op()", the four-line fix
+- [GitHub mirror: 95a762e2c8c9](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f) — "bpf: fix incorrect sign extension in check_alu_op()", the fix (7 insertions, 1 deletion)
 - [GitHub mirror: 484611357c19](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) — "bpf: allow access into map value arrays" (v4.9), the commit named by the fix's `Fixes:` tag
 - [oss-security: Linux >=4.9: eBPF memory corruption bugs](https://www.openwall.com/lists/oss-security/2017/12/21/2) — Jann Horn's December 21, 2017 announcement of all eight verifier bugs, with per-bug technical descriptions
 - [Exploit-DB 44298](https://www.exploit-db.com/exploits/44298), [45010](https://www.exploit-db.com/exploits/45010), and [45058](https://www.exploit-db.com/exploits/45058) — three catalogued local-root exploits; 45058 is the Metasploit module `exploit/linux/local/bpf_sign_extension_priv_esc`
