@@ -236,7 +236,7 @@ Kernel-side, `drm_mode_atomic_ioctl()` (`drivers/gpu/drm/drm_atomic_uapi.c`) wal
 - [`cc4ceb484b37`](https://github.com/torvalds/linux/commit/cc4ceb484b37b9369e0d4e8682b7ae1849ae4579) — "drm: Global atomic state handling," Daniel Vetter, July 2014: the core atomic state object
 - [lore.kernel.org: atomic, remixed](https://lore.kernel.org/dri-devel/1406497308-30733-1-git-send-email-daniel.vetter@ffwll.ch/) — the July 2014 design thread, including Rob Clark's defense of his own competing approach
 - [`d34f20d6e2f2`](https://github.com/torvalds/linux/commit/d34f20d6e2f21bd3531b969dc40913181a8ae31a) — "drm: Atomic modeset ioctl," Rob Clark, December 2014: the `DRM_IOCTL_MODE_ATOMIC` entry point
-- [lore.kernel.org: RFC: drm: Atomic modeset ioctl](https://lore.kernel.org/dri-devel/1418771141-16954-1-git-send-email-robdclark@gmail.com/) — the uAPI debate, including the rejected timestamp-based scheduling proposal
+- [lore.kernel.org: Atomic Properties (RFC: drm: Atomic modeset ioctl)](https://lore.kernel.org/dri-devel/1418771141-16954-1-git-send-email-robdclark@gmail.com/) — the uAPI debate, including the rejected timestamp-based scheduling proposal
 - [`5164f7e7ff8e`](https://github.com/torvalds/linux/commit/5164f7e7ff8ec7d41065d3862630c2ba09854328) — "drm: Rename struct drm_atomic_state to drm_atomic_commit," Maxime Ripard, April 2026
 - [LWN: "prepare for atomic/nuclear modeset/pageflip"](https://lwn.net/Articles/600369/) — Rob Clark's May 2014 infrastructure series that started the transition
 - [LWN: Atomic mode setting design overview, part 1](https://lwn.net/Articles/653071/) — Daniel Vetter, August 2015, on the legacy interface's history and limits
