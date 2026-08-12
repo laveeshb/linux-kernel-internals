@@ -37,7 +37,7 @@ For years the scheduler had one answer to a fired timeout: reset the hardware. T
 | Pattern | Xe TDR chain | Fairness evolution | msm shrinker | Kill-jobs deadlock | NO_HANG |
 |---------|:---:|:---:|:---:|:---:|:---:|
 | Root cause lives in a driver-shared `drm_sched` code path | Driver-specific | Yes | Driver-specific | Yes | Both |
-| Caught by an automated detector (lockdep, hung-task, GPF) rather than a user complaint alone | No | No | Yes | Yes | No |
+| Caught by an automated detector (lockdep, hung-task, GPF) rather than a user complaint alone | Yes | No | Yes | Yes | No |
 | Fix is itself a multi-commit chain, each fixing the previous fix | Yes | — | No | No | No |
 | Motivated by a specific, named observation tool or bug tracker | No | Yes (GPUVis) | No | Yes (Mesa #13908) | No |
 | Involves the `dma_fence` signaling-path contract | No | No | Yes | Yes | No |
