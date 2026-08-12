@@ -2,7 +2,23 @@
 
 > CVE-2016-5696 — a global rate-limit counter meant as an internal implementation detail became an off-path attacker's window into a victim's TCP connections
 
-**Disclosed:** August 2016 &nbsp;·&nbsp; **Reported by:** Yue Cao, Zhiyun Qian, et al. (UC Riverside, with Lisa Marvel, US Army Research Laboratory) &nbsp;·&nbsp; **CVSS:** 4.8 MEDIUM &nbsp;·&nbsp; **Fixed in:** mainline 4.7 &nbsp;·&nbsp; **Exploit tool:** yes ([`mountain_goat`](https://github.com/Gnoxter/mountain_goat) PoC) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+Disclosed
+:   August 2016
+
+Reported by
+:   Yue Cao, Zhiyun Qian, et al. (UC Riverside, with Lisa Marvel, US Army Research Laboratory)
+
+CVSS
+:   4.8 MEDIUM
+
+Fixed in
+:   mainline 4.7
+
+Exploit tool
+:   yes ([`mountain_goat`](https://github.com/Gnoxter/mountain_goat) PoC)
+
+Actively exploited
+:   no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 

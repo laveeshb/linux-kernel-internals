@@ -2,7 +2,23 @@
 
 > CVE-2017-7308 — a single `(int)` cast around an unsigned subtraction defeated a ring-buffer bounds check, found by syzkaller and turned into local root by Project Zero
 
-**Disclosed:** March 29, 2017 &nbsp;·&nbsp; **Reported by:** Andrey Konovalov, Google Project Zero (via syzkaller + KASAN) &nbsp;·&nbsp; **CVSS:** 7.8 HIGH &nbsp;·&nbsp; **Fixed in:** mainline March 2017, backported to 4.10.x and earlier stable branches &nbsp;·&nbsp; **Exploit tool:** yes (2 Exploit-DB entries, incl. a [Metasploit module](https://www.exploit-db.com/exploits/44654)) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+Disclosed
+:   March 29, 2017
+
+Reported by
+:   Andrey Konovalov, Google Project Zero (via syzkaller + KASAN)
+
+CVSS
+:   7.8 HIGH
+
+Fixed in
+:   mainline March 2017, backported to 4.10.x and earlier stable branches
+
+Exploit tool
+:   yes (2 Exploit-DB entries, incl. a [Metasploit module](https://www.exploit-db.com/exploits/44654))
+
+Actively exploited
+:   no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 

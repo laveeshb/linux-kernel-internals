@@ -2,7 +2,29 @@
 
 > CVE-2022-0847 — one missing `buf->flags = 0;` let any user who could *read* a file overwrite it in the page cache, including immutable files, read-only btrfs snapshots, and read-only mounts
 
-**Disclosed:** March 7, 2022 (fix merged February 22, 2022) &nbsp;·&nbsp; **Reported by:** Max Kellermann, CM4all GmbH / IONOS SE &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H` — NVD primary and Red Hat's CNA score agree) &nbsp;·&nbsp; **Bug present since:** 4.9 (2016); **exploitable since:** 5.8 (2020) &nbsp;·&nbsp; **Fixed in:** 5.16.11, 5.15.25, 5.10.102 (all released February 23, 2022) &nbsp;·&nbsp; **Exploit tool:** yes — the reporter published a working PoC in the disclosure itself &nbsp;·&nbsp; **Actively exploited:** yes — added to CISA's KEV catalog April 25, 2022 (per [NVD](https://nvd.nist.gov/vuln/detail/CVE-2022-0847))
+Disclosed
+:   March 7, 2022 (fix merged February 22, 2022)
+
+Reported by
+:   Max Kellermann, CM4all GmbH / IONOS SE
+
+CVSS
+:   7.8 HIGH (`AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H` — NVD primary and Red Hat's CNA score agree)
+
+Bug present since
+:   4.9 (2016)
+
+Exploitable since
+:   5.8 (2020)
+
+Fixed in
+:   5.16.11, 5.15.25, 5.10.102 (all released February 23, 2022)
+
+Exploit tool
+:   yes — the reporter published a working PoC in the disclosure itself
+
+Actively exploited
+:   yes — added to CISA's KEV catalog April 25, 2022 (per [NVD](https://nvd.nist.gov/vuln/detail/CVE-2022-0847))
 
 *Part of [War Stories: Linux Security Bugs and CVEs](../war-stories.md).*
 

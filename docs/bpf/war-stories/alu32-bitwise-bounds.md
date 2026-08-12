@@ -2,7 +2,23 @@
 
 > CVE-2021-3490 — a comment that checked a 32-bit condition and relied on a 64-bit guarantee
 
-**Disclosed:** May 11, 2021 (oss-security) &nbsp;·&nbsp; **Reported by:** Manfred Paul (@_manfp) of the RedRocket CTF team, working with Trend Micro's Zero Day Initiative (ZDI-CAN-13590), and Thadeu Lima de Souza Cascardo of Canonical — both carried as `Reported-by:` on the fix &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); Ubuntu's secondary score is also 7.8, with a different vector (`AC:H`, `S:C`) &nbsp;·&nbsp; **Fixed in:** [`049c4e13714e`](https://github.com/torvalds/linux/commit/049c4e13714ecbca567b4d5f6d563f05d431c80e), mainline v5.13-rc4; stable 5.12.4, 5.11.21, 5.10.37 &nbsp;·&nbsp; **Exploit tool:** yes — NVD tags a public Packet Storm entry, "Linux eBPF ALU32 32-bit Invalid Bounds Tracking Local Privilege Escalation", as `Exploit`. No Exploit-DB entry &nbsp;·&nbsp; **Actively exploited:** no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2021-3490))
+Disclosed
+:   May 11, 2021 (oss-security)
+
+Reported by
+:   Manfred Paul (@_manfp) of the RedRocket CTF team, working with Trend Micro's Zero Day Initiative (ZDI-CAN-13590), and Thadeu Lima de Souza Cascardo of Canonical — both carried as `Reported-by:` on the fix
+
+CVSS
+:   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); Ubuntu's secondary score is also 7.8, with a different vector (`AC:H`, `S:C`)
+
+Fixed in
+:   [`049c4e13714e`](https://github.com/torvalds/linux/commit/049c4e13714ecbca567b4d5f6d563f05d431c80e), mainline v5.13-rc4; stable 5.12.4, 5.11.21, 5.10.37
+
+Exploit tool
+:   yes — NVD tags a public Packet Storm entry, "Linux eBPF ALU32 32-bit Invalid Bounds Tracking Local Privilege Escalation", as `Exploit`. No Exploit-DB entry
+
+Actively exploited
+:   no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2021-3490))
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 

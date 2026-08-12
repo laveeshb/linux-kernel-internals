@@ -2,7 +2,26 @@
 
 > CVE-2017-16995 — the verifier sign-extended a 32-bit immediate that the machine zero-extends, so its model of the register and the register itself disagreed from the very first instruction
 
-**Disclosed:** December 21, 2017 (oss-security) &nbsp;·&nbsp; **Reported by:** Jann Horn, Google Project Zero &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary) &nbsp;·&nbsp; **Introduced in:** [`484611357c19`](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", v4.9) &nbsp;·&nbsp; **Fixed in:** [`95a762e2c8c9`](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f), mainline v4.15-rc5 &nbsp;·&nbsp; **Exploit tool:** yes — three Exploit-DB entries, including a [Metasploit module](https://www.exploit-db.com/exploits/45058) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2017-16995))
+Disclosed
+:   December 21, 2017 (oss-security)
+
+Reported by
+:   Jann Horn, Google Project Zero
+
+CVSS
+:   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary)
+
+Introduced in
+:   [`484611357c19`](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", v4.9)
+
+Fixed in
+:   [`95a762e2c8c9`](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f), mainline v4.15-rc5
+
+Exploit tool
+:   yes — three Exploit-DB entries, including a [Metasploit module](https://www.exploit-db.com/exploits/45058)
+
+Actively exploited
+:   no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2017-16995))
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 

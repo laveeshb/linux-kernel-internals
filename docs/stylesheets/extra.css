@@ -43,3 +43,22 @@ html { font-size: 150%; }                                              /* 125%  
 .md-typeset :not(pre) > code {
   font-size: 0.95em;
 }
+
+/* Definition lists: two-column grid (label left, value right) instead of
+   Material's default stacked layout — used for the war-stories metadata
+   block so seven facts read as seven scannable rows, not one dense line. */
+.md-typeset dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  row-gap: 0.5em;
+  column-gap: 1.2em;
+  margin: 1em 0;
+}
+.md-typeset dl dt {
+  font-weight: 600;
+  white-space: nowrap;
+  margin: 0;
+}
+.md-typeset dl dd {
+  margin: 0;
+}

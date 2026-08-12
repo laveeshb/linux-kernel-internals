@@ -2,7 +2,23 @@
 
 > CVE-2019-11477 / CVE-2019-11478 / CVE-2019-11479 — a remote peer could crash any Linux TCP endpoint with a carefully crafted sequence of SACK blocks
 
-**Disclosed:** June 17, 2019 &nbsp;·&nbsp; **Reported by:** Jonathan Looney (Netflix) &nbsp;·&nbsp; **CVSS:** 7.5 HIGH (all three) &nbsp;·&nbsp; **Fixed in:** 4.4.182, 4.9.182, 4.14.127, 4.19.52, 5.1.11 &nbsp;·&nbsp; **Exploit tool:** none published — the crafted-packet sequence is the whole attack &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+Disclosed
+:   June 17, 2019
+
+Reported by
+:   Jonathan Looney (Netflix)
+
+CVSS
+:   7.5 HIGH (all three)
+
+Fixed in
+:   4.4.182, 4.9.182, 4.14.127, 4.19.52, 5.1.11
+
+Exploit tool
+:   none published — the crafted-packet sequence is the whole attack
+
+Actively exploited
+:   no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 
