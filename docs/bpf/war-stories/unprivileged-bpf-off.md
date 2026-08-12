@@ -34,7 +34,7 @@ Andy Lutomirski's objection is worth preserving because the disagreement was nev
 
 > I hope not. There are a couple setsockopt uses right now, and and seccomp will surely want it someday. And the bpf-inside-container use case really is unprivileged bpf -- containers are, in many (most?) cases, explicitly not trusted by the host.
 
-BPF maintainer Alexei Starovoitov's reply opened by asserting that "Linux has become a single-user system" where anybody who can run any code at all can break out of containment and obtain root privileges, and went on:
+BPF maintainer Alexei Starovoitov replied that, as Corbet summarizes it, "Linux has become a single-user system" in which any code execution at all is a path to root. He continued:
 
 > When we say 'unprivileged bpf' we really mean arbitrary malicious bpf program. It's been a constant source of pain. The constant blinding, randomization, verifier speculative analysis, all spectre v1, v2, v4 mitigations are simply not worth it. It's a lot of complex kernel code without users. There is not a single use case to allow arbitrary malicious bpf program to be loaded and executed.
 
@@ -122,7 +122,7 @@ static int bpf_unpriv_handler(struct ctl_table *table, int write,
 }
 ```
 
-`locked_state` preserves the old one-way behavior for anyone who had already written 1: once permanently disabled, it stays permanently disabled. But a kernel that booted into 2 can be moved to 0 by an administrator who needs unprivileged BPF for something, and can be moved to 1 to lock it down for good. The commit's summary: "This still allows a transition of 2 -> {0,1} through an admin. Similarly, this also still keeps 1 -> {1} behavior intact."
+`locked_state` preserves the old one-way behavior for anyone who had already written 1: once permanently disabled, it stays permanently disabled. But a kernel that booted into 2 can be moved to 0 by an administrator who needs unprivileged BPF for something, and can be moved to 1 to lock it down for good. The commit's summary: "This still allows a transition of 2 -> {0,1} through an admin. Similarly, this also still keeps 1 -> {1} behavior intact, so that once set to permanently disabled, it cannot be undone aside from a reboot."
 
 The `extra1`/`extra2` bounds change from `SYSCTL_ONE`/`SYSCTL_ONE` to `SYSCTL_ZERO`/`two`, which is what makes writes of 0 and 2 reachable at all.
 
