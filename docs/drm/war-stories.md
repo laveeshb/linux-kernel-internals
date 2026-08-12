@@ -13,7 +13,7 @@ The other two are policy, not bugs: two changes to how `drm_sched` decides *whic
 Ordered reverse chronologically by when the fix landed — newest first.
 
 ### [The Xe TDR Recovery Regression Chain](war-stories/xe-tdr-recovery-regression.md)
-**October 2024 – July 2026 · not a CVE**
+**November 2024 – July 2026 · not a CVE**
 A fix for one Xe TDR bug on Lunar Lake regressed unstarted-job recovery twenty months later; the next fix was itself found to dereference freed job memory, written just two days after it. Three commits, one function; the last two each carry a `Fixes:` tag pointing at the one before them.
 
 ### [The Scheduler Fairness Evolution](war-stories/scheduler-fairness-evolution.md)
@@ -43,7 +43,7 @@ For years the scheduler had one answer to a fired timeout: reset the hardware. T
 | Involves the `dma_fence` signaling-path contract | No | No | Yes | Yes | No |
 | Multiple drivers affected by the same root fix | No | Yes | No | Yes | Yes |
 
-**Three of five are lifetime or locking bugs, and every one of those three was caught by a mechanical detector, not by someone reading code and spotting the flaw.** Lockdep caught the interrupt-unsafe locking in `drm_sched_entity_kill_jobs_cb()` before it caused user-visible harm on most machines; hung-task detection caught the msm shrinker deadlock only after it had already stalled a ring for two minutes; the Xe GPF was caught by the kernel's own general-protection-fault handler, in production, two days after the fix that caused it shipped. None of the three would have been obvious from a diff alone — each requires either running the deadlocked scenario or having a tool that reasons about lock ordering abstractly.
+**Three of five are lifetime or locking bugs, and every one of those three was caught by a mechanical detector, not by someone reading code and spotting the flaw.** Lockdep caught the interrupt-unsafe locking in `drm_sched_entity_kill_jobs_cb()` before it caused user-visible harm on most machines; hung-task detection caught the msm shrinker deadlock only after it had already stalled a ring for two minutes; the Xe GPF was caught by the kernel's own general-protection-fault handler two days after the fix that caused it was written. None of the three would have been obvious from a diff alone — each requires either running the deadlocked scenario or having a tool that reasons about lock ordering abstractly.
 
 **The Xe chain is the sharpest illustration on this page of a fix regressing its own fix.** Compare it to [BPF's ALU32 unsigned-bounds bug](../bpf/war-stories/alu32-unsigned-bounds.md), where a fix for one half of a symmetric pattern left the other half broken for four and a half months — a *sibling* left unfixed. The Xe chain is different: each fix was itself broken by the code it introduced, in the same function, requiring a third commit to fully resolve. Twenty months elapsed between the first commit and the last.
 

@@ -3,7 +3,7 @@
 > A fix for one TDR bug on Intel Lunar Lake regressed a second time, and the fix for *that* regression crashed the kernel — three commits, twenty months, one driver
 
 Landed
-:   October 2024 – July 2026 (three-commit chain)
+:   November 2024 – July 2026 (three-commit chain)
 
 Driver
 :   Intel Xe (Lunar Lake and later)
