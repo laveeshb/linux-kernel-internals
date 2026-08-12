@@ -3,7 +3,7 @@
 > CVE-2021-3493 — the code that validates a `security.capability` xattr against the target user namespace lived in the `setxattr(2)` syscall handler, not in the generic `vfs_setxattr()` every filesystem is supposed to be able to trust — and OverlayFS's copy-up path called the latter
 
 Disclosed
-:   April 16, 2021 (Steve Beattie, Canonical, to oss-security)
+:   April 15, 2021 (Steve Beattie, Canonical, to oss-security)
 
 Reported by
 :   an independent security researcher, via the SSD Secure Disclosure program
@@ -36,7 +36,7 @@ NVD's own summary states the exploitability condition precisely: "the overlayfs 
 
 ## Observed behavior
 
-An unprivileged user with access to Ubuntu's carried unprivileged-overlay-mount patch could construct a lower layer containing a file carrying a `security.capability` xattr, have OverlayFS copy that file up without its copy-up path ever running it through the missing permission check, and then execute the resulting upper-layer file to obtain the granted capability outright — a direct path to root if the capability chosen was powerful enough (`cap_setuid`, for instance, trivially yields a root shell). The PoC required nothing beyond ordinary user-namespace and overlay-mount access already enabled by default on affected Ubuntu releases, making it trivially reachable from an unprivileged local shell. CISA added CVE-2021-3493 to its Known Exploited Vulnerabilities catalog on October 20, 2022, confirming sustained real-world exploitation well after the initial 2021 disclosure and patch.
+An unprivileged user with access to Ubuntu's carried unprivileged-overlay-mount patch could construct a lower layer containing a file carrying a `security.capability` xattr, have OverlayFS copy that file up without its copy-up path ever running it through the missing permission check, and then execute the resulting upper-layer file to obtain the granted capability outright — a direct path to root if the capability chosen was powerful enough (`cap_setuid`, for instance, trivially yields a root shell). Exploiting it required nothing more exotic than ordinary user-namespace and overlay-mount access — both already enabled by default on affected Ubuntu releases — making it reachable from an unprivileged local shell. CISA added CVE-2021-3493 to its Known Exploited Vulnerabilities catalog on October 20, 2022, confirming sustained real-world exploitation well after the initial 2021 disclosure and patch.
 
 ## Why it happened
 

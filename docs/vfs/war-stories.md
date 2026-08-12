@@ -2,7 +2,7 @@
 
 > Four CVEs from the dentry cache, `seq_file`, and OverlayFS — a livelock in the generic tree walker, an integer truncation seven years in the making, and two variants of the same OverlayFS copy-up trusting something it shouldn't have
 
-Unlike [GPU/DRM's incident record](../drm/war-stories.md), every incident here is a CVE — VFS sits directly on a security boundary: it's the layer that decides what an unprivileged process can read, write, or become. Two of the four involve OverlayFS's copy-up path specifically, and both stem from the same underlying shape of mistake: copy-up trusts a value — a UID, a capability xattr — that had already been through one security-relevant transformation, without checking that the transformation actually succeeded or was re-validated on the way out.
+Unlike [GPU/DRM's incident record](../drm/war-stories.md), every incident here is a CVE — VFS sits directly on a security boundary: it's the layer that decides what an unprivileged process can read, write, or become. Two of the four involve OverlayFS's copy-up path specifically, and both stem from the same underlying shape of mistake: copy-up acted on a value — a UID, a capability xattr — that needed a security-relevant check on the way out, and either the check silently didn't run at all, or it ran but nobody confirmed it actually succeeded.
 
 ## Incidents
 
@@ -14,10 +14,10 @@ Copy-up read a lower file's UID/GID through the mounter's namespace mapping and 
 
 ### [Sequoia: The seq_file Size-Truncation Overflow](war-stories/sequoia-seq-file-overflow.md)
 **Disclosed July 2021, fixed in Linux 5.14 · CVE-2021-33909**
-A `size_t` buffer size, silently narrowed to a 32-bit `int` seven kernel releases after that narrowing became reachable at all, turned "make a very long directory path" into an exact, attacker-chosen out-of-bounds write.
+A `size_t` buffer size, silently narrowed to a 32-bit `int` since the day `dentry_path()` was written, sat unreachable for seven years until an unrelated 2014 fix made it possible to grow a buffer large enough to trigger it — turning "make a very long directory path" into an exact, attacker-chosen out-of-bounds write.
 
 ### [OverlayFS: The Capability Check That Only One Caller Made](war-stories/overlayfs-capability-bypass.md)
-**Linux 5.11 (February 2021) · CVE-2021-3493**
+**Fixed December 2020, shipped in Linux 5.11 (February 2021) · CVE-2021-3493**
 The permission check for setting a namespaced capability xattr lived in the `setxattr(2)` syscall handler instead of the generic `vfs_setxattr()` every filesystem is supposed to trust — so OverlayFS's copy-up path, which calls the latter directly, skipped it entirely.
 
 ### [The Dentry-Cache Walk Livelock](war-stories/dentry-cache-livelock.md)
@@ -29,19 +29,19 @@ The permission check for setting a namespaced capability xattr lived in the `set
 | Pattern | UID confusion | Sequoia | Capability bypass | Dentry livelock |
 |---------|:---:|:---:|:---:|:---:|
 | Involves OverlayFS copy-up specifically | Yes | No | Yes | No |
-| Root cause: a value trusted after crossing a boundary, without checking the crossing succeeded | Yes | No | Yes | No |
+| Root cause: a security check on copy-up either silently skipped or its success never confirmed | Yes | No | Yes | No |
 | Root cause: two events conflated because they looked identical from inside the check | No | No | No | Yes |
 | Root cause: silent numeric truncation | No | Yes | No | No |
 | Required unprivileged user namespaces to reach | Yes | Yes (bind mount inside one) | Yes | No |
 | Caught by an automated detector (lockdep) rather than manual audit | No | No | No | Yes |
-| CISA KEV-listed | Yes (Oct 2024) | No | Yes (Oct 2022) | No |
-| Public exploit tool published | Yes | Yes (Qualys, private demo) | Yes | No |
+| CISA KEV-listed | Yes (Jun 2025) | No | Yes (Oct 2022) | No |
+| Public exploit tool published | Yes | Crasher PoC public; full exploit private | Yes | No |
 
 **Two of four are the same OverlayFS mistake wearing different clothes.** The UID-confusion bug and the capability-check bypass both involve copy-up acting on a value — an ownership ID, a capability xattr — that had already been through one transformation or that a sibling code path already validated, without OverlayFS's own copy-up re-confirming that validation actually held. Neither is a logic error in the classic sense; both are a *trust boundary drawn one layer too early*.
 
 **The dentry livelock is the odd one out, and the only one caught by tooling before it shipped a fix.** Jaegeuk Kim's lockdep report predates the eventual CVE assignment by eight months — an independent discovery that traced the exact same root cause Red Hat's later bug report described, without either report causing the other. Sequoia and the two OverlayFS bugs were all found by researchers reading code and reasoning about attacker-controlled inputs, not by a detector firing during ordinary testing.
 
-**Sequoia stands alone as a pure integer-width bug, with the longest dormancy on this page.** The vulnerable narrowing conversion in `dentry_path()` existed from the function's original design; it took a 2014 fix to a completely unrelated allocation-failure problem to make it reachable at all, and seven more years before anyone went looking for exactly this class of bug.
+**Sequoia stands alone as a pure integer-width bug, and has the longest documented dormancy of the incidents on this page that state one.** The vulnerable narrowing conversion in `dentry_path()` existed from the function's original design; it took a 2014 fix to a completely unrelated allocation-failure problem to make it reachable at all, and seven more years before anyone went looking for exactly this class of bug.
 
 **Every incident here is a local-privilege or local-denial-of-service bug, not a remote one.** VFS's CVE history reflects what the layer actually guards: not the network-facing attack surface [BPF](../bpf/war-stories.md) or [networking](../net/war-stories.md) deal with, but the boundary between what one unprivileged local user can do versus what they can trick the kernel into doing on their behalf.
 

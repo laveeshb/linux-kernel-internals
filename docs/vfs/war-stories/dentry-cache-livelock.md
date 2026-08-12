@@ -12,10 +12,13 @@ CVSS
 :   5.5 MEDIUM (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H`)
 
 Bug present since
-:   ~v3.12 (September 2013), when `d_walk()` unified the dentry-tree traversal code
+:   ~v3.12 (November 2013), when `d_walk()` unified the dentry-tree traversal code
 
 Fixed in
-:   commit `ca5358ef75fc`, authored October 26, 2014 and fast-tracked to stable kernels within days; reached mainline proper in Linux 3.19 (February 2015)
+:   commit `ca5358ef75fc`, authored October 26, 2014; reached the 3.18.y stable branch about seven weeks later (3.18.1, December 2014), older LTS branches (3.10.y, 3.14.y) not until mid-2015, and mainline proper in Linux 3.19 (February 2015)
+
+Exploit tool
+:   no — no public exploit tool exists; this is a concurrency bug reachable through ordinary filesystem load, not a crafted-input attack
 
 Actively exploited
 :   no confirmed cases (not on CISA KEV) — local denial of service only
@@ -70,7 +73,7 @@ The bug conflated two genuinely different events — "the tree structure changed
 
 `ca5358ef75fc` ("deal with deadlock in d_walk()", Al Viro) stopped treating a killed sibling as a reason to restart the whole walk. Ascending now only triggers `rename_retry` for a genuine `need_seqretry()` failure — reinforced by a new `BUG_ON(seq & 1)` at the retry label, a hard assertion that a restart should never happen while already in locked mode. A killed child is instead skipped in place: a new inner loop walks forward through the sibling list (`child = list_entry(next, struct dentry, d_child); next = next->next;`) until it finds a live dentry to resume from, or reaches the end and ascends one level further.
 
-That skip loop depends on a companion change in `__dentry_kill()`, landed the same day: `list_del()` — which unlinks a node *and* poisons its own `next`/`prev` pointers to catch use-after-removal bugs — became `__list_del_entry()`, which only does the unlinking. A just-killed dentry's `d_child.next` still points at its old next sibling, RCU-protected, which is exactly what lets the new loop safely chase past a run of killed dentries to find where the live list resumes.
+That skip loop depends on a second change in the same commit: in `__dentry_kill()`, `list_del()` — which unlinks a node *and* poisons its own `next`/`prev` pointers to catch use-after-removal bugs — became `__list_del_entry()`, which only does the unlinking. A just-killed dentry's `d_child.next` still points at its old next sibling, which is exactly what lets the new loop safely chase past a run of killed dentries to find where the live list resumes. A separate, same-day commit, `946e51f2bf37`, made that safe under RCU: it moved `d_rcu` off the union it had shared with `d_child` onto `d_alias` instead, so a dentry's RCU-deferred free no longer overwrites the `d_child` links the skip loop still needs to walk.
 
 ## What it taught us
 

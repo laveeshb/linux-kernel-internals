@@ -1,6 +1,6 @@
 # Sequoia: The seq_file Size-Truncation Overflow
 
-> CVE-2021-33909 — a `size_t` buffer size, silently narrowed to a 32-bit `int` seven kernel releases after that narrowing became reachable at all, turned "make a very long directory path" into an exact, attacker-chosen out-of-bounds write
+> CVE-2021-33909 — a `size_t` buffer size, silently narrowed to a 32-bit `int` since the day `dentry_path()` was written, sat unreachable for seven years until a 2014 fix for an unrelated allocation-failure bug made it possible to grow a buffer large enough to trigger it — turning "make a very long directory path" into an exact, attacker-chosen out-of-bounds write
 
 Disclosed
 :   July 20, 2021 (coordinated with Red Hat, kernel security list, and linux-distros)
@@ -12,7 +12,7 @@ CVSS
 :   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`)
 
 Bug present since
-:   3.16 (August 2014, when the vmalloc fallback landed); exploitable through 5.13.3
+:   3.16 (July 2014, when the vmalloc fallback landed; the 3.16 release itself followed in August); exploitable through 5.13.3
 
 Fixed in
 :   commit `8cae8cd89f05`, fast-tracked to the 5.13.4 stable point release; reached Linus's mainline tree as part of the Linux 5.14 development cycle
@@ -57,7 +57,7 @@ Qualys's advisory traces the rest precisely: `dentry_path()`, on an unlinked den
 
 ## Observed behavior
 
-The write is small — 10 bytes, the literal string `"//deleted"` — but it lands at an attacker-chosen offset with no bounds check at all: "exactly -2GB-10B below the beginning of a vmalloc()ated kernel buffer," in Qualys's own words. Reaching the 2 GiB threshold takes a real but achievable setup: create a deeply nested directory tree whose total path length exceeds 1 GiB, bind-mount it inside an unprivileged user namespace, then `rmdir()` it so the dentries become unlinked (triggering the `"//deleted"` suffix path) while something is still reading `mountinfo` for that mount. Because `seq_file`'s own path-component escaping turns each `/` into a 4-byte `\134` sequence, Qualys found the practical directory count came to roughly 1 million nested directories rather than the naive 4 million a flat 256-byte-`NAME_MAX` calculation would suggest — reachable with about 5 GB of memory and 1 million inodes.
+The write is small — 10 bytes, the literal string `"//deleted"` — but it lands at an attacker-chosen offset with no bounds check at all: "exactly -2GB-10B below the beginning of a vmalloc()ated kernel buffer," in Qualys's own words. Reaching the 2 GiB threshold takes a real but achievable setup: create a deeply nested directory tree whose total path length exceeds 1 GiB, bind-mount it inside an unprivileged user namespace, then `rmdir()` it so the dentries become unlinked (triggering the `"//deleted"` suffix path) while something is still reading `mountinfo` for that mount. Because `seq_file`'s own path-component escaping turns each `\` into a 4-byte `\134` sequence, an attacker who pads directory names with backslashes gets a 4x length amplification — Qualys found the practical directory count came to roughly 1 million nested directories rather than the naive 4 million a flat 256-byte-`NAME_MAX` calculation would suggest — reachable with about 5 GB of memory and 1 million inodes.
 
 From that single controlled 10-byte write, Qualys built a full local-root exploit: pin a thread mid-BPF-verification using `userfaultfd()` or FUSE to stall it after the verifier has approved a small eBPF program but before JIT compilation, use the OOB write's timing to corrupt kernel state, and swap in different bytecode than what was verified — arbitrary kernel read/write, then overwriting `modprobe_path[]` for root-equivalent code execution. They confirmed the full chain worked, unmodified, on default installs of Ubuntu 20.04, 20.10, and 21.04, Debian 11, and Fedora 34 Workstation, and assessed other distributions as "certainly vulnerable, and probably exploitable."
 

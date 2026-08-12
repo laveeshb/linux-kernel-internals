@@ -18,7 +18,7 @@ Exploit tool
 :   yes — public PoC (`xkaneiki/CVE-2023-0386`, the `ovlcap` exploit) demonstrated privilege escalation to root
 
 Actively exploited
-:   yes — added to CISA KEV, October 2024
+:   yes — added to CISA KEV, June 17, 2025
 
 *Part of [War Stories: VFS Bugs and Regressions](../war-stories.md).*
 
@@ -36,7 +36,7 @@ That created exactly the inconsistency the fix's commit message calls out: if th
 
 ## Observed behavior
 
-The publicly released proof of concept (`xkaneiki/CVE-2023-0386`, mirroring the pattern of the earlier "GameOver(lay)" family of OverlayFS bugs) pairs a FUSE-backed lower filesystem the attacker fully controls with a file carrying Linux file capabilities. The attacker's FUSE layer reports that file's ownership in a way that exploits the unmapped-UID/overflow-UID inconsistency, and triggers a copy-up of that capability-bearing file into the writable upper layer — landing it somewhere the capabilities are honored, rather than being rejected the way a same-privilege manual copy would have been. Red Hat's advisory summarizes the resulting primitive plainly: "unauthorized access to the execution of the setuid file with capabilities... how a user copies a capable file from a nosuid mount into another mount." From there the PoC's `getshell` step turns the misappropriated capability into a full root shell. Because unprivileged user-namespace mounts of OverlayFS are enabled by default on mainstream distributions (Ubuntu among them) and are also used by common container runtimes, the practical reach of the bug was every desktop and many container hosts running an affected kernel. CISA added CVE-2023-0386 to its Known Exploited Vulnerabilities catalog in October 2024, confirming real-world exploitation well after the initial patch.
+The publicly released proof of concept (`xkaneiki/CVE-2023-0386`, mirroring the pattern of the earlier "GameOver(lay)" family of OverlayFS bugs) pairs a FUSE-backed lower filesystem the attacker fully controls with a file carrying Linux file capabilities. The attacker's FUSE layer reports that file's ownership in a way that exploits the unmapped-UID/overflow-UID inconsistency, and triggers a copy-up of that capability-bearing file into the writable upper layer — landing it somewhere the capabilities are honored, rather than being rejected the way a same-privilege manual copy would have been. Red Hat's advisory summarizes the resulting primitive plainly: "unauthorized access to the execution of the setuid file with capabilities... how a user copies a capable file from a nosuid mount into another mount." From there the PoC's `getshell` step turns the misappropriated capability into a full root shell. Because unprivileged user-namespace mounts of OverlayFS are enabled by default on mainstream distributions (Ubuntu among them) and are also used by common container runtimes, the practical reach of the bug was every desktop and many container hosts running an affected kernel. CISA added CVE-2023-0386 to its Known Exploited Vulnerabilities catalog on June 17, 2025, confirming real-world exploitation well over two years after the initial patch.
 
 ## Why it happened
 
@@ -73,5 +73,5 @@ If the lower file's real UID or GID has no valid mapping in the mounter's user n
 
 - [GitHub mirror: 4f11ada10d0a](https://github.com/torvalds/linux/commit/4f11ada10d0ad3fd53e2bd67806351de63a4f9c3) — "ovl: fail on invalid uid/gid mapping at copy up," the fix
 - [GitHub mirror: 459c7c565ac3](https://github.com/torvalds/linux/commit/459c7c565ac36ba09ffbf24231147f408fde4203) — "ovl: unprivieged mounts," the commit that enabled the mount configuration this bug required
-- [NVD: CVE-2023-0386](https://nvd.nist.gov/vuln/detail/CVE-2023-0386) — CVE record, CVSS 7.8 HIGH; CISA KEV-listed October 2024
+- [NVD: CVE-2023-0386](https://nvd.nist.gov/vuln/detail/CVE-2023-0386) — CVE record, CVSS 7.8 HIGH; CISA KEV-listed June 17, 2025
 - [Red Hat: CVE-2023-0386](https://access.redhat.com/security/cve/cve-2023-0386) — vendor advisory and technical summary
