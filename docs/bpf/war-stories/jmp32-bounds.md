@@ -129,7 +129,7 @@ That is the right design, and it is also the commit named in the `Fixes:` tags o
 - [ALU32 Bitwise Bounds Tracking](alu32-bitwise-bounds.md) — a CVE in `3f50f132d840`, the design that replaced this one's fix
 - [The 32-Bit Unsigned Bounds Propagation Bug](alu32-unsigned-bounds.md) — the other CVE in that replacement
 - [Unprivileged BPF Off by Default](unprivileged-bpf-off.md) — the default this bug depended on, and how it changed a year later
-- [Sign Extension in `check_alu_op()`](sign-extension.md) — the same class of bug (verifier's model diverging from run-time value) three years earlier
+- [Sign Extension in `check_alu_op()`](sign-extension.md) — the same class of bug (verifier's model diverging from run-time value) a little over two years earlier
 
 ## External references
 

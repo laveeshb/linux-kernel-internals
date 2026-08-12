@@ -47,7 +47,7 @@ Weaponization came from elsewhere, and it came fast:
 - **[Exploit-DB 45010](https://www.exploit-db.com/exploits/45010)** — "Linux Kernel < 4.13.9 (Ubuntu 16.04 / Fedora 27) — Local Privilege Escalation", rlarabee, July 10, 2018.
 - **[Exploit-DB 45058](https://www.exploit-db.com/exploits/45058)** — "Linux — BPF Sign Extension Local Privilege Escalation", July 19, 2018: a Metasploit module (`exploit/linux/local/bpf_sign_extension_priv_esc`), which turns the bug into a one-command local root for anyone running the framework.
 
-Three months from disclosure to a public working exploit, seven to a Metasploit module. As with the other incidents on this page, CISA's KEV catalog records no confirmed exploitation in the wild.
+Three months from disclosure to a public working exploit, seven to a Metasploit module. As with the other incidents in this series, CISA's KEV catalog records no confirmed exploitation in the wild.
 
 The reachability caveat is in the fix commit itself:
 
@@ -92,7 +92,7 @@ v3:
 
 The patch reached at least a third revision, and the only revision change the commit message preserves is adding the CVE identifier Debian had assigned. Nobody argued about the fix, because there is nothing to argue about: the instruction set defines two behaviors and the code implemented one.
 
-What did change, structurally, is that this batch marks the point where the verifier's arithmetic became a security-reviewed surface rather than a correctness-reviewed one. The three-year run of bounds-tracking CVEs documented elsewhere on this page — [2020](jmp32-bounds.md), [2021](alu32-bitwise-bounds.md), [2021 again](alu32-unsigned-bounds.md) — all sit downstream of that shift.
+What did change, structurally, is that this batch marks the point where the verifier's arithmetic became a security-reviewed surface rather than a correctness-reviewed one. The run of bounds-tracking CVEs documented across the rest of this series — [2020](jmp32-bounds.md), [2021](alu32-bitwise-bounds.md), [2021 again](alu32-unsigned-bounds.md) — all sit downstream of that shift.
 
 ## What it taught us
 
@@ -100,7 +100,7 @@ What did change, structurally, is that this batch marks the point where the veri
 
 **Signed-to-unsigned promotion at a function boundary deserves an explicit cast even when the default is right.** `__mark_reg_known(reg, insn->imm)` relies on the reader knowing that `imm` is `s32`, that the parameter is `u64`, and that sign extension is intended. Writing the intended conversion out — as the fix does with `(u32)` on one side — makes the two cases distinguishable at the call site instead of at the language-standard level.
 
-**A verifier bug's severity is set by who can reach the verifier.** This defect shipped in v4.9 and was a privilege escalation from v4.14, because that is when the relevant path became reachable without privileges. The code did not change; the exposure did. That relationship is exactly what the [unprivileged-BPF-off-by-default](unprivileged-bpf-off.md) change would eventually act on, four years later.
+**A verifier bug's severity is set by who can reach the verifier.** This defect shipped in v4.9 and was a privilege escalation from v4.14, because that is when the relevant path became reachable without privileges. The code did not change; the exposure did. That relationship is exactly what the [unprivileged-BPF-off-by-default](unprivileged-bpf-off.md) change would eventually act on, three and a half years later.
 
 **Systematic adversarial review finds bug *classes*, not bugs.** Eight verifier bugs in one announcement, from one researcher, in one pass. The individual fixes are each a few lines. The finding that mattered was that the verifier's integer arithmetic had never been examined by someone actively trying to break it.
 
@@ -111,7 +111,7 @@ What did change, structurally, is that this batch marks the point where the veri
 
 - [BPF Verifier](../bpf-verifier.md) — how the verifier models register values and why a wrong constant poisons everything downstream
 - [Architecture & Program Types](../bpf-overview.md) — the BPF instruction set, including the `BPF_ALU` / `BPF_ALU64` split at the heart of this bug
-- [The jmp32 Bounds Regression](jmp32-bounds.md) — the same failure mode (verifier model diverging from run-time value) three years later
+- [The jmp32 Bounds Regression](jmp32-bounds.md) — the same failure mode (verifier model diverging from run-time value) a little over two years later
 - [Unprivileged BPF Off by Default](unprivileged-bpf-off.md) — the sysctl this bug's exploitability depended on
 - [Kernel Hardening](../../security/kernel-hardening.md) — the mitigation layer that local privilege escalations like this one have to get through
 

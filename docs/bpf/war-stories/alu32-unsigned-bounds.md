@@ -71,7 +71,7 @@ And its diff fixes exactly one of the two adjacent blocks:
  		reg->u32_max_value = (u32)reg->umax_value;
 ```
 
-The unsigned block is right there in the diff context, four lines below the change, with identical structure — and it was left alone. The signed variant was the one that had been reported, so the signed variant was the one that got fixed.
+The unsigned block is right there in the diff context, immediately below the change, with identical structure — and it was left alone. The signed variant was the one that had been reported, so the signed variant was the one that got fixed.
 
 Both blocks trace back to the same parent commit, `3f50f132d840`, which introduced explicit ALU32 tracking in v5.7-rc1. That commit is also the `Fixes:` target of [CVE-2021-3490](alu32-bitwise-bounds.md), disclosed eighteen days after this one's fix landed. Adding a second, parallel representation of a register's value created a whole family of "keep the two in sync" obligations, and the bugs came in one at a time.
 
@@ -110,7 +110,7 @@ Before the fix the verifier believed it knew the offset precisely enough to comp
 **A one-sided range test is not a range test.** `if (endpoint_fits) narrow(endpoint)` is wrong whenever narrowing one endpoint asserts something about the interval as a whole. The correct predicate is about the interval, not the endpoint — which is exactly what the fix's `&&` encodes.
 
 !!! warning "Pattern to watch for"
-    Grep for paired `if (cond_a) x = ...;` / `if (cond_b) y = ...;` blocks that jointly define a range, an extent, or a start/end pair. If narrowing one end without the other can produce a range that excludes real values, the two tests belong in one condition. And when reviewing any `Fixes:`-tagged patch, read the surrounding hunk context for a structurally identical block the patch did not touch — in this case the vulnerable code was visible, unchanged, four lines below the fix, in the fix's own diff.
+    Grep for paired `if (cond_a) x = ...;` / `if (cond_b) y = ...;` blocks that jointly define a range, an extent, or a start/end pair. If narrowing one end without the other can produce a range that excludes real values, the two tests belong in one condition. And when reviewing any `Fixes:`-tagged patch, read the surrounding hunk context for a structurally identical block the patch did not touch — in this case the vulnerable code was visible, unchanged, in the trailing context immediately below the fix, in the fix's own diff.
 
 ## See also
 

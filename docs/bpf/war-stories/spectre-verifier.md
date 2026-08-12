@@ -105,7 +105,7 @@ sanitize_speculative_path(struct bpf_verifier_env *env,
 
 In `check_cond_jmp_op()`, both the `pred == 1` and `pred == 0` cases now call it — gated on `!env->bypass_spec_v1`, so privileged loaders that already opt out of speculative analysis pay nothing. The registers involved in the condition are marked unknown on the speculative branch, because no assumption about their contents survives a mispredict.
 
-The commit explains why the branch is pushed rather than merely rejected outright: so that dead-code elimination can still sanitize those instructions with `jmp-1`s afterwards, and so that paths walked in the non-speculative domain are not pruned by earlier walks of the speculative domain.
+The commit gives two reasons for marking the pushed branch's state as *speculative* rather than pushing it unlabelled: so that dead-code elimination can still sanitize those instructions with `jmp-1`s afterwards, and so that paths walked in the non-speculative domain are not pruned by earlier walks of the speculative domain.
 
 **The commit also documents the alternative that was considered and rejected**, which is unusually candid for a security fix. The other option was to record a `BPF_JMP_TAKEN` state plus a direction encoding (always-goto, always-fall-through, unknown) in `aux->alu_state`, and reject programs that mix directions — which would have rejected ordinary constructs like `if (...) { x = 0; } else { x = 1; }` followed by `if (x == 1)`. Borkmann lists two downsides: valid programs doing no pointer arithmetic would be broken, and path pruning would have to be disabled for unprivileged programs. Pushing the speculative branch avoids both.
 
