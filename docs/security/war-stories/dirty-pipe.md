@@ -2,7 +2,7 @@
 
 > CVE-2022-0847 — one missing `buf->flags = 0;` let any user who could *read* a file overwrite it in the page cache, including immutable files, read-only btrfs snapshots, and read-only mounts
 
-**Disclosed:** March 7, 2022 (fix merged February 22, 2022) &nbsp;·&nbsp; **Reported by:** Max Kellermann, CM4all GmbH / IONOS SE &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H` — NVD primary and Red Hat's CNA score agree) &nbsp;·&nbsp; **Bug present since:** 4.9 (2016); **exploitable since:** 5.8 (2020) &nbsp;·&nbsp; **Fixed in:** 5.16.11, 5.15.25, 5.10.102 (all released February 23, 2022) &nbsp;·&nbsp; **Exploit tool:** yes — the reporter published a working PoC in the disclosure itself &nbsp;·&nbsp; **Actively exploited:** yes — [added to CISA's KEV catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) April 25, 2022
+**Disclosed:** March 7, 2022 (fix merged February 22, 2022) &nbsp;·&nbsp; **Reported by:** Max Kellermann, CM4all GmbH / IONOS SE &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H` — NVD primary and Red Hat's CNA score agree) &nbsp;·&nbsp; **Bug present since:** 4.9 (2016); **exploitable since:** 5.8 (2020) &nbsp;·&nbsp; **Fixed in:** 5.16.11, 5.15.25, 5.10.102 (all released February 23, 2022) &nbsp;·&nbsp; **Exploit tool:** yes — the reporter published a working PoC in the disclosure itself &nbsp;·&nbsp; **Actively exploited:** yes — added to CISA's KEV catalog April 25, 2022 (per [NVD](https://nvd.nist.gov/vuln/detail/CVE-2022-0847))
 
 *Part of [War Stories: Linux Security Bugs and CVEs](../war-stories.md).*
 
@@ -95,7 +95,7 @@ One property makes it especially nasty operationally: overwriting a page-cache p
 
 Exploitation in the wild followed quickly and is well documented:
 
-- **CISA** [added CVE-2022-0847 to the Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) on **April 25, 2022**, seven weeks after disclosure, with a federal remediation deadline of May 16, 2022.
+- **CISA** added CVE-2022-0847 to the Known Exploited Vulnerabilities catalog on **April 25, 2022**, confirmed via [NVD](https://nvd.nist.gov/vuln/detail/CVE-2022-0847), seven weeks after disclosure, with a federal remediation deadline of May 16, 2022.
 - **Google's [Android Security Bulletin for May 2022](https://source.android.com/docs/security/bulletin/2022-05-01)** lists CVE-2022-0847 (component: `pipes`, EoP, High, bug A-220741611) and flags it under "There are indications that the following may be under limited, targeted exploitation." Kellermann had reproduced the bug on a Google Pixel 6 the day after reporting it.
 - **Exploit-DB** carries entry [50808](https://www.exploit-db.com/exploits/50808), "Linux Kernel 5.8 < 5.16.11 - Local Privilege Escalation (DirtyPipe)," published March 8, 2022 — the day after public disclosure. NVD's reference list additionally tags three Packet Storm entries as `Exploit`, one of them a SUID-binary hijack variant and the other two generic local-privilege-escalation writeups of the same bug.
 
@@ -187,7 +187,7 @@ uname -r
 ## External references
 
 - [The Dirty Pipe Vulnerability](https://dirtypipe.cm4all.com/) — Max Kellermann's disclosure writeup: the primary source for the mechanism, the year-long corruption investigation, the proof-of-concept exploit, and the timeline
-- [NVD: CVE-2022-0847](https://nvd.nist.gov/vuln/detail/CVE-2022-0847) — CVE record, CVSS 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`), published March 10, 2022
+- [NVD: CVE-2022-0847](https://nvd.nist.gov/vuln/detail/CVE-2022-0847) — CVE record, CVSS 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`), published March 10, 2022; confirms the CISA KEV listing, added April 25, 2022, remediation due May 16, 2022
 - [git.kernel.org: 9d2231c5d74e](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9d2231c5d74e13b2a0546fee6737ee4446017903) — "lib/iov_iter: initialize \"flags\" in new pipe_buffer", the two-line fix
 - [lore.kernel.org: the LKML patch thread](https://lore.kernel.org/lkml/20220221100313.1504449-1-max.kellermann@ionos.com/) — the entire public discussion: Kellermann's patch and Al Viro's "Applied, will push to Linus..."
 - [git.kernel.org: 241699cd72a8](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=241699cd72a8489c9446ae3910ddd243e9b9061b) — "new iov_iter flavour: pipe-backed" (4.9, 2016), the commit the fix's `Fixes:` tag names as the origin
@@ -197,9 +197,7 @@ uname -r
 - [git.kernel.org: 01e7187b4119](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=01e7187b41191376cee8bea8de9f907b001e87b4) — "pipe: stop using ->can_merge" (5.1, 2019), the intermediate refactor that replaced the ops flag with a pointer comparison
 - [lore.kernel.org: sys_tee() bug report](https://lore.kernel.org/linux-fsdevel/CAG48ez1wN=oC_uWkHHhboDvfVt8p9O98ZMFZyh=AK6D=eHU7MA@mail.gmail.com/) and [the v2 fix](https://lore.kernel.org/linux-fsdevel/20190123141918.238286-2-jannh@google.com/) — Jann Horn's original bug report and the patch it produced
 - [git.kernel.org: 84588a93d097](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=84588a93d097bace24b9233930f82511d4f34210) — "fuse: fix uninitialized flags in pipe_buffer" (2017), the same bug class found and fixed in a sibling caller five years earlier
-- [lore.kernel.org: vfs: fix uninitialized flags in splice_to_pipe()](https://lore.kernel.org/linux-fsdevel/20170216164902.GC30656@veci.piliscsaba.szeredi.hu/) — the second, near-identical fix Szeredi posted five minutes after the pull request carrying the fuse one
-- [CISA: Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — lists CVE-2022-0847 as actively exploited, added April 25, 2022, remediation due May 16, 2022
-- [Android Security Bulletin, May 2022](https://source.android.com/docs/security/bulletin/2022-05-01) — lists CVE-2022-0847 (`pipes`, EoP, High) and notes indications of "limited, targeted exploitation"
+- [lore.kernel.org: vfs: fix uninitialized flags in splice_to_pipe()](https://lore.kernel.org/linux-fsdevel/20170216164902.GC30656@veci.piliscsaba.szeredi.hu/) — the second, near-identical fix Szeredi posted five minutes after the pull request carrying the fuse one- [Android Security Bulletin, May 2022](https://source.android.com/docs/security/bulletin/2022-05-01) — lists CVE-2022-0847 (`pipes`, EoP, High) and notes indications of "limited, targeted exploitation"
 - [Exploit-DB 50808](https://www.exploit-db.com/exploits/50808) — "Linux Kernel 5.8 < 5.16.11 - Local Privilege Escalation (DirtyPipe)", published March 8, 2022
 - [lore.kernel.org: Linux 5.16.11](https://lore.kernel.org/stable/1645618039140207@kroah.com/) and [Linux 5.15.25](https://lore.kernel.org/stable/164561803311588@kroah.com/) — Greg Kroah-Hartman's stable release announcements carrying the fix, February 23, 2022
 - [Red Hat Bugzilla 2060795](https://bugzilla.redhat.com/show_bug.cgi?id=2060795) — the CNA's tracking bug and impact analysis
