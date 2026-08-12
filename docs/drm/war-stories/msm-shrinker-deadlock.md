@@ -33,9 +33,14 @@ Capturing that crash-state dump calls `kvmalloc_node()` to allocate the dump buf
 Sergey Senozhatsky's fix commit quotes the actual symptom directly from a device stuck in this state — repeated hangcheck firings that never resolved:
 
 ```
+[..]
 msm_dpu ae01000.display-controller: [drm:hangcheck_handler] *ERROR* (IPv4: 1): hangcheck detected gpu lockup rb 0!
 msm_dpu ae01000.display-controller: [drm:hangcheck_handler] *ERROR* (IPv4: 1): completed fence: 7840161
 msm_dpu ae01000.display-controller: [drm:hangcheck_handler] *ERROR* (IPv4: 1): submitted fence: 7840162
+msm_dpu ae01000.display-controller: [drm:hangcheck_handler] *ERROR* (IPv4: 1): hangcheck detected gpu lockup rb 0!
+msm_dpu ae01000.display-controller: [drm:hangcheck_handler] *ERROR* (IPv4: 1): completed fence: 7840162
+msm_dpu ae01000.display-controller: [drm:hangcheck_handler] *ERROR* (IPv4: 1): submitted fence: 7840163
+[..]
 ```
 
 The commit message also includes the hung-task dump for both blocked threads. The job-running kernel thread, blocked over two minutes on the mutex the recovery worker held:
