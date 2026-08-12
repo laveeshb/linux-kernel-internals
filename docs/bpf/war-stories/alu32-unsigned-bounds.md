@@ -101,6 +101,8 @@ One line of the diff records the behavioral change better than any of the prose.
 
 Before the fix the verifier believed it knew the offset precisely enough to complain about that specific offset. After it, the verifier correctly admits it does not know the value at all.
 
+The same bounds-propagation logic came back once more, publicly, six months later. In November 2021, [Starovoitov posted](https://lore.kernel.org/all/20211101222153.78759-2-alexei.starovoitov@gmail.com/) a further fix to the *signed* counterpart of the strict-comparison change this page's fix made — tightening `__reg64_bound_s32()`'s `a > S32_MIN && a < S32_MAX` to `a >= S32_MIN && a <= S32_MAX`. His commit message is explicit that this one, unlike the CVE, was precision-only: "There is no security bug here. The verifier was too conservative." The strict inequality this page's "Before state" section calls out — the one that excludes `0` and `U32_MAX` themselves — turned out to be needlessly strict on the signed side too, just not exploitably so.
+
 ## What it taught us
 
 **When a bug report names one variant, the fix's scope is every sibling in the same block.** The signed and unsigned propagation paths were adjacent, identically structured, and derived from the same commit. Fixing one and shipping is a defensible response to a bug report and an indefensible response to a bug *class*. Four and a half months and one CVE separated the two halves.
@@ -125,3 +127,4 @@ Before the fix the verifier believed it knew the offset precisely enough to comp
 - [GitHub mirror: 10bf4e83167c](https://github.com/torvalds/linux/commit/10bf4e83167cc68595b85fd73bb91e8f2c086e36) — "bpf: Fix propagation of 32 bit unsigned bounds from 64 bit bounds", the fix
 - [GitHub mirror: b02709587ea3](https://github.com/torvalds/linux/commit/b02709587ea3d699a608568ee8157d8db4fd8cae) — "bpf: Fix propagation of 32-bit signed bounds from 64-bit bounds." (December 2020), the signed half of the same bug, fixed first
 - [GitHub mirror: 3f50f132d840](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking" (v5.7-rc1), the introducing commit named by both 2021 CVEs
+- [lore.kernel.org: bpf: Fix propagation of signed bounds from 64-bit min/max into 32-bit](https://lore.kernel.org/all/20211101222153.78759-2-alexei.starovoitov@gmail.com/) — the November 2021 follow-up to the same bounds-propagation logic, explicitly not a security bug
