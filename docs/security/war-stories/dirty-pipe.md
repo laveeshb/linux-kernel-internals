@@ -12,7 +12,10 @@ CVSS
 :   7.8 HIGH (`AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H` — NVD primary and Red Hat's CNA score agree)
 
 Bug present since
-:   4.9 (2016); exploitable since 5.8 (2020)
+:   4.9 (2016)
+
+Exploitable since
+:   5.8 (2020)
 
 Fixed in
 :   5.16.11, 5.15.25, 5.10.102 (all released February 23, 2022)
