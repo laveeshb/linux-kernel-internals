@@ -6,20 +6,18 @@ A community hub for understanding the Linux kernel — documentation and discuss
 
 ## What's inside
 
-**375+ documents across 28 subsystems**, with sourced citations (kernel commits, LWN, lore) and end-to-end "life of a ..." walkthroughs.
+Documentation spanning every major subsystem, with sourced citations (kernel commits, LWN, lore) and end-to-end "life of a ..." walkthroughs. Mirrors the site's own nav structure:
 
 | Area | Sections |
 |------|----------|
-| Memory | [Memory management](docs/mm/) (90+ docs: allocators, reclaim, MGLRU, DAMON, CXL tiering, folios, THP…) · [IOMMU](docs/iommu/) |
-| CPU & scheduling | [Scheduler](docs/sched/) (EEVDF, deadline, EAS…) · [Locking & RCU](docs/locking/) · [Interrupts](docs/interrupts/) · [Time & timers](docs/time/) |
-| I/O & storage | [I/O paths](docs/io/) · [io_uring](docs/io-uring/) · [Block layer](docs/block/) · [VFS](docs/vfs/) · [Filesystems](docs/filesystems/) |
-| Networking | [Network stack](docs/net/) (XDP, AF_XDP, kTLS, netfilter, namespaces…) |
-| Architecture | [x86-64](docs/arch/x86/) (page tables, syscall entry, Spectre/Meltdown) · [arm64](docs/arch/arm64/) |
-| Isolation & security | [Security](docs/security/) (SELinux, Landlock, seccomp…) · [Cgroups & namespaces](docs/cgroups/) · [Virtualization/KVM](docs/virtualization/) |
-| Observability | [Tracing](docs/tracing/) · [BPF](docs/bpf/) · [Debugging](docs/debugging/) |
-| Kernel machinery | [Core kernel](docs/kernel/) · [Syscalls](docs/syscalls/) · [Modules](docs/modules/) · [Livepatch](docs/livepatch/) · [Drivers](docs/drivers/) · [IPC](docs/ipc/) · [Power](docs/power/) · [Crypto](docs/crypto/) |
-
-Or browse the [full site index](docs/site-index.md).
+| Foundations | [Kernel internals](docs/kernel/) · [Architecture](docs/arch/) (x86-64, arm64: page tables, syscall entry, Spectre/Meltdown) · [Syscalls](docs/syscalls/) · [Time & timers](docs/time/) · [Modules](docs/modules/) |
+| Memory | [Memory management](docs/mm/) (allocators, reclaim, MGLRU, DAMON, CXL tiering, folios, THP…) · [IOMMU](docs/iommu/) |
+| Scheduling & concurrency | [Scheduler](docs/sched/) (EEVDF, deadline, EAS…) · [Locking & RCU](docs/locking/) · [Interrupts](docs/interrupts/) · [IPC](docs/ipc/) |
+| Storage & I/O | [VFS](docs/vfs/) · [Filesystems](docs/filesystems/) · [Block layer](docs/block/) · [I/O paths](docs/io/) · [io_uring](docs/io-uring/) |
+| Devices & drivers | [Device drivers](docs/drivers/) · [USB](docs/usb/) · [GPU/DRM](docs/drm/) |
+| Networking & BPF | [Network stack](docs/net/) (XDP, AF_XDP, kTLS, netfilter, namespaces…) · [BPF/eBPF](docs/bpf/) |
+| Isolation & security | [Security](docs/security/) (SELinux, Landlock, seccomp…) · [Cgroups & namespaces](docs/cgroups/) · [Virtualization/KVM](docs/virtualization/) · [Crypto](docs/crypto/) · [Livepatch](docs/livepatch/) |
+| Observability | [Tracing](docs/tracing/) · [Debugging](docs/debugging/) · [Power management](docs/power/) |
 
 ## Quick Links
 
