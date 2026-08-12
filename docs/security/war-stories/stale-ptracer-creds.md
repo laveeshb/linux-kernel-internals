@@ -2,7 +2,26 @@
 
 > CVE-2019-13272 — `PTRACE_TRACEME` recorded the credentials of the *parent* it drafted as tracer rather than those of the child that actually requested the relationship, so an unprivileged child could obtain a root-marked ptrace relationship no privileged code ever asked for — and keep it after that parent dropped privileges and became attacker-controlled
 
-**Disclosed:** July 17, 2019 (fix authored July 4, 2019) &nbsp;·&nbsp; **Reported by:** Jann Horn, Google Project Zero (issue 1903) &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H` — NVD primary and CISA-ADP's secondary score agree; CVSS 2.0: 7.2 HIGH) &nbsp;·&nbsp; **Bug present since:** 4.10 (commit `64b875f7ac8a`, November 2016) &nbsp;·&nbsp; **Fixed in:** 5.2 upstream; stable 5.1.17, 4.19.58, 4.14.133, 4.9.185, 4.4.185 (all announced July 10, 2019), 3.16.71 &nbsp;·&nbsp; **Exploit tool:** yes — four Exploit-DB entries (three PoCs, one Metasploit module) &nbsp;·&nbsp; **Actively exploited:** yes — added to CISA's KEV catalog December 10, 2021 (per [NVD](https://nvd.nist.gov/vuln/detail/CVE-2019-13272))
+Disclosed
+:   July 17, 2019 (fix authored July 4, 2019)
+
+Reported by
+:   Jann Horn, Google Project Zero (issue 1903)
+
+CVSS
+:   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H` — NVD primary and CISA-ADP's secondary score agree; CVSS 2.0: 7.2 HIGH)
+
+Bug present since
+:   4.10 (commit `64b875f7ac8a`, November 2016)
+
+Fixed in
+:   5.2 upstream; stable 5.1.17, 4.19.58, 4.14.133, 4.9.185, 4.4.185 (all announced July 10, 2019), 3.16.71
+
+Exploit tool
+:   yes — four Exploit-DB entries (three PoCs, one Metasploit module)
+
+Actively exploited
+:   yes — added to CISA's KEV catalog December 10, 2021 (per [NVD](https://nvd.nist.gov/vuln/detail/CVE-2019-13272))
 
 *Part of [War Stories: Linux Security Bugs and CVEs](../war-stories.md).*
 

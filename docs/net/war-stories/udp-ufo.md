@@ -2,7 +2,23 @@
 
 > CVE-2017-1000112 — a per-call heuristic that should have been a per-datagram invariant let two `send()` calls disagree about how a UDP datagram was being built, syzkaller-found and embargo-disclosed in one week
 
-**Disclosed:** August 10, 2017 &nbsp;·&nbsp; **Reported by:** Andrey Konovalov (via syzkaller) &nbsp;·&nbsp; **CVSS:** 7.0 HIGH &nbsp;·&nbsp; **Bug present since:** October 2005 &nbsp;·&nbsp; **Exploit tool:** yes (Konovalov's own PoC + a [Metasploit module](https://www.exploit-db.com/exploits/45147)) &nbsp;·&nbsp; **Actively exploited:** no confirmed cases (not on CISA KEV)
+Disclosed
+:   August 10, 2017
+
+Reported by
+:   Andrey Konovalov (via syzkaller)
+
+CVSS
+:   7.0 HIGH
+
+Bug present since
+:   October 2005
+
+Exploit tool
+:   yes (Konovalov's own PoC + a [Metasploit module](https://www.exploit-db.com/exploits/45147))
+
+Actively exploited
+:   no confirmed cases (not on CISA KEV)
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 

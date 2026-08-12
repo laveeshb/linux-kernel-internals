@@ -2,7 +2,20 @@
 
 > Not a CVE — the hardening response to years of them, and an admission that "safely unprivileged BPF" was a goal the subsystem had stopped pursuing
 
-**Landed:** May 11, 2021 &nbsp;·&nbsp; **Author:** Daniel Borkmann &nbsp;·&nbsp; **Merged in:** [`08389d888287`](https://github.com/torvalds/linux/commit/08389d888287c3823f80b0216766b71e17f0aba5), mainline v5.13-rc4 &nbsp;·&nbsp; **Mechanism:** `CONFIG_BPF_UNPRIV_DEFAULT_OFF` &nbsp;·&nbsp; **Context:** [LWN 796328](https://lwn.net/Articles/796328/), "Reconsidering unprivileged BPF" (Jonathan Corbet, August 2019)
+Landed
+:   May 11, 2021
+
+Author
+:   Daniel Borkmann
+
+Merged in
+:   [`08389d888287`](https://github.com/torvalds/linux/commit/08389d888287c3823f80b0216766b71e17f0aba5), mainline v5.13-rc4
+
+Mechanism
+:   `CONFIG_BPF_UNPRIV_DEFAULT_OFF`
+
+Context
+:   [LWN 796328](https://lwn.net/Articles/796328/), "Reconsidering unprivileged BPF" (Jonathan Corbet, August 2019)
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 

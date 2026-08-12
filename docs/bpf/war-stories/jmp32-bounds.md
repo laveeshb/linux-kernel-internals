@@ -2,7 +2,26 @@
 
 > CVE-2020-8835 — a precision patch was auto-selected into a stable kernel by a machine-learning classifier that mistook it for a bug fix, and it turned out to be a privilege escalation
 
-**Disclosed:** March 30, 2020 (oss-security) &nbsp;·&nbsp; **Demonstrated by:** Manfred Paul, as part of ZDI's Pwn2Own 2020 competition (ZDI-CAN-10780); the hang that led to the fix was reported by Anatoly Trosinenko, fuzzing with the kBdysch harness &nbsp;·&nbsp; **CVSS:** 7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); Ubuntu's secondary score is also 7.8, with a different vector (`AC:H`, `S:C`) &nbsp;·&nbsp; **Introduced in:** [`581738a681b6`](https://github.com/torvalds/linux/commit/581738a681b6faae5725c2555439189ca81c0f1f) (v5.5), backported into 5.4-stable &nbsp;·&nbsp; **Fixed in:** [`f2d67fec0b43`](https://github.com/torvalds/linux/commit/f2d67fec0b43edce8c416101cdc52e71145b5fef), mainline v5.7-rc1; stable 5.6.1, 5.5.14, 5.4.29 &nbsp;·&nbsp; **Exploit tool:** no Exploit-DB entry; NVD tags a later oss-security post as `Exploit` &nbsp;·&nbsp; **Actively exploited:** no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2020-8835))
+Disclosed
+:   March 30, 2020 (oss-security)
+
+Demonstrated by
+:   Manfred Paul, as part of ZDI's Pwn2Own 2020 competition (ZDI-CAN-10780); the hang that led to the fix was reported by Anatoly Trosinenko, fuzzing with the kBdysch harness
+
+CVSS
+:   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); Ubuntu's secondary score is also 7.8, with a different vector (`AC:H`, `S:C`)
+
+Introduced in
+:   [`581738a681b6`](https://github.com/torvalds/linux/commit/581738a681b6faae5725c2555439189ca81c0f1f) (v5.5), backported into 5.4-stable
+
+Fixed in
+:   [`f2d67fec0b43`](https://github.com/torvalds/linux/commit/f2d67fec0b43edce8c416101cdc52e71145b5fef), mainline v5.7-rc1; stable 5.6.1, 5.5.14, 5.4.29
+
+Exploit tool
+:   no Exploit-DB entry; NVD tags a later oss-security post as `Exploit`
+
+Actively exploited
+:   no confirmed cases ([not on CISA KEV](https://nvd.nist.gov/vuln/detail/CVE-2020-8835))
 
 *Part of [War Stories: BPF Verifier Bugs and CVEs](../war-stories.md).*
 

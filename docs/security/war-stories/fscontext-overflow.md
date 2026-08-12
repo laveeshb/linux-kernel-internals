@@ -2,7 +2,26 @@
 
 > CVE-2022-0185 — a bounds check written as `PAGE_SIZE - 2 - size` in unsigned arithmetic let `unshare -Urm` plus a loop of `fsconfig()` calls write past the end of a 4 KB slab object, and turned Google's hardened Kubernetes CTF cluster into a $31,337 payout
 
-**Disclosed:** 18 January 2022 &nbsp;·&nbsp; **Reported by:** the Crusaders of Rust CTF team — Alec Petridis, Hrvoje Mišetić, Isaac Badipe, Jamie Hill-Daniel, Philip Papurt and William Liu — after independent discoveries by syzbot (31 December 2021, on an Android tree) and by StarLabs &nbsp;·&nbsp; **CVSS:** 8.4 HIGH (`CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H`, NVD primary) &nbsp;·&nbsp; **Bug present since:** 5.1-rc1 (2019) &nbsp;·&nbsp; **Fixed in:** 5.4.173, 5.10.93, 5.15.16, 5.16.2 (all 20 January 2022), mainline 5.17-rc1 &nbsp;·&nbsp; **Exploit tool:** yes — two independent public exploits, no Exploit-DB or Metasploit entry &nbsp;·&nbsp; **Actively exploited:** yes — added to CISA's KEV catalog on 21 August 2024 (per [NVD](https://nvd.nist.gov/vuln/detail/CVE-2022-0185))
+Disclosed
+:   18 January 2022
+
+Reported by
+:   the Crusaders of Rust CTF team — Alec Petridis, Hrvoje Mišetić, Isaac Badipe, Jamie Hill-Daniel, Philip Papurt and William Liu — after independent discoveries by syzbot (31 December 2021, on an Android tree) and by StarLabs
+
+CVSS
+:   8.4 HIGH (`CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H`, NVD primary)
+
+Bug present since
+:   5.1-rc1 (2019)
+
+Fixed in
+:   5.4.173, 5.10.93, 5.15.16, 5.16.2 (all 20 January 2022), mainline 5.17-rc1
+
+Exploit tool
+:   yes — two independent public exploits, no Exploit-DB or Metasploit entry
+
+Actively exploited
+:   yes — added to CISA's KEV catalog on 21 August 2024 (per [NVD](https://nvd.nist.gov/vuln/detail/CVE-2022-0185))
 
 *Part of [War Stories: Linux Security Bugs and CVEs](../war-stories.md).*
 
