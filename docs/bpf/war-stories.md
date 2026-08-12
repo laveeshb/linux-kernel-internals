@@ -67,6 +67,6 @@ The first row is the page's spine. Four of the five bugs are the same disagreeme
 - [Architecture & Program Types](bpf-overview.md) — the eBPF instruction format, registers, and program types: the vocabulary the 2017 bug is written in
 - [BPF Maps](bpf-maps.md) — array maps and the other map types the pointers these bugs forge are aimed at
 - [Linux Capabilities](../security/capabilities.md) — `CAP_BPF` and the privilege split that gave administrators an option between "root" and "anyone"
-- [Kernel Hardening](../security/kernel-hardening.md) — where default-off knobs and speculation mitigations sit in the wider picture
+- [Kernel Hardening](../security/kernel-hardening.md) — where speculation mitigations and hardening config knobs sit in the wider picture
 - [Security War Stories](../security/war-stories.md) — local privilege escalations in the capabilities/namespaces/credentials layer, with a very different KEV profile
 - [Network War Stories](../net/war-stories.md) — the same site's networking incidents, where syzkaller found bugs of a kind no sanitizer can find here

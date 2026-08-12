@@ -152,7 +152,7 @@ The commit also points at the middle path the subsystem had already built: "Eith
 - [Linux Capabilities](../../security/capabilities.md) — the model `CAP_BPF` splits `bpf()` loading out of
 - [Spectre in the BPF Verifier](spectre-verifier.md) — the third of the 2021 verifier CVEs, fixed two and a half weeks after this knob was posted
 - [ALU32 Bitwise Bounds Tracking](alu32-bitwise-bounds.md) — publicly announced the same day this patch was posted
-- [Kernel Hardening](../../security/kernel-hardening.md) — where default-off knobs sit in the wider mitigation picture
+- [Kernel Hardening](../../security/kernel-hardening.md) — the other build-time hardening options (KASLR, stack protectors, `HARDENED_USERCOPY`) worth auditing alongside this one
 - [seccomp BPF](../../security/seccomp.md) — the classic-BPF user Lutomirski cited as a real unprivileged-BPF use case
 
 ## External references
