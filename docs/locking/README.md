@@ -34,6 +34,9 @@ The kernel provides a rich set of primitives, each with different performance ch
 - [Lock contention debugging](lock-debugging.md) — Diagnosing lock hotspots
 - [Futex internals](futex.md) — How userspace locking works
 
+### War stories
+- [War Stories](war-stories.md) — three CVEs and one origin story from rt_mutex and PI-futexes
+
 ## The hierarchy: what can nest inside what
 
 ```

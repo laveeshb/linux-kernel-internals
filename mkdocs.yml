@@ -306,6 +306,12 @@ nav:
         - Futex Internals: locking/futex.md
         - SRCU: locking/srcu.md
         - Completions and Wait Queues: locking/completions.md
+      - War Stories:
+        - Locking War Stories: locking/war-stories.md
+        - The Deadlock Detector That Scheduled While Atomic: locking/war-stories/rtmutex-deadlock-detector-atomic-sleep.md
+        - The PI-Futex Fixup That Had No Answer for a Permanent Fault: locking/war-stories/pi-futex-fixup-owner-uaf.md
+        - "Towelroot: The Missing Check That Rooted Millions of Phones": locking/war-stories/towelroot-futex-requeue.md
+        - The PI-Mutex Origin Story: locking/war-stories/pi-mutex-origin.md
     - Interrupts:
       - Getting Started: interrupts/README.md
       - Fundamentals:
