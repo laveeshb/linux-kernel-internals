@@ -429,6 +429,13 @@ nav:
       - Kernel Mode Setting (KMS): drm/kms.md
       - GEM Buffer Objects and dma-buf: drm/gem-dmabuf.md
       - "Command Submission, Fences, and the GPU Scheduler": drm/command-submission.md
+      - War Stories:
+        - DRM War Stories: drm/war-stories.md
+        - The Xe TDR Recovery Regression Chain: drm/war-stories/xe-tdr-recovery-regression.md
+        - The Scheduler Fairness Evolution: drm/war-stories/scheduler-fairness-evolution.md
+        - The msm GPU Recovery/Shrinker Deadlock: drm/war-stories/msm-shrinker-deadlock.md
+        - "The drm_sched_entity_kill_jobs_cb Lockdep Deadlock": drm/war-stories/entity-kill-jobs-deadlock.md
+        - "The NO_HANG False Positive": drm/war-stories/no-hang-false-positive.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
