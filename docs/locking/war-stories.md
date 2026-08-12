@@ -13,7 +13,7 @@ Ordered reverse chronologically by when the fix (or, for the origin story, the o
 rt_mutex's own cycle detector confirmed a genuine deadlock and responded by warning and then looping forever calling `schedule()` — while still holding the raw spinlock every other waiter on the same lock needed to make progress.
 
 ### [The PI-Futex Fixup That Had No Answer for a Permanent Fault](war-stories/pi-futex-fixup-owner-uaf.md)
-**Linux 5.11 (January 2021) · CVE-2021-3347**
+**Linux 5.11 (February 2021) · CVE-2021-3347**
 When the kernel couldn't write a new owner's TID back into a PI futex word, it gave up without reconciling its own rt_mutex and pi_state — and a subsequent unlock on that mismatch corrupted a waiter structure still resident on another task's kernel stack.
 
 ### [Towelroot: The Missing Check on the Requeuer's Half of the Pair](war-stories/towelroot-futex-requeue.md)
@@ -22,7 +22,7 @@ When the kernel couldn't write a new owner's TID back into a PI futex word, it g
 
 ### [The PI-Mutex Origin Story](war-stories/pi-mutex-origin.md)
 **Linux 2.6.18 (September 2006) · not a CVE**
-A low-priority lock holder can be starved by a medium-priority task that has nothing to do with the lock at all — priority-inheritance mutexes exist because a plain mutex has no way to stop this, and it took Linus Torvalds most of a year to be convinced the kernel should carry the fix.
+A low-priority lock holder can be starved by a medium-priority task that has nothing to do with the lock at all — priority-inheritance mutexes exist because a plain mutex has no way to stop this, and it took a blunt public objection from Linus Torvalds before the kernel carried a mainline implementation anyway.
 
 ## Common threads
 
