@@ -138,10 +138,9 @@ The fix reached mainline in v5.13-rc7 and, per LWN, the 5.12.13 and 5.10.46 stab
 
 ## External references
 
-- [NVD: CVE-2021-33624](https://nvd.nist.gov/vuln/detail/CVE-2021-33624) — CVSS 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`), published June 23, 2021
+- [NVD: CVE-2021-33624](https://nvd.nist.gov/vuln/detail/CVE-2021-33624) — CVSS 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`), published June 23, 2021; shows no CISA KEV listing
 - [GitHub mirror: 9183671af6db](https://github.com/torvalds/linux/commit/9183671af6dbf60a1219371d4ed73e23f43b49db) — "bpf: Fix leakage under speculation on mispredicted branches", the fix, including both crafted programs and the rejected alternative design
 - [GitHub mirror: b2157399cc98](https://github.com/torvalds/linux/commit/b2157399cc9898260d6031c5bfe45fe137c1fbe7) — "bpf: prevent out-of-bounds speculation" (v4.15-rc8), the 2018 index-masking fix for the BPF side of Spectre v1
 - [GitHub mirror: 801c6058d14a](https://github.com/torvalds/linux/commit/801c6058d14a82179a7ee17a4b532cac6fad067f) — "bpf: Fix leakage of uninitialized bpf stack under speculation" (April 2021), the adjacent speculative-leak fix
 - [LWN: Spectre revisits BPF](https://lwn.net/Articles/860597/) — Jonathan Corbet, June 24, 2021; the walkthrough of the vulnerability, the fix, and its cost
 - [NVD: CVE-2017-5753](https://nvd.nist.gov/vuln/detail/CVE-2017-5753) — Spectre Variant 1, the hardware vulnerability the 2018 BPF masking patch addressed
-- [CISA: Known Exploited Vulnerabilities Catalog](https://nvd.nist.gov/vuln/detail/CVE-2021-33624) — does not list CVE-2021-33624

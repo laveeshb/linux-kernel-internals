@@ -133,11 +133,10 @@ That is the right design, and it is also the commit named in the `Fixes:` tags o
 
 ## External references
 
-- [NVD: CVE-2020-8835](https://nvd.nist.gov/vuln/detail/CVE-2020-8835) — CVSS 7.8 HIGH, published April 2, 2020; names the affected versions and the ZDI case number
+- [NVD: CVE-2020-8835](https://nvd.nist.gov/vuln/detail/CVE-2020-8835) — CVSS 7.8 HIGH, published April 2, 2020; names the affected versions and the ZDI case number; shows no CISA KEV listing
 - [GitHub mirror: f2d67fec0b43](https://github.com/torvalds/linux/commit/f2d67fec0b43edce8c416101cdc52e71145b5fef) — "bpf: Undo incorrect `__reg_bound_offset32` handling", the revert, with the full reproducer walkthrough and the rejected repair
 - [GitHub mirror: 581738a681b6](https://github.com/torvalds/linux/commit/581738a681b6faae5725c2555439189ca81c0f1f) — "bpf: Provide better register bounds after jmp32 instructions" (v5.5), the introducing commit
 - [GitHub mirror: 604dca5e3af1](https://github.com/torvalds/linux/commit/604dca5e3af1db98bd123b7bfc02b017af99e3a0) — "bpf: Fix tnum constraints for 32-bit comparisons", Jann Horn's replacement implementation from the same series
 - [GitHub mirror: 3f50f132d840](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking", the design that superseded both, in the same release
 - [lore.kernel.org: `[PATCH bpf-next 0/3] Fix __reg_bound_offset32 handling`](https://lore.kernel.org/all/20200330160324.15259-1-daniel@iogearbox.net/) — the three-patch thread and Starovoitov's two-word reply
 - [oss-security: CVE-2020-8835](https://www.openwall.com/lists/oss-security/2020/03/30/3) — Steve Beattie's announcement, March 30, 2020; the Pwn2Own attribution, the 5.4-stable backport hash, and the sysctl reachability note
-- [CISA: Known Exploited Vulnerabilities Catalog](https://nvd.nist.gov/vuln/detail/CVE-2020-8835) — does not list CVE-2020-8835

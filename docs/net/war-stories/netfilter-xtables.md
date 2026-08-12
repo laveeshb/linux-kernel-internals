@@ -2,7 +2,7 @@
 
 > CVE-2021-22555 — a 15-year-old bounds-check gap in the iptables compat layer, sitting unactioned in syzbot's inbox for 8 months, became "Turning \x00\x00 into 10000$" and a Kubernetes pod escape
 
-**Disclosed:** July 2021 (fixed April 2021) &nbsp;·&nbsp; **Reported by:** syzbot (August 2020, unanswered) and Andy Nguyen, Google (April 2021) &nbsp;·&nbsp; **CVSS:** 8.3 HIGH (Google's CNA score) / 7.8 HIGH (NVD primary) &nbsp;·&nbsp; **Bug present since:** 2.6.19-rc1 (2006) &nbsp;·&nbsp; **Actively exploited:** yes — added to [CISA's KEV catalog](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) in October 2025
+**Disclosed:** July 2021 (fixed April 2021) &nbsp;·&nbsp; **Reported by:** syzbot (August 2020, unanswered) and Andy Nguyen, Google (April 2021) &nbsp;·&nbsp; **CVSS:** 8.3 HIGH (Google's CNA score) / 7.8 HIGH (NVD primary) &nbsp;·&nbsp; **Bug present since:** 2.6.19-rc1 (2006) &nbsp;·&nbsp; **Actively exploited:** yes — added to CISA's KEV catalog in October 2025 (per [NVD](https://nvd.nist.gov/vuln/detail/CVE-2021-22555))
 
 *Part of [War Stories: Network Stack Bugs and CVEs](../war-stories.md).*
 
@@ -30,7 +30,7 @@ The bug had existed since **2.6.19-rc1** (2006) — roughly fifteen years — re
 
 Its severity came less from the bug itself (a write of a handful of zero bytes) than from what that primitive enabled. Andy Nguyen's public writeup, [`CVE-2021-22555: Turning \x00\x00 into 10000$`](https://google.github.io/security-research/pocs/linux/cve-2021-22555/writeup.html), demonstrates using the four-zero-byte out-of-bounds write to corrupt an in-flight `msg_msg` object via heap spraying, build a use-after-free, leak kernel heap and code addresses, hijack a `pipe_buffer`'s function-pointer table, and ultimately execute a ROP chain that calls `commit_creds()` and switches namespaces — turning a tiny OOB write into full kernel code execution. Nguyen used the exploit to escape a Kubernetes pod's isolation in Google's kCTF cluster, as covered by LWN (["CVE-2021-22555: Turning \x00\x00 into 10000$", July 2021](https://lwn.net/Articles/862955/)).
 
-The impact wasn't limited to that 2021 demonstration. [CISA added CVE-2021-22555 to its Known Exploited Vulnerabilities catalog](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) in October 2025 — over four years after the original fix — confirming it was observed under active exploitation against real targets long after patches were widely available, not just in a research kCTF cluster. Of the six incidents on this page, it's the only one CISA has ever listed as actively exploited.
+The impact wasn't limited to that 2021 demonstration. CISA added CVE-2021-22555 to its Known Exploited Vulnerabilities catalog in October 2025, confirmed via [NVD](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) — over four years after the original fix — confirming it was observed under active exploitation against real targets long after patches were widely available, not just in a research kCTF cluster. Of the six incidents on this page, it's the only one CISA has ever listed as actively exploited.
 
 syzbot's report actually predates Nguyen's by nearly eight months. On 17 August 2020 syzbot [emailed a KASAN slab-out-of-bounds report](https://lore.kernel.org/all/00000000000022934305ad166be3@google.com/) titled "KASAN: slab-out-of-bounds Write in xt_compat_target_from_user" directly to `netdev@`, `netfilter-devel@`, the netfilter core team address, David Miller, and Florian Westphal, with a full crash trace pinpointing `net/netfilter/x_tables.c:1129` and a ready-to-run C reproducer. Nobody replied.
 
@@ -86,7 +86,7 @@ sysctl kernel.unprivileged_userns_clone   # if present (some distros), 0 blocks 
 
 ## External references
 
-- [NVD: CVE-2021-22555](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) — Netfilter x_tables heap overflow CVE record
+- [NVD: CVE-2021-22555](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) — Netfilter x_tables heap overflow CVE record; confirms the CISA KEV listing, added October 2025
 - [git.kernel.org: b29c457a6511](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b29c457a6511435960115c0f548c4360d5f4801d) — "netfilter: x_tables: fix compat match/target pad out-of-bound write"
 - [lore.kernel.org: netfilter: x_tables: fix compat match/target pad out-of-bound write](https://lore.kernel.org/netfilter-devel/20210407193857.21120-1-fw@strlen.de/) — Florian Westphal's patch as posted to netfilter-devel
 - [syzbot: KASAN: slab-out-of-bounds Write in xt_compat_target_from_user](https://syzkaller.appspot.com/bug?extid=cfc0247ac173f597aaaa) — the syzbot dashboard for the original August 2020 report, showing no reply on the report thread until the fix landed eight months later
@@ -94,4 +94,3 @@ sysctl kernel.unprivileged_userns_clone   # if present (some distros), 0 blocks 
 - [lore.kernel.org: netfilter: allow to turn off xtables compat layer](https://lore.kernel.org/netfilter-devel/20210426101440.25335-1-fw@strlen.de/) — the follow-up thread debating a `CONFIG_NETFILTER_XTABLES_COMPAT` opt-out versus removing the compat layer entirely
 - [Andy Nguyen: CVE-2021-22555: Turning \x00\x00 into 10000$](https://google.github.io/security-research/pocs/linux/cve-2021-22555/writeup.html) — the primary-source exploit writeup, including the kCTF container-escape use
 - [LWN: CVE-2021-22555: Turning \x00\x00 into 10000$](https://lwn.net/Articles/862955/) — LWN's brief on Nguyen's writeup
-- [CISA: Known Exploited Vulnerabilities Catalog](https://nvd.nist.gov/vuln/detail/CVE-2021-22555) — lists CVE-2021-22555 as actively exploited, added October 2025

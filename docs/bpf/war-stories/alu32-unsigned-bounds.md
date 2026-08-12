@@ -121,8 +121,7 @@ Before the fix the verifier believed it knew the offset precisely enough to comp
 
 ## External references
 
-- [NVD: CVE-2021-31440](https://nvd.nist.gov/vuln/detail/CVE-2021-31440) — CVSS 7.0 HIGH (NVD) / 8.8 HIGH (ZDI), published May 21, 2021
+- [NVD: CVE-2021-31440](https://nvd.nist.gov/vuln/detail/CVE-2021-31440) — CVSS 7.0 HIGH (NVD) / 8.8 HIGH (ZDI), published May 21, 2021; shows no CISA KEV listing
 - [GitHub mirror: 10bf4e83167c](https://github.com/torvalds/linux/commit/10bf4e83167cc68595b85fd73bb91e8f2c086e36) — "bpf: Fix propagation of 32 bit unsigned bounds from 64 bit bounds", the fix
 - [GitHub mirror: b02709587ea3](https://github.com/torvalds/linux/commit/b02709587ea3d699a608568ee8157d8db4fd8cae) — "bpf: Fix propagation of 32-bit signed bounds from 64-bit bounds." (December 2020), the signed half of the same bug, fixed first
 - [GitHub mirror: 3f50f132d840](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking" (v5.7-rc1), the introducing commit named by both 2021 CVEs
-- [CISA: Known Exploited Vulnerabilities Catalog](https://nvd.nist.gov/vuln/detail/CVE-2021-31440) — does not list CVE-2021-31440
