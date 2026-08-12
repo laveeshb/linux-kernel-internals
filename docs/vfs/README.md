@@ -42,3 +42,6 @@ Each has an associated operations table (vtable) that the filesystem must implem
 ### Lifecycle
 - [Life of a write() syscall](life-of-write.md) — From write() to disk
 - [Dentry and Inode Caches](dcache-icache.md) — Caching for performance
+
+### War stories
+- [War Stories](war-stories.md) — four CVEs from the dentry cache, `seq_file`, and OverlayFS's copy-up path
