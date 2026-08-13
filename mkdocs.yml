@@ -552,6 +552,13 @@ nav:
       - KVM Exit Handling: virtualization/kvm-exits.md
       - KVM Live Migration: virtualization/live-migration.md
       - Nested Virtualization: virtualization/nested-virt.md
+      - War Stories:
+        - Virtualization War Stories: virtualization/war-stories.md
+        - "MDS: The Mitigation That Flushed the Buffers Too Early": virtualization/war-stories/mds-verw-timing-gap.md
+        - "vhost: The Dirty-Log Counter That Forgot Zero-Length Descriptors": virtualization/war-stories/vhost-migration-log-overflow.md
+        - The Nested-VMX Refactor That Forgot One Field on the Error Path: virtualization/war-stories/nested-vmx-posted-interrupt-uaf.md
+        - "L1TF: When a Not-Present Page Table Entry Wasn't Not-Present Enough": virtualization/war-stories/l1tf-foreshadow-vmm.md
+        - "VENOM: The Floppy Controller Nobody Turned Off": virtualization/war-stories/venom-fdc-overflow.md
     - Crypto:
       - Getting Started: crypto/README.md
       - Kernel Crypto API: crypto/crypto-api.md
