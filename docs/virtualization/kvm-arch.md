@@ -265,7 +265,7 @@ cat /sys/kernel/tracing/trace_pipe
 - [include/linux/kvm_host.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/kvm_host.h) — `struct kvm` and `struct kvm_vcpu` definitions
 - [arch/x86/kvm/x86.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/x86.c) — `kvm_arch_vcpu_ioctl_run()`: the vCPU run loop (request handling, VM entry, exit dispatch)
 - [arch/x86/kvm/vmx/vmx.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmx.c) — Intel VT-x backend: VMLAUNCH/VMRESUME, `vmx_inject_irq()`, VMCS-based VM entry/exit
-- [virt/kvm/kvm_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/kvm_main.c) — `/dev/kvm` core: `kvm_dev_ioctl()` handling `KVM_CREATE_VM`, `KVM_CREATE_VCPU`
+- [virt/kvm/kvm_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/kvm_main.c) — `/dev/kvm` core: `kvm_dev_ioctl()` handling `KVM_CREATE_VM`; `kvm_vm_ioctl()` handling `KVM_CREATE_VCPU` on the resulting VM fd
 - [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `KVM_EXIT_*` exit reason constants and the `kvm_run` ABI
 - [include/uapi/linux/kvm_para.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm_para.h) — `KVM_HC_*` hypercall numbers
 

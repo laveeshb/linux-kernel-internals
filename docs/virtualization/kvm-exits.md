@@ -190,7 +190,7 @@ The vCPU thread sleeps until `kvm_vcpu_kick()` wakes it — typically because a 
 
 ### EXIT_REASON_MSR_READ / MSR_WRITE
 
-MSR accesses can be made cheap with the **MSR bitmap**: a 4KB bitmap in the VMCS where each bit controls whether a specific MSR causes a VM exit. Frequently-read MSRs like `IA32_TSC` or `IA32_SYSENTER_EIP` can be pass-through (no exit). For intercepted MSRs, KVM dispatches to `kvm_get_msr()` or `kvm_set_msr()` (in `arch/x86/kvm/x86.c`), which uses switch-based per-MSR dispatch inside `__kvm_get_msr()` / `__kvm_set_msr()`.
+MSR accesses can be made cheap with the **MSR bitmap**: a 4KB bitmap in the VMCS where each bit controls whether a specific MSR causes a VM exit. Frequently-read MSRs like `IA32_TSC` or `IA32_SYSENTER_EIP` can be pass-through (no exit). For intercepted MSRs, KVM dispatches to `kvm_emulate_rdmsr()` or `kvm_emulate_wrmsr()` (in `arch/x86/kvm/x86.c`), which uses switch-based per-MSR dispatch inside `__kvm_get_msr()` / `__kvm_set_msr()`.
 
 ### EXIT_REASON_EXCEPTION_NMI
 
@@ -334,7 +334,7 @@ Key performance guidelines:
 
 ### Kernel source
 
-- [arch/x86/kvm/x86.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/x86.c) — `vcpu_enter_guest()`: the per-exit dispatch loop; `kvm_fast_pio()`: the in-kernel port I/O fast path; `kvm_get_msr()`/`kvm_set_msr()`: MSR read/write dispatch
+- [arch/x86/kvm/x86.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/x86.c) — `vcpu_enter_guest()`: the per-exit dispatch loop; `kvm_fast_pio()`: the in-kernel port I/O fast path; `kvm_emulate_rdmsr()`/`kvm_emulate_wrmsr()`: MSR read/write VM-exit dispatch
 - [arch/x86/kvm/vmx/vmx.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmx.c) — `vmx_exit_handlers[]`: the VMX exit-reason dispatch table; `handle_io()`, `handle_ept_violation()`, `handle_exception_nmi()`
 - [arch/x86/kvm/svm/svm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/svm/svm.c) — `svm_exit_handlers[]`: AMD SVM's equivalent exit-reason table, indexed by the VMCB `EXITCODE` field
 - [arch/x86/kvm/mmu/mmu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/mmu/mmu.c) — `kvm_mmu_page_fault()`: distinguishes a missing EPT mapping, an MMIO region, and a permission fault

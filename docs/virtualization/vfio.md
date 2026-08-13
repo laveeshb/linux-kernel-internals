@@ -220,7 +220,8 @@ qemu-system-x86_64 \
 ## VFIO kernel internals
 
 ```c
-/* drivers/vfio/vfio.c */
+/* Simplified — real definitions are split across drivers/vfio/vfio.h,
+ * container.c, group.c, and pci/vfio_pci_core.c */
 
 /* The container manages the IOMMU domain: */
 struct vfio_container {
