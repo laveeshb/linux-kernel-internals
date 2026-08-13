@@ -145,7 +145,7 @@ This preserves the original fix's goal — no reader can observe a torn or freed
 
 - [Linux Device Model](../device-model.md) — `struct device`, `device_lock()`, and the driver core's probe/detach machinery this bug lives in
 - [The kobject Path Race That Needed a Retry, Not a Lock](kobject-path-race.md) — a different driver-core race, also in a sysfs-adjacent path, fixed without adding a new lock
-- [The Deadlock Detector That Scheduled While Atomic](../../locking/war-stories/rtmutex-deadlock-detector-atomic-sleep.md) — a different subsystem's lock-discipline bug also invisible to its own usual detection machinery
+- [The Deadlock Detector That Scheduled While Atomic](../../locking/war-stories/rtmutex-deadlock-detector-atomic-sleep.md) — a different subsystem's lock-discipline bug, and the mirror opposite of this one in visibility: that bug triggered a loud "scheduling while atomic" splat on any production kernel, where this one stayed invisible without a subsystem-local lockdep key
 
 ## External references
 

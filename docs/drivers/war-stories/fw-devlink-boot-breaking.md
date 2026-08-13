@@ -69,7 +69,7 @@ This time, the resolution was explicitly not a kernel-core change. Saravana Kann
 
 - [Linux Device Model](../device-model.md) — `struct device`, buses, and the probe/link machinery fw_devlink builds on
 - [Device Tree](../device-tree.md) — the firmware description format fw_devlink parses to discover dependencies
-- [The Origin of Deferred Probing](deferred-probe-origin.md) — the `-EPROBE_DEFER` retry mechanism fw_devlink's `on` mode drives automatically
+- [The Deferred-Probe Origin Story](deferred-probe-origin.md) — the `-EPROBE_DEFER` retry mechanism fw_devlink's `on` mode drives automatically
 - [The uevent_show() Fix That Deadlocked Driver Detach](uevent-show-deadlock.md) — a different driver-core regression from the same subsystem, on a much shorter timescale
 
 ## External references
