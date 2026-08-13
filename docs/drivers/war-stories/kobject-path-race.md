@@ -15,7 +15,7 @@ Bug present since
 :   at least Linux 2.6.12-rc2 (April 2005, the earliest point in the kernel's git-tracked history) — `kobject_get_path()`'s two-pass length/fill design already existed at the very start of git history
 
 Fixed in
-:   commit `3bb2a01caa81`, merged January 11, 2023, first shipped in Linux 6.3 (April 23, 2023)
+:   commit `3bb2a01caa81`, merged January 11, 2023 — backported to stable as Linux 6.2.3 (March 10, 2023); first reached mainline in Linux 6.3 (April 23, 2023)
 
 Exploit tool
 :   no public proof-of-concept found

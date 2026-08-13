@@ -1,6 +1,6 @@
 # War Stories: Device Drivers
 
-> Two CVEs, one multi-year default-rollout saga, and the origin story behind it all — every page here lives in the driver core itself (`drivers/base/`), the code that decides when a device is ready to be probed and how its identity is exposed to userspace, rather than in any individual hardware driver
+> Two CVEs, one multi-year default-rollout saga, and the origin story behind it all — every page here lives in the driver core and its supporting kobject/sysfs infrastructure (`drivers/base/`, `lib/kobject.c`), the code that decides when a device is ready to be probed and how its identity is exposed to userspace, rather than in any individual hardware driver
 
 The driver core sits underneath every bus-specific and hardware-specific driver in the kernel, and these four incidents show two different ways it can go wrong. Two pages — the uevent deadlock and the kobject path race — are about the same narrow problem: safely reading and rendering a device's identity (`dev->driver`, a kobject's name) while that identity can change out from under the reader. The other two are about a completely different axis: *when* a device is allowed to probe at all, relative to whatever it depends on. The deferred-probe origin story explains why that axis exists in the first place; the fw_devlink saga is what happened when the kernel tried to make dependency-aware probing the default behavior for everyone, automatically, without every driver having to ask for it.
 
@@ -28,7 +28,7 @@ An OLPC laptop's camera driver — really three separate devices — failed to i
 
 | Pattern | uevent deadlock | kobject path race | fw_devlink saga | deferred-probe origin |
 |---------|:---:|:---:|:---:|:---:|
-| Lives in the driver core itself (`drivers/base/`) | Yes | Yes | Yes | Yes |
+| Lives in the driver core or its kobject/sysfs plumbing (`drivers/base/`, `lib/kobject.c`) | Yes | Yes | Yes | Yes |
 | About safely exposing a device/driver's identity (sysfs, uevent) | Yes | Yes | No | No |
 | About probe-order / dependency timing | No | No | Yes | Yes (defines it) |
 | Introduced by a fix for a different, real bug | Yes | No | No | — |
@@ -38,7 +38,7 @@ An OLPC laptop's camera driver — really three separate devices — failed to i
 
 **The two identity-exposure bugs are mirror images of each other in how they got fixed.** The uevent deadlock was fixed by *removing* a lock and replacing it with RCU; the kobject path race was fixed by *adding* a bounds check and a retry, deliberately without introducing any new lock at all. Both landed on the same conclusion from opposite starting points: a lock taken casually to fix one problem in this exact code area is more likely to create a new one than a synchronization-free, self-checking design.
 
-**The probe-order pages are separated by almost a decade, and the second is the first one's mechanism turned into a systemwide default.** `-EPROBE_DEFER` started in 2012 as something an individual driver had to explicitly request. fw_devlink's `on` mode, landing for real in 2021, is the driver core issuing that same request automatically, on a driver's behalf, from a firmware-described dependency graph — and the boot regressions it caused were, in every verified case, exactly the class of gap the original 2012 mechanism was built to paper over: a device that the graph says should exist as a probe target, but that never actually registers a `struct device` the way the graph assumed.
+**The probe-order pages are separated by almost a decade, and the second is the first one's mechanism turned into a systemwide default.** `-EPROBE_DEFER` started in 2012 as something an individual driver had to explicitly request. fw_devlink's `on` mode, landing for real in 2021, is the driver core issuing that same request automatically, on a driver's behalf, from a firmware-described dependency graph — and most of its verified boot regressions trace to the same underlying gap that original mechanism was built to paper over: a device the graph says should exist as a probe target, but that never registers a `struct device` the way the graph assumed. Not every regression fit that exact shape, though — the Exynos fix corrected a parsing bug in how fw_devlink read Device Tree's `interrupt-map` property, and the Broadcom/SCMI regression turned out to be a stale-but-real reference to a disabled mailbox device, which the fw_devlink page's own account treats as a firmware-description bug rather than a driver-core one.
 
 **Only one of these four is a rejected CVE, and it's rejected for administrative reasons, not because the underlying deadlock wasn't real.** The lockdep splat behind CVE-2024-44952 is a genuine, reproducible AB-BA deadlock on real CXL hardware; the CVE record itself gives no bug-specific rationale for withdrawal, consistent with the kernel CVE team's general practice of assigning CVE numbers to nearly any bugfix and occasionally un-assigning them administratively afterward.
 
