@@ -39,6 +39,7 @@ Host (Linux + KVM)
 | [KVM Exit Handling](kvm-exits.md) | Exit reasons, I/O emulation, MMIO, interrupt injection |
 | [KVM Live Migration](live-migration.md) | Dirty logging, pre-copy, CPU state transfer, post-copy |
 | [Nested Virtualization](nested-virt.md) | L0/L1/L2, vmcs12, vmcs02 merge, two-level EPT |
+| [War Stories](war-stories.md) | VENOM, L1TF, a nested-VMX UAF, a vhost overflow, and the MDS mitigation's five-year timing gap |
 
 ## Quick reference
 
