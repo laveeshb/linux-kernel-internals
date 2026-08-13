@@ -17,7 +17,7 @@ kvm_arch_vcpu_ioctl_run()          arch/x86/kvm/x86.c
               │   [VM exit fires — hardware saves guest state to VMCS]
               │
               └── kvm_x86_ops.handle_exit(vcpu, exit_fastpath)
-                    └── vmx_exit_handlers[exit_reason](vcpu)
+                    └── kvm_vmx_exit_handlers[exit_reason](vcpu)
                           returns 1 → resume guest
                           returns 0 → exit to userspace (QEMU)
 ```
@@ -60,11 +60,11 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 ## Exit reason dispatch
 
-On Intel, the exit reason is stored in the VMCS `VM_EXIT_REASON` field. KVM VMX reads it into `vcpu->arch.exit_reason` and indexes into `vmx_exit_handlers[]`:
+On Intel, the exit reason is stored in the VMCS `VM_EXIT_REASON` field. KVM VMX reads it into `vcpu->arch.exit_reason` and indexes into `kvm_vmx_exit_handlers[]`:
 
 ```c
 /* arch/x86/kvm/vmx/vmx.c */
-static int (*vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
+static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
     [EXIT_REASON_EXCEPTION_NMI]     = handle_exception_nmi,
     [EXIT_REASON_EXTERNAL_INTERRUPT]= handle_external_interrupt,
     [EXIT_REASON_IO_INSTRUCTION]    = handle_io,
@@ -86,11 +86,11 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu,
 {
     u32 exit_reason = vmx_get_exit_reason(vcpu);
 
-    if (unlikely(exit_reason >= ARRAY_SIZE(vmx_exit_handlers) ||
-                 !vmx_exit_handlers[exit_reason]))
+    if (unlikely(exit_reason >= ARRAY_SIZE(kvm_vmx_exit_handlers) ||
+                 !kvm_vmx_exit_handlers[exit_reason]))
         return handle_invalid_guest_state(vcpu);
 
-    return vmx_exit_handlers[exit_reason](vcpu);
+    return kvm_vmx_exit_handlers[exit_reason](vcpu);
 }
 ```
 
@@ -190,7 +190,7 @@ The vCPU thread sleeps until `kvm_vcpu_kick()` wakes it — typically because a 
 
 ### EXIT_REASON_MSR_READ / MSR_WRITE
 
-MSR accesses can be made cheap with the **MSR bitmap**: a 4KB bitmap in the VMCS where each bit controls whether a specific MSR causes a VM exit. Frequently-read MSRs like `IA32_TSC` or `IA32_SYSENTER_EIP` can be pass-through (no exit). For intercepted MSRs, KVM dispatches to `kvm_get_msr()` or `kvm_set_msr()` (in `arch/x86/kvm/x86.c`), which uses switch-based per-MSR dispatch inside `__kvm_get_msr()` / `__kvm_set_msr()`.
+MSR accesses can be made cheap with the **MSR bitmap**: a 4KB bitmap in the VMCS where each bit controls whether a specific MSR causes a VM exit. Frequently-read MSRs like `IA32_TSC` or `IA32_SYSENTER_EIP` can be pass-through (no exit). For intercepted MSRs, KVM dispatches to `kvm_emulate_rdmsr()` or `kvm_emulate_wrmsr()` (in `arch/x86/kvm/x86.c`), which uses switch-based per-MSR dispatch inside `__kvm_get_msr()` / `__kvm_set_msr()`.
 
 ### EXIT_REASON_EXCEPTION_NMI
 
@@ -246,9 +246,8 @@ Several devices are emulated entirely in-kernel to avoid the QEMU round-trip:
 | Device | In-kernel emulation |
 |--------|---------------------|
 | Local APIC | `arch/x86/kvm/lapic.c` |
-| IOAPIC | `virt/kvm/ioapic.c` |
+| IOAPIC | `arch/x86/kvm/ioapic.c` |
 | PIT (8254 timer) | `arch/x86/kvm/i8254.c` |
-| HPET | `arch/x86/kvm/hpet.c` |
 
 These register on the `kvm_io_bus` with `kvm_io_bus_register_dev()` and are matched by GPA range before any exit to userspace occurs.
 
@@ -333,10 +332,28 @@ Key performance guidelines:
 
 ## Further reading
 
+### Kernel source
+
+- [arch/x86/kvm/x86.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/x86.c) — `vcpu_enter_guest()`: the per-exit dispatch loop; `kvm_fast_pio()`: the in-kernel port I/O fast path; `kvm_emulate_rdmsr()`/`kvm_emulate_wrmsr()`: MSR read/write VM-exit dispatch
+- [arch/x86/kvm/vmx/vmx.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmx.c) — `kvm_vmx_exit_handlers[]`: the VMX exit-reason dispatch table; `handle_io()`, `handle_ept_violation()`, `handle_exception_nmi()`
+- [arch/x86/kvm/svm/svm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/svm/svm.c) — `svm_exit_handlers[]`: AMD SVM's equivalent exit-reason table, indexed by the VMCB `EXITCODE` field
+- [arch/x86/kvm/mmu/mmu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/mmu/mmu.c) — `kvm_mmu_page_fault()`: distinguishes a missing EPT mapping, an MMIO region, and a permission fault
+- [arch/x86/kvm/cpuid.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/cpuid.c) — `kvm_emulate_cpuid()`: CPUID leaf lookup and feature-bit filtering
+- [arch/x86/kvm/emulate.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/emulate.c) — `x86_emulate_insn()`: the instruction emulator invoked for MMIO and string I/O
+- [virt/kvm/kvm_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/kvm_main.c) — `kvm_vcpu_block()`/`kvm_vcpu_kick()`: HLT-driven vCPU sleep and wake
+- [virt/kvm/irqchip.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/irqchip.c) — `kvm_set_irq()` and the GSI routing table used to deliver device interrupts
+- [arch/x86/kvm/lapic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/lapic.c) — in-kernel local APIC emulation
+- [arch/x86/kvm/ioapic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/ioapic.c) — in-kernel IOAPIC emulation
+- [arch/x86/kvm/i8254.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/i8254.c) — in-kernel PIT (8254 timer) emulation
+- [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `struct kvm_run`, `KVM_EXIT_IO`, `KVM_EXIT_MMIO`: the userspace-visible exit ABI
+
+### Related pages
+
 - [KVM Architecture](kvm-arch.md) — vCPU lifecycle, VMCS, KVM ioctls
 - [Memory Virtualization](kvm-memory.md) — EPT, shadow paging, MMU notifiers
 - [Nested Virtualization](nested-virt.md) — exit handling for L2 guests
-- `arch/x86/kvm/vmx/vmx.c` — VMX exit handler table and handlers
-- `arch/x86/kvm/x86.c` — `vcpu_enter_guest()`, `kvm_emulate_pio()`
-- `arch/x86/kvm/emulate.c` — `x86_emulate_instruction()` for MMIO decoding
-- `virt/kvm/ioapic.c`, `arch/x86/kvm/lapic.c` — in-kernel interrupt controllers
+
+### External
+
+- [The Definitive KVM API Documentation](https://docs.kernel.org/virt/kvm/api.html) — `KVM_RUN`, `struct kvm_run`, and the `KVM_EXIT_IO`/`KVM_EXIT_MMIO` field layouts
+- [KVM VCPU Requests](https://docs.kernel.org/virt/kvm/vcpu-requests.html) — the `KVM_REQ_*` flag mechanism processed at the top of `vcpu_enter_guest()`

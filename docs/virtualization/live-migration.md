@@ -276,10 +276,45 @@ perf kvm stat report --event EPT_VIOLATION
 
 ## Further reading
 
+### Kernel source
+
+- [virt/kvm/kvm_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/kvm_main.c) — `kvm_vm_ioctl_get_dirty_log()` / `kvm_vm_ioctl_clear_dirty_log()`: the `KVM_GET_DIRTY_LOG` and `KVM_CLEAR_DIRTY_LOG` implementations
+- [virt/kvm/dirty_ring.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/dirty_ring.c) — `kvm_dirty_ring_push()` / `kvm_dirty_ring_reset()`: the `KVM_CAP_DIRTY_LOG_RING` ring-buffer implementation
+- [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `struct kvm_dirty_gfn`, `KVM_DIRTY_LOG_PAGE_OFFSET`, and the dirty-log/dirty-ring ioctl definitions
+- [mm/userfaultfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/userfaultfd.c) — `handle_userfault()` and the `UFFDIO_COPY` path used by QEMU's post-copy destination to service missing-page faults
+- [drivers/vhost/vhost.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vhost/vhost.c) — `VHOST_GET_VRING_BASE` / `VHOST_SET_VRING_BASE` ioctl handlers for saving and restoring vring indices across migration
+
+### QEMU source
+
+QEMU migration is userspace code; per site policy these link to QEMU's own canonical GitLab repository, not a GitHub mirror.
+
+- [migration/ram.c](https://gitlab.com/qemu-project/qemu/-/blob/master/migration/ram.c) — dirty-bitmap–driven RAM migration and the auto-converge throttling logic
+- [migration/postcopy-ram.c](https://gitlab.com/qemu-project/qemu/-/blob/master/migration/postcopy-ram.c) — `userfaultfd` registration and fault servicing on the post-copy destination
+- [migration/multifd.c](https://gitlab.com/qemu-project/qemu/-/blob/master/migration/multifd.c) — the multifd parallel migration-channel implementation
+- [migration/vmstate.c](https://gitlab.com/qemu-project/qemu/-/blob/master/migration/vmstate.c) — `vmstate_save_state()` / `vmstate_load_state()`: the VMState serialization engine
+- [hw/net/e1000.c](https://gitlab.com/qemu-project/qemu/-/blob/master/hw/net/e1000.c) — `vmstate_e1000`: the `VMStateDescription` example referenced on this page
+- [qapi/migration.json](https://gitlab.com/qemu-project/qemu/-/blob/master/qapi/migration.json) — `throttle-trigger-threshold`, `cpu-throttle-increment`, and `multifd-channels` parameter definitions
+
+### Man pages
+
+- [`userfaultfd(2)`](https://man7.org/linux/man-pages/man2/userfaultfd.2.html) — the syscall QEMU's post-copy destination uses to register guest RAM and receive `UFFD_EVENT_PAGEFAULT`
+
+### Related pages
+
 - [KVM Architecture](kvm-arch.md) — KVM ioctls, `struct kvm_run`, vCPU lifecycle
 - [KVM Exit Handling](kvm-exits.md) — EPT violations, dirty page tracking mechanics
 - [Nested Virtualization](nested-virt.md) — `KVM_GET_NESTED_STATE` for migrating L1 hypervisors
 - [Memory Virtualization](kvm-memory.md) — EPT/NPT, MMU notifiers
-- `virt/kvm/kvm_main.c` — `KVM_GET_DIRTY_LOG`, `KVM_CLEAR_DIRTY_LOG` implementations
-- `virt/kvm/dirty_ring.c` — `KVM_CAP_DIRTY_LOG_RING` implementation
-- `mm/userfaultfd.c` — userfaultfd for post-copy missing-page handling
+
+### LWN articles
+
+- [Page faults in user space: MADV_USERFAULT, remap_anon_range(), and userfaultfd()](https://lwn.net/Articles/615086/) — the original 2014 design discussion; states plainly that "the primary use case here is the live migration of virtual machines running under KVM"
+- [The next steps for userfaultfd()](https://lwn.net/Articles/718198/) — follow-up on userfaultfd's evolution, reiterating that it "was originally created to help with the live migration of virtual machines between physical hosts"
+- [Blocking userfaultfd() kernel-fault handling](https://lwn.net/Articles/819834/) — discusses demand-faulting pages across the network during migration, driven by userfaultfd events
+
+### External
+
+- [The Definitive KVM API Documentation](https://docs.kernel.org/virt/kvm/api.html) — official ioctl reference covering `KVM_GET_DIRTY_LOG`, `KVM_CLEAR_DIRTY_LOG`, and `KVM_CAP_DIRTY_LOG_RING`
+- [Userfaultfd](https://docs.kernel.org/admin-guide/mm/userfaultfd.html) — kernel admin-guide documentation for the `MISSING`-mode fault handling used in post-copy
+- [QEMU Migration framework](https://www.qemu.org/docs/master/devel/migration/main.html) — official QEMU developer docs on the VMState framework and pre-copy design
+- [QEMU Postcopy](https://www.qemu.org/docs/master/devel/migration/postcopy.html) — official QEMU developer docs on post-copy internals

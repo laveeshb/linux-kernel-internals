@@ -342,10 +342,30 @@ perf top -p $(pgrep vhost)
 
 ## Further reading
 
+### Kernel source
+
+- [drivers/virtio/](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/virtio) — the virtio core bus: device registration and feature negotiation (`virtio_add_status()`)
+- [drivers/virtio/virtio_ring.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/virtio/virtio_ring.c) — `virtqueue_add_outbuf()` and `virtqueue_kick()`: the split- and packed-ring implementation behind the vring diagrams above
+- [include/uapi/linux/virtio_ring.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/virtio_ring.h) — `struct vring_desc`, `vring_avail`, `vring_used`: the on-the-wire descriptor/available/used ring layout
+- [drivers/net/virtio_net.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/net/virtio_net.c) — the virtio-net driver: `struct virtnet_info`, `xmit_skb()`
+- [include/uapi/linux/virtio_net.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/virtio_net.h) — `struct virtio_net_hdr` and the `VIRTIO_NET_F_*` feature bits
+- [drivers/block/virtio_blk.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/virtio_blk.c) — the virtio-blk driver
+- [include/uapi/linux/virtio_blk.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/virtio_blk.h) — `struct virtio_blk_outhdr` and the `VIRTIO_BLK_F_*` feature bits (`DISCARD`, `WRITE_ZEROES`, `FLUSH`)
+- [drivers/vhost/net.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vhost/net.c) — the vhost-net kernel backend: `struct vhost_net`, `handle_tx()`
+- [drivers/vhost/vhost.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vhost/vhost.h) — `struct vhost_dev`: the generic vhost core shared by vhost-net, vhost-scsi, and vhost-vsock
+
+### Related pages
+
 - [KVM Architecture](kvm-arch.md) — VM exits, hypercalls
 - [Memory Virtualization](kvm-memory.md) — EPT, balloon driver
-- `drivers/virtio/` in the kernel tree — virtio core bus
-- `drivers/net/virtio_net.c` — virtio-net driver
-- `drivers/block/virtio_blk.c` — virtio-blk driver
-- `drivers/vhost/` — vhost-net kernel backend
-- virtio specification: https://docs.oasis-open.org/virtio/virtio/v1.2/
+
+### LWN articles
+
+- [An API for virtual I/O: virtio](https://lwn.net/Articles/239238/) — LWN's 2007 coverage of Rusty Russell's introduction of virtio: the `add_buf()`/`sync()`/`get_buf()` operations vector that became the virtqueue, and worked examples from the block and network drivers
+- [Standardizing virtio](https://lwn.net/Articles/580186/) — Jonathan Corbet, 2014: why virtio moved to OASIS standardization and what changed in the 1.0 specification (mandatory version feature bit, fixed little-endian byte order, flexible virtqueue memory layout)
+
+### External
+
+- [Virtual I/O Device (VIRTIO) Version 1.2](https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html) — the OASIS committee specification: split and packed virtqueue formats, device types (net, block, and others), and the PCI/MMIO/CCW transports
+- [Virtio on Linux](https://docs.kernel.org/driver-api/virtio/virtio.html) — kernel documentation for the virtio subsystem: the core bus, virtqueues, and transport drivers
+- [Writing Virtio Drivers](https://docs.kernel.org/driver-api/virtio/writing_virtio_drivers.html) — kernel documentation covering `virtqueue_add_outbuf()`, `virtqueue_add_inbuf()`, `virtqueue_kick()`, and the driver probe/remove lifecycle
