@@ -17,7 +17,7 @@ kvm_arch_vcpu_ioctl_run()          arch/x86/kvm/x86.c
               │   [VM exit fires — hardware saves guest state to VMCS]
               │
               └── kvm_x86_ops.handle_exit(vcpu, exit_fastpath)
-                    └── vmx_exit_handlers[exit_reason](vcpu)
+                    └── kvm_vmx_exit_handlers[exit_reason](vcpu)
                           returns 1 → resume guest
                           returns 0 → exit to userspace (QEMU)
 ```
@@ -60,11 +60,11 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 ## Exit reason dispatch
 
-On Intel, the exit reason is stored in the VMCS `VM_EXIT_REASON` field. KVM VMX reads it into `vcpu->arch.exit_reason` and indexes into `vmx_exit_handlers[]`:
+On Intel, the exit reason is stored in the VMCS `VM_EXIT_REASON` field. KVM VMX reads it into `vcpu->arch.exit_reason` and indexes into `kvm_vmx_exit_handlers[]`:
 
 ```c
 /* arch/x86/kvm/vmx/vmx.c */
-static int (*vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
+static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
     [EXIT_REASON_EXCEPTION_NMI]     = handle_exception_nmi,
     [EXIT_REASON_EXTERNAL_INTERRUPT]= handle_external_interrupt,
     [EXIT_REASON_IO_INSTRUCTION]    = handle_io,
@@ -86,11 +86,11 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu,
 {
     u32 exit_reason = vmx_get_exit_reason(vcpu);
 
-    if (unlikely(exit_reason >= ARRAY_SIZE(vmx_exit_handlers) ||
-                 !vmx_exit_handlers[exit_reason]))
+    if (unlikely(exit_reason >= ARRAY_SIZE(kvm_vmx_exit_handlers) ||
+                 !kvm_vmx_exit_handlers[exit_reason]))
         return handle_invalid_guest_state(vcpu);
 
-    return vmx_exit_handlers[exit_reason](vcpu);
+    return kvm_vmx_exit_handlers[exit_reason](vcpu);
 }
 ```
 

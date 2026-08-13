@@ -43,8 +43,7 @@ struct kvm_mmu {
     void (*invlpg)(struct kvm_vcpu *vcpu, gva_t gva, hpa_t root_hpa);
 
     /* Root (top-level EPT/shadow PT physical address) */
-    hpa_t                root_hpa;
-    gpa_t                root_pgd;
+    struct kvm_mmu_root_info root;   /* root.hpa, root.pgd */
     union kvm_mmu_page_role root_role;
 
     /* GPA fault address from VMCS exit qualification */
@@ -61,7 +60,7 @@ struct kvm_mmu {
 When a guest accesses memory with no EPT entry, the CPU triggers an EPT violation VM exit:
 
 ```c
-/* arch/x86/kvm/mmu/mmu.c */
+/* arch/x86/kvm/vmx/vmx.c */
 static int handle_ept_violation(struct kvm_vcpu *vcpu)
 {
     gpa_t gpa    = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
@@ -79,6 +78,7 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
     return kvm_mmu_page_fault(vcpu, gpa, error_code, NULL, 0);
 }
 
+/* arch/x86/kvm/mmu/mmu.c */
 static int kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gpa_t cr2_or_gpa,
                                u64 error_code, ...)
 {
