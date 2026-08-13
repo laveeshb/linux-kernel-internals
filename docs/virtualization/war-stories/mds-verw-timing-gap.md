@@ -12,7 +12,7 @@ Bug present since
 :   commit `650b68a0622f9`, the original KVM MDS mitigation, committed under embargo March 2019, first reached a released kernel at Linux 5.2 (July 2019)
 
 Fixed in
-:   commit `43fb862de8f62`, mainline Linux 6.8 (February 2024) — five years after the original mitigation, and only explicitly identified as a fix for this specific gap in a follow-up commit in late 2025
+:   commit `43fb862de8f62`, committed February 2024, shipping in Linux 6.8 (released March 10, 2024) — five years after the original mitigation, and only explicitly identified as a fix for this specific gap in a follow-up commit in late 2025
 
 Exploit tool
 :   no public exploit tool; the gap was closed before any confirmed exploitation
@@ -32,7 +32,7 @@ MDS — Microarchitectural Data Sampling — covers a family of related CPU flaw
 
 ## Observed behavior
 
-The practical consequence: VERW cleans the buffers, and then several ordinary memory operations — a pushed `%rbp`, a spilled register, a return address — refill them with fresh host data, all before the CPU actually hands control to the guest. A guest exploiting MFBDS after that point would be sampling *newly*-buffered host data, not the pre-flush contents VERW was supposed to have cleared. Five years later, `43fb862de8f62` ("KVM/VMX: Move VERW closer to VMentry for MDS mitigation", February 2024) described the risk in exactly these terms: "After VERW, any memory access like register push onto stack may put host data in MDS affected CPU buffers. A guest can then use MDS to sample host data. Although likelihood of secrets surviving in registers at current VERW callsite is less, but it can't be ruled out." The fix moved the buffer-clear into the hand-written assembly stub itself, as a `CLEAR_CPU_BUFFERS` macro inserted right after the guest's RAX is loaded and immediately before the branch to VMLAUNCH or VMRESUME — with no further C-level calls, spills, or memory writes physically possible in between.
+The practical consequence: VERW cleans the buffers, and then whatever ordinary memory traffic the compiler and the asm block's own register-save prologue generate — a pushed `%rbp` is one concrete example visible in the actual prologue — can refill them with fresh host data, all before the CPU actually hands control to the guest. A guest exploiting MFBDS after that point would be sampling *newly*-buffered host data, not the pre-flush contents VERW was supposed to have cleared. Five years later, `43fb862de8f62` ("KVM/VMX: Move VERW closer to VMentry for MDS mitigation", February 2024) described the risk in exactly these terms: "After VERW, any memory access like register push onto stack may put host data in MDS affected CPU buffers. A guest can then use MDS to sample host data. Although likelihood of secrets surviving in registers at current VERW callsite is less, but it can't be ruled out." The fix moved the buffer-clear into the hand-written assembly stub itself, as a `CLEAR_CPU_BUFFERS` macro inserted right after the guest's RAX is loaded and immediately before the branch to VMLAUNCH or VMRESUME — with no further C-level calls, spills, or memory writes physically possible in between.
 
 An even later commit, `e6ff1d61de51e` (November 2025, Sean Christopherson), reworking a related MMIO-specific mitigation, states the history plainly and puts a name on what had actually happened: "the flaw goes back to the introduction of the MDS mitigation. The MDS mitigation was inadvertently fixed by commit 43fb862de8f6 ... but previous kernels that flush CPU buffers in vmx_vcpu_enter_exit() are affected (though it's unlikely the flaw is meaningfully exploitable even older kernels)." The word "inadvertently" is doing real work there — the 2024 commit's authors were hardening the callsite against a *theoretical* concern they could articulate but hadn't traced back to the original 2019 design, and it took a third developer, over a year later, working on an adjacent piece of the same code, to recognize that the 2024 change had already closed a genuine, if likely low-severity, gap in the original fix.
 
@@ -61,8 +61,8 @@ The original 2019 mitigation was written under real time pressure — MDS was on
 
 ## External references
 
-- [GitHub mirror: 650b68a0622f9](https://github.com/torvalds/linux/commit/650b68a0622f933444a6d66936abb3103029413b) — "x86/kvm/vmx: Add MDS protection when L1D Flush is not active," the original 2019 mitigation
-- [GitHub mirror: 43fb862de8f62](https://github.com/torvalds/linux/commit/43fb862de8f628c5db5e96831c915b9aebf62d33) — "KVM/VMX: Move VERW closer to VMentry for MDS mitigation," the 2024 fix
-- [GitHub mirror: e6ff1d61de51e](https://github.com/torvalds/linux/commit/e6ff1d61de51ec5fe94c5fb79544a93f494104eb) — the 2025 commit that names the original flaw explicitly and closes a related gap
+- [git.kernel.org: 650b68a0622f9](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=650b68a0622f933444a6d66936abb3103029413b) — "x86/kvm/vmx: Add MDS protection when L1D Flush is not active," the original 2019 mitigation
+- [git.kernel.org: 43fb862de8f62](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=43fb862de8f628c5db5e96831c915b9aebf62d33) — "KVM/VMX: Move VERW closer to VMentry for MDS mitigation," the 2024 fix
+- [git.kernel.org: e6ff1d61de51e](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e6ff1d61de51ec5fe94c5fb79544a93f494104eb) — the 2025 commit that names the original flaw explicitly and closes a related gap
 - [Kernel documentation: MDS - Microarchitectural Data Sampling](https://docs.kernel.org/admin-guide/hw-vuln/mds.html) — the kernel's own technical description of the MDS CVE family and the VERW-based mitigation
 - [NVD: CVE-2018-12130](https://nvd.nist.gov/vuln/detail/CVE-2018-12130) — CVE record, CVSS 3.1 5.9, published May 30, 2019

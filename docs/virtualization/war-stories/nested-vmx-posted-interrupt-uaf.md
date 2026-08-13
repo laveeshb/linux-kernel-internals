@@ -64,8 +64,8 @@ The wrapper-removal commit's diff reads, line by line, like an unremarkable clea
 
 ## External references
 
-- [GitHub mirror: c2dd5146e9fe1](https://github.com/torvalds/linux/commit/c2dd5146e9fe1f22c77c1b011adf84eea0245806) — "KVM: Fix UAF in nested posted interrupt processing," the fix, with the full reproduction recipe in its commit message
-- [GitHub mirror: 5e2f30b756a37](https://github.com/torvalds/linux/commit/5e2f30b756a37bd80c5b0471d0e10d769ab2eb9a) — "KVM: nVMX: get rid of nested_get_page()," the refactor that introduced the gap
+- [git.kernel.org: c2dd5146e9fe1](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=c2dd5146e9fe1f22c77c1b011adf84eea0245806) — "KVM: Fix UAF in nested posted interrupt processing," the fix, with the full reproduction recipe in its commit message
+- [git.kernel.org: 5e2f30b756a37](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5e2f30b756a37bd80c5b0471d0e10d769ab2eb9a) — "KVM: nVMX: get rid of nested_get_page()," the refactor that introduced the gap
 - [marc.info: the original patch submission](https://marc.info/?l=kvm&m=154514994222809&w=2) — Cfir Cohen's patch mail with the exact reproduction steps
 - [LWN: Linux 4.19.13](https://lwn.net/Articles/775720/) and [Linux 4.14.91](https://lwn.net/Articles/775721/) — the stable releases (both December 29, 2018) that first shipped the backported fix
 - [NVD: CVE-2018-16882](https://nvd.nist.gov/vuln/detail/CVE-2018-16882) — CVE record, CVSS 8.8 HIGH, published January 3, 2019

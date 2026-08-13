@@ -66,8 +66,8 @@ The FDC's command handlers were written under an implicit, undocumented contract
 
 ## External references
 
-- [GitHub mirror: e907746266721](https://github.com/qemu/qemu/commit/e907746266721f305d67bc0718795fedee2e824c) — "fdc: force the fifo access to be in bounds of the allocated buffer," the fix
-- [GitHub mirror: 6cc8a11c84ddc](https://github.com/qemu/qemu/commit/6cc8a11c84ddc18c64fc88d54c8e9dca24ada489) — "fdc: Fix MSR.RQM flag," the follow-up spec-correctness hardening
+- [QEMU project (official GitLab): e907746266721](https://gitlab.com/qemu-project/qemu/-/commit/e907746266721f305d67bc0718795fedee2e824c) — "fdc: force the fifo access to be in bounds of the allocated buffer," the fix
+- [QEMU project (official GitLab): 6cc8a11c84ddc](https://gitlab.com/qemu-project/qemu/-/commit/6cc8a11c84ddc18c64fc88d54c8e9dca24ada489) — "fdc: Fix MSR.RQM flag," the follow-up spec-correctness hardening
 - [Xen Security Advisory XSA-133](https://xenbits.xen.org/xsa/advisory-133.html) — confirms the shared QEMU device-model exposure across both Xen device models
 - [Red Hat: VENOM, don't get bitten](https://access.redhat.com/blogs/product-security/posts/1976633) — technical analysis of the FIFO-index reset gap and the unconditional FDC instantiation
 - [NVD: CVE-2015-3456](https://nvd.nist.gov/vuln/detail/CVE-2015-3456) — CVE record, CVSS v2 7.7, published May 13, 2015

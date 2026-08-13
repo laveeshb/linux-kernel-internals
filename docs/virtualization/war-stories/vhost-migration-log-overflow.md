@@ -64,7 +64,7 @@ The invariant "one log entry per descriptor, so log_num can never outrun in_num"
 
 ## External references
 
-- [GitHub mirror: 060423bfdee3f](https://github.com/torvalds/linux/commit/060423bfdee3f8bc6e2c1bac97de24d5415e2bc4) — "vhost: make sure log_num < in_num," the fix
-- [GitHub mirror: 3a4d5c94e959](https://github.com/torvalds/linux/commit/3a4d5c94e959359ece6d6b55045c3f046677f55c) — "vhost_net: a kernel-level virtio server," vhost_net's original 2010 introduction
+- [git.kernel.org: 060423bfdee3f](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=060423bfdee3f8bc6e2c1bac97de24d5415e2bc4) — "vhost: make sure log_num < in_num," the fix
+- [git.kernel.org: 3a4d5c94e959](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3a4d5c94e959359ece6d6b55045c3f046677f55c) — "vhost_net: a kernel-level virtio server," vhost_net's original 2010 introduction
 - [oss-security: CVE-2019-14835 disclosure](https://www.openwall.com/lists/oss-security/2019/09/17/1) — Tencent Blade Team's technical writeup, with an independently-annotated trace of the same overflow
 - [NVD: CVE-2019-14835](https://nvd.nist.gov/vuln/detail/CVE-2019-14835) — CVE record, CVSS 3.1 7.8 HIGH, published September 17, 2019
