@@ -336,7 +336,7 @@ structs instead.
 ### Related pages
 
 - [SYSCALL_DEFINE and Dispatch](syscall-define.md) — How native syscalls are defined and dispatched
-- [Syscall Entry Path](syscall-entry.md) — How 32-bit processes enter the kernel on x86-64
+- [Syscall Entry Path](syscall-entry.md) — `do_syscall_64()`'s dispatch, including the `do_syscall_x32()` path this page's compat handling sits alongside
 - [Adding a New Syscall](adding-syscall.md) — Includes the checklist for deciding whether a new syscall needs a compat handler
 
 ### LWN articles

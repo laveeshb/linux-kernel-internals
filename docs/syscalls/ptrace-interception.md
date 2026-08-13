@@ -334,7 +334,7 @@ echo __x64_sys_openat > /sys/kernel/tracing/set_graph_function
 
 ### Related pages
 
-- [Syscall Entry Path](syscall-entry.md) — TIF_SYSCALL_TRACE and the entry fast/slow path
+- [Syscall Entry Path](syscall-entry.md) — `entry_SYSCALL_64`, `pt_regs`, and the `do_syscall_64()` dispatch this page's tracer hooks run inside
 - [SYSCALL_DEFINE and Dispatch](syscall-define.md) — how `SYSCALL_DEFINE` wires a syscall into the dispatch table
 - [Syscall Auditing](audit.md) — `SYSCALL_WORK_SYSCALL_AUDIT` and the audit subsystem's own entry/exit hooks
 
