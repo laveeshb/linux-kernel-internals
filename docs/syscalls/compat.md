@@ -336,7 +336,7 @@ structs instead.
 ### Related pages
 
 - [SYSCALL_DEFINE and Dispatch](syscall-define.md) — How native syscalls are defined and dispatched
-- [Syscall Entry Path](syscall-entry.md) — `do_syscall_64()`'s dispatch, including the `do_syscall_x32()` path this page's compat handling sits alongside
+- [Syscall Entry Path](syscall-entry.md) — `do_syscall_64()`'s dispatch and the `do_syscall_x32()` x32 path; ia32 compat dispatches through its own separate entry point (`ia32_sys_call()`) rather than through either of these
 - [Adding a New Syscall](adding-syscall.md) — Includes the checklist for deciding whether a new syscall needs a compat handler
 
 ### LWN articles
