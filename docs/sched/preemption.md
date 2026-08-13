@@ -136,7 +136,7 @@ asmlinkage __visible void __sched preempt_schedule_irq(void)
 
 ## CONFIG_PREEMPT_RT: real-time
 
-PREEMPT_RT (fully merged in 6.12 for all architectures — [merge commit `baeb9a7d8b60`](https://github.com/torvalds/linux/commit/baeb9a7d8b60b021d907127509c44507539c15e5), [LWN](https://lwn.net/Articles/989212/)) converts almost all spinlocks to sleeping mutexes, allowing preemption even while holding a "spinlock":
+PREEMPT_RT (fully merged in 6.12 for all architectures — [merge commit `baeb9a7d8b60`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=baeb9a7d8b60b021d907127509c44507539c15e5), [LWN](https://lwn.net/Articles/989212/)) converts almost all spinlocks to sleeping mutexes, allowing preemption even while holding a "spinlock":
 
 ```
 Non-RT:                          RT:

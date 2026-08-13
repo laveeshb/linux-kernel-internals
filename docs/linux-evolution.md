@@ -233,7 +233,7 @@ Safe, JIT-compiled programs running in kernel space with verifier guarantees.
 
 ### Rust in Kernel (2022-)
 
-**Commit**: [8aebac82933f](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8aebac82933ff1497f89082d2d8ae1cb35e5d319) (v6.1)
+**Commit**: [8aebac82933f](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8aebac82933ff1a7c8eede18cab11e1115e2062b) (v6.1)
 
 First high-level language besides C in Linux kernel. [Pull request for v6.1](https://lore.kernel.org/lkml/CAK7LNAQ2xBLG_aSDm64SSYRBOBKwhJnZ6UDg8ycAezATVToFLg@mail.gmail.com/t/) accepted. Motivation:
 - Memory safety guarantees

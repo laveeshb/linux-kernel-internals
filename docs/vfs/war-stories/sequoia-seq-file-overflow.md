@@ -27,7 +27,7 @@ Actively exploited
 
 ## Before state
 
-`single_open()` and friends give a `seq_file` exactly one shot at producing its entire output in one buffer — no incremental chunking. When that output doesn't fit, `fs/seq_file.c` doubles the buffer and tries again. Originally that meant `kmalloc()`, which simply failed outright for large, hard-to-satisfy allocations under memory fragmentation — a real problem: [`058504edd026`](https://github.com/torvalds/linux/commit/058504edd02667eef8fac9be27ab3ea74332e9b4) ("fs/seq_file: fallback to vmalloc allocation", Heiko Carstens, July 2014) fixed genuine `/proc/stat` read failures on fragmented systems by adding a fallback: if `kmalloc()` fails and the request is bigger than a page, fall back to `vmalloc()`, which can satisfy far larger requests by stitching together non-contiguous pages.
+`single_open()` and friends give a `seq_file` exactly one shot at producing its entire output in one buffer — no incremental chunking. When that output doesn't fit, `fs/seq_file.c` doubles the buffer and tries again. Originally that meant `kmalloc()`, which simply failed outright for large, hard-to-satisfy allocations under memory fragmentation — a real problem: [`058504edd026`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=058504edd02667eef8fac9be27ab3ea74332e9b4) ("fs/seq_file: fallback to vmalloc allocation", Heiko Carstens, July 2014) fixed genuine `/proc/stat` read failures on fragmented systems by adding a fallback: if `kmalloc()` fails and the request is bigger than a page, fall back to `vmalloc()`, which can satisfy far larger requests by stitching together non-contiguous pages.
 
 ```c
 static void *seq_buf_alloc(unsigned long size)
@@ -98,8 +98,8 @@ static void *seq_buf_alloc(unsigned long size)
 
 ## External references
 
-- [GitHub mirror: 8cae8cd89f05](https://github.com/torvalds/linux/commit/8cae8cd89f05f6de223d63e6d15e31c8ba9cf53b) — "seq_file: disallow extremely large seq buffer allocations," the fix
-- [GitHub mirror: 058504edd026](https://github.com/torvalds/linux/commit/058504edd02667eef8fac9be27ab3ea74332e9b4) — "fs/seq_file: fallback to vmalloc allocation," the commit that made the bug reachable
+- [git.kernel.org: 8cae8cd89f05](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8cae8cd89f05f6de223d63e6d15e31c8ba9cf53b) — "seq_file: disallow extremely large seq buffer allocations," the fix
+- [git.kernel.org: 058504edd026](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=058504edd02667eef8fac9be27ab3ea74332e9b4) — "fs/seq_file: fallback to vmalloc allocation," the commit that made the bug reachable
 - [oss-security: CVE-2021-33909](https://www.openwall.com/lists/oss-security/2021/07/20/1) — Qualys's original advisory, with the full exploitation mechanics
 - [LWN: The Sequoia seq_file vulnerability](https://lwn.net/Articles/863729/) — Jake Edge, July 21, 2021
 - [NVD: CVE-2021-33909](https://nvd.nist.gov/vuln/detail/CVE-2021-33909) — CVE record, CVSS 7.8 HIGH, published July 20, 2021

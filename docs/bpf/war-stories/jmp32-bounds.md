@@ -12,10 +12,10 @@ CVSS
 :   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); Ubuntu's secondary score is also 7.8, with a different vector (`AC:H`, `S:C`)
 
 Introduced in
-:   [`581738a681b6`](https://github.com/torvalds/linux/commit/581738a681b6faae5725c2555439189ca81c0f1f) (v5.5), backported into 5.4-stable
+:   [`581738a681b6`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=581738a681b6faae5725c2555439189ca81c0f1f) (v5.5), backported into 5.4-stable
 
 Fixed in
-:   [`f2d67fec0b43`](https://github.com/torvalds/linux/commit/f2d67fec0b43edce8c416101cdc52e71145b5fef), mainline v5.7-rc1; stable 5.6.1, 5.5.14, 5.4.29
+:   [`f2d67fec0b43`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f2d67fec0b43edce8c416101cdc52e71145b5fef), mainline v5.7-rc1; stable 5.6.1, 5.5.14, 5.4.29
 
 Exploit tool
 :   no Exploit-DB entry; NVD tags a later oss-security post as `Exploit`
@@ -27,7 +27,7 @@ Actively exploited
 
 ## Before state
 
-BPF has 32-bit conditional jumps (`jmp32`, generated when LLVM is asked for `-mcpu=v3`), and in November 2019 Yonghong Song's [`581738a681b6`](https://github.com/torvalds/linux/commit/581738a681b6faae5725c2555439189ca81c0f1f) ("bpf: Provide better register bounds after jmp32 instructions") taught the verifier to learn something from them. The patch [went through review](https://lore.kernel.org/all/20191121045924.v77wb5zzfliln7ql@ast-mbp.dhcp.thefacebook.com/) on the bpf list — but Alexei Starovoitov's only comment was about the *style* of `__reg_bound_offset32()` ("may be make sense to do it as a helper?"), and his direct question to a second reviewer — "Ed, how would you simplify `__reg_bound_offset32` logic?" — went unanswered. The masking premise itself was never challenged.
+BPF has 32-bit conditional jumps (`jmp32`, generated when LLVM is asked for `-mcpu=v3`), and in November 2019 Yonghong Song's [`581738a681b6`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=581738a681b6faae5725c2555439189ca81c0f1f) ("bpf: Provide better register bounds after jmp32 instructions") taught the verifier to learn something from them. The patch [went through review](https://lore.kernel.org/all/20191121045924.v77wb5zzfliln7ql@ast-mbp.dhcp.thefacebook.com/) on the bpf list — but Alexei Starovoitov's only comment was about the *style* of `__reg_bound_offset32()` ("may be make sense to do it as a helper?"), and his direct question to a second reviewer — "Ed, how would you simplify `__reg_bound_offset32` logic?" — went unanswered. The masking premise itself was never challenged.
 
 The verifier tracks each scalar register two ways: as a numeric interval (`umin_value` … `umax_value`) and as a **tnum** — a `(value, mask)` pair recording which individual bits are known and which are not. `581738a681b6` added a helper to refine the tnum after a 32-bit comparison:
 
@@ -109,13 +109,13 @@ Borkmann first tried to repair it. He documents the attempt in the commit messag
 
 > However, above new `__reg_bound_offset32()` has no effect on refining the knowledge of the register contents. Meaning, if the bounds in hi32 range mismatch we'll get the identity function [...] Likewise, if the bounds in hi32 range match, then we mask both bounds with `0xffffffff` [...] However, _prior_ called `__reg_bound_offset()` did already such intersection on the full reg and we therefore would only repeat the same operation on the lo32 part twice.
 
-The corrected version does nothing the verifier wasn't already doing. So [`f2d67fec0b43`](https://github.com/torvalds/linux/commit/f2d67fec0b43edce8c416101cdc52e71145b5fef) ("bpf: Undo incorrect `__reg_bound_offset32` handling") deletes the helper and both pairs of call sites — a 19-line pure deletion — with an explicit stable-tree justification:
+The corrected version does nothing the verifier wasn't already doing. So [`f2d67fec0b43`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f2d67fec0b43edce8c416101cdc52e71145b5fef) ("bpf: Undo incorrect `__reg_bound_offset32` handling") deletes the helper and both pairs of call sites — a 19-line pure deletion — with an explicit stable-tree justification:
 
 > Given this has no effect and the original commit had false assumptions, this patch reverts the code entirely which is also more straight forward for stable trees [...] A proper bounds refinement would need a significantly more complex approach which is currently being worked, but no stable material. Hence revert is best option for stable.
 
 The commit message even shows the reverted verifier correctly rejecting Trosinenko's reproducer.
 
-**A replacement implementation arrived in the same series.** [The three-patch posting](https://lore.kernel.org/all/20200330160324.15259-1-daniel@iogearbox.net/) to `bpf@vger.kernel.org` on March 30, 2020 was Borkmann's revert plus two patches by **Jann Horn**. Horn's [`604dca5e3af1`](https://github.com/torvalds/linux/commit/604dca5e3af1db98bd123b7bfc02b017af99e3a0) ("bpf: Fix tnum constraints for 32-bit comparisons") diagnoses the original defect in one sentence:
+**A replacement implementation arrived in the same series.** [The three-patch posting](https://lore.kernel.org/all/20200330160324.15259-1-daniel@iogearbox.net/) to `bpf@vger.kernel.org` on March 30, 2020 was Borkmann's revert plus two patches by **Jann Horn**. Horn's [`604dca5e3af1`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=604dca5e3af1db98bd123b7bfc02b017af99e3a0) ("bpf: Fix tnum constraints for 32-bit comparisons") diagnoses the original defect in one sentence:
 
 > However, the implementation from `581738a681b6` didn't compute the tnum constraint based on the fixed operand, but instead derives it from the arithmetic-range-based tracking.
 
@@ -125,7 +125,7 @@ Alexei Starovoitov's entire public reply to the series:
 
 > Applied. Thanks
 
-**And then the fix was itself replaced, within the same merge window — by the work Borkmann's revert had already footnoted as "currently being worked."** John Fastabend's [`3f50f132d840`](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) ("bpf: Verifier, do explicit ALU32 bounds tracking") was authored the same day and landed in the same release, v5.7-rc1. It deletes Horn's `set_upper_bound()`/`set_lower_bound()` and abandons the tnum-abuse approach entirely, giving every register a genuine second set of 32-bit bounds (`s32_min_value`, `s32_max_value`, `u32_min_value`, `u32_max_value`) instead of encoding 32-bit knowledge into the tnum. This design got a real review: on [v1](https://lore.kernel.org/all/158507130343.15666.8018068546764556975.stgit@john-Precision-5820-Tower/), Starovoitov caught a genuine correctness bug in the sign-extension logic for negative 32-bit bounds — "looks like above will not be correct for negative `s32_min`/`max`" — which Fastabend fixed before [v2](https://lore.kernel.org/all/158560409224.10843.3588655801186916301.stgit@john-Precision-5820-Tower/) merged.
+**And then the fix was itself replaced, within the same merge window — by the work Borkmann's revert had already footnoted as "currently being worked."** John Fastabend's [`3f50f132d840`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3f50f132d8400e129fc9eb68b5020167ef80a244) ("bpf: Verifier, do explicit ALU32 bounds tracking") was authored the same day and landed in the same release, v5.7-rc1. It deletes Horn's `set_upper_bound()`/`set_lower_bound()` and abandons the tnum-abuse approach entirely, giving every register a genuine second set of 32-bit bounds (`s32_min_value`, `s32_max_value`, `u32_min_value`, `u32_max_value`) instead of encoding 32-bit knowledge into the tnum. This design got a real review: on [v1](https://lore.kernel.org/all/158507130343.15666.8018068546764556975.stgit@john-Precision-5820-Tower/), Starovoitov caught a genuine correctness bug in the sign-extension logic for negative 32-bit bounds — "looks like above will not be correct for negative `s32_min`/`max`" — which Fastabend fixed before [v2](https://lore.kernel.org/all/158560409224.10843.3588655801186916301.stgit@john-Precision-5820-Tower/) merged.
 
 That is the right design, and it is also the commit named in the `Fixes:` tags of [CVE-2021-3490](alu32-bitwise-bounds.md) and [CVE-2021-31440](alu32-unsigned-bounds.md) a year later. The direct lineage runs: a precision improvement → a CVE → a revert plus a proper implementation → a better proper implementation → two more CVEs.
 
@@ -153,11 +153,11 @@ That is the right design, and it is also the commit named in the `Fixes:` tags o
 ## External references
 
 - [NVD: CVE-2020-8835](https://nvd.nist.gov/vuln/detail/CVE-2020-8835) — CVSS 7.8 HIGH, published April 2, 2020; names the affected versions and the ZDI case number
-- [GitHub mirror: f2d67fec0b43](https://github.com/torvalds/linux/commit/f2d67fec0b43edce8c416101cdc52e71145b5fef) — "bpf: Undo incorrect `__reg_bound_offset32` handling", the revert, with the full reproducer walkthrough and the rejected repair
-- [GitHub mirror: 581738a681b6](https://github.com/torvalds/linux/commit/581738a681b6faae5725c2555439189ca81c0f1f) — "bpf: Provide better register bounds after jmp32 instructions" (v5.5), the introducing commit
+- [git.kernel.org: f2d67fec0b43](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f2d67fec0b43edce8c416101cdc52e71145b5fef) — "bpf: Undo incorrect `__reg_bound_offset32` handling", the revert, with the full reproducer walkthrough and the rejected repair
+- [git.kernel.org: 581738a681b6](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=581738a681b6faae5725c2555439189ca81c0f1f) — "bpf: Provide better register bounds after jmp32 instructions" (v5.5), the introducing commit
 - [lore.kernel.org: bpf: provide better register bounds after jmp32 instructions](https://lore.kernel.org/all/20191121045924.v77wb5zzfliln7ql@ast-mbp.dhcp.thefacebook.com/) — the November 2019 review thread; the masking premise itself was never challenged
-- [GitHub mirror: 604dca5e3af1](https://github.com/torvalds/linux/commit/604dca5e3af1db98bd123b7bfc02b017af99e3a0) — "bpf: Fix tnum constraints for 32-bit comparisons", Jann Horn's replacement implementation from the same series
-- [GitHub mirror: 3f50f132d840](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking", the design that superseded both, in the same release
+- [git.kernel.org: 604dca5e3af1](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=604dca5e3af1db98bd123b7bfc02b017af99e3a0) — "bpf: Fix tnum constraints for 32-bit comparisons", Jann Horn's replacement implementation from the same series
+- [git.kernel.org: 3f50f132d840](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking", the design that superseded both, in the same release
 - [lore.kernel.org: ALU32 bounds tracking support (v1)](https://lore.kernel.org/all/158507130343.15666.8018068546764556975.stgit@john-Precision-5820-Tower/) — where Starovoitov caught a real sign-extension bug before the design merged
 - [lore.kernel.org: `[PATCH bpf-next 0/3] Fix __reg_bound_offset32 handling`](https://lore.kernel.org/all/20200330160324.15259-1-daniel@iogearbox.net/) — the three-patch thread and Starovoitov's two-word reply
 - [oss-security: CVE-2020-8835](https://www.openwall.com/lists/oss-security/2020/03/30/3) — Steve Beattie's announcement, March 30, 2020; the Pwn2Own attribution, the 5.4-stable backport hash, and the sysctl reachability note

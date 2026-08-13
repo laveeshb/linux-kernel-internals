@@ -12,7 +12,7 @@ CVSS
 :   4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`, NVD primary)
 
 Fixed in
-:   [`9183671af6db`](https://github.com/torvalds/linux/commit/9183671af6dbf60a1219371d4ed73e23f43b49db), mainline v5.13-rc7; stable 5.12.13 and 5.10.46
+:   [`9183671af6db`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9183671af6dbf60a1219371d4ed73e23f43b49db), mainline v5.13-rc7; stable 5.12.13 and 5.10.46
 
 Exploit tool
 :   multiple proofs-of-concept were sent privately to `security@kernel.org`; NVD's reference list tags a public oss-security post as `Exploit` and links a public PoC repository. No Exploit-DB entry
@@ -26,7 +26,7 @@ Actively exploited
 
 The BPF verifier's job is to prove, before a program is allowed to run, that it cannot touch memory it shouldn't. It does that by [abstract interpretation](../bpf-verifier.md): walking every control-flow path the program could take and tracking, per register, what the value could be on that path.
 
-Spectre broke the premise underneath that. In January 2018, Alexei Starovoitov's [`b2157399cc98`](https://github.com/torvalds/linux/commit/b2157399cc9898260d6031c5bfe45fe137c1fbe7) ("bpf: prevent out-of-bounds speculation", v4.15-rc8) opened with the problem in two sentences:
+Spectre broke the premise underneath that. In January 2018, Alexei Starovoitov's [`b2157399cc98`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b2157399cc9898260d6031c5bfe45fe137c1fbe7) ("bpf: prevent out-of-bounds speculation", v4.15-rc8) opened with the problem in two sentences:
 
 > Under speculation, CPUs may mis-predict branches in bounds checks. Thus, memory accesses under a bounds check may be speculated even if the bounds check fails, providing a primitive for building a side channel.
 
@@ -89,7 +89,7 @@ The verifier's soundness argument has always been about the architectural machin
 
 Put differently: the 2018 fix hardened the values the verifier tracked. The 2021 bug was in which paths the verifier tracked at all.
 
-There is a second, quieter contributing factor visible in the same era's patches. Speculation defenses in BPF are bolted on as a series of specific countermeasures — index masking ([`b2157399cc98`](https://github.com/torvalds/linux/commit/b2157399cc9898260d6031c5bfe45fe137c1fbe7)), pointer-arithmetic sanitation, and, a month before this fix, [`801c6058d14a`](https://github.com/torvalds/linux/commit/801c6058d14a82179a7ee17a4b532cac6fad067f) ("bpf: Fix leakage of uninitialized bpf stack under speculation", also reported by Piotr Krysiuk), which closed a window where speculative pointer arithmetic could walk intermediate offsets and read the 512-byte BPF stack before the program had written it. Each is correct; none of them is a general argument, so each new shape of the attack needs a new countermeasure.
+There is a second, quieter contributing factor visible in the same era's patches. Speculation defenses in BPF are bolted on as a series of specific countermeasures — index masking ([`b2157399cc98`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b2157399cc9898260d6031c5bfe45fe137c1fbe7)), pointer-arithmetic sanitation, and, a month before this fix, [`801c6058d14a`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=801c6058d14a82179a7ee17a4b532cac6fad067f) ("bpf: Fix leakage of uninitialized bpf stack under speculation", also reported by Piotr Krysiuk), which closed a window where speculative pointer arithmetic could walk intermediate offsets and read the 512-byte BPF stack before the program had written it. Each is correct; none of them is a general argument, so each new shape of the attack needs a new countermeasure.
 
 ## Resolution
 
@@ -155,9 +155,9 @@ The fix reached mainline in v5.13-rc7 and, per LWN, the 5.12.13 and 5.10.46 stab
 ## External references
 
 - [NVD: CVE-2021-33624](https://nvd.nist.gov/vuln/detail/CVE-2021-33624) — CVSS 4.7 MEDIUM (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N`), published June 23, 2021
-- [GitHub mirror: 9183671af6db](https://github.com/torvalds/linux/commit/9183671af6dbf60a1219371d4ed73e23f43b49db) — "bpf: Fix leakage under speculation on mispredicted branches", the fix, including both crafted programs and the rejected alternative design
-- [GitHub mirror: b2157399cc98](https://github.com/torvalds/linux/commit/b2157399cc9898260d6031c5bfe45fe137c1fbe7) — "bpf: prevent out-of-bounds speculation" (v4.15-rc8), the 2018 index-masking fix for the BPF side of Spectre v1
-- [GitHub mirror: 801c6058d14a](https://github.com/torvalds/linux/commit/801c6058d14a82179a7ee17a4b532cac6fad067f) — "bpf: Fix leakage of uninitialized bpf stack under speculation" (April 2021), the adjacent speculative-leak fix
+- [git.kernel.org: 9183671af6db](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9183671af6dbf60a1219371d4ed73e23f43b49db) — "bpf: Fix leakage under speculation on mispredicted branches", the fix, including both crafted programs and the rejected alternative design
+- [git.kernel.org: b2157399cc98](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b2157399cc9898260d6031c5bfe45fe137c1fbe7) — "bpf: prevent out-of-bounds speculation" (v4.15-rc8), the 2018 index-masking fix for the BPF side of Spectre v1
+- [git.kernel.org: 801c6058d14a](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=801c6058d14a82179a7ee17a4b532cac6fad067f) — "bpf: Fix leakage of uninitialized bpf stack under speculation" (April 2021), the adjacent speculative-leak fix
 - [LWN: Spectre revisits BPF](https://lwn.net/Articles/860597/) — Jonathan Corbet, June 24, 2021; the walkthrough of the vulnerability, the fix, and its cost
 - [lore.kernel.org: bpf: backport fixes for CVE-2021-33624 (5.4)](https://lore.kernel.org/all/20210805155343.3618696-1-ovidiu.panait@windriver.com/) — the six-patch manual backport that brought the fix to the 5.4 LTS branch two months after mainline
 - [NVD: CVE-2017-5753](https://nvd.nist.gov/vuln/detail/CVE-2017-5753) — Spectre Variant 1, the hardware vulnerability the 2018 BPF masking patch addressed

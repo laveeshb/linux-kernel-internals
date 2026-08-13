@@ -54,8 +54,8 @@ The kernel's own `pi-futex.rst` documentation describes the resulting fast path 
 
 ## External references
 
-- [GitHub mirror: 23f78d4a03c5](https://github.com/torvalds/linux/commit/23f78d4a03c53cbd75d87a795378ea540aa08c86) — "[PATCH] pi-futex: rt mutex core," the commit that introduced `kernel/rtmutex.c`
-- [GitHub mirror: c87e2837be82](https://github.com/torvalds/linux/commit/c87e2837be82df479a6bae9f155c43516d2feebc) — "[PATCH] pi-futex: futex_lock_pi/futex_unlock_pi support," the futex-facing integration
+- [git.kernel.org: 23f78d4a03c5](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=23f78d4a03c53cbd75d87a795378ea540aa08c86) — "[PATCH] pi-futex: rt mutex core," the commit that introduced `kernel/rtmutex.c`
+- [git.kernel.org: c87e2837be82](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=c87e2837be82df479a6bae9f155c43516d2feebc) — "[PATCH] pi-futex: futex_lock_pi/futex_unlock_pi support," the futex-facing integration
 - [LWN: Priority inheritance in the kernel](https://lwn.net/Articles/178253/) — Jonathan Corbet, April 3, 2006
 - [LWN: mirror of Linus Torvalds's December 2005 LKML post](https://lwn.net/Articles/178258/) — "Friends don't let friends use priority inheritance"
 - [Kernel documentation: RT-mutex implementation design](https://docs.kernel.org/locking/rt-mutex-design.html) — Steven Rostedt's design document, the source for the priority-inversion and PI-chain explanations above

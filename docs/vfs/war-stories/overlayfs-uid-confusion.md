@@ -71,7 +71,7 @@ If the lower file's real UID or GID has no valid mapping in the mounter's user n
 
 ## External references
 
-- [GitHub mirror: 4f11ada10d0a](https://github.com/torvalds/linux/commit/4f11ada10d0ad3fd53e2bd67806351de63a4f9c3) — "ovl: fail on invalid uid/gid mapping at copy up," the fix
-- [GitHub mirror: 459c7c565ac3](https://github.com/torvalds/linux/commit/459c7c565ac36ba09ffbf24231147f408fde4203) — "ovl: unprivieged mounts," the commit that enabled the mount configuration this bug required
+- [git.kernel.org: 4f11ada10d0a](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=4f11ada10d0ad3fd53e2bd67806351de63a4f9c3) — "ovl: fail on invalid uid/gid mapping at copy up," the fix
+- [git.kernel.org: 459c7c565ac3](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=459c7c565ac36ba09ffbf24231147f408fde4203) — "ovl: unprivieged mounts," the commit that enabled the mount configuration this bug required
 - [NVD: CVE-2023-0386](https://nvd.nist.gov/vuln/detail/CVE-2023-0386) — CVE record, CVSS 7.8 HIGH; CISA KEV-listed June 17, 2025
 - [Red Hat: CVE-2023-0386](https://access.redhat.com/security/cve/cve-2023-0386) — vendor advisory and technical summary

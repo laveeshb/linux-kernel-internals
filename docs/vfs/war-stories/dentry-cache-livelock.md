@@ -92,6 +92,6 @@ That skip loop depends on a second change in the same commit: in `__dentry_kill(
 
 ## External references
 
-- [GitHub mirror: ca5358ef75fc](https://github.com/torvalds/linux/commit/ca5358ef75fc69fee5322a38a340f5739d997c10) — "deal with deadlock in d_walk()," the fix
-- [GitHub mirror: 946e51f2bf37](https://github.com/torvalds/linux/commit/946e51f2bf37f1656916eb75bd0742ba33983c28) — "move d_rcu from overlapping d_child to overlapping d_alias," the same-day companion structural change
+- [git.kernel.org: ca5358ef75fc](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=ca5358ef75fc69fee5322a38a340f5739d997c10) — "deal with deadlock in d_walk()," the fix
+- [git.kernel.org: 946e51f2bf37](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=946e51f2bf37f1656916eb75bd0742ba33983c28) — "move d_rcu from overlapping d_child to overlapping d_alias," the same-day companion structural change
 - [NVD: CVE-2014-8559](https://nvd.nist.gov/vuln/detail/CVE-2014-8559) — CVE record, CVSS 5.5 MEDIUM, published November 10, 2014

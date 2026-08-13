@@ -62,7 +62,7 @@ The 2014 commit's own description frames its goal precisely: stop silently retur
 
 ## External references
 
-- [GitHub mirror: d33d26036a02](https://github.com/torvalds/linux/commit/d33d26036a0274b472299d7dcdaa5fb34329f91b) — "rtmutex: Drop rt_mutex::wait_lock before scheduling," the fix
-- [GitHub mirror: 3d5c9340d194](https://github.com/torvalds/linux/commit/3d5c9340d1949733eb37616abd15db36aef9a57c) — "rtmutex: Handle deadlock detection smarter," the 2014 commit that introduced the unconditional parking loop
+- [git.kernel.org: d33d26036a02](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d33d26036a0274b472299d7dcdaa5fb34329f91b) — "rtmutex: Drop rt_mutex::wait_lock before scheduling," the fix
+- [git.kernel.org: 3d5c9340d194](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3d5c9340d1949733eb37616abd15db36aef9a57c) — "rtmutex: Handle deadlock detection smarter," the 2014 commit that introduced the unconditional parking loop
 - [lore.kernel.org: the original patch submission](https://lore.kernel.org/all/ME0P300MB063599BEF0743B8FA339C2CECC802@ME0P300MB0635.AUSP300.PROD.OUTLOOK.COM/) — Roland Xu's "Avoid schedule while atomic if meeting the early deadlock"
 - [NVD: CVE-2024-46829](https://nvd.nist.gov/vuln/detail/CVE-2024-46829) — CVE record, CVSS 5.5 MEDIUM, published September 27, 2024
