@@ -20,7 +20,7 @@ Adding `stat64()` and `lstat64()` helped 32-bit architectures get 64-bit file si
 in `struct stat64` on 32-bit Linux still used 32-bit `time_t`. The real fix required new syscalls with
 genuinely 64-bit timestamps throughout.
 
-Linux 4.11 (2017) added `statx()` (`fs/stat.c`, commit [`a528d35e8bfc`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a528d35e8bfcc521d7cb70aaf03e1bd296c8493f)), which uses `__kernel_timespec`
+Linux 4.11 (2017) added `statx()` (`fs/stat.c`, commit [`a528d35e8bfc`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a528d35e8bfcc521d7cb70aaf03e1bd296c8493f)), which uses `struct statx_timestamp`
 with a 64-bit `tv_sec`:
 
 ```c

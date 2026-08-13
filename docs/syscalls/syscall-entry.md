@@ -280,7 +280,7 @@ These special codes (`< -MAX_ERRNO`) never reach userspace — the signal path c
 - [Adding a new syscall](adding-syscall.md) — Practical guide for kernel contributors
 - [vDSO and Virtual System Calls](vdso.md) — the shared `vvar` timekeeping page and fast-path clock reads
 - [Syscall Restart Mechanisms](restart-block.md) — `ERESTARTSYS`, `ERESTART_RESTARTBLOCK`, and `restart_syscall()`
-- [32-bit Compat Syscalls](compat.md) — the x32 ABI referenced by `do_syscall_x32()`
+- [32-bit Compat Syscalls](compat.md) — the ia32 compat layer, the sibling mechanism to `do_syscall_x32()`'s x32 ABI handling for 32-bit userspace on a 64-bit kernel
 
 ### LWN articles
 

@@ -290,7 +290,7 @@ cat /proc/$(pgrep myapp)/syscall
 
 - [Syscall Entry Path](syscall-entry.md) — `syscall_exit_to_user_mode()`, signal path, `pt_regs`
 - [Signals](../ipc/signals.md) — signal delivery, `sigaction`, `SA_RESTART`
-- [Futex Internals](../locking/futex.md) — `FUTEX_WAIT`'s own `restart_block` usage for restarting with an adjusted timeout
+- [Futex Internals](../locking/futex.md) — `FUTEX_WAIT` and the userspace mutex/condvar mechanism whose timeout the `futex` member of `restart_block` restarts
 
 ### LWN articles
 
