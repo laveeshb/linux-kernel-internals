@@ -430,6 +430,12 @@ nav:
       - PCI Drivers: drivers/pci-driver.md
       - Device Tree: drivers/device-tree.md
       - I2C and SPI Drivers: drivers/i2c-spi.md
+      - War Stories:
+        - Device Drivers War Stories: drivers/war-stories.md
+        - The uevent_show() Fix That Deadlocked Driver Detach: drivers/war-stories/uevent-show-deadlock.md
+        - The kobject Path Race That Needed a Retry, Not a Lock: drivers/war-stories/kobject-path-race.md
+        - "fw_devlink=on: The Default That Broke Boot Twice Before It Stuck": drivers/war-stories/fw-devlink-boot-breaking.md
+        - The Deferred-Probe Origin Story: drivers/war-stories/deferred-probe-origin.md
     - USB:
       - Getting Started: usb/README.md
       - Enumeration and Descriptors: usb/enumeration.md
