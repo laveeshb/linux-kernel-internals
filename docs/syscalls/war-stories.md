@@ -308,13 +308,13 @@ modification.
 ## Further reading
 
 - [SYSCALL_DEFINE and Dispatch](syscall-define.md) — ABI stability guarantees and struct-based syscalls
-- [32-bit Compat Syscalls](compat.md) — How Y2038 affected the compat syscall tables
+- [32-bit Compat Syscalls](compat.md) — the 32-bit ABI machinery (`compat_stat`'s 32-bit time fields among them) that the Y2038 fix had to work around
 - [Syscall Restart Mechanisms](restart-block.md) — ERESTARTSYS, ERESTART_RESTARTBLOCK, and restart_syscall() in full, the mechanism behind the EINTR story above
 - [Signals](../ipc/signals.md) — signal delivery, `sigaction`, and `SA_RESTART` semantics behind the EINTR story above
 - [Futex Internals](../locking/futex.md) — how futex_wait()/futex_wake() and futex key hashing work today
 - [ptrace and Syscall Interception](ptrace-interception.md) — seccomp-notify as an alternative to custom syscalls
 - [Adding a New Syscall](adding-syscall.md) — The right way to add a syscall and avoid the pitfalls above
-- `kernel/futex/core.c` — futex_key and physical address hashing
+- [kernel/futex/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/futex/core.c) — `get_futex_key()`: hashes on the backing `mm_struct`/`address_space` pointer and page offset, not a physical address
 
 ## External references
 
