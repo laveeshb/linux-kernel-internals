@@ -37,6 +37,7 @@ struct device_driver ←── struct pci_driver (driver-specific extension)
 | [Character and Misc Devices](chardev.md) | cdev, file_operations, ioctl, mmap from driver side |
 | [PCI Drivers](pci-driver.md) | Enumeration, config space, BARs, MSI setup |
 | [I2C and SPI](i2c-spi.md) | Slow-bus drivers, regmap, device addressing |
+| [War Stories](war-stories.md) | Real driver-core bugs and regressions: probe-order races, sysfs deadlocks, the fw_devlink default rollout |
 | [Device Tree](device-tree.md) | Hardware description for non-discoverable buses |
 
 ## Quick reference
