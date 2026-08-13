@@ -45,5 +45,5 @@ An OLPC laptop's camera driver — really three separate devices — failed to i
 ## See also
 
 - [Linux Device Model](device-model.md) — `struct device`, buses, drivers, and classes, the framework every page here operates inside
-- [Device Tree](device-tree.md) — the firmware description format two of these incidents (fw_devlink, deferred-probe) are built around
+- [Device Tree](device-tree.md) — the firmware description format fw_devlink parses to build its dependency graph, and that decades later gave deferred-probe's `-EPROBE_DEFER` an automatic trigger it didn't originally have
 - [Locking War Stories](../locking/war-stories.md) — a comparable set of incidents where a lock's own discipline, rather than a device's identity, is the thing that goes wrong
