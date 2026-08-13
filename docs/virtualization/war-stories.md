@@ -9,7 +9,7 @@ Virtualization's trust boundary is the sharpest one this site covers: a guest is
 Ordered reverse chronologically by when the fix landed — newest first.
 
 ### [MDS: The Mitigation That Flushed the Buffers Too Early](war-stories/mds-verw-timing-gap.md)
-**Original mitigation 2019, real fix Linux 6.8 (February 2024) · CVE-2018-12130**
+**Original mitigation 2019, real fix committed Feb 2024 (Linux 6.8, March 2024) · CVE-2018-12130**
 KVM's original defense against Microarchitectural Data Sampling flushed CPU buffers several instructions before actually entering the guest — and every register spill and stack push in between could refill those buffers with fresh host data. The gap sat unexamined for five years until a routine hardening pass closed it as a side effect.
 
 ### [vhost: The Dirty-Log Counter That Forgot Zero-Length Descriptors](war-stories/vhost-migration-log-overflow.md)
