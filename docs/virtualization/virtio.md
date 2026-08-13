@@ -361,7 +361,7 @@ perf top -p $(pgrep vhost)
 
 ### LWN articles
 
-- [An API for virtual I/O: virtio](https://lwn.net/Articles/239238/) — Rusty Russell's original 2007 introduction of virtio: the `add_buf()`/`sync()`/`get_buf()` operations vector that became the virtqueue, and worked examples from the block and network drivers
+- [An API for virtual I/O: virtio](https://lwn.net/Articles/239238/) — LWN's 2007 coverage of Rusty Russell's introduction of virtio: the `add_buf()`/`sync()`/`get_buf()` operations vector that became the virtqueue, and worked examples from the block and network drivers
 - [Standardizing virtio](https://lwn.net/Articles/580186/) — Jonathan Corbet, 2014: why virtio moved to OASIS standardization and what changed in the 1.0 specification (mandatory version feature bit, fixed little-endian byte order, flexible virtqueue memory layout)
 
 ### External

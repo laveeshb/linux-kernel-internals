@@ -252,7 +252,7 @@ ioctl(vcpu_fd, KVM_GET_NESTED_STATE, state);
 ioctl(vcpu_fd, KVM_SET_NESTED_STATE, state);
 ```
 
-`struct kvm_nested_state` is defined in `include/uapi/linux/kvm.h`. The `format` field distinguishes VMX (`KVM_STATE_NESTED_FORMAT_VMX`) from SVM (`KVM_STATE_NESTED_FORMAT_SVM`). The variable-length data following the header contains the vmcs12/vmcb12 content and any shadow VMCS.
+`struct kvm_nested_state` is defined in `arch/x86/include/uapi/asm/kvm.h`. The `format` field distinguishes VMX (`KVM_STATE_NESTED_FORMAT_VMX`) from SVM (`KVM_STATE_NESTED_FORMAT_SVM`). The variable-length data following the header contains the vmcs12/vmcb12 content and any shadow VMCS.
 
 ## Observing nested virtualization
 
@@ -294,7 +294,8 @@ Nested virtualization exposes a large attack surface. L1 can craft arbitrary VMC
 - [arch/x86/kvm/vmx/nested.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/nested.c) — Intel nested VMX: `handle_vmxon()`, `handle_vmptrld()`, `handle_vmlaunch()`/`handle_vmresume()` → `nested_vmx_run()`, `prepare_vmcs02()`, `vmx_check_nested_events()`, `nested_vmx_reflect_vmexit()`, `nested_vmx_vmexit()`
 - [arch/x86/kvm/vmx/vmcs12.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmcs12.h) — `struct vmcs12` definition, L1's view of the VMCS for L2
 - [arch/x86/kvm/svm/nested.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/svm/nested.c) — AMD nested SVM: `nested_svm_vmrun()`, the vmcb02 merge (SVM's analog of `prepare_vmcs02()`)
-- [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `struct kvm_nested_state`, `KVM_CAP_NESTED_STATE`, `KVM_STATE_NESTED_FORMAT_VMX`/`KVM_STATE_NESTED_FORMAT_SVM`
+- [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `KVM_GET_NESTED_STATE`/`KVM_SET_NESTED_STATE` ioctl definitions and `KVM_CAP_NESTED_STATE`
+- [arch/x86/include/uapi/asm/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/uapi/asm/kvm.h) — `struct kvm_nested_state` and the `KVM_STATE_NESTED_FORMAT_VMX`/`KVM_STATE_NESTED_FORMAT_SVM` format constants
 
 ### Related pages
 

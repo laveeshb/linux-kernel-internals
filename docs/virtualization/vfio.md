@@ -291,7 +291,8 @@ perf stat -e power/pts/  # Intel IOMMU TLB misses
 ### Kernel source
 
 - [drivers/vfio/vfio_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_main.c) — VFIO core: container/group/device registration and ioctl dispatch
-- [drivers/vfio/vfio.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio.h) — `struct vfio_group` and `struct vfio_container` definitions
+- [drivers/vfio/vfio.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio.h) — `struct vfio_group` definition (`struct vfio_container` is only forward-declared here)
+- [drivers/vfio/container.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/container.c) — `struct vfio_container` definition
 - [drivers/vfio/vfio_iommu_type1.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_iommu_type1.c) — Type1 IOMMU backend: `VFIO_IOMMU_MAP_DMA` handling, page pinning, `iommu_map()`
 - [drivers/vfio/pci/vfio_pci_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/pci/vfio_pci_core.c) — vfio-pci core: BAR/MMIO mapping, config space, IRQ eventfds (backs `struct vfio_pci_core_device` in [include/linux/vfio_pci_core.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/vfio_pci_core.h))
 - [drivers/vfio/mdev/mdev_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/mdev/mdev_core.c) — mediated device (mdev) framework used by GPU-sharing drivers like Intel GVT-g
@@ -306,7 +307,7 @@ perf stat -e power/pts/  # Intel IOMMU TLB misses
 
 ### LWN articles
 
-- [LWN: Safe device assignment with VFIO](https://lwn.net/Articles/474088/) — Alex Williamson's original overview of the VFIO framework and IOMMU-group-based device assignment (January 3, 2012)
+- [LWN: Safe device assignment with VFIO](https://lwn.net/Articles/474088/) — Jonathan Corbet's coverage of Alex Williamson's VFIO framework and IOMMU-group-based device assignment (January 3, 2012)
 
 ### External
 
