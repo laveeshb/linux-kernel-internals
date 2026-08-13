@@ -335,7 +335,7 @@ Key performance guidelines:
 ### Kernel source
 
 - [arch/x86/kvm/x86.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/x86.c) — `vcpu_enter_guest()`: the per-exit dispatch loop; `kvm_fast_pio()`: the in-kernel port I/O fast path; `kvm_emulate_rdmsr()`/`kvm_emulate_wrmsr()`: MSR read/write VM-exit dispatch
-- [arch/x86/kvm/vmx/vmx.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmx.c) — `vmx_exit_handlers[]`: the VMX exit-reason dispatch table; `handle_io()`, `handle_ept_violation()`, `handle_exception_nmi()`
+- [arch/x86/kvm/vmx/vmx.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmx.c) — `kvm_vmx_exit_handlers[]`: the VMX exit-reason dispatch table; `handle_io()`, `handle_ept_violation()`, `handle_exception_nmi()`
 - [arch/x86/kvm/svm/svm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/svm/svm.c) — `svm_exit_handlers[]`: AMD SVM's equivalent exit-reason table, indexed by the VMCB `EXITCODE` field
 - [arch/x86/kvm/mmu/mmu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/mmu/mmu.c) — `kvm_mmu_page_fault()`: distinguishes a missing EPT mapping, an MMIO region, and a permission fault
 - [arch/x86/kvm/cpuid.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/cpuid.c) — `kvm_emulate_cpuid()`: CPUID leaf lookup and feature-bit filtering

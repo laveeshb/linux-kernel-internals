@@ -427,7 +427,7 @@ cat /sys/kernel/mm/ksm/pages_unshared   # not mergeable
 
 ### Kernel source
 
-- [arch/x86/include/asm/kvm_host.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/kvm_host.h) — `struct kvm_mmu`: the per-vCPU MMU context (`root_hpa`, `page_fault` handler, `root_role`)
+- [arch/x86/include/asm/kvm_host.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/kvm_host.h) — `struct kvm_mmu`: the per-vCPU MMU context (`root` — a `struct kvm_mmu_root_info` holding the root HPA — `page_fault` handler, `root_role`)
 - [arch/x86/kvm/mmu/mmu_internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/mmu/mmu_internal.h) — `struct kvm_mmu_page`: one struct per shadow/EPT page-table page, including the reverse-map `parent_ptes`
 - [arch/x86/kvm/mmu/mmu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/mmu/mmu.c) — `kvm_mmu_page_fault()` and `kvm_mmu_hugepage_adjust()`: GPA fault resolution and huge-page level selection
 - [arch/x86/kvm/vmx/vmx.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmx.c) — `handle_ept_violation()`: the VMX EPT-violation VM-exit handler

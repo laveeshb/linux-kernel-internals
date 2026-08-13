@@ -291,7 +291,7 @@ perf stat -e power/pts/  # Intel IOMMU TLB misses
 
 ### Kernel source
 
-- [drivers/vfio/vfio_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_main.c) — VFIO core: container/group/device registration and ioctl dispatch
+- [drivers/vfio/vfio_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_main.c) — VFIO core: device registration (`vfio_register_group_dev()`), ioctl/mmap/read/write file ops, and subsystem module init (group and container ioctl dispatch live in `group.c`/`container.c`)
 - [drivers/vfio/vfio.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio.h) — `struct vfio_group` definition (`struct vfio_container` is only forward-declared here)
 - [drivers/vfio/container.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/container.c) — `struct vfio_container` definition
 - [drivers/vfio/vfio_iommu_type1.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_iommu_type1.c) — Type1 IOMMU backend: `VFIO_IOMMU_MAP_DMA` handling, page pinning, `iommu_map()`
