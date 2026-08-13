@@ -283,16 +283,27 @@ cat /sys/module/kvm_amd/parameters/nested     # 1 or 0
 
 Nested virtualization exposes a large attack surface. L1 can craft arbitrary VMCS/VMCB values and attempt to confuse L0:
 
-- **vmcs12 field validation**: `nested_vmx_check_vmentry_prereqs()` and related helpers validate all vmcs12 control fields before entering L2. Invalid combinations cause `VM_FAIL` with `VM_INSTRUCTION_ERROR` set, matching hardware behavior.
+- **vmcs12 field validation**: `nested_vmx_check_controls()`, `nested_vmx_check_host_state()`, and `nested_vmx_check_guest_state()` validate all vmcs12 control and state fields before entering L2. Invalid combinations cause `VM_FAIL` with `VM_INSTRUCTION_ERROR` set, matching hardware behavior.
 - **EPT pointer sanity**: L0 verifies `vmcs12->ept_pointer` alignment and reserved bits.
 - **Spectre/Meltdown mitigations**: L0 must flush branch predictor state on L2 → L1 → L0 transitions to prevent L2 from influencing L0's branch prediction through L1.
 
 ## Further reading
 
+### Kernel source
+
+- [arch/x86/kvm/vmx/nested.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/nested.c) — Intel nested VMX: `handle_vmxon()`, `handle_vmptrld()`, `handle_vmlaunch()`/`handle_vmresume()` → `nested_vmx_run()`, `prepare_vmcs02()`, `vmx_check_nested_events()`, `nested_vmx_reflect_vmexit()`, `nested_vmx_vmexit()`
+- [arch/x86/kvm/vmx/vmcs12.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmcs12.h) — `struct vmcs12` definition, L1's view of the VMCS for L2
+- [arch/x86/kvm/svm/nested.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/svm/nested.c) — AMD nested SVM: `nested_svm_vmrun()`, the vmcb02 merge (SVM's analog of `prepare_vmcs02()`)
+- [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `struct kvm_nested_state`, `KVM_CAP_NESTED_STATE`, `KVM_STATE_NESTED_FORMAT_VMX`/`KVM_STATE_NESTED_FORMAT_SVM`
+
+### Related pages
+
 - [KVM Architecture](kvm-arch.md) — VMCS structure, vCPU run loop
 - [KVM Exit Handling](kvm-exits.md) — exit dispatch table, exit reason handling
 - [Live Migration](live-migration.md) — `KVM_GET_NESTED_STATE` for migrating L1 hypervisors
 - [Memory Virtualization](kvm-memory.md) — EPT/NPT, two-level page table walking
-- `arch/x86/kvm/vmx/nested.c` — Intel nested VMX implementation (~7000 lines)
-- `arch/x86/kvm/svm/nested.c` — AMD nested SVM implementation
-- `arch/x86/kvm/vmx/vmcs12.h` — `struct vmcs12` definition
+
+### External
+
+- [Nested VMX](https://docs.kernel.org/virt/kvm/x86/nested-vmx.html) — kernel documentation for Intel nested VMX: the L0/L1/L2 model, vmcs01/vmcs12/vmcs02, and the full `struct vmcs12` field layout
+- [KVM API docs: `KVM_GET_NESTED_STATE`/`KVM_SET_NESTED_STATE`](https://docs.kernel.org/virt/kvm/api.html#kvm-get-nested-state) — the `struct kvm_nested_state` layout and `KVM_CAP_NESTED_STATE` used for live migration of nested guests

@@ -425,9 +425,32 @@ cat /sys/kernel/mm/ksm/pages_unshared   # not mergeable
 
 ## Further reading
 
+### Kernel source
+
+- [arch/x86/include/asm/kvm_host.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/kvm_host.h) — `struct kvm_mmu`: the per-vCPU MMU context (`root_hpa`, `page_fault` handler, `root_role`)
+- [arch/x86/kvm/mmu/mmu_internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/mmu/mmu_internal.h) — `struct kvm_mmu_page`: one struct per shadow/EPT page-table page, including the reverse-map `parent_ptes`
+- [arch/x86/kvm/mmu/mmu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/mmu/mmu.c) — `kvm_mmu_page_fault()` and `kvm_mmu_hugepage_adjust()`: GPA fault resolution and huge-page level selection
+- [arch/x86/kvm/vmx/vmx.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmx.c) — `handle_ept_violation()`: the VMX EPT-violation VM-exit handler
+- [include/linux/kvm_host.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/kvm_host.h) — `struct kvm_memory_slot`: guest physical memory slot layout
+- [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `struct kvm_userspace_memory_region`, `struct kvm_dirty_gfn`, and the `KVM_SET_USER_MEMORY_REGION` / `KVM_MEM_LOG_DIRTY_PAGES` ioctl ABI
+- [include/linux/kvm_dirty_ring.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/kvm_dirty_ring.h) — `struct kvm_dirty_ring`: the per-vCPU dirty-GFN ring buffer (5.11+)
+- [drivers/virtio/virtio_balloon.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/virtio/virtio_balloon.c) — `update_balloon_stats()`: guest memory statistics reported to the host
+
+### Related pages
+
 - [KVM Architecture](kvm-arch.md) — /dev/kvm API, vCPU run loop
 - [virtio](virtio.md) — paravirtual I/O, balloon transport
 - [VFIO](vfio.md) — direct device passthrough to VMs
+- [KVM Live Migration](live-migration.md) — how dirty-bitmap and dirty-ring tracking drive the pre-copy migration loop
 - [Memory Management: page tables](../mm/page-tables.md) — host-side page tables
 - [Memory Management: THP](../mm/thp.md) — huge page promotion KVM uses
-- `arch/x86/kvm/mmu/` in the kernel tree — EPT/shadow page table implementation
+
+### LWN articles
+
+- [KVM: Dirty ring interface](https://lwn.net/Articles/833784/) — Peter Xu's patch posting introducing the per-vCPU dirty-ring alternative to the dirty bitmap
+
+### External
+
+- [The Definitive KVM API Documentation](https://docs.kernel.org/virt/kvm/api.html) — memory slot ioctls (`KVM_SET_USER_MEMORY_REGION`), dirty logging (`KVM_GET_DIRTY_LOG`, `KVM_CLEAR_DIRTY_LOG`), and the dirty-ring capability
+- [Kernel Samepage Merging](https://docs.kernel.org/admin-guide/mm/ksm.html) — the `/sys/kernel/mm/ksm/` sysfs knobs and how KSM deduplicates identical guest pages
+- [Transparent Hugepage Support](https://docs.kernel.org/admin-guide/mm/transhuge.html) — THP configuration referenced in the guest huge-pages section above

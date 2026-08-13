@@ -246,9 +246,8 @@ Several devices are emulated entirely in-kernel to avoid the QEMU round-trip:
 | Device | In-kernel emulation |
 |--------|---------------------|
 | Local APIC | `arch/x86/kvm/lapic.c` |
-| IOAPIC | `virt/kvm/ioapic.c` |
+| IOAPIC | `arch/x86/kvm/ioapic.c` |
 | PIT (8254 timer) | `arch/x86/kvm/i8254.c` |
-| HPET | `arch/x86/kvm/hpet.c` |
 
 These register on the `kvm_io_bus` with `kvm_io_bus_register_dev()` and are matched by GPA range before any exit to userspace occurs.
 
@@ -333,10 +332,28 @@ Key performance guidelines:
 
 ## Further reading
 
+### Kernel source
+
+- [arch/x86/kvm/x86.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/x86.c) — `vcpu_enter_guest()`: the per-exit dispatch loop; `kvm_fast_pio()`: the in-kernel port I/O fast path; `kvm_get_msr()`/`kvm_set_msr()`: MSR read/write dispatch
+- [arch/x86/kvm/vmx/vmx.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmx.c) — `vmx_exit_handlers[]`: the VMX exit-reason dispatch table; `handle_io()`, `handle_ept_violation()`, `handle_exception_nmi()`
+- [arch/x86/kvm/svm/svm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/svm/svm.c) — `svm_exit_handlers[]`: AMD SVM's equivalent exit-reason table, indexed by the VMCB `EXITCODE` field
+- [arch/x86/kvm/mmu/mmu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/mmu/mmu.c) — `kvm_mmu_page_fault()`: distinguishes a missing EPT mapping, an MMIO region, and a permission fault
+- [arch/x86/kvm/cpuid.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/cpuid.c) — `kvm_emulate_cpuid()`: CPUID leaf lookup and feature-bit filtering
+- [arch/x86/kvm/emulate.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/emulate.c) — `x86_emulate_insn()`: the instruction emulator invoked for MMIO and string I/O
+- [virt/kvm/kvm_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/kvm_main.c) — `kvm_vcpu_block()`/`kvm_vcpu_kick()`: HLT-driven vCPU sleep and wake
+- [virt/kvm/irqchip.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/irqchip.c) — `kvm_set_irq()` and the GSI routing table used to deliver device interrupts
+- [arch/x86/kvm/lapic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/lapic.c) — in-kernel local APIC emulation
+- [arch/x86/kvm/ioapic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/ioapic.c) — in-kernel IOAPIC emulation
+- [arch/x86/kvm/i8254.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/i8254.c) — in-kernel PIT (8254 timer) emulation
+- [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `struct kvm_run`, `KVM_EXIT_IO`, `KVM_EXIT_MMIO`: the userspace-visible exit ABI
+
+### Related pages
+
 - [KVM Architecture](kvm-arch.md) — vCPU lifecycle, VMCS, KVM ioctls
 - [Memory Virtualization](kvm-memory.md) — EPT, shadow paging, MMU notifiers
 - [Nested Virtualization](nested-virt.md) — exit handling for L2 guests
-- `arch/x86/kvm/vmx/vmx.c` — VMX exit handler table and handlers
-- `arch/x86/kvm/x86.c` — `vcpu_enter_guest()`, `kvm_emulate_pio()`
-- `arch/x86/kvm/emulate.c` — `x86_emulate_instruction()` for MMIO decoding
-- `virt/kvm/ioapic.c`, `arch/x86/kvm/lapic.c` — in-kernel interrupt controllers
+
+### External
+
+- [The Definitive KVM API Documentation](https://docs.kernel.org/virt/kvm/api.html) — `KVM_RUN`, `struct kvm_run`, and the `KVM_EXIT_IO`/`KVM_EXIT_MMIO` field layouts
+- [KVM VCPU Requests](https://docs.kernel.org/virt/kvm/vcpu-requests.html) — the `KVM_REQ_*` flag mechanism processed at the top of `vcpu_enter_guest()`

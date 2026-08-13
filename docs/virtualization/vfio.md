@@ -288,10 +288,27 @@ perf stat -e power/pts/  # Intel IOMMU TLB misses
 
 ## Further reading
 
+### Kernel source
+
+- [drivers/vfio/vfio_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_main.c) — VFIO core: container/group/device registration and ioctl dispatch
+- [drivers/vfio/vfio.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio.h) — `struct vfio_group` and `struct vfio_container` definitions
+- [drivers/vfio/vfio_iommu_type1.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_iommu_type1.c) — Type1 IOMMU backend: `VFIO_IOMMU_MAP_DMA` handling, page pinning, `iommu_map()`
+- [drivers/vfio/pci/vfio_pci_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/pci/vfio_pci_core.c) — vfio-pci core: BAR/MMIO mapping, config space, IRQ eventfds (backs `struct vfio_pci_core_device` in [include/linux/vfio_pci_core.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/vfio_pci_core.h))
+- [drivers/vfio/mdev/mdev_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/mdev/mdev_core.c) — mediated device (mdev) framework used by GPU-sharing drivers like Intel GVT-g
+- [drivers/iommu/iommu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iommu.c) — `iommu_group_alloc()` and IOMMU group management
+
+### Related pages
+
 - [KVM Architecture](kvm-arch.md) — VM exits and VMCS
 - [Memory Virtualization](kvm-memory.md) — EPT and shadow paging
 - [IOMMU Architecture](../iommu/iommu-arch.md) — IOMMU hardware and DMA API
 - [PCI Drivers](../drivers/pci-driver.md) — How PCI drivers work before VFIO
-- `drivers/vfio/` — VFIO framework
-- `drivers/vfio/pci/` — vfio-pci driver
-- `Documentation/driver-api/vfio.rst`
+
+### LWN articles
+
+- [LWN: Safe device assignment with VFIO](https://lwn.net/Articles/474088/) — Alex Williamson's original overview of the VFIO framework and IOMMU-group-based device assignment (January 3, 2012)
+
+### External
+
+- [VFIO — "Virtual Function I/O"](https://docs.kernel.org/driver-api/vfio.html) — official kernel documentation for the VFIO framework, container/group/device model, and userspace API
+- [VFIO Mediated devices](https://docs.kernel.org/driver-api/vfio-mediated-device.html) — official documentation for the mdev framework covered in this page's mediated-devices section
