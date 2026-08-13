@@ -186,7 +186,7 @@ Userspace never sees `__NR_restart_syscall` in normal operation. It appears in
 3.  sys_nanosleep() calculates remaining time: 2 seconds
 
 4.  Fills in restart_block:
-        current->restart_block.fn              = nanosleep_restart;
+        current->restart_block.fn              = hrtimer_nanosleep_restart;
         current->restart_block.nanosleep.clockid = CLOCK_REALTIME;
         current->restart_block.nanosleep.rmtp    = &rem (userspace pointer);
         current->restart_block.nanosleep.expires = now + 2_seconds_in_ns;
@@ -204,7 +204,7 @@ Userspace never sees `__NR_restart_syscall` in normal operation. It appears in
 
 8.  Kernel dispatches restart_syscall()
     → current->restart_block.fn(&current->restart_block)
-    → nanosleep_restart()
+    → hrtimer_nanosleep_restart()
     → starts a new hrtimer for the remaining 2 seconds
     → task sleeps again
 
@@ -271,9 +271,28 @@ cat /proc/$(pgrep myapp)/syscall
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/errno.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/errno.h) — `ERESTARTSYS`, `ERESTARTNOINTR`, `ERESTARTNOHAND`, `ERESTART_RESTARTBLOCK` definitions
+- [include/linux/restart_block.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/restart_block.h) — `struct restart_block` definition, including the `futex`, `nanosleep`, and `poll` union members
+- [include/linux/sched.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/sched.h) — `restart_block` embedded directly in `struct task_struct`
+- [include/linux/thread_info.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/thread_info.h) — `set_restart_fn()`: sets `restart->fn` and returns `-ERESTART_RESTARTBLOCK`
+- [kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/signal.c) — `SYSCALL_DEFINE0(restart_syscall)` and `do_no_restart_syscall()`
+- [arch/x86/kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/signal.c) — `handle_signal()` and `arch_do_signal_or_restart()`: where the `ERESTART*` codes in `regs->ax` are inspected and dispatched
+- [kernel/time/hrtimer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/hrtimer.c) — `hrtimer_nanosleep_restart()`: the restart handler `nanosleep()`/`clock_nanosleep()` register in `restart_block.fn`
+
+### Man pages
+
+- [`signal(7)`](https://man7.org/linux/man-pages/man7/signal.7.html) — see "Interruption of system calls and library functions by signal handlers" for the userspace-visible effects of `SA_RESTART`
+- [`restart_syscall(2)`](https://man7.org/linux/man-pages/man2/restart_syscall.2.html) — the syscall this page's walkthrough dispatches into; note its "no manual invocation" behavior
+
+### Related pages
+
 - [Syscall Entry Path](syscall-entry.md) — `syscall_exit_to_user_mode()`, signal path, `pt_regs`
 - [Signals](../ipc/signals.md) — signal delivery, `sigaction`, `SA_RESTART`
-- `kernel/signal.c` — `restart_syscall()`, `set_restart_fn()`
-- `arch/x86/kernel/signal.c` — `handle_signal()`, restart-code handling
-- `include/linux/sched.h` — `struct restart_block` definition
-- `kernel/time/hrtimer.c` — `nanosleep_restart()`, hrtimer-based sleep restart
+- [Futex Internals](../locking/futex.md) — `FUTEX_WAIT`'s own `restart_block` usage for restarting with an adjusted timeout
+
+### LWN articles
+
+- [A new system call restart mechanism](https://lwn.net/Articles/17744/) (2002) — Jonathan Corbet on why the restart-block mechanism was added: `nanosleep()` needs to restart with an *adjusted* (remaining) duration, not the original one, which a plain `-ERESTARTSYS` retry-from-scratch can't express
+- [\[braindump\]\[RFC\] signals and syscall restarts](https://lwn.net/Articles/528935/) (2012) — Al Viro's detailed technical notes on `ERESTARTSYS`/`ERESTARTNOINTR`/`SA_RESTART` semantics and the ways architecture signal-delivery code has gotten them wrong

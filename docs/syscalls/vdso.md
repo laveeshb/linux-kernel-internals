@@ -306,9 +306,38 @@ hardware counter read (`__arch_get_hw_counter`) is architecture-specific.
 
 ## Further reading
 
+### Kernel source
+
+- [include/vdso/datapage.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/vdso/datapage.h) — `struct vdso_clock` and `struct vdso_time_data`: the current vvar layout. Note: current kernels no longer have a single combined `struct vdso_data` as shown earlier on this page — that layout was split into `vdso_clock` (per-clocksource seqlock state) and `vdso_time_data` (the top-level vvar struct) some time ago
+- [include/vdso/helpers.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/vdso/helpers.h) — `vdso_read_begin()` / `vdso_read_retry()`: the seqlock read-side helpers
+- [lib/vdso/gettimeofday.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/vdso/gettimeofday.c) — `do_hres()`: the shared TSC-to-timespec read loop used by all architectures
+- [arch/x86/entry/vdso/common/vclock_gettime.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/vdso/common/vclock_gettime.c) — `__vdso_clock_gettime()` / `__vdso_gettimeofday()`: the x86-64 entry points
+- [arch/x86/entry/vdso/common/vgetcpu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/vdso/common/vgetcpu.c) — `__vdso_getcpu()`
+- [arch/x86/include/asm/vdso/gettimeofday.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/vdso/gettimeofday.h) — `clock_gettime_fallback()` and `__arch_get_hw_counter()`: the real syscall fallback and the TSC read
+- [arch/x86/include/asm/segment.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/segment.h) — `vdso_read_cpunode()`: the actual LSL/RDPID CPU+node lookup used by `__vdso_getcpu()`
+- [kernel/time/vsyscall.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/vsyscall.c) — `update_vsyscall()`: the kernel-side vvar update on every timer tick
+- [arch/arm64/kernel/vdso](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/kernel/vdso) — arm64 vDSO implementation
+
+### Man pages
+
+- [`vdso(7)`](https://man7.org/linux/man-pages/man7/vdso.7.html) — overview of the vDSO mechanism and `AT_SYSINFO_EHDR` discovery
+- [`clock_gettime(2)`](https://man7.org/linux/man-pages/man2/clock_gettime.2.html) — the syscall the vDSO accelerates
+- [`gettimeofday(2)`](https://man7.org/linux/man-pages/man2/gettimeofday.2.html) — the syscall the vDSO accelerates
+- [`getcpu(2)`](https://man7.org/linux/man-pages/man2/getcpu.2.html) — NOTES section documents the vDSO-backed fast path
+- [`getauxval(3)`](https://man7.org/linux/man-pages/man3/getauxval.3.html) — `AT_SYSINFO_EHDR`, used to locate the vDSO at process start
+
+### Related pages
+
 - [Syscall Entry Path](syscall-entry.md) — KPTI and the cost of ring transitions
-- `include/vdso/datapage.h` — struct vdso_data definition
-- `arch/x86/entry/vdso/vclock_gettime.c` — x86-64 vDSO clock implementation
-- `lib/vdso/gettimeofday.c` — shared vDSO time implementation
-- `kernel/time/vsyscall.c` — update_vsyscall(): kernel side vvar update
-- `Documentation/vdso/vdso.rst` — kernel documentation on vDSO
+- [vDSO: Virtual Dynamic Shared Object](../mm/vdso.md) — companion mm-side page on vDSO mapping and per-architecture function tables
+- [Timekeeping and Clocksources](../time/timekeeping.md) — TSC, clocksource, and NTP background behind the vvar update
+- [Time Namespaces](../time/time-namespaces.md) — the `timens_offset` mechanism referenced in the vvar layout
+
+### LWN articles
+
+- [On vsyscalls and the vDSO](https://lwn.net/Articles/446528/) — the security case for retiring the fixed-address vsyscall page in favor of the vDSO
+- [Implementing virtual system calls](https://lwn.net/Articles/615809/) — how `__vdso_gettimeofday()` and `__vdso_clock_gettime()` work, and how to add new vDSO functions
+
+### External
+
+- [Kernel boot parameters: `vdso=` and `vsyscall=`](https://docs.kernel.org/admin-guide/kernel-parameters.html) — official documentation for the `vdso=0` and `vsyscall={emulate,xonly,none}` boot options

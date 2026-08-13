@@ -254,7 +254,33 @@ This is why syscalls are preemption and signal delivery points — the kernel ch
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/syscalls.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/syscalls.h) — `SYSCALL_DEFINEx()`/`__SYSCALL_DEFINEx()` macro definitions and the `__MAP()` argument-marshaling machinery
+- [arch/x86/include/asm/syscall_wrapper.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/syscall_wrapper.h) — x86's override of `__SYSCALL_DEFINEx()`: decodes `pt_regs` into the `__x64_sys_*()`/`__ia32_sys_*()` stubs
+- [fs/read_write.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/read_write.c) — `SYSCALL_DEFINE3(write, ...)` and `ksys_write()`, the worked example on this page
+- [kernel/fork.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/fork.c) — `SYSCALL_DEFINE2(clone3, ...)` and `copy_clone_args_from_user()`: the struct-based, extensible syscall pattern
+- [arch/x86/entry/syscalls/syscall_64.tbl](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/syscalls/syscall_64.tbl) — the syscall number → entry point table that `sys_call_table` is generated from
+- [kernel/entry/common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/entry/common.c) — `exit_to_user_mode_loop()`: the slow-path signal/reschedule checks on syscall return
+
+### Man pages
+
+- [`syscalls(2)`](https://man7.org/linux/man-pages/man2/syscalls.2.html) — overview of Linux system calls and the wrapper-function naming convention
+- [`strace(1)`](https://man7.org/linux/man-pages/man1/strace.1.html) — user-space syscall tracing via `ptrace`, as used in this page's tracing example
+
+### Related pages
+
 - [Syscall Entry Path](syscall-entry.md) — Hardware mechanism and entry assembly
 - [Adding a new syscall](adding-syscall.md) — Step-by-step guide
-- `include/linux/syscalls.h` — SYSCALL_DEFINE macros
-- `Documentation/process/adding-syscalls.rst` — Official guide for new syscalls
+- [32-bit Compat Syscalls](compat.md) — how `COMPAT_SYSCALL_DEFINEx()` and the compat table actually work
+- [ptrace and Syscall Interception](ptrace-interception.md) — how strace, debuggers, and seccomp-notify intercept syscalls
+- [Syscall Auditing](audit.md) — the Linux Audit subsystem referenced in the tracing/audit section
+- [Syscall Restart Mechanisms](restart-block.md) — how the slow path's signal handling leads to `ERESTARTSYS`/`restart_syscall()`
+
+### LWN articles
+
+- [Anatomy of a system call, part 1](https://lwn.net/Articles/604287/) — David Drysdale, LWN.net (2014); walks through `SYSCALL_DEFINEn()`, using `read()`'s `fs/read_write.c` definition as the example
+
+### External
+
+- [Adding a New System Call](https://docs.kernel.org/process/adding-syscalls.html) — the kernel's official process guide (`Documentation/process/adding-syscalls.rst`)

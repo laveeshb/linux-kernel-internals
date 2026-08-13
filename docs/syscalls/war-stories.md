@@ -20,7 +20,7 @@ Adding `stat64()` and `lstat64()` helped 32-bit architectures get 64-bit file si
 in `struct stat64` on 32-bit Linux still used 32-bit `time_t`. The real fix required new syscalls with
 genuinely 64-bit timestamps throughout.
 
-Linux 4.11 (2017) added `statx()` (`fs/stat.c`, commit `a528d35e8bfc`), which uses `__kernel_timespec`
+Linux 4.11 (2017) added `statx()` (`fs/stat.c`, commit [`a528d35e8bfc`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a528d35e8bfcc521d7cb70aaf03e1bd296c8493f)), which uses `__kernel_timespec`
 with a 64-bit `tv_sec`:
 
 ```c
@@ -309,7 +309,16 @@ modification.
 
 - [SYSCALL_DEFINE and Dispatch](syscall-define.md) — ABI stability guarantees and struct-based syscalls
 - [32-bit Compat Syscalls](compat.md) — How Y2038 affected the compat syscall tables
+- [Syscall Restart Mechanisms](restart-block.md) — ERESTARTSYS, ERESTART_RESTARTBLOCK, and restart_syscall() in full, the mechanism behind the EINTR story above
+- [Signals](../ipc/signals.md) — signal delivery, `sigaction`, and `SA_RESTART` semantics behind the EINTR story above
+- [Futex Internals](../locking/futex.md) — how futex_wait()/futex_wake() and futex key hashing work today
 - [ptrace and Syscall Interception](ptrace-interception.md) — seccomp-notify as an alternative to custom syscalls
 - [Adding a New Syscall](adding-syscall.md) — The right way to add a syscall and avoid the pitfalls above
-- `Documentation/process/adding-syscalls.rst` — Upstream guidance on ABI design
 - `kernel/futex/core.c` — futex_key and physical address hashing
+
+## External references
+
+- [git.kernel.org: a528d35e8bfc](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a528d35e8bfcc521d7cb70aaf03e1bd296c8493f) — "statx: Add a system call to make enhanced file info available," David Howells, merged for Linux 4.11 (fs/stat.c)
+- [git.kernel.org: 3075d9da0b4c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3075d9da0b4ccc88959db30de80ebd11d2dde175) — "Use ERESTART_RESTARTBLOCK if poll() is interrupted by a signal," the fs/select.c change (merged for Linux 2.6.24) behind the EINTR story's central claim about `poll()`
+- [Kernel documentation: ktime accessors](https://docs.kernel.org/core-api/timekeeping.html) — "Deprecated time interfaces" section: "all interfaces returning a 'struct timeval' or 'struct timespec' have been replaced because the tv_sec member overflows in year 2038 on 32-bit architectures"
+- [Kernel documentation: Adding a New System Call](https://docs.kernel.org/process/adding-syscalls.html) — upstream guidance on syscall numbering ("these numbers are liable to be changed if there are conflicts in the relevant merge window") and on preferring ioctl/sysfs/other interfaces over new syscalls
