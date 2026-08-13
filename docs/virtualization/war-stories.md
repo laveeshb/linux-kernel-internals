@@ -1,6 +1,6 @@
 # War Stories: Virtualization (KVM) Bugs and Escapes
 
-> Five incidents spanning the whole KVM/QEMU stack — a guest-to-host escape through a device nobody configured, two speculative-execution mitigations whose exact timing turned out to matter as much as their existence, and two use-after-free bugs born from refactors that quietly dropped an implicit invariant
+> Five incidents spanning the whole KVM/QEMU stack — a guest-to-host escape through a device nobody configured, two speculative-execution mitigations whose exact timing turned out to matter as much as their existence, a use-after-free born from a refactor that quietly dropped an implicit invariant, and a heap overflow born from the same kind of gap in an edge case nobody had reasoned about
 
 Virtualization's trust boundary is the sharpest one this site covers: a guest is, by design, an untrusted tenant that the host must contain completely, across both the device-emulation layer (QEMU, in userspace) and the hypervisor kernel module (KVM) that gives it hardware-accelerated CPU access. The five incidents below span that entire boundary — one lives entirely in QEMU's userspace device model, two are host-kernel use-after-frees born from refactors that dropped an implicit state invariant, and two are CPU speculative-execution mitigations where getting the *mechanism* right wasn't enough — the exact placement and timing of the fix mattered just as much.
 
@@ -38,11 +38,11 @@ QEMU's floppy disk controller emulation is instantiated for every default x86 ma
 | Guest-to-host memory corruption (not just information disclosure) | No | Yes | Yes (UAF) | No (side channel only) | Yes |
 | Fix required understanding hardware microarchitecture, not just software logic | Yes | No | No | Yes | No |
 | CISA KEV-listed | No | No | No | No | No |
-| Years between introduction and (eventual, full) fix | 5 (2019→2024) | ~9.5 (2010→2019) | 1.3 (2017→2018) | N/A (hardware behavior) | ~12 (pre-2003→2015) |
+| Years between introduction and (eventual, full) fix | 5 (2019→2024) | 9 (2010→2019) | 1.3 (2017→2018) | N/A (hardware behavior) | 12+ (code dated 2003 at latest→2015) |
 
 **Three of the five are the same shape of mistake: an invariant that held by construction, until a refactor or an edge case broke the thing nobody was checking directly.** The nested-VMX UAF lost an implicit reset-on-failure behavior when a wrapper-removal refactor changed unconditional assignment into an early return. The vhost overflow lost the "log_num tracks in_num" invariant to a completely ordinary, spec-legal zero-length descriptor nobody had reasoned about. VENOM is the same pattern one layer down, at the device-emulation level: buffer-access code trusted command handlers to reset an index that two of them, each independently reasonable on its own terms, didn't.
 
-**MDS and L1TF are both speculative-execution mitigations where getting the concept right wasn't the hard part — getting the exact mechanics right was.** L1TF's flush-on-VM-entry doesn't help against a sibling hyperthread sharing the same physical core; the kernel had to add SMT-disable as a separate, costlier lever for the cases that actually need it. MDS's VERW-based flush was conceptually correct from day one in 2019, but its literal position in the compiled code left a window where ordinary memory writes could undo the flush before the guest ever ran — a bug in *placement*, not in the mitigation's logic, that took five years and a third developer's unrelated cleanup to actually close.
+**MDS and L1TF are both speculative-execution mitigations where getting the concept right wasn't the hard part — getting the exact mechanics right was.** L1TF's flush-on-VM-entry doesn't help against a sibling hyperthread sharing the same physical core; the kernel had to add SMT-disable as a separate, costlier lever for the cases that actually need it. MDS's VERW-based flush was conceptually correct from day one in 2019, but its literal position in the compiled code left a window where ordinary memory writes could undo the flush before the guest ever ran — a bug in *placement*, not in the mitigation's logic, that took five years to actually close, and a year longer still before anyone recognized what the closing commit had actually fixed.
 
 **VENOM is the only incident here that isn't a Linux kernel bug at all.** It's included because the guest-facing trust boundary this site documents doesn't stop at KVM's kernel module — QEMU is the other half of the stack every KVM guest actually runs against, and a guest-to-host escape through QEMU's device emulation is exactly as real a break of the virtualization boundary as a bug in KVM itself.
 
@@ -51,5 +51,5 @@ QEMU's floppy disk controller emulation is instantiated for every default x86 ma
 - [KVM Architecture](kvm-arch.md) — the `/dev/kvm` API and QEMU's role as the userspace half of the stack
 - [Nested Virtualization](nested-virt.md) — L0/L1/L2, vmcs12/vmcs02, the model behind the posted-interrupt UAF
 - [KVM Live Migration](live-migration.md) — dirty-page logging, the feature whose logging path the vhost bug lives in
-- [Locking War Stories](../locking/war-stories.md) and [VFS War Stories](../vfs/war-stories.md) — comparable local-privilege CVE collections from other subsystems, for contrasting root-cause shapes
+- [Locking War Stories](../locking/war-stories.md) and [VFS War Stories](../vfs/war-stories.md) — comparable local-CVE collections from other subsystems, for contrasting root-cause shapes
 - [GPU/DRM War Stories](../drm/war-stories.md) — reliability-only incidents (no CVEs) from a different kind of shared kernel-internal resource contention

@@ -5,6 +5,9 @@
 Disclosed
 :   May 13, 2015 (coordinated disclosure, CrowdStrike)
 
+Reported by
+:   Jason Geffner, CrowdStrike (per Xen Security Advisory XSA-133's credits section)
+
 CVSS
 :   7.7 (CVSS v2, `AV:A/AC:L/Au:S/C:C/I:C/A:C` — no CVSS v3 score was ever assigned)
 
@@ -26,7 +29,7 @@ Actively exploited
 
 QEMU's Floppy Disk Controller emulation (`hw/block/fdc.c`) models the Intel 82078 controller chip, command FIFO and all. Since floppy drives predate every modern x86 machine type by decades but the PC platform's device model still assumes one might exist, `pc_basic_device_init()` instantiates the FDC unconditionally for the default PIIX and ICH9 machine types — no check for whether the user configured `-drive if=floppy` or any floppy media at all. A guest with no floppy drive attached still has a live, guest-accessible FDC at the standard I/O ports, because both KVM's QEMU and Xen's HVM device model share this same code.
 
-The FDC's command FIFO is a fixed 512-byte heap buffer (`fdctrl->fifo = qemu_memalign(512, FD_SECTOR_LEN)`, `FD_SECTOR_LEN` = 512), used for both command/parameter bytes and PIO sector-data staging. `fdctrl_write_data()`'s job is straightforward: index into that buffer with `fdctrl->data_pos`, write the guest-supplied byte, increment. Under ordinary operation, whatever command handler is running resets `data_pos` back to zero once it has consumed the parameters it needs — so the index index never has a chance to run away.
+The FDC's command FIFO is a fixed 512-byte heap buffer (`fdctrl->fifo = qemu_memalign(512, FD_SECTOR_LEN)`, `FD_SECTOR_LEN` = 512), used for both command/parameter bytes and PIO sector-data staging. `fdctrl_write_data()`'s job is straightforward: index into that buffer with `fdctrl->data_pos`, write the guest-supplied byte, increment. Under ordinary operation, whatever command handler is running resets `data_pos` back to zero once it has consumed the parameters it needs — so the index never has a chance to run away.
 
 ## The trigger
 

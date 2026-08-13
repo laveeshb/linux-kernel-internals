@@ -15,7 +15,7 @@ Fixed in
 :   the "l1tf-final" series, merged commit `958f338e96f87`, mainline Linux 4.19 (August 14, 2018)
 
 Exploit tool
-:   proof-of-concept demonstrated by the disclosing research team; no public weaponized tool
+:   proof-of-concept demonstrated by the disclosing research teams; no public weaponized tool
 
 Actively exploited
 :   no confirmed cases (not on CISA KEV)
@@ -64,5 +64,5 @@ Flushing alone does not solve the sibling-hyperthread case: "L1D flush does not 
 - [GitHub mirror: 958f338e96f87](https://github.com/torvalds/linux/commit/958f338e96f874a0d29442396d6adf9c1e17aa2d) — the merged "l1tf-final" series that landed the KVM mitigations in mainline
 - [Kernel documentation: L1TF - L1 Terminal Fault](https://docs.kernel.org/admin-guide/hw-vuln/l1tf.html) — the kernel's own technical description and mitigation reference, source for every direct quote above
 - [CERT/CC VU#982149](https://www.kb.cert.org/vuls/id/982149) — coordinated disclosure summary covering the full three-CVE Foreshadow-NG family
-- [Foreshadow attack research](https://foreshadowattack.eu/) — the disclosing academic research team (KU Leuven, Technion, University of Michigan, University of Adelaide/CSIRO's Data61)
+- [Foreshadow attack research](https://foreshadowattack.eu/) — two independent research teams that concurrently discovered and reported the flaw: KU Leuven (imec-DistriNet), and separately Technion, University of Michigan, and University of Adelaide/CSIRO's Data61
 - [NVD: CVE-2018-3646](https://nvd.nist.gov/vuln/detail/CVE-2018-3646) — CVE record, CVSS 3.1 5.6, published August 14, 2018

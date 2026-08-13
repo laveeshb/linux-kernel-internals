@@ -37,7 +37,7 @@ In nested virtualization, L0 (the real hypervisor) runs L1 (a guest that is itse
 
 ## Observed behavior
 
-The fix's own commit message gives an exact, independently-verified reproduction: call `vmlaunch` with a valid posted-interrupt descriptor address but an invalid `MSR_EFER`, so `nested_get_vmcs12_pages()` caches the mapped `pi_desc_page`/`pi_desc` before the whole vmlaunch fails on the invalid EFER later in validation. Call `vmlaunch` again, this time with a valid EFER but a deliberately invalid `posted_intr_desc_addr` — this trips the "shouldn't happen" block, which unmaps and releases the previously-cached page and resets `pi_desc_page` to `NULL`, but the new address lookup then fails too, and the function returns early without ever touching `pi_desc`. At this point `vmx->nested.pi_desc` is a dangling pointer into freed memory, and the hardware VMCS field `POSTED_INTR_DESC_ADDR` in L0's own VMCS still points at the released physical page — but nothing has failed loudly, so `vmlaunch` proceeds. Issue an interprocessor interrupt from L2 guest code, and `vmx_complete_nested_posted_interrupt()` calls `pi_test_and_clear_on(vmx->nested.pi_desc)`, which directly dereferences the dangling pointer — a guest-triggerable use-after-free in the host kernel, reachable whenever nested virtualization and APIC virtualization are both enabled and the host CPU supports posted interrupts.
+The fix's own commit message documents the exact reproduction its author used: call `vmlaunch` with a valid posted-interrupt descriptor address but an invalid `MSR_EFER`, so `nested_get_vmcs12_pages()` caches the mapped `pi_desc_page`/`pi_desc` before the whole vmlaunch fails on the invalid EFER later in validation. Call `vmlaunch` again, this time with a valid EFER but a deliberately invalid `posted_intr_desc_addr` — this trips the "shouldn't happen" block, which unmaps and releases the previously-cached page and resets `pi_desc_page` to `NULL`, but the new address lookup then fails too, and the function returns early without ever touching `pi_desc`. At this point `vmx->nested.pi_desc` is a dangling pointer into freed memory, and the hardware VMCS field `POSTED_INTR_DESC_ADDR` in L0's own VMCS still points at the released physical page — but nothing has failed loudly, so `vmlaunch` proceeds. Issue an interprocessor interrupt from L2 guest code, and `vmx_complete_nested_posted_interrupt()` calls `pi_test_and_clear_on(vmx->nested.pi_desc)`, which directly dereferences the dangling pointer — a guest-triggerable use-after-free in the host kernel, reachable whenever nested virtualization and APIC virtualization are both enabled and the host CPU supports posted interrupts.
 
 ## Why it happened
 
@@ -60,7 +60,7 @@ The wrapper-removal commit's diff reads, line by line, like an unremarkable clea
 
 - [Nested Virtualization](../nested-virt.md) — the L0/L1/L2 model, vmcs12/vmcs02 merge, and posted-interrupt tracking for nested guests
 - [KVM Exit Handling](../kvm-exits.md) — interrupt injection and the posted-interrupt delivery mechanism this bug corrupts
-- [The Deadlock Detector That Scheduled While Atomic](../../locking/war-stories/rtmutex-deadlock-detector-atomic-sleep.md) — a comparable case of a fix losing track of state across a restructured error path
+- [The PI-Futex Fixup That Had No Answer for a Permanent Fault](../../locking/war-stories/pi-futex-fixup-owner-uaf.md) — a closer structural parallel: an error path that left related state only partially reset, also leading to a use-after-free
 
 ## External references
 

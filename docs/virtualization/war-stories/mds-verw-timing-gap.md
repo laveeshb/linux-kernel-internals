@@ -9,7 +9,7 @@ CVSS
 :   5.9 (CVSS 3.1, `AV:L/AC:H/PR:N/UI:N/S:C/C:H/I:N/A:N`)
 
 Bug present since
-:   commit `650b68a0622f9`, the original KVM MDS mitigation, March 2019
+:   commit `650b68a0622f9`, the original KVM MDS mitigation, committed under embargo March 2019, first reached a released kernel at Linux 5.2 (July 2019)
 
 Fixed in
 :   commit `43fb862de8f62`, mainline Linux 6.8 (February 2024) — five years after the original mitigation, and only explicitly identified as a fix for this specific gap in a follow-up commit in late 2025
@@ -28,7 +28,7 @@ MDS — Microarchitectural Data Sampling — covers a family of related CPU flaw
 
 ## The trigger
 
-`650b68a0622f9` ("x86/kvm/vmx: Add MDS protection when L1D Flush is not active", March 2019) added the guest-entry VERW call as an ordinary C function invocation, `mds_clear_cpu_buffers()`, inside `__vmx_vcpu_run()` — several lines *before* the large inline `asm()` block that does the actual register save/restore and VMLAUNCH/VMRESUME. Between that call and the actual VM-entry instruction sat an unknown quantity of compiler-generated code: stack frame setup for the asm block's operands, register spills, and the asm block's own "store host registers" prologue — which, quite literally, pushes registers onto the stack. Every one of those is a memory write. And per the kernel's own description of the vulnerability class, a memory write is exactly the kind of operation that populates the microarchitectural fill buffers MDS targets.
+`650b68a0622f9` ("x86/kvm/vmx: Add MDS protection when L1D Flush is not active", committed under embargo in March 2019, first shipping in Linux 5.2) added the guest-entry VERW call as an ordinary C function invocation, `mds_clear_cpu_buffers()`, inside `__vmx_vcpu_run()` — several lines *before* the large inline `asm()` block that does the actual register save/restore and VMLAUNCH/VMRESUME. Between that call and the actual VM-entry instruction sat an unknown quantity of compiler-generated code: stack frame setup for the asm block's operands, register spills, and the asm block's own "store host registers" prologue — which, quite literally, pushes registers onto the stack. Every one of those is a memory write. And per the kernel's own description of the vulnerability class, a memory write is exactly the kind of operation that populates the microarchitectural fill buffers MDS targets.
 
 ## Observed behavior
 
@@ -38,7 +38,7 @@ An even later commit, `e6ff1d61de51e` (November 2025, Sean Christopherson), rewo
 
 ## Why it happened
 
-The original 2019 mitigation was written under real time pressure — MDS was one of four CVEs disclosed together, across a 23-commit series covering documentation, sysfs reporting, command-line controls, and mitigations for both userspace and KVM simultaneously. Placing the VERW call as an ordinary C function invocation was the natural, mechanically simplest way to add the mitigation to existing C code; nobody involved in that specific patch appears to have reasoned explicitly about exactly how many bytes of compiler-generated code separated that call from the real VM-entry instruction, or audited what those bytes actually did. The gap wasn't a rejected tradeoff — it was a question nobody in the room had asked yet, closed only when later work on a related mitigation (the 2024 MMIO Stale Data hardening) happened to move the same code for an unrelated, more conservative reason.
+The original 2019 mitigation was written under real time pressure — MDS was one of four CVEs disclosed together, across a 23-commit series covering documentation, sysfs reporting, command-line controls, and mitigations for both userspace and KVM simultaneously. Placing the VERW call as an ordinary C function invocation was the natural, mechanically simplest way to add the mitigation to existing C code; nobody involved in that specific patch appears to have reasoned explicitly about exactly how many bytes of compiler-generated code separated that call from the real VM-entry instruction, or audited what those bytes actually did. The gap wasn't a rejected tradeoff — it was a question nobody in the room had asked yet, closed only when a 2024 hardening pass on this same MDS callsite happened to move the code for a related but distinct concern, and only recognized as having fixed this specific gap by a third developer working on adjacent code a year later still.
 
 ## Resolution
 
