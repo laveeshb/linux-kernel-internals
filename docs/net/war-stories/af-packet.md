@@ -54,7 +54,7 @@ A single unsigned-to-signed cast, applied to a subtraction of two attacker-influ
 
 ## Resolution
 
-[`2b6867c2ce76`](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e2) ("net/packet: fix overflow in check for priv area size"), authored by Andrey Konovalov, drops the signed cast and instead casts `tp_sizeof_priv` to `u64` before the comparison — comparing both sides in a wide-enough, correctly-signed domain that wraparound can no longer occur:
+[`2b6867c2ce76`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=2b6867c2ce76c596676bec7d2d525af525fdc6e2) ("net/packet: fix overflow in check for priv area size"), authored by Andrey Konovalov, drops the signed cast and instead casts `tp_sizeof_priv` to `u64` before the comparison — comparing both sides in a wide-enough, correctly-signed domain that wraparound can no longer occur:
 
 ```c
 if (po->tp_version >= TPACKET_V3 &&
@@ -88,7 +88,7 @@ Konovalov [originally posted this fix](https://lore.kernel.org/netdev/cover.1490
 ## External references
 
 - [NVD: CVE-2017-7308](https://nvd.nist.gov/vuln/detail/CVE-2017-7308) — AF_PACKET TPACKET_V3 CVE record
-- [GitHub mirror: 2b6867c2ce76](https://github.com/torvalds/linux/commit/2b6867c2ce76c596676bec7d2d525af525fdc6e2) — "net/packet: fix overflow in check for priv area size"
+- [git.kernel.org: 2b6867c2ce76](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=2b6867c2ce76c596676bec7d2d525af525fdc6e2) — "net/packet: fix overflow in check for priv area size"
 - [lore.kernel.org: net/packet: fix multiple overflow issues in ring buffers (v1)](https://lore.kernel.org/netdev/cover.1490709552.git.andreyknvl@google.com/) — the cover-letter thread showing Willem de Bruijn's request to split the minimal overflow fix from the broader ring-buffer cleanup
 - [lore.kernel.org: v2, the trimmed three-patch series](https://lore.kernel.org/netdev/cover.1490796500.git.andreyknvl@google.com/) — the resubmission David Miller actually merged
 - [Project Zero: Exploiting the Linux kernel via packet sockets](https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html) — Andrey Konovalov's writeup of CVE-2017-7308

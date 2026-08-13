@@ -12,10 +12,10 @@ CVSS
 :   7.8 HIGH (`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary)
 
 Introduced in
-:   [`484611357c19`](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", v4.9)
+:   [`484611357c19`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", v4.9)
 
 Fixed in
-:   [`95a762e2c8c9`](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f), mainline v4.15-rc5
+:   [`95a762e2c8c9`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c942780948091f8f2a4f32fce1ac6f), mainline v4.15-rc5
 
 Exploit tool
 :   yes — three Exploit-DB entries, including a [Metasploit module](https://www.exploit-db.com/exploits/45058)
@@ -72,7 +72,7 @@ The reachability caveat is in the fix commit itself:
 
 > Starting with v4.14, this is exploitable by unprivileged users as long as the `unprivileged_bpf_disabled` sysctl isn't set.
 
-The bug was introduced in v4.9 by [`484611357c19`](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", Josef Bacik, September 2016) — but, per the fix commit, only became exploitable by unprivileged users starting with v4.14, which is what turned a verifier defect into a privilege escalation.
+The bug was introduced in v4.9 by [`484611357c19`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=484611357c19f9e19ef742ebef4505a07d243cc9) ("bpf: allow access into map value arrays", Josef Bacik, September 2016) — but, per the fix commit, only became exploitable by unprivileged users starting with v4.14, which is what turned a verifier defect into a privilege escalation.
 
 ## Why it happened
 
@@ -119,7 +119,7 @@ What did change, structurally, is that this batch marks the point where the veri
 
 **Signed-to-unsigned promotion at a function boundary deserves an explicit cast even when the default is right.** `__mark_reg_known(reg, insn->imm)` relies on the reader knowing that `imm` is `s32`, that the parameter is `u64`, and that sign extension is intended. Writing the intended conversion out — as the fix does with `(u32)` on one side — makes the two cases distinguishable at the call site instead of at the language-standard level.
 
-**A verifier bug's severity is set by what an unprivileged program can build on top of it.** This defect shipped in v4.9 and was a privilege escalation from v4.14 — the fix commit states that boundary without explaining it. The defect itself survived v4.14's wholesale rewrite of the verifier's value tracking: v4.9 assigned `insn->imm` straight into a `u64 max_value`, and Edward Cree's [`b03c9f9fdc37`](https://github.com/torvalds/linux/commit/b03c9f9fdc37dab81ea04d5dacdc5995d4c224c2) replaced that with a call passing the same `s32` into `__mark_reg_known()`'s `u64` parameter — a different line making the identical mistake. What changed over those five releases was the exposure, not the bug. That relationship is exactly what the [unprivileged-BPF-off-by-default](unprivileged-bpf-off.md) change would eventually act on, three and a half years later.
+**A verifier bug's severity is set by what an unprivileged program can build on top of it.** This defect shipped in v4.9 and was a privilege escalation from v4.14 — the fix commit states that boundary without explaining it. The defect itself survived v4.14's wholesale rewrite of the verifier's value tracking: v4.9 assigned `insn->imm` straight into a `u64 max_value`, and Edward Cree's [`b03c9f9fdc37`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b03c9f9fdc37dab81ea04d5dacdc5995d4c224c2) replaced that with a call passing the same `s32` into `__mark_reg_known()`'s `u64` parameter — a different line making the identical mistake. What changed over those five releases was the exposure, not the bug. That relationship is exactly what the [unprivileged-BPF-off-by-default](unprivileged-bpf-off.md) change would eventually act on, three and a half years later.
 
 **Systematic adversarial review finds bug *classes*, not bugs.** Eight verifier bugs in one announcement, from one researcher, in one pass. The individual fixes are each a few lines. The finding that mattered was that the verifier's integer arithmetic had never been examined by someone actively trying to break it.
 
@@ -137,7 +137,7 @@ What did change, structurally, is that this batch marks the point where the veri
 ## External references
 
 - [NVD: CVE-2017-16995](https://nvd.nist.gov/vuln/detail/CVE-2017-16995) — CVSS 7.8 HIGH, published December 27, 2017
-- [GitHub mirror: 95a762e2c8c9](https://github.com/torvalds/linux/commit/95a762e2c8c942780948091f8f2a4f32fce1ac6f) — "bpf: fix incorrect sign extension in check_alu_op()", the fix (7 insertions, 1 deletion)
-- [GitHub mirror: 484611357c19](https://github.com/torvalds/linux/commit/484611357c19f9e19ef742ebef4505a07d243cc9) — "bpf: allow access into map value arrays" (v4.9), the commit named by the fix's `Fixes:` tag
+- [git.kernel.org: 95a762e2c8c9](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c942780948091f8f2a4f32fce1ac6f) — "bpf: fix incorrect sign extension in check_alu_op()", the fix (7 insertions, 1 deletion)
+- [git.kernel.org: 484611357c19](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=484611357c19f9e19ef742ebef4505a07d243cc9) — "bpf: allow access into map value arrays" (v4.9), the commit named by the fix's `Fixes:` tag
 - [oss-security: Linux >=4.9: eBPF memory corruption bugs](https://www.openwall.com/lists/oss-security/2017/12/21/2) — Jann Horn's December 21, 2017 announcement of all eight verifier bugs, with per-bug technical descriptions
 - [Exploit-DB 44298](https://www.exploit-db.com/exploits/44298), [45010](https://www.exploit-db.com/exploits/45010), and [45058](https://www.exploit-db.com/exploits/45058) — three catalogued local-root exploits; 45058 is the Metasploit module `exploit/linux/local/bpf_sign_extension_priv_esc`

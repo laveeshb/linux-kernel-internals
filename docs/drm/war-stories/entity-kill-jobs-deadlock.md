@@ -15,7 +15,7 @@ Reported by
 :   Mikhail Gavrilov, via [Mesa issue #13908](https://gitlab.freedesktop.org/mesa/mesa/-/issues/13908)
 
 Fixed in
-:   [`487df8b69834`](https://github.com/torvalds/linux/commit/487df8b698345dd5a91346335f05170ed5f29d4e)
+:   [`487df8b69834`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=487df8b698345dd5a91346335f05170ed5f29d4e)
 
 Not a CVE
 
@@ -86,5 +86,5 @@ Switching every `xa_*` call to its interrupt-safe `xa_*_irq` counterpart would h
 
 ## External references
 
-- [GitHub mirror: 487df8b69834](https://github.com/torvalds/linux/commit/487df8b698345dd5a91346335f05170ed5f29d4e) — "drm/sched: Fix deadlock in drm_sched_entity_kill_jobs_cb," full lockdep trace and both deadlock scenarios
+- [git.kernel.org: 487df8b69834](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=487df8b698345dd5a91346335f05170ed5f29d4e) — "drm/sched: Fix deadlock in drm_sched_entity_kill_jobs_cb," full lockdep trace and both deadlock scenarios
 - [Mesa GitLab issue #13908](https://gitlab.freedesktop.org/mesa/mesa/-/issues/13908) — Mikhail Gavrilov's original report

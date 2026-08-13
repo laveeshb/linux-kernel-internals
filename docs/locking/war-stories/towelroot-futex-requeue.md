@@ -62,8 +62,8 @@ The 2012 fix was scoped to the crash `trinity` actually produced — a NULL dere
 
 ## External references
 
-- [GitHub mirror: e9c243a5a6de](https://github.com/torvalds/linux/commit/e9c243a5a6de0be8e584c604d353412584b592f8) — "futex: Forbid uaddr == uaddr2 in futex_requeue(..., requeue_pi=1)," the fix
-- [GitHub mirror: 6f7b0a2a5c0f](https://github.com/torvalds/linux/commit/6f7b0a2a5c0fb03be7c25bd1745baa50582348ef) — "futex: Forbid uaddr == uaddr2 in futex_wait_requeue_pi()," the 2012 fix that only covered the sibling function
+- [git.kernel.org: e9c243a5a6de](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e9c243a5a6de0be8e584c604d353412584b592f8) — "futex: Forbid uaddr == uaddr2 in futex_requeue(..., requeue_pi=1)," the fix
+- [git.kernel.org: 6f7b0a2a5c0f](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=6f7b0a2a5c0fb03be7c25bd1745baa50582348ef) — "futex: Forbid uaddr == uaddr2 in futex_wait_requeue_pi()," the 2012 fix that only covered the sibling function
 - [Debian DSA-2949-1](https://lists.debian.org/debian-security-announce/2014/msg00130.html) — "Pinkie Pie discovered an issue in the futex subsystem that allows a local user to gain ring 0 control via the futex syscall"
 - [Google Android Security 2014 Year in Review](https://source.android.com/docs/security/reports/Google_Android_Security_2014_Report_Final.pdf) — names CVE-2014-3153 as the year's most significantly exploited Android local-privilege-escalation bug
 - [NVD: CVE-2014-3153](https://nvd.nist.gov/vuln/detail/CVE-2014-3153) — CVE record; CISA KEV-listed May 25, 2022

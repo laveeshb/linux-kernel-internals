@@ -275,7 +275,7 @@ flush_tlb_page(vma, addr);
 # ARM provides litmus7 tool for testing actual hardware behavior
 
 # LKMM (Linux Kernel Memory Model) verification
-# https://github.com/torvalds/linux/tree/master/tools/memory-model
+# https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/memory-model
 
 # Enable CONFIG_KCSAN for compile-time race detection
 # KCSAN instruments memory accesses and checks for data races

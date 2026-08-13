@@ -26,15 +26,15 @@ An earlier version of that callback treated a job that had never actually starte
 
 On Lunar Lake, GuC could miss a GGTT (Global Graphics Translation Table) page update and simply never schedule a job at all. Because the callback specifically skipped jobs that hadn't started, this failure mode produced no recovery action whatsoever — the job sat forever, and nothing in the driver ever noticed.
 
-Matthew Brost's fix, [`fe05cee4d953`](https://github.com/torvalds/linux/commit/fe05cee4d9533892210e1ee90147175d87e7c053) ("drm/xe: Don't short circuit TDR on jobs not started", October 2024), removed the short-circuit: on an unstarted job, the TDR now toggles scheduling to try to get the job unstuck, warns, and times the job out for real if a second TDR firing still finds it unstarted. That closed the original hang — and created the next one.
+Matthew Brost's fix, [`fe05cee4d953`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=fe05cee4d9533892210e1ee90147175d87e7c053) ("drm/xe: Don't short circuit TDR on jobs not started", October 2024), removed the short-circuit: on an unstarted job, the TDR now toggles scheduling to try to get the job unstuck, warns, and times the job out for real if a second TDR firing still finds it unstarted. That closed the original hang — and created the next one.
 
 ## Observed behavior
 
-The revised handler now silently errored out an unstarted job instead of ever triggering a GT reset to actually recover the hardware. Rodrigo Vivi's fix nearly twenty months later, [`770031ec2312`](https://github.com/torvalds/linux/commit/770031ec2312bfab307d05db5469f24fd297e758) ("drm/xe: fix job timeout recovery for unstarted jobs and kernel queues", June 10, 2026), states the problem plainly: "A job that GuC never scheduled (never started) indicates a GuC scheduling failure; previously such jobs were silently errored out instead of triggering a GT reset to recover." For kernel queues — internal driver work, not user submissions — the fix goes further: they are "always recovered this way and wedge the device once recovery attempts are exhausted, since kernel work must not silently fail," in the commit's own words, unconditionally in a way a banned user queue's recovery isn't.
+The revised handler now silently errored out an unstarted job instead of ever triggering a GT reset to actually recover the hardware. Rodrigo Vivi's fix nearly twenty months later, [`770031ec2312`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=770031ec2312bfab307d05db5469f24fd297e758) ("drm/xe: fix job timeout recovery for unstarted jobs and kernel queues", June 10, 2026), states the problem plainly: "A job that GuC never scheduled (never started) indicates a GuC scheduling failure; previously such jobs were silently errored out instead of triggering a GT reset to recover." For kernel queues — internal driver work, not user submissions — the fix goes further: they are "always recovered this way and wedge the device once recovery attempts are exhausted, since kernel work must not silently fail," in the commit's own words, unconditionally in a way a banned user queue's recovery isn't.
 
 That fix itself had a sharp edge, caught in review: an unstarted job on a queue that was *already* banned had to be left alone. Clearing the ban or forcing a GT reset on an intentionally-banned queue would resurrect userspace work the kernel had deliberately killed, and could turn a single bad queue into a GT-reset storm. The v3 revision added that carve-out explicitly.
 
-Two days after Rodrigo Vivi wrote `770031ec2312`, it produced a crash of its own. [`d42df9dce7b3`](https://github.com/torvalds/linux/commit/d42df9dce7b374079c5c41691bd62d8765768a80) ("drm/xe: wedge from the timeout handler only after releasing the queue", June 12, 2026) quotes the fault directly:
+Two days after Rodrigo Vivi wrote `770031ec2312`, it produced a crash of its own. [`d42df9dce7b3`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d42df9dce7b374079c5c41691bd62d8765768a80) ("drm/xe: wedge from the timeout handler only after releasing the queue", June 12, 2026) quotes the fault directly:
 
 ```
 Oops: general protection fault ... 0x6b6b6b6b6b6b6c3b
@@ -70,6 +70,6 @@ Control then returned to the handler, which kept using the now-stale job and sch
 
 ## External references
 
-- [GitHub mirror: fe05cee4d953](https://github.com/torvalds/linux/commit/fe05cee4d9533892210e1ee90147175d87e7c053) — "drm/xe: Don't short circuit TDR on jobs not started"
-- [GitHub mirror: 770031ec2312](https://github.com/torvalds/linux/commit/770031ec2312bfab307d05db5469f24fd297e758) — "drm/xe: fix job timeout recovery for unstarted jobs and kernel queues"
-- [GitHub mirror: d42df9dce7b3](https://github.com/torvalds/linux/commit/d42df9dce7b374079c5c41691bd62d8765768a80) — "drm/xe: wedge from the timeout handler only after releasing the queue," including the full GPF trace
+- [git.kernel.org: fe05cee4d953](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=fe05cee4d9533892210e1ee90147175d87e7c053) — "drm/xe: Don't short circuit TDR on jobs not started"
+- [git.kernel.org: 770031ec2312](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=770031ec2312bfab307d05db5469f24fd297e758) — "drm/xe: fix job timeout recovery for unstarted jobs and kernel queues"
+- [git.kernel.org: d42df9dce7b3](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d42df9dce7b374079c5c41691bd62d8765768a80) — "drm/xe: wedge from the timeout handler only after releasing the queue," including the full GPF trace

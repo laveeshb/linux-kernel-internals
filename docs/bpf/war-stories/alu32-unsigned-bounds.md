@@ -12,7 +12,7 @@ CVSS
 :   7.0 HIGH (`CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`, NVD primary); 8.8 HIGH (`CVSS:3.0/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H`) from ZDI as secondary scorer
 
 Fixed in
-:   [`10bf4e83167c`](https://github.com/torvalds/linux/commit/10bf4e83167cc68595b85fd73bb91e8f2c086e36), mainline v5.13-rc1
+:   [`10bf4e83167c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=10bf4e83167cc68595b85fd73bb91e8f2c086e36), mainline v5.13-rc1
 
 Exploit tool
 :   none catalogued on Exploit-DB; NVD lists no reference tagged `Exploit`
@@ -24,7 +24,7 @@ Actively exploited
 
 ## Before state
 
-Since [`3f50f132d840`](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) ("bpf: Verifier, do explicit ALU32 bounds tracking", v5.7-rc1), every scalar register in the verifier carries *two* sets of numeric bounds: the 64-bit `{s,u}{min,max}_value` and a separate 32-bit `{s,u}32_{min,max}_value` describing the low half.
+Since [`3f50f132d840`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3f50f132d8400e129fc9eb68b5020167ef80a244) ("bpf: Verifier, do explicit ALU32 bounds tracking", v5.7-rc1), every scalar register in the verifier carries *two* sets of numeric bounds: the 64-bit `{s,u}{min,max}_value` and a separate 32-bit `{s,u}32_{min,max}_value` describing the low half.
 
 Two sets of bounds means they have to be kept consistent. `__reg_combine_64_into_32()` is the direction that derives 32-bit bounds from 64-bit ones, and it did so one endpoint at a time:
 
@@ -68,7 +68,7 @@ Unlike its sibling [CVE-2021-3490](alu32-bitwise-bounds.md), whose public exploi
 
 This is not the first time this exact code shape was fixed.
 
-On December 8, 2020 — four and a half months before this fix — Alexei Starovoitov committed [`b02709587ea3`](https://github.com/torvalds/linux/commit/b02709587ea3d699a608568ee8157d8db4fd8cae) ("bpf: Fix propagation of 32-bit signed bounds from 64-bit bounds."), reported by Jean-Philippe Brucker. Its reasoning is word-for-word the same argument, one signedness over:
+On December 8, 2020 — four and a half months before this fix — Alexei Starovoitov committed [`b02709587ea3`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b02709587ea3d699a608568ee8157d8db4fd8cae) ("bpf: Fix propagation of 32-bit signed bounds from 64-bit bounds."), reported by Jean-Philippe Brucker. Its reasoning is word-for-word the same argument, one signedness over:
 
 > The 64-bit signed bounds should not affect 32-bit signed bounds unless the verifier knows that upper 32-bits are either all 1s or all 0s. For example the register with `smin_value==1` doesn't mean that `s32_min_value` is also equal to 1, since `smax_value` could be larger than 32-bit subregister can hold.
 
@@ -93,7 +93,7 @@ Both blocks trace back to the same parent commit, `3f50f132d840`, which introduc
 
 ## Resolution
 
-[`10bf4e83167c`](https://github.com/torvalds/linux/commit/10bf4e83167cc68595b85fd73bb91e8f2c086e36) ("bpf: Fix propagation of 32 bit unsigned bounds from 64 bit bounds", Daniel Borkmann) applies the same shape of fix to the unsigned block:
+[`10bf4e83167c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=10bf4e83167cc68595b85fd73bb91e8f2c086e36) ("bpf: Fix propagation of 32 bit unsigned bounds from 64 bit bounds", Daniel Borkmann) applies the same shape of fix to the unsigned block:
 
 ```diff
 -	if (__reg64_bound_u32(reg->umin_value))
@@ -140,7 +140,7 @@ The same bounds-propagation logic came back once more, publicly, six months late
 ## External references
 
 - [NVD: CVE-2021-31440](https://nvd.nist.gov/vuln/detail/CVE-2021-31440) — CVSS 7.0 HIGH (NVD) / 8.8 HIGH (ZDI), published May 21, 2021
-- [GitHub mirror: 10bf4e83167c](https://github.com/torvalds/linux/commit/10bf4e83167cc68595b85fd73bb91e8f2c086e36) — "bpf: Fix propagation of 32 bit unsigned bounds from 64 bit bounds", the fix
-- [GitHub mirror: b02709587ea3](https://github.com/torvalds/linux/commit/b02709587ea3d699a608568ee8157d8db4fd8cae) — "bpf: Fix propagation of 32-bit signed bounds from 64-bit bounds." (December 2020), the signed half of the same bug, fixed first
-- [GitHub mirror: 3f50f132d840](https://github.com/torvalds/linux/commit/3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking" (v5.7-rc1), the introducing commit named by both 2021 CVEs
+- [git.kernel.org: 10bf4e83167c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=10bf4e83167cc68595b85fd73bb91e8f2c086e36) — "bpf: Fix propagation of 32 bit unsigned bounds from 64 bit bounds", the fix
+- [git.kernel.org: b02709587ea3](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b02709587ea3d699a608568ee8157d8db4fd8cae) — "bpf: Fix propagation of 32-bit signed bounds from 64-bit bounds." (December 2020), the signed half of the same bug, fixed first
+- [git.kernel.org: 3f50f132d840](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3f50f132d8400e129fc9eb68b5020167ef80a244) — "bpf: Verifier, do explicit ALU32 bounds tracking" (v5.7-rc1), the introducing commit named by both 2021 CVEs
 - [lore.kernel.org: bpf: Fix propagation of bounds from 64-bit min/max into 32-bit and var_off](https://lore.kernel.org/all/20211101222153.78759-1-alexei.starovoitov@gmail.com/) — the November 2021 follow-up carrying `Fixes: 10bf4e83167c`, restoring precision this page's fix had cost; its signed-side companion patch is explicit that it fixed no security bug

@@ -63,5 +63,5 @@ An unprivileged user with access to Ubuntu's carried unprivileged-overlay-mount 
 
 ## External references
 
-- [GitHub mirror: 7c03e2cda4a5](https://github.com/torvalds/linux/commit/7c03e2cda4a584cadc398e8f6641ca9988a39d52) — "vfs: move cap_convert_nscap() call into vfs_setxattr()," the fix
+- [git.kernel.org: 7c03e2cda4a5](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7c03e2cda4a584cadc398e8f6641ca9988a39d52) — "vfs: move cap_convert_nscap() call into vfs_setxattr()," the fix
 - [NVD: CVE-2021-3493](https://nvd.nist.gov/vuln/detail/CVE-2021-3493) — CVE record; CISA KEV-listed October 20, 2022

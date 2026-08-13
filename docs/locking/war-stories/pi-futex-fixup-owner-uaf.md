@@ -64,7 +64,7 @@ The 2008 fix was correct about the problem it set out to solve — a real, obser
 
 ## External references
 
-- [GitHub mirror: 34b1a1ce1458](https://github.com/torvalds/linux/commit/34b1a1ce1458f50ef27c54e28eb9b1947012907a) — "futex: Handle faults correctly for PI futexes," the fix
-- [GitHub mirror: 1b7558e457ed](https://github.com/torvalds/linux/commit/1b7558e457ed0de61023cfc913d2c342c7c3d9f2) — "futexes: fix fault handling in futex_lock_pi," the 2008 commit whose retry logic never covered a permanent fault
+- [git.kernel.org: 34b1a1ce1458](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=34b1a1ce1458f50ef27c54e28eb9b1947012907a) — "futex: Handle faults correctly for PI futexes," the fix
+- [git.kernel.org: 1b7558e457ed](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1b7558e457ed0de61023cfc913d2c342c7c3d9f2) — "futexes: fix fault handling in futex_lock_pi," the 2008 commit whose retry logic never covered a permanent fault
 - [oss-security: Linux Kernel local priv escalation via futexes](https://www.openwall.com/lists/oss-security/2021/01/29/1) — Marcus Meissner's CVE request, quoting the merge that introduced the fix
 - [NVD: CVE-2021-3347](https://nvd.nist.gov/vuln/detail/CVE-2021-3347) — CVE record, CVSS 7.8 HIGH, published January 29, 2021

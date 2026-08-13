@@ -12,7 +12,7 @@ Author
 :   Sergey Senozhatsky (Google/ChromeOS)
 
 Fixed in
-:   [`4625fe5bbdac`](https://github.com/torvalds/linux/commit/4625fe5bbdaccd45be274c30ff0a42e30d4e38cf)
+:   [`4625fe5bbdac`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=4625fe5bbdaccd45be274c30ff0a42e30d4e38cf)
 
 Not a CVE
 
@@ -107,4 +107,4 @@ The crash-dump allocation was ordinary code, written without any thought to `dma
 
 ## External references
 
-- [GitHub mirror: 4625fe5bbdac](https://github.com/torvalds/linux/commit/4625fe5bbdaccd45be274c30ff0a42e30d4e38cf) — "drm: gpu: msm: forbid mem reclaim from reset," including both hung-task traces
+- [git.kernel.org: 4625fe5bbdac](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=4625fe5bbdaccd45be274c30ff0a42e30d4e38cf) — "drm: gpu: msm: forbid mem reclaim from reset," including both hung-task traces
