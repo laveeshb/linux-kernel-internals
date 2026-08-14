@@ -290,4 +290,4 @@ modprobe vfio-pci
 
 ### External
 
-- [x86 IOMMU Support](https://docs.kernel.org/arch/x86/iommu.html) — official kernel documentation on DMAR/IVRS ACPI tables, `intel_iommu=`/`amd_iommu=` boot options, and fault-reporting formats for both vendors
+- [x86 IOMMU Support](https://docs.kernel.org/arch/x86/iommu.html) — official kernel documentation on DMAR/IVRS ACPI tables, the `intel_iommu=igfx_off`/`iommu=pt` boot options, and fault-reporting formats for both vendors

@@ -249,7 +249,6 @@ grep CONFIG_IOMMU_SVA /boot/config-$(uname -r)
 - [drivers/iommu/intel/svm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/intel/svm.c) — Intel VT-d SVA: `intel_svm_set_dev_pasid()` and first-level PASID table setup
 - [drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c) — ARM SMMUv3 SVA: `arm_smmu_sva_set_dev_pasid()` and Context Descriptor programming from `mm->pgd`
 - [include/linux/iommu.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/iommu.h) — `struct iommu_sva` and the `iommu_sva_bind_device()` family of declarations
-- [Documentation/arch/x86/sva.rst](https://docs.kernel.org/arch/x86/sva.html) — the kernel's own SVA/PASID/ENQCMD documentation: PASID life-cycle, the `IA32_PASID` MSR, and the PCIe ATS/PRI background
 
 ### Related pages
 
@@ -261,3 +260,7 @@ grep CONFIG_IOMMU_SVA /boot/config-$(uname -r)
 ### LWN articles
 
 - [5.7 Merge window part 1](https://lwn.net/Articles/816313/) — Jonathan Corbet, April 3, 2020; covers the merge of the "unified user-space access-intended accelerator framework" (uacce), a generic driver framework (used by HiSilicon's accelerators) for exposing SVA-backed devices to user space
+
+### External
+
+- [Documentation/arch/x86/sva.rst](https://docs.kernel.org/arch/x86/sva.html) — the kernel's own SVA/PASID/ENQCMD documentation: PASID life-cycle, the `IA32_PASID` MSR, and the PCIe ATS/PRI background
