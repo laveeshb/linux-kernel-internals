@@ -397,9 +397,34 @@ cat /sys/kernel/debug/tracing/trace | grep 'do_one_initcall'
 
 ## Further reading
 
+### Kernel source
+
+- [init/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/init/main.c) — `start_kernel()`, `rest_init()`, `kernel_init()`, and `do_initcalls()`
+- [include/linux/init.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/init.h) — the `__init`/`__exit` section macros and the `early_initcall()` … `late_initcall()` level macros
+- [arch/x86/kernel/head_64.S](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/head_64.S) — `startup_64`, the x86-64 assembly entry point that runs before `start_kernel()`
+- [arch/arm64/kernel/head.S](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/arm64/kernel/head.S) — `primary_entry`, the arm64 equivalent
+- [arch/x86/kernel/setup.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/setup.c) — `setup_arch()` on x86-64: e820 parsing, memblock and page table setup, ACPI table parsing
+- [kernel/cpu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/cpu.c) — `boot_cpu_init()`
+- [mm/mm_init.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mm_init.c) — `mm_core_init()`
+- [mm/page_alloc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/page_alloc.c) — `build_all_zonelists()`
+- [mm/slub.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) — `kmem_cache_init()`, the SLUB bootstrap
+- [kernel/sched/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/sched/core.c) — `sched_init()`
+- [kernel/rcu/tree.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/rcu/tree.c) — `rcu_init()`
+- [kernel/workqueue.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/workqueue.c) — `workqueue_init_early()`
+- [kernel/printk/printk.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/printk/printk.c) — `console_init()`
+- [include/asm-generic/vmlinux.lds.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/vmlinux.lds.h) — `INIT_CALLS`/`INIT_CALLS_LEVEL`, the linker macros that lay out `.initcall*.init` sections in level order
+
+### Related pages
+
 - [Kernel Boot Parameters](boot-params.md) — how `early_param` and `__setup` are parsed
 - [Module Init and Initcalls](initcalls-modules.md) — the module side of `module_init()`
 - [printk and Kernel Logging](printk.md) — why printk works after `console_init()` but not before
-- `init/main.c` — `start_kernel()`, `rest_init()`, `do_initcalls()`
-- `include/linux/init.h` — `__init`, `__exit`, initcall macros
-- `Documentation/core-api/kernel-api.rst` — kernel API reference
+- [memblock: The Boot-Time Memory Allocator](../mm/memblock.md) — the allocator `setup_arch()` initializes, used before the buddy allocator exists
+- [SLUB Allocator Internals](../mm/slab-internals.md) — what `kmem_cache_init()` bootstraps
+- [Runqueues and Task Selection](../sched/runqueues.md) — the per-CPU `struct rq` that `sched_init()` allocates
+- [RCU (Read-Copy-Update)](../locking/rcu.md) — what becomes safe to use after `rcu_init()`
+
+### External
+
+- [The Linux/x86 Boot Protocol](https://docs.kernel.org/arch/x86/boot.html) — the boot loader/kernel handoff that precedes `startup_64`
+- [Kernel Parameters: `initcall_debug`](https://docs.kernel.org/admin-guide/kernel-parameters.html) — official description of the boot parameter covered in "Observing boot order"

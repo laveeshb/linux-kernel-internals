@@ -370,12 +370,36 @@ KFENCE does not catch every bug (only sampled allocations are guarded), but it p
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/panic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/panic.c) — `panic()`/`vpanic()`: message formatting, the panic notifier chain, and the reboot/halt sequence
+- [kernel/crash_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/crash_core.c) — `kexec_should_crash()` and `crash_kexec()`: the kdump entry point invoked from both `oops_end()` and `vpanic()`
+- [arch/x86/kernel/dumpstack.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/dumpstack.c) — `die()`, `oops_begin()`, `oops_end()`: the actual x86 oops path (see note below — the page's `die()` code block is out of date)
+- [arch/x86/kernel/traps.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/traps.c) — exception entry points (`exc_general_protection()`, `exc_invalid_op()`, `exc_double_fault()`, etc.) that call `die()`
+- [arch/x86/kernel/unwind_orc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/unwind_orc.c) — `orc_find()`: ORC entry lookup used to produce `Call Trace`
+- [arch/x86/include/asm/orc_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/orc_types.h) — `struct orc_entry` layout (note: `type` is a 3-bit field, not 2 — see below)
+- [include/asm-generic/bug.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/bug.h) — `WARN()`/`BUG()` family, and the `warn_slowpath_fmt()`/`__warn()` declarations
+- [lib/bust_spinlocks.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/bust_spinlocks.c) — `bust_spinlocks()`: the `oops_in_progress` counter used to keep console output readable during an oops
+
+### Man pages
+
+- [`kexec_load(2)`](https://man7.org/linux/man-pages/man2/kexec_load.2.html) — the underlying syscall behind `kexec -p`; documents `KEXEC_ON_CRASH`, the flag that registers a crash kernel
+
+### Related pages
+
 - [Oops Analysis](../debugging/oops-analysis.md) — step-by-step guide to reading an oops
 - [kdump and crash](../debugging/kdump.md) — setting up and using kdump in depth
 - [KASAN](../mm/kasan.md) — KASAN configuration and use
 - [KFENCE](../mm/kfence.md) — KFENCE in production
-- `kernel/panic.c` — `panic()` implementation
-- `arch/x86/kernel/traps.c` — x86 exception handlers, `die()`
-- `arch/x86/kernel/unwind_orc.c` — ORC stack unwinder
-- `Documentation/admin-guide/tainted-kernels.rst` — taint flag reference
-- `Documentation/admin-guide/kdump/kdump.rst` — kdump setup guide
+
+### LWN articles
+
+- [ORC unwinder](https://lwn.net/Articles/728721/) — Josh Poimboeuf's patch series and design writeup introducing the ORC unwinder and objtool-generated unwind tables (2017)
+- [Crash dumps with kexec](https://lwn.net/Articles/108595/) — Jonathan Corbet on the original kexec-based crash dump design (2004)
+- [The kernel address sanitizer](https://lwn.net/Articles/612153/) — Jake Edge's introduction to KASAN (2014)
+- [KFENCE: A low-overhead sampling-based memory safety error detector](https://lwn.net/Articles/830877/) — Marco Elver's design writeup for KFENCE (2020)
+
+### External
+
+- [Tainted kernels](https://docs.kernel.org/admin-guide/tainted-kernels.html) — full taint flag reference
+- [Kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html) — kdump setup guide

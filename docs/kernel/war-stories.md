@@ -233,7 +233,7 @@ dmesg | grep -i 'unknown\|mxcpus'
 # Unknown kernel command line parameters "mxcpus=4", will be passed to userspace
 ```
 
-The message is at `KERN_WARNING` level, which at the default console loglevel of 4 does not appear on the screen during boot — it goes only to the ring buffer. The SMP initialization code never saw the parameter, so all 8 CPUs came online.
+The message is logged via `pr_notice()` (`KERN_NOTICE`, level 5) — not `KERN_WARNING` — but at a console loglevel of 4, as many distributions configure for a quiet boot (the upstream Kconfig default, `CONFIG_CONSOLE_LOGLEVEL_DEFAULT`, is actually 7), it still does not appear on the screen: only messages below the console loglevel are printed. The message goes only to the ring buffer. The SMP initialization code never saw the parameter, so all 8 CPUs came online.
 
 ### Root cause
 
@@ -392,5 +392,17 @@ Module init functions must return 0 on success or a negative errno on failure. A
 - [Kernel Panic and Oops](panic-oops.md) — crash analysis and kdump setup
 - [Boot Parameters](boot-params.md) — `__setup()`, `early_param()`, unknown parameter handling
 - [Kmemleak](../mm/kmemleak.md) — detecting memory leaks like Case 5
-- `Documentation/admin-guide/kdump/kdump.rst` — kdump sizing guidelines
-- `Documentation/process/coding-style.rst` — error path conventions in kernel code
+- [KASAN](../mm/kasan.md) — `CONFIG_KASAN_GENERIC` vs `CONFIG_KASAN_VMALLOC`, the detection strategies discussed in Case 2
+- [include/linux/init.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/init.h) — the initcall level macros: `core_initcall()` = level 1, `subsys_initcall()` = level 4, `device_initcall()` = level 6, confirming the ordering behind Case 1
+- [init/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/init/main.c) — `do_one_initcall()` and the level-by-level initcall dispatch (`do_initcall_level()`), plus `unknown_bootoption()`/`print_unknown_bootoptions()` behind Case 4
+- [kernel/module/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/main.c) — `do_init_module()`: `if (ret > 0) pr_warn("%s: init suspiciously returned %d, it should follow 0/-E convention\n", ...)`, the real kernel code that would have caught Case 5's bug at load time
+
+## External references
+
+- [Kernel documentation: Kdump Support](https://docs.kernel.org/admin-guide/kdump/kdump.html) — `crashkernel=` sizing syntax and guidance (e.g. `crashkernel=512M-2G:64M,2G-:128M`), the scaling-with-RAM rule behind Case 3
+- [Kernel documentation: Kernel Parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) — "if it doesn't recognize a parameter and it doesn't contain a '.', the parameter gets passed to init: parameters with '=' go into init's environment" — the exact mechanism behind Case 4's silent `mxcpus=4` typo
+- [Kernel documentation: Linux kernel coding style, §16 "Function return values and names"](https://docs.kernel.org/process/coding-style.html) — the 0-success/negative-errno convention that Case 5's `return 1;` violated
+- [Kernel documentation: KASAN](https://docs.kernel.org/dev-tools/kasan.html) — `CONFIG_KASAN_GENERIC` covers slab, page_alloc, vmalloc, stack, and global memory by default; `CONFIG_KASAN_VMALLOC` separately extends shadow-memory coverage to the vmalloc address range specifically — confirming Case 2's claim that `CONFIG_KASAN_VMALLOC` doesn't apply to a direct-mapped `__init` text page
+- [Kernel documentation: Kmemleak](https://docs.kernel.org/dev-tools/kmemleak.html) — "detecting possible kernel memory leaks ... the orphan objects are not freed but only reported," the tool that surfaces the bug in Case 5
+
+No specific commit hashes, CVE numbers, or kernel-version-tied feature claims appear in this page's prose — the five cases are composite scenarios illustrating real, recurring bug patterns rather than write-ups of a single named incident, so there is nothing of that kind to cite in place. The references above verify the underlying kernel mechanisms (initcall ordering, `__init`/KASAN, kdump/crashkernel sizing, unknown-boot-parameter handling, and module init return codes) against current mainline source and documentation.

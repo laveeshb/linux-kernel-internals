@@ -282,9 +282,23 @@ For production code, prefer `early_param()` or `__setup()` over manual string se
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/init.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/init.h) — `early_param()`, `__setup()`, `__setup_param()` macros and `struct obs_kernel_param`
+- [kernel/params.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/params.c) — `parse_args()` and `parse_one()`: the token-splitting loop and per-token dispatch
+- [init/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/init/main.c) — `boot_command_line`, `saved_command_line`, `parse_early_param()`, and `unknown_bootoption()`/`obsolete_checksetup()` (the `__setup_start`/`__setup_end` linker-section walk)
+- [init/do_mounts.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/init/do_mounts.c) — `root_dev_setup()`: a real, worked `__setup()` handler for `root=`
+- [include/linux/moduleparam.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/moduleparam.h) — `module_param()` macro family used by built-in and loadable modules
+
+### Man pages
+
+- [`proc_cmdline(5)`](https://man7.org/linux/man-pages/man5/proc_cmdline.5.html) — documents `/proc/cmdline`
+
+### Related pages
+
 - [Early Boot and start_kernel()](early-boot.md) — when each parsing phase runs
 - [Module Init and Initcalls](initcalls-modules.md) — `module_param()` in loadable modules
-- `kernel/params.c` — `parse_args()`, `parse_one()`, module parameter core
-- `include/linux/moduleparam.h` — `module_param()` macro family
-- `Documentation/admin-guide/kernel-parameters.txt` — canonical list of all kernel parameters
-- `Documentation/core-api/kernel-api.rst` — `__setup` and `early_param` documentation
+
+### External
+
+- [The kernel's command-line parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) — the canonical, generated list of every parameter recognized by `__setup()`, `early_param()`, `core_param()`, and `module_param()`

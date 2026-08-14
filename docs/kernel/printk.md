@@ -209,8 +209,34 @@ kprobe:vprintk_emit {
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/printk/printk.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/printk/printk.c) — `vprintk_emit()`, `wake_up_klogd()`, `console_flush_all()`: the core implementation
+- [kernel/printk/printk_ringbuffer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/printk/printk_ringbuffer.h) — `struct printk_info`, `struct printk_ringbuffer`, `prb_reserve()`/`prb_commit()`: the lock-free ring buffer
+- [include/linux/printk.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/printk.h) — the `pr_*()` convenience macros and `printk_ratelimited()`
+- [include/linux/ratelimit.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/ratelimit.h) — `DEFINE_RATELIMIT_STATE()` and `__ratelimit()`: the rate-limiting primitives
+- [include/linux/dev_printk.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/dev_printk.h) — `dev_err()`, `dev_info()`, `dev_warn()`, `dev_dbg()`: the device-aware wrappers
+
+### Man pages
+
+- [`dmesg(1)`](https://man7.org/linux/man-pages/man1/dmesg.1.html) — reading and filtering the kernel log, including `-T`, `-w`, `-l`, `--clear`
+- [`syslog(2)`](https://man7.org/linux/man-pages/man2/syslog.2.html) — the syscall behind `dmesg`/`klogctl`, and the console-loglevel semantics exposed via `/proc/sys/kernel/printk`
+
+### Related pages
+
 - [Oops Analysis](../debugging/oops-analysis.md) — reading kernel crash output
 - [kdump](../debugging/kdump.md) — kernel crash dumps
-- `kernel/printk/printk.c` — core implementation
-- `include/linux/printk.h` — API macros
-- `Documentation/admin-guide/dynamic-debug-howto.rst` — dynamic debug guide
+- [Dynamic Debug](../modules/dynamic-debug.md) — full treatment of `pr_debug()`/`dev_dbg()` and the `dynamic_debug/control` command language
+
+### LWN articles
+
+- [Reimplementing printk()](https://lwn.net/Articles/780556/) — John Ogness's lockless ring-buffer redesign that the current `printk_ringbuffer` implements
+- [Why printk() is so complicated (and how to fix it)](https://lwn.net/Articles/800946/) — the tension between console output, log levels, and reliability that shapes the current design
+- [Keeping printk() under control](https://lwn.net/Articles/66091/) — the original `printk_ratelimit()` mechanism
+
+### External
+
+- [Message logging with printk](https://docs.kernel.org/core-api/printk-basics.html) — the `pr_*()` macros, `KERN_*` log levels, and `pr_fmt()`
+- [dynamic-debug-howto](https://docs.kernel.org/admin-guide/dynamic-debug-howto.html) — full command language and flag reference for `/sys/kernel/debug/dynamic_debug/control`
+- [sysctl/kernel.rst: printk](https://docs.kernel.org/admin-guide/sysctl/kernel.html#printk) — the four `/proc/sys/kernel/printk` values, plus `printk_ratelimit` and `printk_ratelimit_burst` defaults
+- [ramoops.rst](https://docs.kernel.org/admin-guide/ramoops.html) — the RAM-backed pstore/ramoops persistent logging mechanism

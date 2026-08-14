@@ -384,11 +384,36 @@ kprobe:do_init_module {
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/module.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/module.h) — `module_init()` / `module_exit()` macros and the `struct module` definition
+- [include/linux/init.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/init.h) — the initcall level macros (`early_initcall()` through `late_initcall()`) and `__define_initcall()`
+- [kernel/module/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/main.c) — `load_module()`, `do_init_module()`, `free_module()`
+- [include/linux/export.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/export.h) — `EXPORT_SYMBOL()` and `EXPORT_SYMBOL_GPL()`
+- [kernel/module/internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/internal.h) — the current `struct kernel_symbol` definition and the `__ksymtab` boundary symbols
+
+### Man pages
+
+- [`init_module(2)`](https://man7.org/linux/man-pages/man2/init_module.2.html) — loads a module from a userspace buffer
+- [`finit_module(2)`](https://man7.org/linux/man-pages/man2/finit_module.2.html) — loads a module from a file descriptor; added in Linux 3.8
+- [`delete_module(2)`](https://man7.org/linux/man-pages/man2/delete_module.2.html) — the syscall behind `rmmod`
+- [`modprobe(8)`](https://man7.org/linux/man-pages/man8/modprobe.8.html) — dependency-aware module loading/removal
+- [`depmod(8)`](https://man7.org/linux/man-pages/man8/depmod.8.html) — builds `modules.dep` from each module's undefined symbols
+
+### Related pages
+
 - [Early Boot and start_kernel()](early-boot.md) — the initcall levels and `do_initcalls()`
 - [Kernel Modules](../modules/README.md) — writing and building out-of-tree modules
 - [Module Signing](../modules/module-signing.md) — key generation and signing workflow
 - [Parameters, Symbols, and Kconfig](../modules/module-params.md) — `module_param()` in depth
-- `kernel/module/main.c` — `load_module()`, `free_module()`, `do_init_module()`
-- `include/linux/module.h` — `struct module`, `module_init()`, `EXPORT_SYMBOL()`
-- `Documentation/kbuild/modules.rst` — building out-of-tree modules
-- `Documentation/core-api/symbol-namespaces.rst` — EXPORT_SYMBOL_NS() for namespaced exports
+
+### LWN articles
+
+- [LWN: Enforcement (or not) for module-specific exported symbols](https://lwn.net/Articles/1029492/) — `EXPORT_SYMBOL_GPL_FOR_MODULES()` and the debate over restricting exports to a named set of in-tree modules
+- [LWN: The proper use of EXPORT_SYMBOL_GPL()](https://lwn.net/Articles/769471/) — how maintainers decide when an exported symbol should be GPL-only
+
+### External
+
+- [Kernel module signing facility](https://docs.kernel.org/admin-guide/module-signing.html) — `CONFIG_MODULE_SIG`, key generation, and `scripts/sign-file`
+- [Building External Modules](https://docs.kernel.org/kbuild/modules.html) — kbuild mechanics for out-of-tree modules
+- [Symbol Namespaces](https://docs.kernel.org/core-api/symbol-namespaces.html) — `EXPORT_SYMBOL_NS()` for namespaced exports
