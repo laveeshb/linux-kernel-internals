@@ -37,7 +37,9 @@ struct klp_func {
     struct list_head  node;         /* list node for klp_object->func_list */
     struct list_head  stack_node;   /* position in klp_ops->func_stack */
     unsigned long     old_size, new_size;  /* sizes of old/new function */
-    bool              nop;          /* no-op patch (for rollback testing) */
+    bool              nop;          /* temporary patch to use the original code
+                                       again; dynamically allocated by atomic
+                                       replace (klp-cumulative.md) */
     bool              patched;      /* currently active */
     bool              transition;   /* in consistency transition */
 };
@@ -84,16 +86,27 @@ struct klp_object {
 #include <linux/kernel.h>
 #include <linux/livepatch.h>
 
-/* The replacement function */
-static int patched_vfs_read(struct file *file, char __user *buf,
-                             size_t count, loff_t *pos)
+/*
+ * The replacement function. Its prototype must match the original exactly:
+ * include/linux/fs.h declares
+ *   ssize_t vfs_read(struct file *, char __user *, size_t, loff_t *);
+ * Getting this wrong is silent — .new_func is a void *, so a mismatched
+ * return type (int here) would compile without a warning and truncate
+ * every result the patched function hands back to its callers.
+ */
+static ssize_t patched_vfs_read(struct file *file, char __user *buf,
+                                size_t count, loff_t *pos)
 {
     /* New implementation with the bug fixed */
     if (!file || !file->f_op)
         return -EBADF;   /* was: NULL deref here */
 
-    /* Re-implement the fixed logic entirely — KLP has no klp_call_orig() */
-    return orig_vfs_read_impl(file, buf, count, pos);
+    /*
+     * ... rest of vfs_read()'s body, copied verbatim from fs/read_write.c,
+     * elided here. KLP has no klp_call_orig(): there is no supported way to
+     * chain back into the original function, so the patch module carries the
+     * whole body and applies the fix inside its own copy.
+     */
 }
 
 /* Patch descriptor */
@@ -161,9 +174,11 @@ static void notrace klp_ftrace_handler(unsigned long ip,
 
     ops = container_of(fops, struct klp_ops, fops);
 
-    /* Recursion guard (disabling preemption is also required by
-       kernel/livepatch/transition.c's synchronize_rcu()-based sync
-       path, not shown on this page) */
+    /* Recursion guard. It also disables preemption, which is required by
+       kernel/livepatch/transition.c's klp_synchronize_transition() — a
+       schedule_on_each_cpu()-based stand-in for synchronize_rcu(), used
+       because livepatch must also patch functions where RCU isn't watching
+       (e.g. before user_exit()), so it can't rely on RCU itself */
     bit = ftrace_test_recursion_trylock(ip, parent_ip);
     if (WARN_ON_ONCE(bit < 0))
         return;
@@ -215,8 +230,11 @@ KLP can't simply redirect calls immediately — a task might be in the middle of
 State: KLP_TRANSITION_UNPATCHED → (patch applied) → KLP_TRANSITION_PATCHED
 
 For each task:
-  1. When task returns to userspace (schedule point), mark as KLP_TRANSITION_PATCHED
-  2. Tasks already in kernel get KLP_TRANSITION_PATCHED at their next schedule
+  1. On return to userspace, klp_update_patch_state() marks it KLP_TRANSITION_PATCHED
+  2. Tasks that stay in the kernel are switched by the ~1s transition workqueue's
+     stack check, or by klp_sched_try_switch() in __schedule() — which only fires
+     when the outgoing task is entering a freezable (TASK_FREEZABLE) sleep, not at
+     every schedule point
   3. Until all tasks are KLP_TRANSITION_PATCHED, the patch is in "transition" state
 
 During transition:

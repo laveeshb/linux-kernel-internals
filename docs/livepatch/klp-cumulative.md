@@ -228,7 +228,8 @@ insmod mypatch.ko
 klp_enable_patch()
   │  (registration, symbol resolution, ftrace hook install)
   ▼
-enabled=0, transition=1 (transition in progress)
+enabled=1, transition=1 (transition in progress -- enabled is set
+                          at the START of the transition, not the end)
   │
   ▼
 enabled=1, transition=0 (fully active)
@@ -306,29 +307,58 @@ systemctl enable kpatch
 
 ## Cumulative patch ordering rules
 
-Loading a cumulative patch while another patch is still transitioning is
-unsafe. The `func_stack` can end up in an indeterminate state. Always verify
-all active patches are stable before loading a cumulative replacement:
+The ordering rule that matters most is enforced by the kernel, not by the
+operator. Only one transition may be in flight at a time, and both the enable
+and the disable path bail out early if one already is:
+
+```c
+/* kernel/livepatch/core.c — __klp_enable_patch() and __klp_disable_patch()
+ * both open with the same guard */
+if (klp_transition_patch)
+        return -EBUSY;
+```
+
+So loading a cumulative patch while another patch is still transitioning does
+not corrupt the `func_stack` — the `klp_enable_patch()` call from the new
+module's `init` returns `-EBUSY`, the `insmod` fails, and the module never
+loads. The same guard rejects an `echo 0 > .../enabled` issued during a
+transition. Checking first only saves you a failed deployment step:
 
 ```bash
-# Check all patches are fully transitioned before loading a cumulative patch
+# Avoid a spurious EBUSY: wait for any in-flight transition to finish
 for p in /sys/kernel/livepatch/*/; do
     t=$(cat "$p/transition")
     if [ "$t" = "1" ]; then
-        echo "WARNING: $(basename $p) is still transitioning — wait before loading cumulative patch"
+        echo "$(basename $p) is still transitioning — insmod would fail with EBUSY"
     fi
 done
 ```
 
-See [war stories](war-stories.md) for a real incident where this rule was
-violated.
+The rule the kernel does *not* enforce is that a patch you intended to be
+cumulative actually is one. `klp_add_nops()` runs only under
+`if (patch->replace)`, and `klp_unpatch_replaced_patches()` only when
+`klp_transition_patch->replace` is set, so a patch that forgets
+`.replace = true` silently stacks on top of the patches it was meant to
+supersede — and any function those patches touched that the new one does not
+name keeps running the old replacement. Verify the outcome after every
+deployment:
+
+```bash
+cat /sys/kernel/livepatch/mypatch/replace       # want 1
+cat /sys/kernel/livepatch/mypatch/stack_order   # want 1 — replaced patches are
+                                                # removed from klp_patches
+ls /sys/kernel/livepatch/                       # want only mypatch
+```
+
+See [war stories](war-stories.md) for a real incident where a cumulative patch
+shipped without `.replace` and a superseded fix never reverted.
 
 ## Further reading
 
 ### Kernel source
 
 - [include/linux/livepatch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch.h) — `struct klp_patch`, `struct klp_func`, `struct klp_object`, and the `KLP_TRANSITION_IDLE`/`KLP_TRANSITION_UNPATCHED`/`KLP_TRANSITION_PATCHED` task-state constants
-- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — `klp_enable_patch()`, `klp_add_nops()`, `klp_unpatch_replaced_patches()`, `klp_module_going()`, and a comment block documenting the full `/sys/kernel/livepatch/...` sysfs layout
+- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — `klp_enable_patch()`, `klp_add_nops()`, `klp_unpatch_replaced_patches()`, `klp_module_going()`, the `if (klp_transition_patch) return -EBUSY;` guard shared by `__klp_enable_patch()`/`__klp_disable_patch()`, and a comment block documenting the full `/sys/kernel/livepatch/...` sysfs layout
 - [kernel/livepatch/patch.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.c) — `klp_patch_func()`/`klp_unpatch_func()`: pushing and popping `klp_func` entries on `ops->func_stack` via `list_add_rcu()`/`list_del_rcu()`
 - [kernel/livepatch/patch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.h) — `struct klp_ops` definition (`node`, `func_stack`, `fops`)
 - [Documentation/livepatch/cumulative-patches.rst](https://docs.kernel.org/livepatch/cumulative-patches.html) — the upstream usage guide for atomic replace, including the callback and shadow-variable limitations
@@ -344,7 +374,7 @@ violated.
 - [Kernel Live Patching](klp.md) — struct klp_func/klp_patch, ftrace redirection, shadow variables
 - [KLP State](klp-state.md) — the `struct klp_state`/`klp_get_state()` API referenced by `struct klp_patch`'s `.states` field
 - [Kernel Modules](../modules/module-basics.md) — KLP modules use the standard module infrastructure
-- [War Stories](war-stories.md) — a real incident from loading a cumulative patch while another was still transitioning
+- [War Stories](war-stories.md) — a real incident from shipping a "cumulative" patch that was missing `.replace = true`
 
 ### LWN articles
 

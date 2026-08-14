@@ -22,8 +22,8 @@ Each task carries a `patch_state` field in `struct task_struct`
 of three values, defined in `include/linux/livepatch.h`:
 
 ```c
-/* include/linux/livepatch.h */
-#define KLP_TRANSITION_IDLE       -1   /* task hasn't been evaluated yet */
+/* include/linux/livepatch.h — "task patch states" */
+#define KLP_TRANSITION_IDLE       -1   /* no transition in progress */
 #define KLP_TRANSITION_UNPATCHED   0   /* task should call the original function */
 #define KLP_TRANSITION_PATCHED     1   /* task should call the patched function */
 ```
@@ -88,10 +88,27 @@ Two other paths *do* run a stack check, both funneling through
   a static key that `klp_resched_enable()`/`klp_resched_disable()` toggle for
   the duration of the transition — calls `klp_try_switch_task(current)` on
   context switches where the outgoing task is entering a freezable sleep
-  state (`TASK_FREEZABLE`), not on every context switch. This exists specifically to help CPU-bound kthreads
-  get patched: such a task may rarely (or never) go through the
-  kernel-exit-to-userspace path, so relying on that path alone could stall
-  the transition indefinitely.
+  state (`TASK_FREEZABLE`), not on every context switch. The point of this
+  path is kernel threads: a kthread never returns to userspace, so the
+  kernel-exit-to-userspace path can never catch it, no matter how often it
+  runs. Many kthreads do, however, park in a freezable sleep between work
+  items — and `TASK_FREEZABLE` is precisely the "sleeping in a known-safe
+  state" property the freezer already depends on — so the scheduler hook
+  switches them there instead. Note the inverse case is *not* covered: a
+  genuinely CPU-bound kthread that never sleeps reaches neither path, and the
+  periodic workqueue check returns `-EBUSY` for any task that is actually
+  on-CPU, so such a task stalls the transition until it sleeps or the
+  transition is forced.
+
+The comment above `klp_sched_try_switch_key` in `kernel/livepatch/transition.c`
+still describes the static key as something that "helps CPU-bound kthreads get
+patched". That wording predates commit
+[`676e8cf70cb0`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=676e8cf70cb0)
+("sched,livepatch: Untangle cond_resched() and live-patching", 2025-05-09),
+which moved the hook off `cond_resched()` — where a busy loop that yielded
+really could be caught — and onto `TASK_FREEZABLE` sleeps in `__schedule()`.
+Read the `TASK_FREEZABLE` test in `klp_sched_try_switch()`
+(`include/linux/livepatch_sched.h`), not the comment.
 
 Either way, before a task can be switched via a stack-checking path, the
 kernel must verify that the old (unpatched) function — or, if a patch is
@@ -271,7 +288,7 @@ Neither path can wake a task in `TASK_UNINTERRUPTIBLE` (D state). D-state tasks 
 
 `klp_send_signals()` is called from `klp_try_complete_transition()` roughly
 every 15 seconds (every `SIGNALS_TIMEOUT`th incomplete retry round, at the
-~1-second-per-round cadence described below) once the transition has stalled.
+~1-second-per-round cadence described above) once the transition has stalled.
 
 ## Patch stacking: func_stack and struct klp_ops
 
@@ -328,10 +345,44 @@ code, but the patch state is set to `KLP_TRANSITION_PATCHED`. If the new
 function changes data layouts or assumptions, those tasks can access
 inconsistent state.
 
-After a forced transition the `forced` field of `struct klp_patch` is set to
-`true`. This is internal-only — there is no sysfs file to read it back; the
-only externally visible trace is that `rmmod` on the patch module is
-permanently disabled from that point on.
+Which patch gets flagged afterwards is narrower than it sounds.
+`klp_force_transition()` sets the `forced` field of `struct klp_patch` like
+this:
+
+```c
+/* kernel/livepatch/transition.c — tail of klp_force_transition() */
+/* Set forced flag for patches being removed. */
+if (klp_target_state == KLP_TRANSITION_UNPATCHED)
+    klp_transition_patch->forced = true;
+else if (klp_transition_patch->replace) {
+    klp_for_each_patch(patch) {
+        if (patch != klp_transition_patch)
+            patch->forced = true;
+    }
+}
+```
+
+So there are three cases, and only two of them set the flag at all:
+
+- Forcing a **disable** (`klp_target_state == KLP_TRANSITION_UNPATCHED`) sets
+  `forced` on the patch being disabled — it can never be unloaded.
+- Forcing an **enable of a `.replace` (cumulative) patch** sets `forced` on
+  every *other* patch — the ones this patch is replacing — and **not** on the
+  patch being force-enabled. Those replaced modules become permanently
+  unloadable; the new one does not.
+- Forcing a plain **enable** of a non-`replace` patch — exactly the scenario
+  described above, a kthread looping forever inside the old function while a
+  forward transition waits — sets `forced` on **nothing**. The transition
+  completes unsafely, but no patch is marked, and the force leaves no
+  `forced`-flag trace at all.
+
+Where the flag *is* set it is internal-only — there is no sysfs file to read
+it back. Its only externally visible effect is that the flagged patch's module
+can never be unloaded: `klp_free_patch_finish()` (`kernel/livepatch/core.c`)
+ends with `if (!patch->forced) module_put(patch->mod);`, so a forced patch
+never gives back the module reference it took, and its refcount never reaches
+zero. Note that this consequence attaches to whichever module the rule above
+flagged — which is not necessarily the module whose `force` file was written.
 
 `TAINT_LIVEPATCH` is applied at **module load time** for every livepatch module — not conditionally on forced transitions. Every live patch application taints the kernel with `TAINT_LIVEPATCH` (bit 15). `klp_force_transition()` itself does not add any additional taint — `TAINT_FORCED_MODULE` is unrelated; it's set when a module is force-loaded with `insmod -f`, not when a livepatch transition is forced.
 
@@ -412,8 +463,11 @@ cat /sys/kernel/livepatch/<patch>/transition
 # 1 = in progress, 0 = complete
 
 # Whether a transition was ever forced is internal-only (struct klp_patch.forced)
-# and not exposed via sysfs — the only observable side effect is that `rmmod`
-# on the patch module will be permanently refused from that point on.
+# and not exposed via sysfs. The only observable side effect is that `rmmod` is
+# permanently refused for whichever module got flagged — and that is not always
+# the one you forced: forcing a disable flags the patch being disabled, forcing
+# an enable of a .replace patch flags the patches it replaced (not itself), and
+# forcing a plain non-replace enable flags nothing at all.
 
 # Which tasks are blocking the transition?
 # (tasks that have the old function on their stack)
@@ -434,14 +488,16 @@ dmesg | grep livepatch
 ## Transition state machine
 
 ```
-klp_enable_patch()
+klp_enable_patch()  →  __klp_enable_patch()
        │
        ▼
-  Set klp_target_state = KLP_TRANSITION_PATCHED
-  Set func->transition = true
-  Queue klp_transition_work
+  klp_init_transition():  klp_target_state = KLP_TRANSITION_PATCHED
+                          func->transition = true
+  klp_start_transition(): set TIF_PATCH_PENDING on every task
+  patch->enabled = true   ← set HERE, at the start of the transition,
+                            not when it completes
        │
-       ▼ (periodic, every ~1s)
+       ▼ (first call is immediate; then periodic, every ~1s)
   klp_try_complete_transition()
        │
        ├── for each task (and each idle task):
@@ -456,9 +512,12 @@ klp_enable_patch()
        │             │
        │             ▼
        │         func->transition = false
+       │         task->patch_state = KLP_TRANSITION_IDLE (all tasks)
        │         klp_target_state = KLP_TRANSITION_IDLE
-       │         patch->enabled = true
+       │         klp_transition_patch = NULL
        │         transition sysfs = 0
+       │         (enabled was already 1 throughout — it is not
+       │          touched by klp_complete_transition())
 ```
 
 ## Further reading
