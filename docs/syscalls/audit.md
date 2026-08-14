@@ -323,7 +323,7 @@ on the `backlog_wait_time` setting.
 
 - [Syscall Entry Path](syscall-entry.md) — `syscall_enter_from_user_mode()` and `syscall_exit_to_user_mode()` where the audit hooks are called
 - [Linux Audit Subsystem](../security/audit.md) — broader audit coverage including IMA, PAM integration, and file watch rules
-- [LSM Framework](../security/lsm.md) — LSM hooks that emit additional audit records
+- [LSM Framework](../security/lsm.md) — the LSM hook framework; its SELinux subsection covers reading SELinux's own AVC-denial audit records via `ausearch -m AVC`
 - [seccomp BPF](../security/seccomp.md) — seccomp denials appear in the audit log
 
 ### External

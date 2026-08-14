@@ -95,9 +95,11 @@ mechanism for injecting a return value or no-op'ing a syscall via ptrace: set `o
 
 ## TIF_SYSCALL_TRACE
 
-The flag that triggers ptrace syscall-stops is `TIF_SYSCALL_TRACE` in the task's `thread_info.flags`. It is
-set by `ptrace_attach()` and cleared when the tracer detaches. The kernel checks this flag in
-`syscall_enter_from_user_mode()` and `syscall_exit_to_user_mode()`:
+The flag that triggers ptrace syscall-stops is `SYSCALL_WORK_SYSCALL_TRACE` in the task's
+`thread_info.syscall_work`. It is set by `ptrace_resume()` when a `PTRACE_SYSCALL` request is issued
+(not at attach time — a plain `PTRACE_CONT` never sets it), and cleared in `__ptrace_unlink()` when the
+tracer detaches. The kernel checks this flag in `syscall_enter_from_user_mode()` and
+`syscall_exit_to_user_mode()`:
 
 ```c
 /* kernel/entry/common.c */
@@ -123,12 +125,10 @@ Linux 5.3 added `PTRACE_GET_SYSCALL_INFO` (commit `201766a20e30f982ccfe36bebfad9
 /* include/uapi/linux/ptrace.h */
 struct ptrace_syscall_info {
     __u8  op;          /* PTRACE_SYSCALL_INFO_NONE/ENTRY/EXIT/SECCOMP */
-    __u8  arch_native;
-    __u16 reserved;
-    __u32 flags;
-    __u64 entry_ip;
-    __u64 entry_sp;
-    __u64 insn_pointer;
+    __u8  reserved;
+    __u16 flags;
+    __u32 arch;
+    __u64 instruction_pointer;
     __u64 stack_pointer;
     union {
         struct { /* PTRACE_SYSCALL_INFO_ENTRY or SECCOMP */
@@ -143,6 +143,7 @@ struct ptrace_syscall_info {
             __u64 nr;
             __u64 args[6];
             __u32 ret_data;
+            __u32 reserved2;
         } seccomp;
     };
 };

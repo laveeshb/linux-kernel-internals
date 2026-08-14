@@ -78,13 +78,13 @@ struct pt_regs {
 ## do_syscall_64: the dispatch
 
 ```c
-/* arch/x86/entry/common.c */
-__visible noinstr void do_syscall_64(struct pt_regs *regs, int nr)
+/* arch/x86/entry/syscall_64.c */
+__visible noinstr bool do_syscall_64(struct pt_regs *regs, int nr)
 {
-    add_random_kstack_offset();
     nr = syscall_enter_from_user_mode(regs, nr);
 
     instrumentation_begin();
+    add_random_kstack_offset();
 
     if (!do_syscall_x64(regs, nr) && !do_syscall_x32(regs, nr) && nr != -1) {
         /* syscall number out of range */
@@ -93,6 +93,7 @@ __visible noinstr void do_syscall_64(struct pt_regs *regs, int nr)
 
     instrumentation_end();
     syscall_exit_to_user_mode(regs);
+    /* ... SYSRET-vs-IRET decision, see below ... */
 }
 
 static __always_inline bool do_syscall_x64(struct pt_regs *regs, int nr)
@@ -101,21 +102,34 @@ static __always_inline bool do_syscall_x64(struct pt_regs *regs, int nr)
 
     if (likely(unr < NR_syscalls)) {
         unr = array_index_nospec(unr, NR_syscalls);  /* Spectre mitigation */
-        regs->ax = sys_call_table[unr](regs);         /* dispatch! */
+        regs->ax = x64_sys_call(regs, unr);           /* dispatch! */
         return true;
     }
     return false;
 }
 ```
 
-## sys_call_table: the dispatch table
+`do_syscall_64()` returns `bool` — its final lines (elided above) decide whether the fast `SYSRET`
+instruction is safe to use for the return to userspace, or whether the slower `IRET` path is needed.
+
+## x64_sys_call: the dispatch switch
 
 ```c
 /* arch/x86/entry/syscall_64.c */
-asmlinkage const sys_call_ptr_t sys_call_table[] = {
-#include <asm/syscalls_64.h>
-};
+#define __SYSCALL(nr, sym) case nr: return __x64_##sym(regs);
+long x64_sys_call(const struct pt_regs *regs, unsigned int nr)
+{
+    switch (nr) {
+    #include <asm/syscalls_64.h>
+    default: return __x64_sys_ni_syscall(regs);
+    }
+}
 ```
+
+A `sys_call_table[]` array is also built in the same file from the same `syscalls_64.h`, but — per the
+kernel's own comment above its definition — "is no longer used for system calls;
+`kernel/trace/trace_syscalls.c` still wants to know the system call address." Actual dispatch is the
+switch statement above.
 
 The `syscalls_64.h` is generated from `syscall_64.tbl`:
 
