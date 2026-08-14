@@ -29,8 +29,8 @@ write(efd, &value, sizeof(value));  /* counter += 1 */
 value = 5;
 write(efd, &value, sizeof(value));  /* counter += 5 */
 
-/* Counter saturates at UINT64_MAX - 1 */
-/* write blocks (or returns EAGAIN with EFD_NONBLOCK) when at max */
+/* Counter has a ceiling of UINT64_MAX - 1 */
+/* write blocks (or returns EAGAIN with EFD_NONBLOCK) when at max, it does not saturate */
 ```
 
 ### Reading (consuming)
@@ -133,40 +133,63 @@ struct eventfd_ctx {
 };
 
 static ssize_t eventfd_write(struct file *file, const char __user *buf,
-                              size_t count, loff_t *ppos)
+                             size_t count, loff_t *ppos)
 {
     struct eventfd_ctx *ctx = file->private_data;
-    __u64 ucnt = 0;
+    ssize_t res;
+    __u64 ucnt;
 
-    copy_from_user(&ucnt, buf, sizeof(ucnt));
+    if (count != sizeof(ucnt))
+        return -EINVAL;
+    if (copy_from_user(&ucnt, buf, sizeof(ucnt)))
+        return -EFAULT;
+    /* Writing the exact max value is rejected outright, not saturated */
+    if (ucnt == ULLONG_MAX)
+        return -EINVAL;
 
     spin_lock_irq(&ctx->wqh.lock);
-    /* Saturate at ULLONG_MAX - 1 */
+    res = -EAGAIN;
     if (ULLONG_MAX - ctx->count > ucnt)
+        res = sizeof(ucnt);
+    else if (!(file->f_flags & O_NONBLOCK)) {
+        /* Block until there's room, rather than silently saturating */
+        res = wait_event_interruptible_locked_irq(ctx->wqh,
+                ULLONG_MAX - ctx->count > ucnt);
+        if (!res)
+            res = sizeof(ucnt);
+    }
+    if (likely(res > 0)) {
         ctx->count += ucnt;
-    else
-        ctx->count = ULLONG_MAX - 1;
-
-    /* Wake up anyone polling/reading */
-    if (waitqueue_active(&ctx->wqh))
-        wake_up_locked_poll(&ctx->wqh, EPOLLIN);
+        if (waitqueue_active(&ctx->wqh))
+            wake_up_locked_poll(&ctx->wqh, EPOLLIN);
+    }
     spin_unlock_irq(&ctx->wqh.lock);
+
+    return res;
 }
 
-static ssize_t eventfd_read(struct file *file, char __user *buf,
-                              size_t count, loff_t *ppos)
+/* eventfd uses the iov_iter read interface (.read_iter), not the classic
+ * .read(file, buf, count, ppos) signature */
+static ssize_t eventfd_read(struct kiocb *iocb, struct iov_iter *to)
 {
+    struct file *file = iocb->ki_filp;
     struct eventfd_ctx *ctx = file->private_data;
     __u64 ucnt = 0;
+
+    if (iov_iter_count(to) < sizeof(ucnt))
+        return -EINVAL;
 
     spin_lock_irq(&ctx->wqh.lock);
     if (!ctx->count) {
-        if (file->f_flags & O_NONBLOCK) {
+        if ((file->f_flags & O_NONBLOCK) || (iocb->ki_flags & IOCB_NOWAIT)) {
             spin_unlock_irq(&ctx->wqh.lock);
             return -EAGAIN;
         }
         /* Sleep until count > 0 */
-        wait_event_interruptible_locked_irq(ctx->wqh, ctx->count);
+        if (wait_event_interruptible_locked_irq(ctx->wqh, ctx->count)) {
+            spin_unlock_irq(&ctx->wqh.lock);
+            return -ERESTARTSYS;
+        }
     }
 
     if (ctx->flags & EFD_SEMAPHORE) {
@@ -181,7 +204,8 @@ static ssize_t eventfd_read(struct file *file, char __user *buf,
         wake_up_locked_poll(&ctx->wqh, EPOLLOUT);
     spin_unlock_irq(&ctx->wqh.lock);
 
-    copy_to_user(buf, &ucnt, sizeof(ucnt));
+    if (unlikely(copy_to_iter(&ucnt, sizeof(ucnt), to) != sizeof(ucnt)))
+        return -EFAULT;
     return sizeof(ucnt);
 }
 ```
@@ -307,38 +331,43 @@ signalfd(sfd, &mask, 0);  /* first arg is existing fd */
 ### Kernel implementation
 
 ```c
-/* fs/signalfd.c */
-static ssize_t signalfd_read(struct file *file, char __user *buf,
-                              size_t count, loff_t *ppos)
+/* fs/signalfd.c — real function uses .read_iter, not the classic
+ * .read(file, buf, count, ppos) signature, and delegates dequeuing to a
+ * helper (signalfd_dequeue()) rather than calling dequeue_signal() inline */
+static ssize_t signalfd_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
+    struct file *file = iocb->ki_filp;
     struct signalfd_ctx *ctx = file->private_data;
-    struct signalfd_siginfo __user *siginfo = (void __user *)buf;
-    int ret = 0;
-    siginfo_t info;
+    size_t count = iov_iter_count(to);
+    ssize_t ret, total = 0;
+    kernel_siginfo_t info;
+    bool nonblock;
 
-    count /= sizeof(*siginfo);
+    count /= sizeof(struct signalfd_siginfo);
     if (!count)
         return -EINVAL;
 
+    nonblock = file->f_flags & O_NONBLOCK || iocb->ki_flags & IOCB_NOWAIT;
     do {
-        /* Dequeue a pending signal matching our mask */
-        ret = dequeue_signal(current, &ctx->sigmask, &info, &type);
-        if (!ret) {
-            /* No signal: block or EAGAIN */
-            if (file->f_flags & O_NONBLOCK)
-                return -EAGAIN;
-            /* Wait for a signal in our mask */
-            wait_event_interruptible(ctx->wqh,
-                next_signal(&current->pending, &ctx->sigmask) ||
-                next_signal(&current->signal->shared_pending, &ctx->sigmask));
-        }
-    } while (!ret);
+        /* Dequeue a pending signal matching our mask (blocks internally
+         * unless nonblock), sleeping on current->sighand->signalfd_wqh */
+        ret = signalfd_dequeue(ctx, &info, nonblock);
+        if (unlikely(ret <= 0))
+            break;
+        /* Copy siginfo to userspace signalfd_siginfo format directly
+         * into the iov_iter -- no intermediate siginfo_t buffer */
+        ret = signalfd_copyinfo(to, &info);
+        if (ret < 0)
+            break;
+        total += ret;
+        nonblock = 1;   /* only the first iteration may block */
+    } while (--count);
 
-    /* Copy siginfo to userspace signalfd_siginfo format */
-    copy_siginfo_to_user_sighand(siginfo, &info);
-    return sizeof(*siginfo);
+    return total ? total : ret;
 }
 ```
+
+`dequeue_signal()` itself takes exactly three arguments — `(sigset_t *mask, kernel_siginfo_t *info, enum pid_type *type)` — with no explicit `current` argument (it operates on the caller's own pending signals). There is no `copy_siginfo_to_user_sighand()` anywhere in the kernel; the real translation to the userspace `struct signalfd_siginfo` layout is done by `signalfd_copyinfo()`, which maps fields via a `siginfo_layout()` switch.
 
 ## timerfd: pollable timers
 
@@ -355,8 +384,22 @@ epoll_ctl(epfd, EPOLL_CTL_ADD, sock_fd,  &ev_socket);
 
 ## Further reading
 
-- [Completions and Wait Queues](../locking/completions.md) — kernel-side wait primitives
-- [IPC: Signals](signals.md) — traditional signal delivery
-- [POSIX Timers and timerfd](../time/posix-timers.md) — timerfd
-- [io_uring Architecture](../io-uring/io-uring-arch.md) — io_uring + eventfd
-- `fs/eventfd.c`, `fs/signalfd.c` — implementations
+### Kernel source
+
+- [fs/eventfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/eventfd.c) — `do_eventfd()`, `eventfd_read()`/`eventfd_write()`, and the `eventfd_signal_mask()` in-kernel signaling entry point
+- [fs/signalfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/signalfd.c) — `signalfd_read_iter()`, `signalfd_copyinfo()`, and `do_signalfd4()`
+- [include/uapi/linux/eventfd.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/eventfd.h) — `EFD_SEMAPHORE`/`EFD_CLOEXEC`/`EFD_NONBLOCK` flag definitions
+- [include/uapi/linux/signalfd.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/signalfd.h) — the `signalfd_siginfo` struct layout
+
+### Man pages
+
+- [`eventfd(2)`](https://man7.org/linux/man-pages/man2/eventfd.2.html) — counter semantics, `EFD_SEMAPHORE`, and the `ULLONG_MAX - 1` blocking/EAGAIN ceiling
+- [`signalfd(2)`](https://man7.org/linux/man-pages/man2/signalfd.2.html) — `signalfd_siginfo` fields and the epoll+`fork()` caveat
+
+### Related pages
+
+- [Signals](signals.md) — the traditional signal delivery path `signalfd` replaces
+- [epoll Internals](../net/epoll.md) — the event loop eventfd/signalfd are designed to integrate with
+- [POSIX Timers and timerfd](../time/posix-timers.md) — the third pollable-fd primitive that rounds out an all-fd event loop
+- [Completions and Wait Queues](../locking/completions.md) — the `wait_queue_head_t` primitive `eventfd_ctx` and signalfd's per-sighand queue build on
+- [IPC War Stories](war-stories.md) — a real eventfd `EAGAIN`/backpressure incident, walked through against `eventfd_write()`

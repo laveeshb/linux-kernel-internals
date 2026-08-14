@@ -49,14 +49,22 @@ if (fork() == 0) {
 ## Kernel pipe data structures
 
 ```c
-/* fs/pipe.c */
+/* include/linux/pipe_fs_i.h -- not fs/pipe.c */
 struct pipe_inode_info {
     struct mutex        mutex;          /* protects the pipe */
     wait_queue_head_t   rd_wait;        /* readers waiting for data */
     wait_queue_head_t   wr_wait;        /* writers waiting for space */
 
-    unsigned int        head;           /* producer head index */
-    unsigned int        tail;           /* consumer tail index */
+    /* head/tail are packed into a union (as one unsigned long,
+     * head_tail, on 64-bit) rather than two standalone fields */
+    union pipe_index {
+        unsigned long head_tail;
+        struct {
+            pipe_index_t head;         /* producer index */
+            pipe_index_t tail;         /* consumer index */
+        };
+    };
+
     unsigned int        max_usage;      /* buffer slots (default 16 = 64KB) */
     unsigned int        ring_size;      /* power-of-2 buffer size */
     unsigned int        nr_accounted;   /* for accounting */
@@ -65,7 +73,8 @@ struct pipe_inode_info {
     unsigned int        files;          /* sum of readers + writers */
     unsigned int        r_counter;      /* read counter for POLLHUP check */
     unsigned int        w_counter;
-    struct page        *tmp_page;       /* reusable page */
+    bool                poll_usage;
+    struct page        *tmp_page[2];    /* reusable pages -- an array, not one pointer */
     struct fasync_struct *fasync_readers;
     struct fasync_struct *fasync_writers;
     struct pipe_buffer  *bufs;          /* ring of pipe_buffer[ring_size] */
@@ -87,8 +96,8 @@ The pipe buffer is a ring of `pipe_buffer` slots, each pointing to a page. The d
 ## Pipe read and write paths
 
 ```c
-/* Simplified pipe write path */
-static ssize_t pipe_write(struct kiocb *iocb, struct iov_iter *from)
+/* Simplified pipe write path -- real function is anon_pipe_write() (fs/pipe.c) */
+static ssize_t anon_pipe_write(struct kiocb *iocb, struct iov_iter *from)
 {
     struct pipe_inode_info *pipe = /* ... */;
     size_t total_len = iov_iter_count(from);
@@ -235,12 +244,13 @@ ls -la /proc/self/fd/
 # See all pipes open in the system
 lsof | grep "^.\{8\}pipe"
 
-# Pipe buffer size
+# fdinfo has no pipe-specific "pipe-size" field -- only the generic
+# pos/flags/mnt_id/ino lines. Use F_GETPIPE_SZ to read current capacity.
 cat /proc/$(pgrep myproc)/fdinfo/4
+# pos:     0
 # flags:   0100001
 # mnt_id:  12
-# pos:     0
-# pipe-size: 65536  ← current pipe size
+# ino:     54321
 
 # Check splice/vmsplice usage
 perf trace -e splice,vmsplice -- myprocess
@@ -248,7 +258,31 @@ perf trace -e splice,vmsplice -- myprocess
 
 ## Further reading
 
-- [Shared Memory and Semaphores](shared-memory.md) — Alternatives without byte ordering
-- [VFS: File Operations](../vfs/file-ops.md) — How pipes fit in the VFS
-- `fs/pipe.c` — complete pipe implementation
-- `man 7 pipe` — pipe semantics and limits
+### Kernel source
+
+- [fs/pipe.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/pipe.c) — pipe/FIFO read and write paths (`anon_pipe_read()`, `anon_pipe_write()`, `fifo_open()`), and `F_SETPIPE_SZ`/`F_GETPIPE_SZ` handling
+- [include/linux/pipe_fs_i.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pipe_fs_i.h) — `struct pipe_inode_info` and `struct pipe_buffer` definitions, `PIPE_DEF_BUFFERS`
+- [fs/splice.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/splice.c) — `splice()`, `vmsplice()`, and `tee()` syscall implementations
+- [Splice — The Linux Kernel documentation](https://docs.kernel.org/filesystems/splice.html) — kernel-internal splice/pipe API reference (`pipe_buffer` helpers, `splice_to_pipe()`, and friends)
+
+### Man pages
+
+- [`pipe(2)`](https://man7.org/linux/man-pages/man2/pipe.2.html) — `pipe()`/`pipe2()` creation, `O_DIRECT` packet mode
+- [`pipe(7)`](https://man7.org/linux/man-pages/man7/pipe.7.html) — pipe/FIFO overview, capacity, `PIPE_BUF` atomicity
+- [`fifo(7)`](https://man7.org/linux/man-pages/man7/fifo.7.html) — FIFO `open()` blocking semantics for `O_RDONLY`/`O_WRONLY`/`O_RDWR`
+- [`splice(2)`](https://man7.org/linux/man-pages/man2/splice.2.html) — `splice()` flags and the "at least one fd must be a pipe" requirement
+- [`vmsplice(2)`](https://man7.org/linux/man-pages/man2/vmsplice.2.html) — `SPLICE_F_GIFT` semantics
+- [`tee(2)`](https://man7.org/linux/man-pages/man2/tee.2.html) — duplicating pipe data without consuming it
+- [`F_SETPIPE_SZ(2const)`](https://man7.org/linux/man-pages/man2/F_SETPIPE_SZ.2const.html) — changing/querying pipe capacity, rounding rules, since Linux 2.6.35
+
+### Related pages
+
+- [splice-sendfile.md](../vfs/splice-sendfile.md) — deeper dive into the splice/tee/sendfile kernel paths and how `sendfile()` is built on the same machinery
+- [shared-memory.md](shared-memory.md) — alternatives without byte-stream ordering
+- [unix-sockets.md](unix-sockets.md) — the bidirectional, credential-passing counterpart compared above
+- [war-stories.md](war-stories.md) — "The pipe capacity surprise": a producer blocking on a full pipe during a consumer stall
+- [file-ops.md](../vfs/file-ops.md) — the `file_operations` vtable that pipe/FIFO `read_iter`/`write_iter` hook into
+
+### LWN articles
+
+- [Two new system calls: splice() and sync_file_range()](https://lwn.net/Articles/178199/) — Jonathan Corbet, April 3, 2006; introduces `splice()` (Jens Axboe's 2.6.17 implementation, based on an earlier proposal by Larry McVoy) and the `SPLICE_F_MOVE` flag

@@ -171,8 +171,9 @@ cat /proc/sys/fs/mqueue/msg_max       # default: 10
 # Default maximum message size
 cat /proc/sys/fs/mqueue/msgsize_max   # default: 8192
 
-# Maximum priority
-cat /proc/sys/fs/mqueue/msg_default   # default message max
+# Default mq_maxmsg applied to queues created without explicit attributes
+# (not priority-related; msgsize_default is the sibling for message size)
+cat /proc/sys/fs/mqueue/msg_default
 
 # View all open queues with their attributes:
 ls -la /dev/mqueue/
@@ -186,25 +187,38 @@ cat /dev/mqueue/myqueue  # shows: QSIZE:0 NOTIFY:0 SIGNO:0 NOTIFY_PID:0
 ```c
 /* ipc/mqueue.c */
 struct mqueue_inode_info {
-    struct inode      vfs_inode;
+    spinlock_t         lock;
+    struct inode       vfs_inode;
+    wait_queue_head_t  wait_q;
 
-    /* Priority queue: array of linked lists, one per priority */
-    struct list_head  msg_tree[MQUEUE_PRIO_MAX];
-    struct rb_root    msg_tree_rb;   /* newer kernels use rb-tree */
-
-    struct msg_msg   *messages;
-    struct mq_attr    attr;
+    /* One rb-tree, keyed by priority -- not an array of per-priority
+     * lists. Same-priority messages are FIFO via a per-node msg_list. */
+    struct rb_root     msg_tree;
+    struct rb_node    *msg_tree_rightmost;
+    struct posix_msg_tree_node *node_cache;  /* spare node, avoids GFP_ATOMIC alloc */
+    struct mq_attr     attr;
 
     /* Notification */
-    struct sigevent   notify;
-    struct pid       *notify_owner;
-    struct user_struct *notify_user;
+    struct sigevent    notify;
+    struct pid        *notify_owner;
+    u32                notify_self_exec_id;
+    struct user_namespace *notify_user_ns;
+    struct ucounts    *ucounts;       /* user who created, for accounting */
+    struct sock       *notify_sock;
+    struct sk_buff    *notify_cookie;
 
-    /* Wait queues */
-    wait_queue_head_t  wait_q;        /* blocked receivers */
-    struct list_head   e_wait_q[2];   /* poll/select waiters */
+    /* Waiters for free space and for messages, respectively */
+    struct ext_wait_queue e_wait_q[2];
 
-    spinlock_t        lock;
+    unsigned long      qsize;         /* total size of queue in memory */
+};
+
+/* Each rb-tree node covers one distinct priority; messages of that
+ * priority hang off msg_list in FIFO order */
+struct posix_msg_tree_node {
+    struct rb_node    rb_node;
+    struct list_head  msg_list;
+    int               priority;
 };
 ```
 
@@ -225,42 +239,36 @@ struct msg_msg {
 ### mq_send kernel path
 
 ```c
-/* ipc/mqueue.c */
-static int do_mq_send(mqd_t mqdes, const char __user *u_msg_ptr,
-                       size_t msg_len, unsigned int msg_prio,
-                       struct timespec64 *ts)
+/* ipc/mqueue.c -- simplified from the real do_mq_timedsend(); the real
+ * function also handles a speculative node_cache allocation and a
+ * pipelined direct handoff to an already-waiting receiver, skipping the
+ * tree entirely when one exists */
+static int do_mq_timedsend(mqd_t mqdes, const char __user *u_msg_ptr,
+                           size_t msg_len, unsigned int msg_prio,
+                           struct timespec64 *ts)
 {
     struct mqueue_inode_info *info;
     struct msg_msg *msg_ptr;
 
     /* Allocate and copy message data from userspace */
     msg_ptr = load_msg(u_msg_ptr, msg_len);
-    msg_ptr->m_type = (long)msg_prio;
+    msg_ptr->m_ts = msg_len;
+    msg_ptr->m_type = msg_prio;
 
     spin_lock(&info->lock);
 
     if (info->attr.mq_curmsgs == info->attr.mq_maxmsg) {
-        /* Queue full: block or EAGAIN */
+        /* Queue full: block (via wq_sleep(), on the SEND wait list) or EAGAIN */
         if (filp->f_flags & O_NONBLOCK) {
             spin_unlock(&info->lock);
             return -EAGAIN;
         }
-        /* Block on wait_q until space available */
-        wait_event_interruptible(info->wait_q,
-            info->attr.mq_curmsgs < info->attr.mq_maxmsg);
+        return wq_sleep(info, SEND, timeout, &wait);  /* releases the lock itself */
     }
 
-    /* Insert into priority tree */
+    /* No receiver waiting: insert into the priority tree and notify */
     msg_insert(msg_ptr, info);
-    info->attr.mq_curmsgs++;
-
-    /* Wake up a blocked receiver */
-    if (waitqueue_active(&info->wait_q))
-        wake_up(&info->wait_q);
-
-    /* Fire mq_notify if queue was empty and notifier registered */
-    if (info->attr.mq_curmsgs == 1 && info->notify_owner)
-        do_notify_owner(info);
+    __do_notify(info);
 
     spin_unlock(&info->lock);
     return 0;
@@ -270,20 +278,50 @@ static int do_mq_send(mqd_t mqdes, const char __user *u_msg_ptr,
 ### Priority tree insertion
 
 ```c
-static void msg_insert(struct msg_msg *ptr, struct mqueue_inode *info)
+/* ipc/mqueue.c */
+static int msg_insert(struct msg_msg *msg, struct mqueue_inode_info *info)
 {
-    /* Insert into rb-tree ordered by priority (highest first) */
-    /* Equal-priority messages are FIFO via a per-priority list */
-    struct rb_node **p = &info->msg_tree_rb.rb_node;
+    struct rb_node **p, *parent = NULL;
+    struct posix_msg_tree_node *leaf;
+    bool rightmost = true;
+
+    /* Find (or create) the rb-tree node for this priority */
+    p = &info->msg_tree.rb_node;
     while (*p) {
-        struct msg_msg *n = rb_entry(*p, struct msg_msg, rb_node);
-        if (ptr->m_type > n->m_type)
-            p = &(*p)->rb_left;   /* higher priority → left (min-heap) */
-        else
+        parent = *p;
+        leaf = rb_entry(parent, struct posix_msg_tree_node, rb_node);
+
+        if (likely(leaf->priority == msg->m_type))
+            goto insert_msg;
+        else if (msg->m_type < leaf->priority) {
+            p = &(*p)->rb_left;
+            rightmost = false;
+        } else
             p = &(*p)->rb_right;
     }
-    rb_link_node(&ptr->rb_node, parent, p);
-    rb_insert_color(&ptr->rb_node, &info->msg_tree_rb);
+    /* No existing node for this priority: use the spare node_cache if
+     * available, otherwise allocate one (GFP_ATOMIC, under the lock) */
+    if (info->node_cache) {
+        leaf = info->node_cache;
+        info->node_cache = NULL;
+    } else {
+        leaf = kmalloc_obj(*leaf, GFP_ATOMIC);
+        if (!leaf)
+            return -ENOMEM;
+        INIT_LIST_HEAD(&leaf->msg_list);
+    }
+    leaf->priority = msg->m_type;
+    if (rightmost)
+        info->msg_tree_rightmost = &leaf->rb_node;
+    rb_link_node(&leaf->rb_node, parent, p);
+    rb_insert_color(&leaf->rb_node, &info->msg_tree);
+
+insert_msg:
+    /* Same-priority messages are FIFO within this node's msg_list */
+    info->attr.mq_curmsgs++;
+    info->qsize += msg->m_ts;
+    list_add_tail(&msg->m_list, &leaf->msg_list);
+    return 0;
 }
 ```
 
@@ -339,9 +377,31 @@ ipcrm --all=msg
 
 ## Further reading
 
-- [IPC: Pipes and FIFOs](pipes.md) — byte-stream IPC
-- [IPC: Shared Memory](shared-memory.md) — zero-copy bulk IPC
-- [eventfd and signalfd](eventfd-signalfd.md) — mq_notify integration
-- [POSIX Timers](../time/posix-timers.md) — similar kernel notification model
-- `ipc/mqueue.c` — POSIX mqueue kernel implementation
-- `ipc/msg.c` — SysV message queue implementation
+### Kernel source
+
+- [ipc/mqueue.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/mqueue.c) — POSIX mqueue filesystem, syscalls (`do_mq_timedsend()`, `do_mq_timedreceive()`), and `struct mqueue_inode_info`
+- [ipc/msg.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/msg.c) — SysV message queue implementation (`msgget`/`msgsnd`/`msgrcv`)
+- [include/uapi/linux/mqueue.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/mqueue.h) — `struct mq_attr` and `MQ_PRIO_MAX` (32768)
+- [include/linux/msg.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/msg.h) — `struct msg_msg`, the message representation shared by POSIX and SysV queues
+
+### Man pages
+
+- [`mq_overview(7)`](https://man7.org/linux/man-pages/man7/mq_overview.7.html) — overview of the POSIX message queue API, `/dev/mqueue`, and the `/proc/sys/fs/mqueue` limits
+- [`mq_open(3)`](https://man7.org/linux/man-pages/man3/mq_open.3.html) — create/open a queue, `O_CREAT`/`O_EXCL` semantics, `struct mq_attr`
+- [`mq_send(3)`](https://man7.org/linux/man-pages/man3/mq_send.3.html) — `mq_send()`/`mq_timedsend()`
+- [`mq_receive(3)`](https://man7.org/linux/man-pages/man3/mq_receive.3.html) — `mq_receive()`/`mq_timedreceive()`
+- [`mq_notify(3)`](https://man7.org/linux/man-pages/man3/mq_notify.3.html) — `SIGEV_SIGNAL`/`SIGEV_THREAD`/`SIGEV_NONE` notification modes
+- [`mq_getattr(3)`](https://man7.org/linux/man-pages/man3/mq_getattr.3.html) — `mq_getattr()`/`mq_setattr()`
+
+### Related pages
+
+- [SysV IPC: Semaphores and Message Queues](sysv-semaphores.md) — full treatment of `msgget`/`msgsnd`/`msgrcv` and kernel internals, referenced briefly above
+- [eventfd and signalfd](eventfd-signalfd.md) — the `epoll` integration pattern used in the mq_notify example above
+- [Signals](signals.md) — real-time signal delivery, used by `mq_notify`'s `SIGEV_SIGNAL` mode
+- [Pipes and FIFOs](pipes.md) — byte-stream IPC, contrasted with mqueue's message-oriented model
+- [Shared Memory, Semaphores, and eventfd](shared-memory.md) — zero-copy bulk IPC vs. mqueue's small bounded messages
+- [POSIX Timers and timerfd](../time/posix-timers.md) — same `sigevent`-based notification model as `mq_notify`
+
+### LWN articles
+
+- [IPC medley: message-queue peeking, io_uring, and bus1](https://lwn.net/Articles/1065490/) — Jonathan Corbet, April 2026; covers a proposed (not yet merged as of this page's kernel pin) `mq_timedreceive2()`/`MQ_PEEK` extension for non-destructive, index-addressed message reads

@@ -10,7 +10,7 @@ A signal is an integer (1–64 on x86-64) sent to a process or thread. The kerne
 Sender                Kernel                Receiver
 ──────                ──────                ────────
 kill(pid, SIGTERM) →  pending bit set   →   process checks TIF_SIGPENDING
-                      on return to user     do_signal()
+                      on return to user     arch_do_signal_or_restart()
                       mode:                 → runs signal handler
                                            → or default action (terminate)
 ```
@@ -74,7 +74,11 @@ kill_pgrp(pgrp, SIGTERM, 0);
 ## Kernel signal delivery path
 
 ```c
-/* kernel/signal.c */
+/* Spans three files: do_send_sig_info()/get_signal() are in kernel/signal.c
+ * (signal_wake_up() is a thin inline wrapper in include/linux/sched/signal.h
+ * around kernel/signal.c's signal_wake_up_state()); exit_to_user_mode_loop()
+ * is in kernel/entry/common.c; arch_do_signal_or_restart()/handle_signal()/
+ * setup_rt_frame() are x86-64-specific, in arch/x86/kernel/signal.c */
 
 /* 1. do_send_sig_info(): queues signal to target task */
 do_send_sig_info(sig, info, task, type)
@@ -86,20 +90,21 @@ do_send_sig_info(sig, info, task, type)
 /* 2. On return to userspace (syscall return, interrupt return): */
 exit_to_user_mode_loop()
   → if TIF_SIGPENDING: arch_do_signal_or_restart(regs)
-      → get_signal(&ksig)               /* dequeue next signal */
+      → get_signal(&ksig)               /* dequeue next signal (also handles
+                                          * the ignored/default-action cases
+                                          * internally -- only "handled"
+                                          * returns to the caller below) */
       → if handled: handle_signal(&ksig) /* set up userspace stack frame */
-      → if ignored: continue
-      → if default: do_group_exit() or coredump etc.
 
 /* 3. handle_signal: set up signal frame on userspace stack */
 handle_signal(ksig, regs)
   → setup_rt_frame(ksig, regs)
-      /* pushes: siginfo_t, ucontext_t, trampoline code onto user stack */
+      /* pushes: siginfo_t, ucontext_t onto user stack */
       /* sets rip = signal handler, rsp = new user stack */
-      /* sets up SIGRETURN trampoline (calls rt_sigreturn syscall) */
+      /* sets frame->pretcode = sa_restorer (a pointer, not pushed code) */
 ```
 
-After the signal handler returns, the trampoline calls `rt_sigreturn` which restores the saved `ucontext_t` (CPU registers before signal delivery) and resumes normal execution.
+`setup_rt_frame()` does not push trampoline machine code onto the stack — it requires `SA_RESTORER` and writes only a pointer (`frame->pretcode = ksig->ka.sa.sa_restorer`) to the userspace restorer stub, which normally lives in glibc/vDSO (`__restore_rt`). After the signal handler returns, that restorer calls `rt_sigreturn`, which restores the saved `ucontext_t` (CPU registers before signal delivery) and resumes normal execution.
 
 ## struct sigaction: installing handlers
 
@@ -273,7 +278,29 @@ static void sigchld_handler(int sig, siginfo_t *info, void *ctx)
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/signal.c) — `do_send_sig_info()`, `signal_wake_up_state()`, and `get_signal()`: the core signal-queuing and dequeuing implementation
+- [kernel/entry/common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/entry/common.c) — `exit_to_user_mode_loop()`: where `TIF_SIGPENDING` is checked on the way back to userspace
+- [arch/x86/kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/signal.c) — `arch_do_signal_or_restart()`, `handle_signal()`, `setup_rt_frame()`: x86-64 signal-frame setup and the `sa_restorer`/`rt_sigreturn` return path
+- [include/linux/sched.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/sched.h) — `task_struct`: per-thread `pending`, `blocked`, `real_blocked`, `saved_sigmask`
+- [include/linux/sched/signal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/sched/signal.h) — `signal_struct`: per-process `shared_pending`
+- [include/linux/signal_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/signal_types.h) — `struct sigpending` definition
+
+### Man pages
+
+- [signal(7)](https://man7.org/linux/man-pages/man7/signal.7.html) — signal list, default dispositions, and the standard-vs-real-time queuing distinction
+- [sigaction(2)](https://man7.org/linux/man-pages/man2/sigaction.2.html) — `struct sigaction` and the `SA_*` flags
+- [kill(2)](https://man7.org/linux/man-pages/man2/kill.2.html) — `pid` targeting rules (process, process group, broadcast)
+- [rt_sigqueueinfo(2)](https://man7.org/linux/man-pages/man2/rt_sigqueueinfo.2.html) — the syscall underlying `sigqueue(3)`, used to queue a real-time signal with data
+- [signalfd(2)](https://man7.org/linux/man-pages/man2/signalfd.2.html) — signals delivered as `read()`-able file descriptor events
+- [signal-safety(7)](https://man7.org/linux/man-pages/man7/signal-safety.7.html) — which functions may safely be called from a signal handler
+
+### Related pages
+
+- [eventfd and signalfd](eventfd-signalfd.md) — a fuller treatment of `signalfd`, including `struct signalfd_siginfo` and the `epoll` integration pattern
 - [Pipes and FIFOs](pipes.md) — `SIGPIPE` when writing to a broken pipe
-- [Futex Internals](../locking/futex.md) — How signals interact with futex waits
-- `kernel/signal.c` — complete signal implementation
-- `man 7 signal` — signal list and default dispositions
+
+### LWN articles
+
+- [Ghosts of Unix past, part 3: Unfixable designs](https://lwn.net/Articles/414618/) — Neil Brown on why the original signal design became unfixably complicated, and how `signalfd()` sidesteps it by making delivery synchronous
