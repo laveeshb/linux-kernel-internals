@@ -458,6 +458,14 @@ needed" — is asking for. The robust form is to allocate in `pre_patch_v2()`
 (where failure can still abort the load), copy the *contents* in
 `post_patch_v2()`, and free the older patch's allocation there.
 
+Unlike the main example, this one does need a `post_unpatch_v2()`: if
+`pre_patch_v2()` allocates and the enable is later reversed before
+`post_patch_v2()` runs, that allocation has no other release point.
+`system-state.rst` notes `post_unpatch()` "typically does symmetric
+operations to `pre_patch()`" for exactly this reason — free here whatever
+`pre_patch_v2()` allocated, mirroring `pre_patch_subsys()`'s "clean up its own
+mess" obligation on error.
+
 The `version` field is what the kernel uses to decide compatibility —
 automatically, and before any of the patch's own code runs. When a patch is
 loaded, `klp_enable_patch()` calls `klp_is_patch_compatible()`

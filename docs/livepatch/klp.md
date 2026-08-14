@@ -17,7 +17,7 @@ Before patch:           After patch:
                                         └─► executes patch
 ```
 
-The original function's first bytes are never modified. The ftrace hook at function entry branches to the replacement.
+The original function's body is never rewritten and no jump is inserted into it. KLP reuses the ftrace call site the compiler already emitted at function entry (via `-fentry`/`-mfentry`), and `klp_ftrace_handler()` redirects execution by changing the saved instruction pointer, not by patching code.
 
 ## Architecture
 
@@ -57,7 +57,8 @@ struct klp_patch {
     struct kobject       kobj;
     struct list_head    obj_list;
     bool                 enabled;
-    bool                 forced;    /* forced (skipped consistency check) */
+    bool                 forced;    /* was involved in a forced transition —
+                                        module can never be unloaded */
     struct work_struct   free_work;
     struct completion    finish;
 };

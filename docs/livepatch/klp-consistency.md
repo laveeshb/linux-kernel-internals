@@ -12,8 +12,8 @@ in an inconsistent state.
 
 The KLP consistency model solves this by tracking every task in the system and
 only considering the patch fully active once every task has reached a safe
-point: returned from the old function, passed through a schedule point, or
-entered from userspace.
+point: returned from the old function, entered a freezable sleep, or reached
+the kernel's exit-to-userspace path.
 
 ## Per-task patch state
 

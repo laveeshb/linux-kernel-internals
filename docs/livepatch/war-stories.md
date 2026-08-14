@@ -62,8 +62,10 @@ Two options were available:
    echo 1 > /sys/kernel/livepatch/net-fix/force
    ```
 
-   The taint was accepted. The system was marked for a planned reboot within
-   24 hours.
+   The kernel was already tainted with `TAINT_LIVEPATCH` from loading the
+   module — forcing adds no additional taint of its own. The unsafety of the
+   force itself was accepted as a stopgap, and the system was marked for a
+   planned reboot within 24 hours.
 
 2. **Make the kthread sleep** (permanent fix): a follow-up patch made the loop
    sleep between iterations instead of spinning. That gives the transition two
@@ -390,8 +392,9 @@ walks that module's ELF symbol table in index order and skips `SHN_UNDEF`
 entries — a different ordering, and one to verify rather than assume.) The
 engineer had derived the position from `nm vmlinux | grep rx_ring_refill`, and
 `nm` sorts alphabetically by name unless given `-n` — for two identically named
-symbols that leaves the tie order up to the symbol table, which here did not
-match address order. Position 1 was the wireless driver's copy.
+symbols, `strcmp()` returns 0 and the tie order is whatever `qsort()` leaves
+it as, which here did not match address order. Position 1 was the wireless
+driver's copy.
 
 Nothing in the kernel objects to this. A `sympos` that is in range resolves to
 *some* real function and patching proceeds normally; only an out-of-range value
@@ -412,8 +415,9 @@ So the ambiguity that fails loudly is the safe one. A wrong-but-valid
 
 `dmesg` was clean, which was itself the clue — this was not a resolution
 failure, so the question was *what* had been resolved. `old_func` is
-deliberately not exposed through sysfs, but the requested position is, in the
-per-function directory name:
+deliberately not exposed through sysfs, but the effective position is, in the
+per-function directory name (a `.old_sympos` of 0 would also show as `,1` —
+the field records what was actually used, not the raw source value):
 
 ```bash
 ls /sys/kernel/livepatch/rx-fix/vmlinux/

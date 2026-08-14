@@ -313,7 +313,7 @@ and the disable path bail out early if one already is:
 
 ```c
 /* kernel/livepatch/core.c — __klp_enable_patch() and __klp_disable_patch()
- * both open with the same guard */
+ * both bail out early on the same guard */
 if (klp_transition_patch)
         return -EBUSY;
 ```
@@ -321,8 +321,13 @@ if (klp_transition_patch)
 So loading a cumulative patch while another patch is still transitioning does
 not corrupt the `func_stack` — the `klp_enable_patch()` call from the new
 module's `init` returns `-EBUSY`, the `insmod` fails, and the module never
-loads. The same guard rejects an `echo 0 > .../enabled` issued during a
-transition. Checking first only saves you a failed deployment step:
+loads. The same guard rejects an `echo 0 > .../enabled` aimed at a *different*
+patch while one is transitioning — but not one aimed at the transitioning
+patch itself: `enabled_store()` routes that case to `klp_reverse_transition()`
+instead, deliberately reversing the in-flight transition rather than
+rejecting the write (see [KLP State](klp-state.md), which relies on exactly
+this to make its callbacks re-entrant). Checking first only saves you a
+failed deployment step on a genuinely different patch:
 
 ```bash
 # Avoid a spurious EBUSY: wait for any in-flight transition to finish
