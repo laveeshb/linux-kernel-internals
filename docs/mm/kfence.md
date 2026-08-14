@@ -316,7 +316,7 @@ KFENCE was developed at Google. The [v1 RFC](https://lore.kernel.org/lkml/202009
 
 The patch series went through extensive review on LKML: [KFENCE v7 patch series](https://lore.kernel.org/lkml/20201103175841.3495947-1-elver@google.com/) (November 2020, merged for v5.12 in early 2021).
 
-**LWN coverage**: [KFENCE: A low-overhead memory safety error detector](https://lwn.net/Articles/832354/) provides an accessible overview of the design rationale.
+**LWN coverage**: [KFENCE: A low-overhead sampling-based memory safety error detector](https://lwn.net/Articles/830877/) provides an accessible overview of the design rationale.
 
 ### v5.17: Improved Reporting and Coverage
 
@@ -348,7 +348,7 @@ Added a deferrable timer option to reduce overhead on systems where power consum
 
 ### LWN Articles
 
-- [KFENCE: A low-overhead memory safety error detector](https://lwn.net/Articles/832354/) -- overview article from the initial submission
+- [KFENCE: A low-overhead sampling-based memory safety error detector](https://lwn.net/Articles/830877/) -- overview article from the initial submission
 
 ### LKML Discussions
 
@@ -370,7 +370,7 @@ Added a deferrable timer option to reduce overhead on systems where power consum
 
 ### LWN articles
 
-- [KFENCE: A low-overhead memory safety error detector](https://lwn.net/Articles/832354/) — Marco Elver's overview of the design rationale and production deployment model (2021)
+- [KFENCE: A low-overhead sampling-based memory safety error detector](https://lwn.net/Articles/830877/) — Marco Elver's overview of the design rationale and production deployment model (2021)
 
 ### Related docs
 
