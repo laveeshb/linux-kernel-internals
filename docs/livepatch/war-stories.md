@@ -208,8 +208,11 @@ static void patched_sock_release(struct socket *sock)
     /* Free the shadow variable we attached in patched_tcp_connect */
     klp_shadow_free(sock->sk, KLP_MY_SHADOW_ID, NULL);
 
-    /* Call original release */
-    orig_sock_release(sock);
+    /*
+     * ... rest of sock_release()'s body, copied verbatim from
+     * net/socket.c, elided here. KLP has no klp_call_orig() — see
+     * klp.md — so the patch module carries the whole body.
+     */
 }
 ```
 
