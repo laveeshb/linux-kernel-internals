@@ -245,6 +245,6 @@ crash> dis -l sock_destroy  # disassemble with source lines
 - [syzbot documentation](https://github.com/google/syzkaller/blob/master/docs/syzbot.md) — the `#syz fix:`, `#syz dup:`, and other commands for triaging syzbot reports by email
 - [Reproducing crashes](https://github.com/google/syzkaller/blob/master/docs/reproducing_crashes.md) — how syzkaller generates Syz and C reproducers, and the `syz-repro` tool
 - [Syscall description syntax](https://github.com/google/syzkaller/blob/master/docs/syscall_descriptions_syntax.md) — the syzlang grammar used in `sys/linux/*.txt`
-- [Setting up syzkaller for Linux](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) — kernel config (`CONFIG_KCOV`, `CONFIG_KASAN`, ...) and `syz-manager` setup
+- [Setting up syzkaller for Linux](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) — `CONFIG_KCOV` and `syz-manager` setup; links out to [kernel_configs.md](https://github.com/google/syzkaller/blob/master/docs/linux/kernel_configs.md) for the full recommended config, including `CONFIG_KASAN`
 - [syzbot](https://syzkaller.appspot.com) — the continuous fuzzing dashboard
 - [KCOV: code coverage for fuzzing](https://docs.kernel.org/dev-tools/kcov.html) — the kernel's own documentation of the KCOV interface, including the ioctl/mmap sequence and the `cover[0]`-as-count, `cover[1..n]`-as-PC-addresses buffer layout used in this page's example
