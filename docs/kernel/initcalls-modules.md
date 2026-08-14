@@ -67,15 +67,12 @@ struct module {
 
     char name[MODULE_NAME_LEN];     /* module name (e.g., "e1000e") */
 
-    /* Exported symbols */
+    /* Exported symbols (GPL and non-GPL share one unified table;
+     * each entry's license is carried in flagstab, not a separate array) */
     const struct kernel_symbol *syms;
+    const u32 *crcs;
+    const u8 *flagstab;
     unsigned int num_syms;
-    const s32 *crcs;
-
-    /* GPL-exported symbols */
-    const struct kernel_symbol *gpl_syms;
-    unsigned int num_gpl_syms;
-    const s32 *gpl_crcs;
 
     /* Init and exit functions */
     int (*init)(void);
@@ -144,9 +141,9 @@ load_module()
     5. Apply ELF relocations
        - apply_relocations(): resolve symbol references
        - Symbols resolved against:
-         a. __ksymtab (EXPORT_SYMBOL)
-         b. __ksymtab_gpl (EXPORT_SYMBOL_GPL)
-         c. Other loaded modules' exported symbols
+         a. __ksymtab (unified table; each entry carries its own
+            GPL/non-GPL license string, not a separate table)
+         b. Other loaded modules' exported symbols
 
     6. module_finalize()
        - Set up alternatives (CPU feature patching)
@@ -203,15 +200,16 @@ Modules cannot be unloaded while any code is executing in them (tracked by `refc
 
 ## Symbol export
 
-Only explicitly exported symbols are accessible to loadable modules. The mechanism uses two ELF sections:
+Only explicitly exported symbols are accessible to loadable modules. Both macros funnel into the same underlying `__EXPORT_SYMBOL()`, differing only in the license string each entry carries:
 
 ```c
 /* include/linux/export.h */
-#define EXPORT_SYMBOL(sym)      __EXPORT_SYMBOL(sym, "")
-#define EXPORT_SYMBOL_GPL(sym)  __EXPORT_SYMBOL(sym, "_gpl")
+#define _EXPORT_SYMBOL(sym, license)  __EXPORT_SYMBOL(sym, license, DEFAULT_SYMBOL_NAMESPACE)
+#define EXPORT_SYMBOL(sym)            _EXPORT_SYMBOL(sym, "")
+#define EXPORT_SYMBOL_GPL(sym)        _EXPORT_SYMBOL(sym, "GPL")
 ```
 
-Each `EXPORT_SYMBOL()` creates a `struct kernel_symbol` in `__ksymtab`:
+Each export creates a `struct kernel_symbol` in a single unified `__ksymtab` section (`kernel/module/internal.h`):
 
 ```c
 struct kernel_symbol {
@@ -221,7 +219,7 @@ struct kernel_symbol {
 };
 ```
 
-During module loading, the relocation step resolves undefined symbols by searching `__ksymtab` (and the `__ksymtab` of already-loaded modules). If a symbol is in `__ksymtab_gpl` and the loading module's `MODULE_LICENSE` is not GPL-compatible, the load fails:
+The license string itself lives in the module's `flagstab` array (see `struct module` above), not a separate symbol table — there is no `__ksymtab_gpl`. During module loading, the relocation step resolves undefined symbols by searching `__ksymtab` (and the `__ksymtab` of already-loaded modules). If a resolved symbol's license is GPL-only and the loading module's `MODULE_LICENSE` is not GPL-compatible, the load fails:
 
 ```
 ERROR: "some_gpl_function" [drivers/mydriver/mydriver.ko] undefined!

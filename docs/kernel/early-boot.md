@@ -124,7 +124,7 @@ On x86, sets up the Interrupt Descriptor Table (IDT) with handlers for all CPU e
 
 **[15] `mm_core_init()`** (`mm/mm_init.c`)
 
-Initializes the core memory management infrastructure: `mem_init()` (converts memblock to the buddy allocator), `kmem_cache_init()` (bootstraps the slab allocator), page table caches, and more. After this, the general-purpose page allocator (`alloc_pages()`) is operational. Note: `kmem_cache_init_late()` is invoked later as a separate `core_initcall`, not from within `mm_core_init()`.
+Initializes the core memory management infrastructure: `mem_init()` (converts memblock to the buddy allocator), `kmem_cache_init()` (bootstraps the slab allocator), page table caches, and more. After this, the general-purpose page allocator (`alloc_pages()`) is operational. Note: `kmem_cache_init_late()` is invoked later as a plain direct call from `start_kernel()` (not from within `mm_core_init()`, and not registered via any `core_initcall()`/initcall-level mechanism at all).
 
 **[16] `poking_init()`**
 
@@ -188,7 +188,7 @@ The last call in `start_kernel()`. Creates kernel threads and enters the idle lo
 
 ```c
 /* init/main.c */
-static noinline void __ref rest_init(void)
+static noinline void __ref __noreturn rest_init(void)
 {
     struct task_struct *tsk;
     int pid;
@@ -196,11 +196,11 @@ static noinline void __ref rest_init(void)
     rcu_scheduler_starting();
 
     /*
-     * We need to spawn init first so that it obtains pid 1,
-     * and kthreadd second so that it obtains pid 2. We require
-     * pid 1 to be running before kthreadd starts.
+     * We need to spawn init first so that it obtains pid 1, however
+     * the init task will end up wanting to create kthreads, which, if
+     * we schedule it before we create kthreadd, will OOPS.
      */
-    pid = kernel_thread(kernel_init, NULL, "init", CLONE_FS);
+    pid = user_mode_thread(kernel_init, NULL, CLONE_FS);
 
     rcu_read_lock();
     tsk = find_task_by_pid_ns(pid, &init_pid_ns);
@@ -209,7 +209,7 @@ static noinline void __ref rest_init(void)
     rcu_read_unlock();
 
     numa_default_policy();
-    pid = kernel_thread(kthreadd, NULL, "kthreadd", CLONE_FS | CLONE_FILES);
+    pid = kernel_thread(kthreadd, NULL, NULL, CLONE_FS | CLONE_FILES);
     rcu_read_lock();
     kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
     rcu_read_unlock();
@@ -219,15 +219,18 @@ static noinline void __ref rest_init(void)
     complete(&kthreadd_done);
 
     /*
-     * The boot CPU is now the idle thread. It will never return.
+     * The boot idle thread must execute schedule()
+     * at least once to get things moving:
      */
+    schedule_preempt_disabled();
+    /* Call into cpu_idle with preempt disabled */
     cpu_startup_entry(CPUHP_ONLINE);
 }
 ```
 
-- **PID 1 (`kernel_init`)**: runs `do_initcalls()` to execute all registered initcalls, then mounts the root filesystem and execs `/sbin/init` (or whatever `init=` specifies on the command line).
-- **PID 2 (`kthreadd`)**: the kernel thread daemon. All subsequent kernel threads are created by `kthreadd` in response to `kernel_thread()` calls.
-- **CPU 0 idle**: after `rest_init()` returns, CPU 0 enters `cpu_startup_entry()` and becomes the idle thread, running `do_idle()` in a loop. It never returns to `start_kernel()`.
+- **PID 1 (`kernel_init`)**: spawned via `user_mode_thread()` (not the generic `kernel_thread()` — PID 1 needs a real userspace return path), runs `do_initcalls()` to execute all registered initcalls, then mounts the root filesystem and execs `/sbin/init` (or whatever `init=` specifies on the command line).
+- **PID 2 (`kthreadd`)**: the kernel thread daemon, spawned via `kernel_thread()`. All subsequent kernel threads are created by `kthreadd` in response to `kernel_thread()` calls.
+- **CPU 0 idle**: after `rest_init()` finishes, CPU 0 enters `cpu_startup_entry()` and becomes the idle thread, running `do_idle()` in a loop. `rest_init()` itself never returns to `start_kernel()`.
 
 ---
 
@@ -253,18 +256,20 @@ Built-in kernel subsystems register initialization functions using initcall macr
 
 ### How it works
 
-Each macro expands to `__define_initcall(fn, level)`:
+Each macro expands through `__define_initcall(fn, id)`. On kernels without `CONFIG_HAVE_ARCH_PREL32_RELOCATIONS` (a minority today — most 64-bit architectures, including x86-64 and arm64, have it enabled), the expansion is close to the simple version this section used to show:
 
 ```c
-/* include/linux/init.h */
-#define __define_initcall(fn, id) \
-    static initcall_t __initcall_##fn##id \
-    __used __attribute__((__section__(".initcall" #id ".init"))) = fn
+/* include/linux/init.h, CONFIG_HAVE_ARCH_PREL32_RELOCATIONS=n path */
+#define ____define_initcall(fn, __unused, __name, __sec)	\
+    static initcall_t __name __used			\
+        __attribute__((__section__(__sec))) = fn;
 
 #define core_initcall(fn)       __define_initcall(fn, 1)
 #define device_initcall(fn)     __define_initcall(fn, 6)
 #define module_init(fn)         device_initcall(fn)
 ```
+
+On the more common `CONFIG_HAVE_ARCH_PREL32_RELOCATIONS=y` path, each entry isn't a plain function pointer at all — it's a PC-relative 32-bit offset emitted via inline assembly, resolved back to a real address only when read (`initcall_from_entry()`, used below). This trades a small amount of decode overhead for a smaller `initcall*.init` section, since a 4-byte relative offset is half the size of a full pointer on 64-bit.
 
 The linker script (`arch/x86/kernel/vmlinux.lds.S`, via `include/asm-generic/vmlinux.lds.h`) collects all `.initcall*.init` sections in level order. `do_initcalls()` iterates this array and calls each function pointer:
 

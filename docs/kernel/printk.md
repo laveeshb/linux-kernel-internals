@@ -82,30 +82,28 @@ struct printk_info {
 ## printk flow
 
 ```c
+/* kernel/printk/printk.c — simplified; the real function also handles
+ * panic-CPU message suppression and the scheduler-context (LOGLEVEL_SCHED)
+ * case before reaching this core sequence */
 asmlinkage int vprintk_emit(int facility, int level,
                              const struct dev_printk_info *dev_info,
                              const char *fmt, va_list args)
 {
-    /* 1. Format the message into a temporary buffer */
-    int text_len = vscnprintf(text_buf, sizeof(text_buf), fmt, args);
+    /* 1. Format the message and store it in the ring buffer
+     *    (vscnprintf + prb_reserve/memcpy/prb_commit happen inside) */
+    int printed_len = vprintk_store(facility, level, dev_info, fmt, args);
 
-    /* 2. Store in the ring buffer */
-    if (prb_reserve(&e, prb, &r)) {
-        r.info->facility = facility;
-        r.info->level    = level & 7;
-        r.info->ts_nsec  = local_clock();
-        memcpy(r.text_buf, text_buf, text_len);
-        prb_commit(&e);
-    }
+    /* 2. Decide how/whether to flush to the console right now.
+     *    The real decision is driven by struct console_flush_type,
+     *    covering the legacy console-lock path, the newer "nbcon"
+     *    (non-blocking console) path, and offloading to a kthread or
+     *    irq_work when direct printing isn't safe here. */
 
-    /* 3. Wake up console writers (klogd, /dev/kmsg readers) */
+    /* 3. If nothing is flushing directly, wake up console writers
+     *    (klogd, /dev/kmsg readers) so they pick the message up */
     wake_up_klogd();
 
-    /* 4. If in atomic context: direct console write */
-    if (is_printk_force_console())
-        console_flush_all(true, &dropped, &panic_dropped);
-
-    return text_len;
+    return printed_len;
 }
 ```
 

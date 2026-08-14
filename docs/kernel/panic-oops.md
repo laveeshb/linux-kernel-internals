@@ -150,7 +150,7 @@ BUG_ON(condition)
 
 `BUG()` on x86 expands to the `ud2` instruction (undefined instruction opcode `0x0f 0x0b`). This raises a `#UD` exception, which reaches the kernel's `invalid_op` handler, which calls `die()`.
 
-`WARN()` calls `warn_slowpath_fmt()` → `__warn()`, which calls `dump_stack()` and `print_oops_end_marker()` but does not trigger `die()`. Execution continues after `WARN()`.
+On x86 (and other architectures defining `__WARN_FLAGS`), `WARN()` expands to a `ud2` trap instruction rather than a direct function call — the resulting invalid-opcode exception is caught by `exc_invalid_op()`, which recognizes the `ud2` as a warning site and calls `report_bug()` → `__warn()`. (`warn_slowpath_fmt()` is the fallback path for architectures without trap-based warnings; it's dead code on x86.) Either way, `__warn()` calls `dump_stack()` and `print_oops_end_marker()` but does not trigger `die()` — execution continues after `WARN()`.
 
 ---
 
@@ -368,7 +368,7 @@ KFENCE does not catch every bug (only sampled allocations are guarded), but it p
 - [arch/x86/kernel/traps.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/traps.c) — exception entry points (`exc_general_protection()`, `exc_invalid_op()`, `exc_double_fault()`, etc.) that call `die()`
 - [arch/x86/kernel/unwind_orc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/unwind_orc.c) — `orc_find()`: ORC entry lookup used to produce `Call Trace`
 - [arch/x86/include/asm/orc_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/orc_types.h) — `struct orc_entry` layout
-- [include/asm-generic/bug.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/bug.h) — `WARN()`/`BUG()` family, and the `warn_slowpath_fmt()`/`__warn()` declarations
+- [include/asm-generic/bug.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/bug.h) — `WARN()`/`BUG()` family and the `__warn()` declaration; on x86 the trap-based path (`report_bug()`, called from `exc_invalid_op()`) is what actually reaches it, not `warn_slowpath_fmt()`
 - [lib/bust_spinlocks.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/bust_spinlocks.c) — `bust_spinlocks()`: the `oops_in_progress` counter used to keep console output readable during an oops
 
 ### Man pages
