@@ -417,7 +417,7 @@ processes requests one at a time through it regardless.
 | stm32-cryp | `drivers/crypto/stm32/stm32-cryp.c` | Single-channel, full fallback, rotate IV in CBC |
 | sun8i-ce | `drivers/crypto/allwinner/sun8i-ce/` | Multi-algorithm crypto_engine user, scatter-gather |
 | marvell/cesa | `drivers/crypto/marvell/cesa/` | Does *not* use `crypto_engine` — its own TDMA-chain-based queueing |
-| bcm2835 | `drivers/crypto/bcm/cipher.c` | Does *not* use `crypto_engine` — its own kthread-based queue |
+| bcm2835 | `drivers/crypto/bcm/cipher.c` | Does *not* use `crypto_engine` — submits via the mailbox (mbox) framework to the SPU coprocessor |
 
 ## Observing crypto_engine
 
