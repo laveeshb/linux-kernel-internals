@@ -187,10 +187,11 @@ public livepatch API exported via `EXPORT_SYMBOL_GPL` — `core.c` also exports
 `klp_shadow_free_all()`, and `state.c` exports `klp_get_state()` and
 `klp_get_prev_state()`. A livepatch module's `module_exit` should be empty or
 omitted entirely — the teardown already happened when the patch was disabled:
-`klp_complete_transition()` calls `klp_unpatch_objects()`, which unregisters
-each function's ftrace hook, and `klp_free_patch_async()` then frees the
-`struct klp_patch` and drops the module reference. There is nothing left to
-clean up by the time `rmmod` runs.
+`klp_complete_transition()` calls `klp_unpatch_objects()`, which pops each
+function off its `func_stack` and unregisters the ftrace hook once that stack
+is empty, and `klp_free_patch_async()` then frees the `struct klp_patch` and
+drops the module reference. There is nothing left to clean up by the time
+`rmmod` runs.
 
 (`klp_module_going()`, called directly by `kernel/module/main.c` during
 module load/unload — not via the module notifier chain — is a different

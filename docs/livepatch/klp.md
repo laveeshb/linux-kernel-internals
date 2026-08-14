@@ -256,7 +256,7 @@ echo 1 > /sys/kernel/livepatch/mypatch/force
 
 ### Sleepy tasks
 
-A task blocked in `D` state (uninterruptible sleep) inside the old function will delay the transition. The kernel uses `klp_send_signals()` to wake such tasks and a periodic workqueue to re-check transition completion:
+A task blocked in `D` state (`TASK_UNINTERRUPTIBLE`) inside the old function will delay the transition, and the livepatch core cannot shorten that wait: `klp_send_signals()` reaches only tasks in interruptible sleep (`wake_up_state(task, TASK_INTERRUPTIBLE)` for kthreads, `set_notify_signal()` — itself only a `TASK_INTERRUPTIBLE` wakeup — for user tasks). A D-state task has to leave that state on its own; the periodic workqueue just re-checks until it does. See [KLP Consistency Model](klp-consistency.md):
 
 ```bash
 # If transition is stuck: find who's blocking it

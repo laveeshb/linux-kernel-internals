@@ -91,8 +91,6 @@ workqueue scan tries them. Before writing a patch that covers such a function:
 - Give the kthread a real sleep — a brief `msleep()`, or better a freezable
   wait — if you control its source (via a separate preparatory patch). Yielding
   with `cond_resched()` alone no longer helps the transition.
-- Or patch the non-inlined callers instead, or restructure the kernel code to
-  prevent inlining by adding `noinline` and submitting a patch upstream.
 
   Note: the `nop` field in `struct klp_func` is used by the cumulative replace
   mechanism (`klp_add_nops()`) to create placeholder entries that call through
@@ -643,7 +641,6 @@ description of the `func_stack`, the `nop` funcs, and the atomic replace flow.
 - [Documentation/livepatch/cumulative-patches.rst](https://docs.kernel.org/livepatch/cumulative-patches.html) — the upstream atomic replace guide: the "atomically revert some functions" feature and the "set .replace flag in any released livepatch" advice Case 5 turns on
 - [fs/ioctl.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/ioctl.c) — `ioctl_preallocate()` and the separate x86_64 `compat_ioctl_preallocate()` entry point, the two functions behind Case 3
 - [include/linux/falloc.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/falloc.h) — `struct space_resv`/`struct space_resv_32`, the native/compat layout mismatch behind Case 3
-- [Shadow variables](https://docs.kernel.org/livepatch/shadow-vars.html) — upstream documentation on matching a shadow variable's lifecycle to its parent object's, the rule Case 2's patch violated
 
 ### Related pages
 
@@ -658,3 +655,7 @@ description of the `func_stack`, the `nop` funcs, and the atomic replace flow.
 - [livepatch: consistency model](https://lwn.net/Articles/632582/) (February 9, 2015) — the original per-task consistency model RFC and per-task transition design behind Case 1
 - [livepatch: introduce shadow variable API](https://lwn.net/Articles/731585/) (August 21, 2017) — Joe Lawrence's patch introducing `klp_shadow_alloc()`/`klp_shadow_get()`/`klp_shadow_free()` and the `(obj, id)`-keyed hashtable behind Case 2
 - [livepatch: introduce atomic replace](https://lwn.net/Articles/734997/) (September 27, 2017) — the atomic replace / cumulative patch design discussed in Case 5
+
+### External
+
+- [Shadow variables](https://docs.kernel.org/livepatch/shadow-vars.html) — upstream documentation on matching a shadow variable's lifecycle to its parent object's, the rule Case 2's patch violated
