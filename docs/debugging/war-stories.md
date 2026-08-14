@@ -309,7 +309,7 @@ char *make_name(const char *prefix, const char *suffix)
 
 The bug had existed for several kernel releases, but no KASAN-enabled kernel had ever exercised this exact code path: `make_name()` was reached only from a driver probe path tied to hardware that wasn't present in the KASAN-enabled CI fleet or on developers' local test rigs. This was a coverage gap, not a KASAN detection-granularity gap — generic KASAN's shadow byte encodes the exact accessible-byte count within each 8-byte granule (see [KASAN and KFENCE](kasan-kfence.md) for the shadow-byte table), so a NUL write to byte 8 of a 7-byte `kmalloc-8` object would have been flagged immediately had it run under KASAN. The bug survived because KASAN's ~2–3× CPU overhead means it typically runs only in development and CI, on whatever hardware and code paths engineers happen to exercise there — not because an off-by-one at this exact boundary is somehow invisible to it.
 
-KFENCE, by contrast, samples allocations in production at near-zero overhead, so it eventually caught this allocation once it landed in a KFENCE slot, right-aligned in a 4 KB data page. The guard page immediately followed byte 7. The NUL write to byte 8 hit the guard page and faulted.
+KFENCE, by contrast, samples allocations in production at near-zero overhead, so it eventually caught this allocation once it landed in a KFENCE slot that happened to be right-aligned in its 4 KB data page (KFENCE randomizes left/right placement per allocation). The guard page immediately followed byte 7. The NUL write to byte 8 hit the guard page and faulted.
 
 ### The fix
 
