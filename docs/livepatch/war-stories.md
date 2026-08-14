@@ -181,68 +181,96 @@ See [Kernel Live Patching](klp.md) for the shadow variable API.
 
 ### Scenario
 
-A CVE was discovered in the read path. A live patch was deployed to all
-production hosts within two hours, fixing `vfs_read`. The vulnerability was
-considered remediated. Three days later, a security audit found that 32-bit
-processes on a subset of mixed-architecture hosts were still exploitable.
+A CVE was discovered in the legacy XFS-compatible space-reservation ioctls —
+`FS_IOC_RESVSP`, `FS_IOC_UNRESVSP`, and `FS_IOC_ZERO_RANGE`. A live patch was
+deployed to all production hosts within two hours, fixing `ioctl_preallocate()`
+in `fs/ioctl.c`. The vulnerability was considered remediated. Three days
+later, a security audit found that 32-bit processes on x86_64 hosts were
+still exploitable through the exact same ioctl commands.
 
 ### Root cause
 
-The patch targeted only the 64-bit syscall entry path. The 32-bit compat
-entry point, `compat_sys_read`, called a different code path that did not go
-through the patched `vfs_read`:
+The patch targeted only the native ioctl path. On `CONFIG_X86_64`, the 32-bit
+compat entry point, `compat_sys_ioctl()`, dispatches the equivalent
+`_32`-suffixed command codes (`FS_IOC_RESVSP_32`, `FS_IOC_UNRESVSP_32`,
+`FS_IOC_ZERO_RANGE_32`) straight to a separate function,
+`compat_ioctl_preallocate()`, which the patch never touched:
 
 ```c
-/* 64-bit path — patched */
-SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+/* Native path — patched */
+static int ioctl_preallocate(struct file *filp, int mode, void __user *argp)
 {
+    struct space_resv sr;
+
+    if (copy_from_user(&sr, argp, sizeof(sr)))
+        return -EFAULT;
     ...
-    return vfs_read(f.file, buf, count, &f.file->f_pos);  /* ← patched */
+    return vfs_fallocate(filp, mode | FALLOC_FL_KEEP_SIZE,
+                          sr.l_start, sr.l_len);   /* ← patched */
 }
 
-/* 32-bit compat path — NOT patched */
-COMPAT_SYSCALL_DEFINE3(read, unsigned int, fd,
-                        compat_uptr_t, buf, compat_size_t, count)
+/* 32-bit compat path on x86_64 — NOT patched */
+#if defined CONFIG_COMPAT && defined(CONFIG_X86_64)
+/* on ia32 l_start is on a 32-bit boundary; just account for the
+ * different alignment */
+static int compat_ioctl_preallocate(struct file *file, int mode,
+                                    struct space_resv_32 __user *argp)
 {
+    struct space_resv_32 sr;   /* distinct, packed 32-bit layout */
+
+    if (copy_from_user(&sr, argp, sizeof(sr)))
+        return -EFAULT;
     ...
-    return vfs_read(f.file, compat_ptr(buf), count,
-                    &f.file->f_pos);  /* ← same vfs_read, but... */
+    return vfs_fallocate(file, mode | FALLOC_FL_KEEP_SIZE,
+                          sr.l_start, sr.l_len);   /* ← same call, but... */
 }
+#endif
 ```
 
-In this particular case the vulnerability was actually in a helper called
-by both paths, but the helper was reached via a slightly different call chain
-in the compat path that bypassed the patched code.
+`compat_ioctl_preallocate()` exists because `struct space_resv`'s 64-bit
+`l_start`/`l_len` fields are 8-byte aligned, but on ia32 they're only 4-byte
+aligned — so the compat path defines its own packed `struct space_resv_32`
+and its own copy-in routine (`include/linux/falloc.h`). Inside
+`COMPAT_SYSCALL_DEFINE3(ioctl...)`, the `_32` command codes are handled
+directly by `compat_ioctl_preallocate()` and never reach `do_vfs_ioctl()` →
+`file_ioctl()` → `ioctl_preallocate()`, the function the patch had hooked.
 
 ### Detection
 
 ```bash
-# Check /proc/kallsyms for compat variants of the target function
-grep -i "compat.*read\|read.*compat" /proc/kallsyms
-# ffffffff81200a30 T compat_sys_read
-# ffffffff81200b20 T __se_compat_sys_read
+# Check /proc/kallsyms for the compat counterpart
+grep -i preallocate /proc/kallsyms
+# ffffffff812a1050 t ioctl_preallocate
+# ffffffff812a1120 t compat_ioctl_preallocate   ← separate symbol, unpatched
 
-# Look for COMPAT_SYSCALL_DEFINE in the source
-grep -r "COMPAT_SYSCALL_DEFINE.*read" fs/read_write.c
+# Confirm the compat dispatch in the source
+grep -n "compat_ioctl_preallocate\|FS_IOC_RESVSP_32" fs/ioctl.c
 ```
 
 ### Resolution
 
-A second patch was deployed that covered the compat path. Going forward, the
-team added a checklist item for every syscall patch:
+A second patch was deployed that also hooked `compat_ioctl_preallocate()`.
+Going forward, the team added a checklist item for every ioctl-handler patch:
 
-1. Does the syscall have a `COMPAT_SYSCALL_DEFINE` variant?
-2. Does the vulnerability exist in the 32-bit path too?
-3. Are there `ia32_sys_*` wrappers (`arch/x86/entry/syscall_32.c`) that
-   bypass the patched function?
+1. Does the ioctl command have a `_32` compat variant, and does a
+   `CONFIG_X86_64`-guarded struct like `space_resv_32` exist for it?
+2. Does the compat path — either a driver's separate `f_op->compat_ioctl`,
+   or, as here, a branch inside `compat_sys_ioctl()` in `fs/ioctl.c` — call a
+   genuinely different function, rather than forwarding to the native
+   handler?
+3. Is the vulnerability present in both the native and compat parsing
+   routines?
 
 ### Lesson
 
-For any patch targeting a syscall or a function called from a syscall, check
-`/proc/kallsyms` and the source tree for `compat_` variants before
-considering the patch complete. Architecture-specific entry tables
-(`arch/x86/entry/syscalls/syscall_32.tbl`) map compat syscall numbers to
-handler functions and are a good reference.
+For any patch targeting a function reached through `do_vfs_ioctl()` or
+`f_op->unlocked_ioctl`, check whether the same command number has a compat
+counterpart that runs different code. Not every `compat_ioctl` diverges —
+generic ones like `compat_ptr_ioctl()` just forward to the native handler
+after a pointer conversion — but any handler with a genuinely different
+compat argument layout, like `space_resv` vs. `space_resv_32` here, needs its
+own livepatch target. `grep -i <name> /proc/kallsyms` for the function's
+name family is a fast first check; the source is the definitive answer.
 
 ## 4. Patching an inline function
 
@@ -348,11 +376,14 @@ followed under high connection load.
 
 ### Root cause
 
-The KLP atomic replace path in `klp_atomic_replace()` assumes that all
-existing patches are in a stable state (no active transition). It marks old
-patches for replacement and then begins the new transition. If an old patch
-is mid-transition, its per-task state (`KLP_UNDEFINED`, `KLP_UNPATCHED`,
-`KLP_PATCHED`) conflicts with the new transition's bookkeeping.
+There is no dedicated `klp_atomic_replace()` function. Cumulative replace is
+handled by `klp_init_patch()`, which calls `klp_add_nops()` when
+`patch->replace` is set, followed by the same transition machinery every
+patch uses (`klp_enable_patch()` → `klp_init_transition()`). That machinery
+assumes all existing patches are in a stable state (no active transition). If
+an old patch is mid-transition, its per-task state (`KLP_TRANSITION_IDLE`,
+`KLP_TRANSITION_UNPATCHED`, `KLP_TRANSITION_PATCHED`) conflicts with the new
+transition's bookkeeping.
 
 The kernel does not prevent loading a cumulative patch while another is
 transitioning — it trusts the operator to sequence correctly.
@@ -398,8 +429,26 @@ transition state machine.
 
 ## Further reading
 
-- [KLP Consistency Model](klp-consistency.md) — per-task states, stack checking, forced transitions
-- [Cumulative Patches and Atomic Replace](klp-cumulative.md) — stacking and .replace=true
-- [Kernel Live Patching](klp.md) — shadow variables, observing patches
-- `kernel/livepatch/transition.c` — klp_try_complete_transition, klp_send_signals
-- `kernel/livepatch/shadow.c` — klp_shadow_hash implementation
+### Kernel source
+
+- [kernel/livepatch/transition.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/transition.c) — `klp_send_signals()`, whose `wake_up_state(task, TASK_INTERRUPTIBLE)` only wakes kthreads in interruptible sleep, and `klp_try_complete_transition()`, behind Case 1
+- [kernel/livepatch/shadow.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/shadow.c) — the `klp_shadow_hash` hashtable and the `klp_shadow_get_or_alloc()`/`klp_shadow_free()` pairing that Case 2's patch got wrong
+- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — `klp_add_nops()`, which creates the placeholder `nop` functions referenced in Case 1's lesson, and the `old_sympos` handling for duplicate symbol names behind Case 4
+- [include/linux/livepatch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch.h) — `struct klp_func`'s `nop` and `old_sympos` fields, and the per-task transition states (`KLP_TRANSITION_IDLE`/`KLP_TRANSITION_UNPATCHED`/`KLP_TRANSITION_PATCHED`) behind Case 5
+- [fs/ioctl.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/ioctl.c) — `ioctl_preallocate()` and the separate x86_64 `compat_ioctl_preallocate()` entry point, the two functions behind Case 3
+- [include/linux/falloc.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/falloc.h) — `struct space_resv`/`struct space_resv_32`, the native/compat layout mismatch behind Case 3
+- [Shadow variables](https://docs.kernel.org/livepatch/shadow-vars.html) — upstream documentation on matching a shadow variable's lifecycle to its parent object's, the rule Case 2's patch violated
+
+### Related pages
+
+- [Kernel Live Patching](klp.md) — the ftrace redirection mechanism and shadow variable API these incidents build on
+- [KLP Consistency Model](klp-consistency.md) — per-task transition states and stack checking behind Cases 1 and 5
+- [Cumulative Patches and Atomic Replace](klp-cumulative.md) — `.replace=true` and `func_stack` stacking behind Case 5
+- [KLP State: Custom Consistency Checks](klp-state.md) — the API for patches where stack scanning alone isn't sufficient, relevant background for Case 5's ordering lesson
+- [kexec](kexec.md) — the fast-reboot mechanism used as the fallback once a stuck transition can't be forced safely, as in Case 1's resolution
+
+### LWN articles
+
+- [livepatch: consistency model](https://lwn.net/Articles/632582/) (February 9, 2015) — the original per-task consistency model RFC, which explicitly flags kthreads that never sleep or transition as an open problem, the root cause behind Case 1
+- [livepatch: introduce shadow variable API](https://lwn.net/Articles/731585/) (August 21, 2017) — Joe Lawrence's patch introducing `klp_shadow_alloc()`/`klp_shadow_get()`/`klp_shadow_free()` and the `(obj, id)`-keyed hashtable behind Case 2
+- [livepatch: introduce atomic replace](https://lwn.net/Articles/734997/) (September 27, 2017) — the atomic replace / cumulative patch design discussed in Case 5

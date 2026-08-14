@@ -25,7 +25,7 @@ But some patches change things that stack scanning cannot detect:
 
 In all of these cases, the patch author needs a way to run custom logic at
 the moment of transition — logic that the kernel cannot infer automatically.
-The `klp_state` API, added in Linux 5.8, provides exactly that.
+The `klp_state` API, added in Linux 5.5, provides exactly that.
 
 ## struct klp_state
 
@@ -93,6 +93,7 @@ struct klp_object {
     /* ... internal fields ... */
 };
 
+/* include/linux/livepatch_external.h */
 struct klp_callbacks {
     int  (*pre_patch)(struct klp_object *obj);
     void (*post_patch)(struct klp_object *obj);
@@ -124,7 +125,7 @@ The call order during a reverse transition (disabling a patch):
 Two helpers provide access to state data from within the callbacks:
 
 ```c
-/* kernel/livepatch/core.c */
+/* include/linux/livepatch.h (declared here; implemented in kernel/livepatch/state.c) */
 struct klp_state *klp_get_state(struct klp_patch *patch, unsigned long id);
 struct klp_state *klp_get_prev_state(unsigned long id);
 ```
@@ -157,6 +158,16 @@ The patch must quiesce all old-code users before the new code becomes active:
 /* id=1 identifies the subsystem lock state */
 #define SUBSYS_LOCK_STATE_ID  1UL
 
+/*
+ * Forward-declared: pre_patch_subsys() below needs to look up its own
+ * patch's state via klp_get_state(&subsys_patch, ...), but the full
+ * struct klp_patch definition (which needs the callbacks and objects
+ * defined first) only comes together at the end of the file -- the
+ * same order real livepatch modules use, e.g.
+ * samples/livepatch/livepatch-callbacks-demo.c.
+ */
+static struct klp_patch subsys_patch;
+
 static int pre_patch_subsys(struct klp_object *obj)
 {
     struct klp_state *state;
@@ -166,42 +177,52 @@ static int pre_patch_subsys(struct klp_object *obj)
         return -EINVAL;
 
     /*
-     * Acquire the subsystem's existing spinlock so no old-code caller
-     * is inside the critical section when the hooks go live.
-     * Store a flag so post_patch knows we succeeded.
+     * Briefly take the subsystem's existing spinlock just long enough
+     * to confirm no old-code caller is mid-critical-section, then
+     * release it immediately. The lock must NOT be held across the
+     * rest of the transition (steps 2-3 below): the consistency
+     * model's stack scan can take an unbounded amount of time while
+     * it waits for every task in the system, and holding a spinlock
+     * for that long is itself a correctness bug, not a safe pattern.
      */
     spin_lock(&subsys_spinlock);
-    state->data = (void *)1UL;   /* mark: lock held */
+    state->data = (void *)1UL;   /* mark: transition to mutex started */
+    spin_unlock(&subsys_spinlock);
 
-    /*
-     * Drain any async work that uses the old lock path.
-     * Return 0 to allow the transition to proceed.
-     */
     return 0;
 }
 
 static void post_patch_subsys(struct klp_object *obj)
 {
     /*
-     * At this point all tasks are running the new code path,
-     * which uses subsys_mutex.  Release the spinlock; from here
-     * on, only mutex_lock/mutex_unlock will be used.
+     * By the time post_patch runs, the consistency model has already
+     * confirmed that no task is still executing inside the old
+     * subsys_do_work() -- so nothing can still be holding
+     * subsys_spinlock across a call into it. Every caller from here
+     * on uses the new, mutex-based code path; there is no lock left
+     * to release here.
      */
-    spin_unlock(&subsys_spinlock);
 }
 
 static void pre_unpatch_subsys(struct klp_object *obj)
 {
     /*
-     * Reverse: acquire the mutex to drain new-code callers before
-     * the hooks are removed and old code (spinlock) resumes.
+     * Reverse transition: briefly take the mutex to confirm no
+     * new-code caller is mid-critical-section, then release it right
+     * away. As with pre_patch_subsys() above, the lock must not be
+     * held across the reverse transition itself.
      */
     mutex_lock(&subsys_mutex);
+    mutex_unlock(&subsys_mutex);
 }
 
 static void post_unpatch_subsys(struct klp_object *obj)
 {
-    mutex_unlock(&subsys_mutex);
+    /*
+     * The reverse transition has completed and the ftrace hooks are
+     * gone, so the original spinlock-based code is running again for
+     * every caller. There is nothing left to release here.
+     */
 }
 
 static struct klp_state subsys_states[] = {
@@ -239,9 +260,9 @@ static struct klp_patch subsys_patch = {
 ```
 
 If `pre_patch_subsys` returns a non-zero value — for example, because
-`subsys_spinlock` is held by a `TASK_UNINTERRUPTIBLE` caller that cannot be
-drained — `klp_enable_patch()` propagates that error to `insmod` and no hooks
-are installed. The system stays on the old code path with no partial state.
+`klp_get_state()` can't find the state entry it expects —
+`klp_enable_patch()` propagates that error to `insmod` and no hooks are
+installed. The system stays on the old code path with no partial state.
 
 ## klp_state and cumulative patches
 
@@ -251,12 +272,15 @@ the new patch can inherit the previous patch's state data via
 successive patch builds on the state established by its predecessor:
 
 ```c
+/* subsys_patch_v2: the new, replacing patch's own struct klp_patch,
+ * declared the same way subsys_patch was above -- omitted here for
+ * brevity. */
 static int pre_patch_v2(struct klp_object *obj)
 {
     struct klp_state *prev, *cur;
 
     prev = klp_get_prev_state(SUBSYS_LOCK_STATE_ID);
-    cur  = klp_get_state(&my_patch, SUBSYS_LOCK_STATE_ID);
+    cur  = klp_get_state(&subsys_patch_v2, SUBSYS_LOCK_STATE_ID);
 
     if (prev && prev->data) {
         /*
@@ -270,9 +294,19 @@ static int pre_patch_v2(struct klp_object *obj)
 }
 ```
 
-The `version` field assists compatibility checks: if `prev->version` is higher
-than the version the new patch understands, the new patch can reject the
-transition early in `pre_patch` rather than misinterpreting inherited data.
+The `version` field is what the kernel uses to decide compatibility —
+automatically, and before any of the patch's own code runs. When a patch is
+loaded, `klp_enable_patch()` calls `klp_is_patch_compatible()`
+(`kernel/livepatch/state.c`), which walks every state already modified by
+every currently-installed patch. For each such state, if the new patch also
+declares that state id, its `version` must be `>=` the already-installed
+version; if the new patch doesn't declare that state id at all, it's only
+compatible when the new patch is non-cumulative (a cumulative, `.replace =
+true` patch must account for every state a patch it replaces has already
+touched). If the check fails, `klp_enable_patch()` returns `-EINVAL`
+immediately — `pre_patch_v2()` above is never called, and `insmod` fails
+outright. The patch's own callbacks have no say in the decision; they only
+run once the kernel has already confirmed compatibility.
 
 ## Observing state
 
@@ -284,24 +318,44 @@ the patch module. To observe transition progress use the standard sysfs files:
 cat /sys/kernel/livepatch/<patch>/transition
 # 1 = in progress, 0 = complete
 
-# Was the transition forced (skipped consistency check)?
-cat /sys/kernel/livepatch/<patch>/forced
-# 0 = normal, 1 = forced
+# Force a stuck transition to finish immediately, skipping the rest of
+# the consistency check. This attribute is write-only -- there is no
+# way to read it back to find out whether a past transition was
+# forced; that's tracked only internally (struct klp_patch.forced).
+echo 1 > /sys/kernel/livepatch/<patch>/force
 ```
+
+Forcing a transition is a last resort: it clears every task's pending-patch
+flag outright, and once used, the patch module can never be removed
+(`rmmod`) again for the lifetime of the running kernel.
 
 If a `pre_patch` callback returns an error, `insmod` exits with a non-zero
 status and `dmesg` will contain a line like:
 
 ```
-livepatch: 'my_patch': pre_patch callback failed for object 'vmlinux': -EBUSY
+livepatch: pre-patch callback failed for object 'vmlinux'
 ```
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/livepatch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch.h) — `struct klp_state`, `struct klp_object`, `struct klp_patch`, and the `klp_get_state()`/`klp_get_prev_state()` declarations
+- [include/linux/livepatch_external.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch_external.h) — `struct klp_callbacks`: the `pre_patch`/`post_patch`/`pre_unpatch`/`post_unpatch` hook table
+- [kernel/livepatch/state.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/state.c) — `klp_get_state()` and `klp_get_prev_state()` implementations, plus the automatic version-compatibility check (`klp_is_patch_compatible()`) run when a patch is loaded
+- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — `klp_enable_patch()`: where `pre_patch` is invoked before the ftrace hooks are installed, and how a non-zero return aborts the transition
+
+### Related pages
+
 - [KLP Consistency Model](klp-consistency.md) — stack scanning, per-task state, forced transitions
 - [Cumulative Patches and Atomic Replace](klp-cumulative.md) — `.replace=true`, `klp_get_prev_state()` in context
 - [Kernel Live Patching](klp.md) — `struct klp_func`, `struct klp_patch`, ftrace redirection
-- `include/linux/livepatch.h` — `struct klp_state`, `struct klp_object` callback declarations
-- `kernel/livepatch/core.c` — `klp_get_state()`, `klp_get_prev_state()`, `klp_free_patch_start()`
-- `Documentation/livepatch/callbacks.rst` — upstream documentation for transition callbacks
-- `Documentation/livepatch/system-state.rst` — upstream documentation for the klp_state API
+
+### LWN articles
+
+- [LWN: Live patching for CPU vulnerabilities](https://lwn.net/Articles/775264/) — Nicolai Stange's account of the L1TF/KPTI live patches, which had to flip global page-table semantics mid-transition using exactly the pre/post-patch callback pattern this page describes
+
+### External
+
+- [System State Changes — The Linux Kernel documentation](https://docs.kernel.org/livepatch/system-state.html) — upstream documentation for the `klp_state` API and its version-compatibility rules
+- [(Un)patching Callbacks — The Linux Kernel documentation](https://docs.kernel.org/livepatch/callbacks.html) — upstream documentation for `pre_patch`/`post_patch`/`pre_unpatch`/`post_unpatch` semantics and use cases

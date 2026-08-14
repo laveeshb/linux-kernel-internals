@@ -29,7 +29,7 @@ struct klp_patch {
     /* external (set by patch module author): */
     struct module       *mod;       /* the live patch module */
     struct klp_object   *objs;      /* array of patched objects */
-    struct klp_state    *states;    /* optional consistency states (5.8+) */
+    struct klp_state    *states;    /* optional consistency states (5.5+) */
     bool                 replace;   /* true = cumulative replace (5.1+) */
 
     /* internal (managed by the livepatch core): */
@@ -110,8 +110,9 @@ The "atomic" part is that the entire switch — enabling the new patch and remov
  *    allocates nop funcs for any functions in active patches
  *    not covered by the new patch */
 /* 3. Normal transition begins (same as any patch) */
-/* 4. klp_complete_transition() → klp_unpatch_objects() removes
- *    all replaced patches from the func_stack */
+/* 4. klp_complete_transition() → klp_unpatch_replaced_patches()
+ *    → klp_unpatch_objects() (per old patch) removes all replaced
+ *    patches from the func_stack */
 ```
 
 ## struct klp_ops: the per-function hook
@@ -120,7 +121,7 @@ There is exactly one `struct klp_ops` for each (object, function-name) pair,
 no matter how many patches target that function:
 
 ```c
-/* kernel/livepatch/patch.c */
+/* kernel/livepatch/patch.h */
 struct klp_ops {
     struct list_head  node;        /* global klp_ops list */
     struct list_head  func_stack;  /* klp_func entries — newest at head */
@@ -151,13 +152,13 @@ function resumes executing without any trampoline overhead.
 ## Disabling a patch
 
 Disabling a patch starts a *reverse transition*: tasks are moved from
-`KLP_PATCHED` back to `KLP_UNPATCHED`. The `enabled` sysfs file triggers this:
+`KLP_TRANSITION_PATCHED` back to `KLP_TRANSITION_UNPATCHED`. The `enabled` sysfs file triggers this:
 
 ```bash
 echo 0 > /sys/kernel/livepatch/<patch>/enabled
 ```
 
-The kernel sets `klp_target_state = KLP_UNPATCHED` and queues
+The kernel sets `klp_target_state = KLP_TRANSITION_UNPATCHED` and queues
 `klp_transition_work`. The stack check still applies — tasks that are executing
 inside the *new* (patched) function cannot be reversed until they return.
 
@@ -178,12 +179,22 @@ cat /sys/kernel/livepatch/mypatch/enabled
 
 ## Removing a patch
 
-Once a patch is disabled, its module can be unloaded. The only public livepatch API exported via `EXPORT_SYMBOL_GPL` is `klp_enable_patch()`. A livepatch module's `module_exit` should be empty or omitted entirely — the livepatch core handles cleanup via the module notifier `klp_module_going()`:
+Once a patch is disabled, its module can be unloaded. `klp_enable_patch()` is
+the primary entry point a livepatch module calls, but it is not the only
+public livepatch API exported via `EXPORT_SYMBOL_GPL` — `core.c` also exports
+`klp_find_section_by_name()`, `shadow.c` exports `klp_shadow_get()`,
+`klp_shadow_alloc()`, `klp_shadow_get_or_alloc()`, `klp_shadow_free()`, and
+`klp_shadow_free_all()`, and `state.c` exports `klp_get_state()` and
+`klp_get_prev_state()`. A livepatch module's `module_exit` should be empty or
+omitted entirely — the livepatch core handles cleanup via `klp_module_going()`,
+which `kernel/module/main.c` calls directly during module load/unload state
+transitions (it is not registered on the module notifier chain):
 
 ```c
 /* Livepatch module exit: no explicit unregister needed.
- * The livepatch core registers a module notifier (klp_module_going)
- * that handles cleanup when the module is unloaded.
+ * The module loader calls klp_module_going() directly during the module's
+ * exit path, and the livepatch core uses it to clean up when the module
+ * is unloaded.
  * Before unloading, disable the patch via sysfs:
  *   echo 0 > /sys/kernel/livepatch/<patch>/enabled
  * Then: rmmod <patch_module>
@@ -236,21 +247,29 @@ enabled=0, transition=0 (disabled, can unload)
 
 ## Observing the func_stack
 
-The sysfs hierarchy exposes the state of each patched function, including
-its position in the func_stack relative to other patches:
+The sysfs hierarchy exposes the state of each patched object, and lists each
+patched function's directory, but a per-function `patched` file does not
+exist — `patched` is an object-level attribute only:
 
 ```bash
-# Check if a specific function is patched
-cat /sys/kernel/livepatch/mypatch/objs/vmlinux/funcs/tcp_sendmsg/patched
-# 1 = hook is active for this function
+# Check if the vmlinux object (core kernel) is patched by mypatch
+cat /sys/kernel/livepatch/mypatch/vmlinux/patched
+# 1 = this patch's functions in this object are currently hooked
+
+# Each patched function shows up as a directory named "<function>,<sympos>"
+# under the object — its mere presence is the signal, it has no attribute
+# files of its own:
+ls /sys/kernel/livepatch/mypatch/vmlinux/
+# patched  tcp_sendmsg,0
 
 # old_addr is NOT exposed via sysfs
 # To find the original function address, use /proc/kallsyms:
 grep " tcp_sendmsg$" /proc/kallsyms
 
-# If two patches cover the same function:
-cat /sys/kernel/livepatch/p1/objs/vmlinux/funcs/tcp_sendmsg/patched  # 0 (shadowed by p2)
-cat /sys/kernel/livepatch/p2/objs/vmlinux/funcs/tcp_sendmsg/patched  # 1 (active)
+# If two patches cover the same function, func_stack order (not sysfs) is
+# the arbiter — see "stack_order" for each patch's position:
+cat /sys/kernel/livepatch/p1/stack_order  # 1 (older, shadowed by p2)
+cat /sys/kernel/livepatch/p2/stack_order  # 2 (newer, active)
 ```
 
 ## Practical workflow with kpatch
@@ -306,9 +325,27 @@ violated.
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/livepatch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch.h) — `struct klp_patch`, `struct klp_func`, `struct klp_object`, and the `KLP_TRANSITION_IDLE`/`KLP_TRANSITION_UNPATCHED`/`KLP_TRANSITION_PATCHED` task-state constants
+- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — `klp_enable_patch()`, `klp_add_nops()`, `klp_unpatch_replaced_patches()`, `klp_module_going()`, and a comment block documenting the full `/sys/kernel/livepatch/...` sysfs layout
+- [kernel/livepatch/patch.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.c) — `klp_patch_func()`/`klp_unpatch_func()`: pushing and popping `klp_func` entries on `ops->func_stack` via `list_add_rcu()`/`list_del_rcu()`
+- [kernel/livepatch/patch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.h) — `struct klp_ops` definition (`node`, `func_stack`, `fops`)
+- [Documentation/livepatch/cumulative-patches.rst](https://docs.kernel.org/livepatch/cumulative-patches.html) — the upstream usage guide for atomic replace, including the callback and shadow-variable limitations
+- [`e1452b607c48` — livepatch: Add atomic replace](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e1452b607c48c642caf57299f4da83aa002f8533) — Petr Mladek's commit adding the `.replace` field to `struct klp_patch`, merged for Linux 5.1
+
+### Man pages
+
+- [`rmmod(8)`](https://man7.org/linux/man-pages/man8/rmmod.8.html) — module removal; the `-f`/`--force` option bypasses the in-use refcount check this page warns against using on a still-enabled live patch
+
+### Related pages
+
 - [KLP Consistency Model](klp-consistency.md) — per-task states, stack checking, forced transitions
 - [Kernel Live Patching](klp.md) — struct klp_func/klp_patch, ftrace redirection, shadow variables
+- [KLP State](klp-state.md) — the `struct klp_state`/`klp_get_state()` API referenced by `struct klp_patch`'s `.states` field
 - [Kernel Modules](../modules/module-basics.md) — KLP modules use the standard module infrastructure
-- `kernel/livepatch/core.c` — klp_enable_patch(), klp_add_nops(), klp_module_going()
-- `kernel/livepatch/patch.c` — struct klp_ops, func_stack management
-- `Documentation/livepatch/cumulative-patches.rst` — upstream cumulative patch guide
+- [War Stories](war-stories.md) — a real incident from loading a cumulative patch while another was still transitioning
+
+### LWN articles
+
+- [livepatch: Atomic replace feature](https://lwn.net/Articles/776290/) — Petr Mladek's v15 patch series introducing atomic replace, mirrored on LWN (January 9, 2019); the cover letter explains the cumulative-patch design and the problems it replaced (patch-ordering dependencies, no way to revert a single stacked patch)
