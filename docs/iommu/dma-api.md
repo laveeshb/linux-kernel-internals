@@ -163,7 +163,7 @@ dma_addr_t iommu_dma_map_phys(struct device *dev, phys_addr_t phys, size_t size,
     if (!iova)
         return DMA_MAPPING_ERROR;
     if (iommu_map(domain, iova, phys, size, prot, GFP_ATOMIC)) {
-        iommu_dma_free_iova(cookie, iova, size, NULL);
+        iommu_dma_free_iova(domain, iova, size, NULL);
         return DMA_MAPPING_ERROR;
     }
 
@@ -208,7 +208,7 @@ phys_addr_t swiotlb_tbl_map_single(struct device *dev,
 
     /* Find a free slot, in whichever pool has room */
     index = swiotlb_find_slots(dev, orig_addr, size, alloc_align_mask, &pool);
-    tlb_addr = slot_addr(pool->start, index);
+    tlb_addr = slot_addr(pool->start, index) + offset;
 
     /* Copy data to bounce buffer for DMA_TO_DEVICE */
     if (!(attrs & DMA_ATTR_SKIP_CPU_SYNC) &&
