@@ -460,6 +460,16 @@ static void myblk_end_io(struct bio *bio)
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/locking/lockdep.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/locking/lockdep.c) — `check_noncircular()` and `check_deadlock()`, the runtime cycle-detection code behind Case 2's splat
+- [mm/kfence/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kfence/core.c) and [lib/Kconfig.kfence](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/Kconfig.kfence) — the sampling-gate implementation and `CONFIG_KFENCE_SAMPLE_INTERVAL` (default 100, in milliseconds), confirming Case 4's "default 100ms sample interval" claim
+- [mm/slub.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) — `get_freepointer()`/`set_freepointer()`, the freelist-pointer mechanics behind the corrupted `bio` freelist in Case 5
+- [mm/kasan/report.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kasan/report.c) — `kasan_report()`, the reporting path behind Case 1 and Case 5's follow-up KASAN report
+- [io_uring/io_uring.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/io_uring/io_uring.c) — `io_file_get_fixed()`, the real fixed-file resolution function Case 3's illustrative bug is modeled on (current source validates through `io_rsrc_node_lookup()` rather than the simplified direct index check shown here)
+
+### Related pages
+
 - [KASAN and KFENCE](kasan-kfence.md) — memory error detector reference
 - [lockdep in Practice](dynamic-debug-lockdep.md) — reading splats, annotating false positives
 - [syzkaller](syzkaller.md) — setting up and using the kernel fuzzer
@@ -467,17 +477,12 @@ static void myblk_end_io(struct bio *bio)
 - [Oops Analysis](oops-analysis.md) — decoding stack traces
 - [KCSAN](kcsan.md) — data race detection
 
-## External references
+### External
 
 - [Kernel documentation: KASAN](https://docs.kernel.org/dev-tools/kasan.html) — shadow memory and use-after-free/out-of-bounds detection, the mechanism behind Case 1's report and Case 5's follow-up KASAN run
 - [Kernel documentation: KFENCE](https://docs.kernel.org/dev-tools/kfence.html) — the sampling guard-page detector, its production-safe overhead, and left/right allocation alignment within a slot, behind Case 4
 - [Kernel documentation: Lockdep Design](https://docs.kernel.org/locking/lockdep-design.html) — the dependency-cycle proof engine that produces the "possible circular locking dependency detected" splat in Case 2
 - [Kernel documentation: kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html) — kexec-based crash-kernel capture and the `crash` utility used to analyze the vmcore in Case 5
 - [Kernel documentation: SLUB debugging](https://docs.kernel.org/admin-guide/mm/slab.html) — `CONFIG_SLUB_DEBUG`, redzoning, and object poisoning — the mechanism that let `crash` trace the corrupted `bio`'s allocation backtrace in Case 5
-- [kernel/locking/lockdep.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/locking/lockdep.c) — `check_noncircular()` and `check_deadlock()`, the runtime cycle-detection code behind Case 2's splat
-- [mm/kfence/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kfence/core.c) and [lib/Kconfig.kfence](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/Kconfig.kfence) — the sampling-gate implementation and `CONFIG_KFENCE_SAMPLE_INTERVAL` (default 100, in milliseconds), confirming Case 4's "default 100ms sample interval" claim
-- [mm/slub.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) — `get_freepointer()`/`set_freepointer()`, the freelist-pointer mechanics behind the corrupted `bio` freelist in Case 5
-- [mm/kasan/report.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kasan/report.c) — `kasan_report()`, the reporting path behind Case 1 and Case 5's follow-up KASAN report
-- [io_uring/io_uring.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/io_uring/io_uring.c) — `io_file_get_fixed()`, the real fixed-file resolution function Case 3's illustrative bug is modeled on (current source validates through `io_rsrc_node_lookup()` rather than the simplified direct index check shown here)
 
 No specific commit hashes, CVE numbers, or kernel-version-tied feature claims appear in this page's prose — the five cases are composite scenarios illustrating real, recurring bug-and-tool patterns (following the same approach as `docs/kernel/war-stories.md`) rather than write-ups of a single named historical incident, so there is nothing of that kind to cite in place. The references above verify the underlying kernel mechanisms — KASAN/KFENCE detection internals, lockdep cycle detection, kdump/crash capture, SLUB debug metadata, and io_uring fixed-file resolution — against current mainline source and documentation.
