@@ -139,8 +139,10 @@ static inline int crypto_memneq(const void *a, const void *b, size_t size)
 }
 
 /* lib/crypto/memneq.c — simplified generic path; the real implementation
- * also has a loop-free 16-byte fast path and an unaligned-access variant */
-noinline unsigned long __crypto_memneq_generic(const void *a, const void *b, size_t size)
+ * also has a loop-free 16-byte fast path and an unaligned-access variant.
+ * This helper is static inline; noinline is on the exported dispatcher,
+ * __crypto_memneq(), which switches on size and calls this or the fast path. */
+static inline unsigned long __crypto_memneq_generic(const void *a, const void *b, size_t size)
 {
     unsigned long neq = 0;
 
@@ -166,9 +168,9 @@ noinline unsigned long __crypto_memneq_generic(const void *a, const void *b, siz
 
 `OPTIMIZER_HIDE_VAR(neq)` after every accumulation step (not a `-Os` compiler flag — there is
 no such override for this file) hides the running accumulator from the optimizer, preventing
-it from proving the loop could exit early. Combined with `noinline` (which prevents the
-surrounding code's optimization context from affecting it), the function maintains its
-constant-time property.
+it from proving the loop could exit early. Combined with the exported dispatcher
+`__crypto_memneq()` being `noinline` (preventing the caller's optimization context from
+affecting the comparison), the function maintains its constant-time property.
 
 ### Fix
 

@@ -220,7 +220,7 @@ cat /proc/crypto | grep -A 10 "name.*gcm"
 # module       : kernel
 # priority     : 400     ← base AES-NI selected (higher-priority AVX/VAES variants need newer CPU support)
 
-# Run the full crypto test suite (requires CONFIG_CRYPTO_TEST)
+# Run the full crypto test suite (requires CONFIG_CRYPTO_BENCHMARK)
 modprobe tcrypt mode=0
 ```
 
