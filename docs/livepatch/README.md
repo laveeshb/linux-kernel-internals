@@ -11,7 +11,7 @@
 | [Cumulative Patches and Atomic Replace](klp-cumulative.md) | Patch stacking, .replace=true, struct klp_ops, disabling and removing patches |
 | [KLP State: Custom Consistency Checks](klp-state.md) | klp_state API, transition callbacks, pre/post patch hooks, cumulative state inheritance |
 | [kexec](kexec.md) | kexec_load, machine_kexec, kdump integration, fast reboot |
-| [War Stories](war-stories.md) | Stuck transitions, shadow variable leaks, compat syscall misses, inline functions |
+| [War Stories](war-stories.md) | Stuck transitions, shadow variable leaks, compat syscall misses, `old_sympos` ambiguity, missing `.replace` |
 
 ## Quick reference
 
@@ -26,7 +26,7 @@ cat /sys/kernel/livepatch/*/enabled
 # Apply a live patch (kernel module)
 insmod mypatch.ko
 cat /sys/kernel/livepatch/mypatch/enabled
-# 1 = active and consistent
+# 1 = enabled (check transition=0 for fully consistent)
 
 # Disable a live patch
 echo 0 > /sys/kernel/livepatch/mypatch/enabled

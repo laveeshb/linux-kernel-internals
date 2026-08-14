@@ -9,7 +9,8 @@
 ```
 Normal boot:      BIOS/UEFI → GRUB → kernel
 kexec boot:       running kernel → kexec_exec → new kernel
-                  (BIOS/POST skipped → 5-10 second faster reboot)
+                  (BIOS/POST skipped → faster reboot, savings vary
+                   widely by firmware and hardware)
 ```
 
 Primary uses:
@@ -29,11 +30,16 @@ Primary uses:
  *   flags:      KEXEC_ON_CRASH=for kdump, KEXEC_ARCH=arch, etc.
  */
 
+/* include/linux/kexec.h */
 struct kexec_segment {
-    const void  __user *buf;   /* userspace buffer with segment data */
-    size_t               bufsz; /* size of buffer */
-    const void          *mem;  /* target physical address */
-    size_t               memsz; /* size at target */
+    /* ->buf for kexec_load() (userspace ptr); ->kbuf for kexec_file_load() (kernel ptr) */
+    union {
+        void __user *buf;
+        void        *kbuf;
+    };
+    size_t        bufsz;  /* size of buffer */
+    unsigned long mem;    /* target physical address */
+    size_t        memsz;  /* size at target */
 };
 ```
 
@@ -50,7 +56,7 @@ int kexec_file_load(int kernel_fd,      /* open("/boot/vmlinuz", O_RDONLY) */
                      unsigned long flags);
 ```
 
-If `CONFIG_KEXEC_VERIFY_SIG=y`, the kernel image must be signed with a trusted key — useful for Secure Boot compatibility.
+If `CONFIG_KEXEC_SIG=y`, the kernel image must be signed with a trusted key — useful for Secure Boot compatibility.
 
 ## Machine kexec: the jump
 
@@ -60,33 +66,40 @@ When `kexec -e` is run, `machine_kexec()` performs the actual handoff:
 /* arch/x86/kernel/machine_kexec_64.c */
 void machine_kexec(struct kimage *image)
 {
-    unsigned long page_list;
-    unsigned long reboot_code_buffer_phys;
-    void *reboot_code_buffer;
+    unsigned long reloc_start = (unsigned long)__relocate_kernel_start;
+    relocate_kernel_fn *relocate_kernel_ptr;
+    unsigned int relocate_kernel_flags;
+    void *control_page;
 
-    /* Disable interrupts */
+    /* By this point kernel_kexec() has already parked every other CPU
+       via machine_shutdown()'s stop_other_cpus() (or, on the
+       CONFIG_KEXEC_JUMP preserve-context path, suspend_disable_secondary_cpus());
+       this function does not stop CPUs itself. */
+
+    /* Interrupts aren't acceptable while we reboot */
     local_irq_disable();
+    hw_breakpoint_disable();
+    cet_disable();
 
-    /* Stop all other CPUs */
-    native_smp_send_stop();
+    control_page = page_address(image->control_code_page);
 
-    /* Copy identity-mapped page tables (kexec needs to access
-       the new kernel's pages which are at physical addresses) */
-    page_list = image->head & PAGE_MASK;
+    /* relocate_kernel_ptr points at the relocation trampoline
+       copied into control_page */
+    relocate_kernel_ptr = control_page + ((unsigned long)relocate_kernel - reloc_start);
 
-    /* Jump to the relocation trampoline */
-    reboot_code_buffer = page_address(image->control_code_page);
-    relocate_kernel((unsigned long)page_list,
-                     reboot_code_buffer,
-                     image->start,
-                     image->preserve_context,
-                     image->arch.pgtable);
+    relocate_kernel_flags = 0;
+    if (image->preserve_context)
+        relocate_kernel_flags |= RELOC_KERNEL_PRESERVE_CONTEXT;
+
+    load_segments();
+
+    /* Jump to the relocation trampoline: copies new kernel segments
+       to their final locations, then jumps to the new kernel entry */
+    image->start = relocate_kernel_ptr((unsigned long)image->head,
+                                        virt_to_phys(control_page),
+                                        image->start,
+                                        relocate_kernel_flags);
 }
-
-/* relocate_kernel (assembly): */
-/*   1. Switch to identity-mapped page tables */
-/*   2. Copy new kernel segments to their final locations */
-/*   3. Jump to new kernel entry point */
 ```
 
 ## kimage: the loaded kernel
@@ -110,9 +123,13 @@ struct kimage {
     struct list_head dest_pages;     /* pages for new kernel */
     struct list_head unusable_pages; /* pages that can't be used */
 
+    /* Flags to indicate special processing */
+    unsigned int type : 1;        /* KEXEC_TYPE_DEFAULT or KEXEC_TYPE_CRASH */
+    unsigned int preserve_context : 1;
+    unsigned int file_mode : 1;   /* set if loaded via kexec_file_load() */
+    unsigned int no_cma : 1;
+
     /* ... */
-    unsigned long    flags;
-    int              type;           /* KEXEC_TYPE_DEFAULT or KEXEC_TYPE_CRASH */
 };
 ```
 
@@ -193,20 +210,50 @@ int kernel_kexec(void)
 {
     int error = 0;
 
-    /* Execute pre-kexec notifiers */
-    error = blocking_notifier_call_chain(&reboot_notifier_list, SYS_RESTART, NULL);
+    if (!kexec_trylock())
+        return -EBUSY;
+    if (!kexec_image) {
+        error = -EINVAL;
+        goto Unlock;
+    }
 
-    kernel_restart_prepare(NULL);
+#ifdef CONFIG_KEXEC_JUMP
+    if (kexec_image->preserve_context) {
+        /* preserve-context ("kexec jump") path: reuses the same
+           device-suspend callbacks as hibernation */
+        pm_prepare_console();
+        freeze_processes();
+        console_suspend_all();
+        dpm_suspend_start(PMSG_FREEZE);
+        dpm_suspend_end(PMSG_FREEZE);
+        suspend_disable_secondary_cpus();
+        local_irq_disable();
+        syscore_suspend();
+    } else
+#endif
+    {
+        kexec_in_progress = true;
+        /* kernel_restart_prepare() runs the reboot notifier chain,
+           sets system_state, disables usermodehelpers, and shuts
+           down devices */
+        kernel_restart_prepare("kexec reboot");
+        migrate_to_reboot_cpu();
+        syscore_shutdown();
+        cpu_hotplug_enable();
+        machine_shutdown();
+    }
 
-    /* Disable SMP: all other CPUs stopped */
-    migrate_to_reboot_cpu();
-    syscore_shutdown();
-
-    /* Jump to new kernel */
+    kmsg_dump(KMSG_DUMP_SHUTDOWN);
+    /* Jump to new kernel; does not return on success */
     machine_kexec(kexec_image);
 
-    /* Should not return */
-    BUG();
+#ifdef CONFIG_KEXEC_JUMP
+    /* Only reached if preserve_context and the "jump" kernel later
+       hands control back (mirror-image resume of the block above) */
+#endif
+
+ Unlock:
+    kexec_unlock();
     return error;
 }
 ```
@@ -228,27 +275,54 @@ if (efi_enabled(EFI_RUNTIME_SERVICES)) {
 grep KEXEC /boot/config-$(uname -r)
 # CONFIG_KEXEC=y
 # CONFIG_KEXEC_FILE=y
-# CONFIG_KEXEC_VERIFY_SIG=y   (optional)
+# CONFIG_KEXEC_SIG=y   (optional)
 
 # Memory reserved for kdump
 cat /proc/iomem | grep -i crash
 # 100000000-10fffffff : Crash kernel
 
-# Boot source detection: was this a kexec boot?
+# kexec_loaded reports whether an image is currently loaded and
+# ready to execute, not whether the running kernel itself was
+# booted via kexec
 cat /sys/kernel/kexec_loaded
-# After kexec reboot: bootloader may set ACPI table flag
 dmesg | grep -i kexec
 
-# Timing: kexec vs cold boot
-time systemctl kexec   # ~5 seconds
+# Timing: kexec vs cold boot. kexec skips BIOS/UEFI POST and the
+# bootloader stage, so it's typically faster than a full reboot —
+# but the actual savings (anywhere from roughly one second to tens
+# of seconds) depend heavily on firmware POST time and CPU count,
+# so measure on your own hardware rather than assuming a fixed number
+time systemctl kexec
 # vs
-time reboot            # ~60 seconds (BIOS POST)
+time reboot
 ```
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/kexec.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kexec.c) — `SYSCALL_DEFINE4(kexec_load, ...)`: the segment-list-based load syscall
+- [kernel/kexec_file.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kexec_file.c) — `SYSCALL_DEFINE5(kexec_file_load, ...)` and the `CONFIG_KEXEC_SIG` signature-verification path
+- [kernel/kexec_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kexec_core.c) — `kernel_kexec()`'s shutdown sequence and the `loaded`/`crash_loaded` sysfs attributes exposed as `/sys/kernel/kexec_loaded` and `/sys/kernel/kexec_crash_loaded`
+- [include/linux/kexec.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/kexec.h) — `struct kimage` and `struct kexec_segment` definitions
+- [arch/x86/kernel/machine_kexec_64.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/machine_kexec_64.c) — `machine_kexec()`: the actual handoff to the new kernel on x86-64
+
+### Man pages
+
+- [kexec_load(2)](https://man7.org/linux/man-pages/man2/kexec_load.2.html) — covers both the `kexec_load()` and `kexec_file_load()` syscalls
+- [kexec(8)](https://man7.org/linux/man-pages/man8/kexec.8.html) — the userspace `kexec-tools` command: `-l`/`-p`/`-e`/`-u` options
+
+### Related pages
+
 - [kdump and crash](../debugging/kdump.md) — crash dump collection using kexec
 - [Kernel Live Patching](klp.md) — avoiding reboots entirely
-- [Power Management: System Suspend](../power/suspend.md) — PM notifiers in kexec path
-- `kernel/kexec_core.c`, `arch/x86/kernel/machine_kexec_64.c` — kexec core
-- `man 8 kexec` — userspace kexec tool
+- [Power Management: System Suspend](../power/suspend.md) — the `freeze_processes()`/`dpm_suspend_start()` device-suspend sequence that `CONFIG_KEXEC_JUMP`'s preserve-context path reuses from the hibernation code path
+
+### LWN articles
+
+- [kexec: A new system call to allow in kernel loading](https://lwn.net/Articles/574400/) — the original RFC introducing `kexec_file_load()` with its kernel-fd/initrd-fd design
+- [Reworking kexec for signatures](https://lwn.net/Articles/603116/) — why `kexec_file_load()` exists: restricting kexec to signed kernels, and its relationship to Secure Boot
+
+### External
+
+- [Kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html) — official kdump setup guide covering `crashkernel=` sizing and the `irqpoll`/`nr_cpus=1`/`reset_devices` boot options used when loading the capture kernel

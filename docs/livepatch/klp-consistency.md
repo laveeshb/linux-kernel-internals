@@ -12,8 +12,8 @@ in an inconsistent state.
 
 The KLP consistency model solves this by tracking every task in the system and
 only considering the patch fully active once every task has reached a safe
-point: returned from the old function, passed through a schedule point, or
-entered from userspace.
+point: returned from the old function, entered a freezable sleep, or reached
+the kernel's exit-to-userspace path.
 
 ## Per-task patch state
 
@@ -22,20 +22,23 @@ Each task carries a `patch_state` field in `struct task_struct`
 of three values, defined in `include/linux/livepatch.h`:
 
 ```c
-/* include/linux/livepatch.h */
-#define KLP_UNDEFINED  -1   /* task hasn't been evaluated yet */
-#define KLP_UNPATCHED   0   /* task should call the original function */
-#define KLP_PATCHED     1   /* task should call the patched function */
+/* include/linux/livepatch.h — "task patch states" */
+#define KLP_TRANSITION_IDLE       -1   /* no transition in progress */
+#define KLP_TRANSITION_UNPATCHED   0   /* task should call the original function */
+#define KLP_TRANSITION_PATCHED     1   /* task should call the patched function */
 ```
 
-At the start of a patching transition every task is `KLP_UNDEFINED`. The
-ftrace handler in `kernel/livepatch/patch.c` treats `KLP_UNDEFINED` the same
-as `KLP_UNPATCHED` — the task gets the old behavior until explicitly
-transitioned.
+`KLP_TRANSITION_IDLE` is the resting value when no transition is in progress.
+`klp_init_transition()` assigns every task's real starting state —
+`KLP_TRANSITION_UNPATCHED` or `KLP_TRANSITION_PATCHED`, whichever isn't the
+target — before a transition becomes visible, so no live task is ever actually
+observed at `KLP_TRANSITION_IDLE` mid-transition; the ftrace handler in
+`kernel/livepatch/patch.c` even asserts this with `WARN_ON_ONCE(patch_state ==
+KLP_TRANSITION_IDLE)`.
 
 The transition direction can be either forward (enabling a patch:
-`KLP_UNPATCHED` → `KLP_PATCHED`) or backward (disabling a patch:
-`KLP_PATCHED` → `KLP_UNPATCHED`).
+`KLP_TRANSITION_UNPATCHED` → `KLP_TRANSITION_PATCHED`) or backward (disabling
+a patch: `KLP_TRANSITION_PATCHED` → `KLP_TRANSITION_UNPATCHED`).
 
 ### How klp_update_patch_state() works
 
@@ -61,90 +64,160 @@ void klp_update_patch_state(struct task_struct *task)
 ```
 
 The global `klp_target_state` is set by the transition machinery to
-`KLP_PATCHED` when enabling or `KLP_UNPATCHED` when disabling. Each time a
-task is scheduled out (`finish_task_switch`) the scheduler calls
-`klp_update_patch_state()` for that task.
+`KLP_TRANSITION_PATCHED` when enabling or `KLP_TRANSITION_UNPATCHED` when
+disabling. `klp_update_patch_state()` is called for `current` from the
+kernel-exit-to-userspace path (`__exit_to_user_mode_loop()` in
+`kernel/entry/common.c`) whenever `TIF_PATCH_PENDING` is set, and directly on
+every task by `klp_force_transition()` for a forced transition.
 
 ## Stack checking: klp_check_stack()
 
-The scheduler path (`finish_task_switch` → `klp_update_patch_state`) does **not** run a stack check. It fires whenever `TIF_PATCH_PENDING` is set, unconditionally. The scheduler path is always safe because a task being scheduled out cannot currently be executing the old function's body.
+`klp_update_patch_state()` does **not** run a stack check — it's an
+unconditional flag-check-and-clear. That's safe on the kernel-exit-to-userspace
+path because a task that's about to return to userspace cannot be mid-execution
+inside a patched kernel function's body.
 
-The stack check (`klp_check_stack()`) only runs in the workqueue path (`klp_try_complete_transition()`), not in the scheduler fast path. Before a task can be transitioned via the workqueue path, the kernel must verify that the old (unpatched) function is not on that task's call stack. If it is, the task is mid-execution inside the old function and cannot be safely transitioned yet.
+Two other paths *do* run a stack check, both funneling through
+`klp_check_stack()`:
+
+- **The workqueue path** (`klp_try_complete_transition()`, described below):
+  runs roughly once a second and walks every task in the system, including
+  ones that are sleeping or blocked.
+- **The scheduler path**: while a transition is in progress, `__schedule()`
+  calls `klp_sched_try_switch(prev)` (`kernel/sched/core.c`), which — gated by
+  a static key that `klp_resched_enable()`/`klp_resched_disable()` toggle for
+  the duration of the transition — calls `klp_try_switch_task(current)` on
+  context switches where the outgoing task is entering a freezable sleep
+  state (`TASK_FREEZABLE`), not on every context switch. The point of this
+  path is kernel threads: a kthread never returns to userspace, so the
+  kernel-exit-to-userspace path can never catch it, no matter how often it
+  runs. Many kthreads do, however, park in a freezable sleep between work
+  items — and `TASK_FREEZABLE` is precisely the "sleeping in a known-safe
+  state" property the freezer already depends on — so the scheduler hook
+  switches them there instead. Note the inverse case is *not* covered: a
+  genuinely CPU-bound kthread that never sleeps reaches neither path, and the
+  periodic workqueue check returns `-EBUSY` for any task that is actually
+  on-CPU, so such a task stalls the transition until it sleeps or the
+  transition is forced.
+
+The comment above `klp_sched_try_switch_key` in `kernel/livepatch/transition.c`
+still describes the static key as something that "helps CPU-bound kthreads get
+patched". That wording predates commit
+[`676e8cf70cb0`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=676e8cf70cb0)
+("sched,livepatch: Untangle cond_resched() and live-patching", 2025-05-09),
+which moved the hook off `cond_resched()` — where a busy loop that yielded
+really could be caught — and onto `TASK_FREEZABLE` sleeps in `__schedule()`.
+Read the `TASK_FREEZABLE` test in `klp_sched_try_switch()`
+(`include/linux/livepatch_sched.h`), not the comment.
+
+Either way, before a task can be switched via a stack-checking path, the
+kernel must verify that the old (unpatched) function — or, if a patch is
+already stacked on top of another, the previously patched function — is not
+on that task's call stack. If it is, the task is mid-execution inside that
+function and cannot be safely transitioned yet.
 
 ```c
 /* kernel/livepatch/transition.c */
-static int klp_check_stack_func(struct klp_func *func,
-                                unsigned long *entries,
+static int klp_check_stack_func(struct klp_func *func, unsigned long *entries,
                                 unsigned int nr_entries)
 {
-    unsigned long func_addr, func_size;
-    const char *func_name;
+    unsigned long func_addr, func_size, address;
     struct klp_ops *ops;
     int i;
 
-    for (i = 0; i < nr_entries; i++) {
-        if (klp_target_state == KLP_UNPATCHED) {
-            /*
-             * Check for the new (patched) function on the stack:
-             * if found, can't unpatch yet.
-             */
-            func_addr = (unsigned long)func->new_func;
-            func_size = func->new_size;
-        } else {
-            /*
-             * Check for the old (original) function on the stack:
-             * if found, can't patch yet.
-             */
-            ops = klp_find_ops(func->old_func);
-            func_addr = func->old_addr;
+    if (klp_target_state == KLP_TRANSITION_UNPATCHED) {
+        /*
+         * Check for the to-be-unpatched function
+         * (the func itself).
+         */
+        func_addr = (unsigned long)func->new_func;
+        func_size = func->new_size;
+    } else {
+        /*
+         * Check for the to-be-patched function
+         * (the previous func).
+         */
+        ops = klp_find_ops(func->old_func);
+
+        if (list_is_singular(&ops->func_stack)) {
+            /* original function */
+            func_addr = (unsigned long)func->old_func;
             func_size = func->old_size;
+        } else {
+            /* previously patched function */
+            struct klp_func *prev;
+
+            prev = list_next_entry(func, stack_node);
+            func_addr = (unsigned long)prev->new_func;
+            func_size = prev->new_size;
         }
-        if (entries[i] >= func_addr &&
-            entries[i] < func_addr + func_size)
+    }
+
+    for (i = 0; i < nr_entries; i++) {
+        address = entries[i];
+
+        if (address >= func_addr && address < func_addr + func_size)
             return -EAGAIN;
     }
     return 0;
 }
 ```
 
-The function receives the full stack frame array captured by `stack_trace_save_tsk()`, not a single address.
+Note the patch-stacking-aware branch: when checking whether it's safe to
+*patch* (not unpatch), the function doesn't just look for `func->old_func` —
+if another patch already replaced this function (`func_stack` has more than
+one entry), it looks for the *previously patched* function
+(`list_next_entry(func, stack_node)`'s `new_func`), since that's what's
+actually running on the stack right now. See "Patch stacking", below.
+
+The function receives the full stack frame array captured by
+`stack_trace_save_tsk_reliable()`, not a single address.
 
 ```c
 /* kernel/livepatch/transition.c */
-static int klp_check_stack(struct task_struct *task,
-                            const char **oldname)
+#define MAX_STACK_ENTRIES  100
+static DEFINE_PER_CPU(unsigned long[MAX_STACK_ENTRIES], klp_stack_entries);
+
+static int klp_check_stack(struct task_struct *task, const char **oldname)
 {
-    unsigned long entries[KLP_MAX_STACK_ENTRIES];
-    struct klp_patch *patch;
+    unsigned long *entries = this_cpu_ptr(klp_stack_entries);
     struct klp_object *obj;
     struct klp_func *func;
-    int nr_entries, ret;
+    int ret, nr_entries;
 
-    nr_entries = stack_trace_save_tsk(task, entries,
-                                       ARRAY_SIZE(entries), 0);
+    ret = stack_trace_save_tsk_reliable(task, entries, MAX_STACK_ENTRIES);
+    if (ret < 0)
+        return -EINVAL;
+    nr_entries = ret;
 
-    klp_for_each_patch(patch) {
-        if (!patch->enabled)
+    klp_for_each_object(klp_transition_patch, obj) {
+        if (!obj->patched)
             continue;
-        klp_for_each_object(patch, obj) {
-            if (!klp_is_object_loaded(obj))
-                continue;
-            klp_for_each_func(obj, func) {
-                ret = klp_check_stack_func(func, entries, nr_entries);
-                if (ret) {
-                    *oldname = func->old_name;
-                    return -EAGAIN;
-                }
+        klp_for_each_func(obj, func) {
+            ret = klp_check_stack_func(func, entries, nr_entries);
+            if (ret) {
+                *oldname = func->old_name;
+                return -EADDRINUSE;
             }
         }
     }
+
     return 0;
 }
 ```
 
-If `klp_check_stack()` returns `-EAGAIN`, the task is skipped for this
-transition round. The transition machinery will retry on the next workqueue
-invocation.
+`klp_check_stack()` only walks the single patch currently transitioning
+(`klp_transition_patch`, via `klp_for_each_object()`) — not every enabled
+patch — since only one patch can be mid-transition at a time. The stack
+buffer itself is a per-CPU array (`klp_stack_entries`, sized by the private
+`MAX_STACK_ENTRIES` `#define`, not a `KLP_MAX_STACK_ENTRIES` constant),
+protected by having preemption disabled.
+
+`klp_check_stack()` returns `-EINVAL` if the stack trace itself is
+unreliable (`stack_trace_save_tsk_reliable()` failed) and `-EADDRINUSE` if
+the stack unwound cleanly but a to-be-patched or to-be-unpatched function was
+found on it. Either way the task is skipped for this transition round; the
+transition machinery will retry on the next workqueue invocation.
 
 ## The transition workqueue
 
@@ -165,30 +238,40 @@ static void klp_transition_work_fn(struct work_struct *work)
 static DECLARE_DELAYED_WORK(klp_transition_work, klp_transition_work_fn);
 ```
 
-The actual call chain in `klp_try_complete_transition()` is: `klp_try_complete_transition()` → `klp_try_switch_task(task)` → `klp_check_and_switch_task()`. The `klp_check_and_switch_task()` function (used via `task_call_func()` for non-current tasks) runs `klp_check_stack()` and, if it returns 0, calls `klp_update_patch_state()`. `klp_update_patch_state()` is never called directly from the main loop of `klp_try_complete_transition()`.
+The actual call chain in `klp_try_complete_transition()` is: `klp_try_complete_transition()` → `klp_try_switch_task(task)` → `klp_check_and_switch_task()`. The `klp_check_and_switch_task()` function (used via `task_call_func()` for non-current tasks) runs `klp_check_stack()` and, if it returns 0, clears `TIF_PATCH_PENDING` and sets `task->patch_state = klp_target_state` directly. `klp_update_patch_state()` — the flag-check-and-clear function from the previous section — is never called from the main loop of `klp_try_complete_transition()`; that function is reserved for the kernel-exit-to-userspace path and `klp_force_transition()`.
 
 ```c
 /* kernel/livepatch/transition.c — simplified structure */
-static void klp_try_complete_transition(void)
+void klp_try_complete_transition(void)
 {
-    /* ... */
-    for_each_process_thread(g, task) {
-        if (!klp_patch_pending(task))
-            continue;
-        /*
-         * klp_try_switch_task uses task_call_func to safely
-         * run klp_check_and_switch_task on the target task.
-         */
-        if (klp_try_switch_task(task)) {
-            /* task still has old func on stack — not done yet */
-            goto err;
-        }
+    unsigned int cpu;
+    struct task_struct *g, *task;
+    bool complete = true;
+
+    /*
+     * klp_try_switch_task uses task_call_func to safely run
+     * klp_check_and_switch_task on the target task. It returns
+     * true on success (task is now at klp_target_state).
+     */
+    for_each_process_thread(g, task)
+        if (!klp_try_switch_task(task))
+            complete = false;
+
+    /* idle ("swapper") tasks are checked the same way */
+    for_each_possible_cpu(cpu) {
+        task = idle_task(cpu);
+        if (!klp_try_switch_task(task))
+            complete = false;
     }
+
+    if (!complete) {
+        /* some tasks weren't switched yet — try again later */
+        schedule_delayed_work(&klp_transition_work, round_jiffies_relative(HZ));
+        return;
+    }
+
     /* all tasks transitioned */
     klp_complete_transition();
-    return;
-err:
-    schedule_delayed_work(&klp_transition_work, round_jiffies_relative(HZ));
 }
 ```
 
@@ -203,8 +286,9 @@ The periodic re-check runs approximately every second (one HZ).
 
 Neither path can wake a task in `TASK_UNINTERRUPTIBLE` (D state). D-state tasks must leave that state naturally before the transition can include them. This is why livepatch transitions can stall for an extended period — the `force` mechanism exists precisely for situations where a D-state task cannot be transitioned.
 
-`klp_send_signals()` is called from `klp_try_complete_transition()` when the
-transition has been in progress for more than a few seconds.
+`klp_send_signals()` is called from `klp_try_complete_transition()` roughly
+every 15 seconds (every `SIGNALS_TIMEOUT`th incomplete retry round, at the
+~1-second-per-round cadence described above) once the transition has stalled.
 
 ## Patch stacking: func_stack and struct klp_ops
 
@@ -213,7 +297,7 @@ function, the kernel must know which replacement is currently active. This is
 managed through `struct klp_ops` and its `func_stack`:
 
 ```c
-/* kernel/livepatch/patch.c */
+/* kernel/livepatch/patch.h */
 struct klp_ops {
     struct list_head  node;        /* entry in klp_ops list */
     struct list_head  func_stack;  /* stack of klp_func — newest at head */
@@ -257,13 +341,50 @@ echo 1 > /sys/kernel/livepatch/<patch>/force
 
 Forcing a transition is **unsafe**: any task that was executing inside the old
 function at the moment of the force will continue executing the old function's
-code, but the patch state is set to `KLP_PATCHED`. If the new function changes
-data layouts or assumptions, those tasks can access inconsistent state.
+code, but the patch state is set to `KLP_TRANSITION_PATCHED`. If the new
+function changes data layouts or assumptions, those tasks can access
+inconsistent state.
 
-After a forced transition the `forced` field of `struct klp_patch` is set to
-`true`. The `/sys/kernel/livepatch/<patch>/forced` sysfs file reflects this.
+Which patch gets flagged afterwards is narrower than it sounds.
+`klp_force_transition()` sets the `forced` field of `struct klp_patch` like
+this:
 
-`TAINT_LIVEPATCH` is applied at **module load time** for every livepatch module — not conditionally on forced transitions. Every live patch application taints the kernel with `TAINT_LIVEPATCH` (bit 15). A separate taint (`TAINT_FORCED_MODULE`) may be added on forced transitions.
+```c
+/* kernel/livepatch/transition.c — tail of klp_force_transition() */
+/* Set forced flag for patches being removed. */
+if (klp_target_state == KLP_TRANSITION_UNPATCHED)
+    klp_transition_patch->forced = true;
+else if (klp_transition_patch->replace) {
+    klp_for_each_patch(patch) {
+        if (patch != klp_transition_patch)
+            patch->forced = true;
+    }
+}
+```
+
+So there are three cases, and only two of them set the flag at all:
+
+- Forcing a **disable** (`klp_target_state == KLP_TRANSITION_UNPATCHED`) sets
+  `forced` on the patch being disabled — it can never be unloaded.
+- Forcing an **enable of a `.replace` (cumulative) patch** sets `forced` on
+  every *other* patch — the ones this patch is replacing — and **not** on the
+  patch being force-enabled. Those replaced modules become permanently
+  unloadable; the new one does not.
+- Forcing a plain **enable** of a non-`replace` patch — exactly the scenario
+  described above, a kthread looping forever inside the old function while a
+  forward transition waits — sets `forced` on **nothing**. The transition
+  completes unsafely, but no patch is marked, and the force leaves no
+  `forced`-flag trace at all.
+
+Where the flag *is* set it is internal-only — there is no sysfs file to read
+it back. Its only externally visible effect is that the flagged patch's module
+can never be unloaded: `klp_free_patch_finish()` (`kernel/livepatch/core.c`)
+ends with `if (!patch->forced) module_put(patch->mod);`, so a forced patch
+never gives back the module reference it took, and its refcount never reaches
+zero. Note that this consequence attaches to whichever module the rule above
+flagged — which is not necessarily the module whose `force` file was written.
+
+`TAINT_LIVEPATCH` is applied at **module load time** for every livepatch module — not conditionally on forced transitions. Every live patch application taints the kernel with `TAINT_LIVEPATCH` (bit 15). `klp_force_transition()` itself does not add any additional taint — `TAINT_FORCED_MODULE` is unrelated; it's set when a module is force-loaded with `insmod -f`, not when a livepatch transition is forced.
 
 Only use forced transitions as a last resort after confirming — by reading
 `/proc/<pid>/stack` — that the affected task is not in a call path the new
@@ -277,31 +398,56 @@ Once every task has been transitioned, `klp_complete_transition()` is called:
 /* kernel/livepatch/transition.c */
 static void klp_complete_transition(void)
 {
-    struct klp_patch *patch;
     struct klp_object *obj;
     struct klp_func *func;
     struct task_struct *g, *task;
+    unsigned int cpu;
 
-    /* Clear per-task transition state */
-    for_each_process_thread(g, task)
-        task->patch_state = KLP_UNDEFINED;
+    /* For cumulative (replace) patches: unpatch all replaced patches.
+     * This removes their funcs from the func_stack. */
+    if (klp_transition_patch->replace && klp_target_state == KLP_TRANSITION_PATCHED) {
+        klp_unpatch_replaced_patches(klp_transition_patch);
+        klp_discard_nops(klp_transition_patch);
+    }
+
+    if (klp_target_state == KLP_TRANSITION_UNPATCHED) {
+        /*
+         * All tasks have transitioned to KLP_TRANSITION_UNPATCHED so we
+         * can now remove the new functions from the func_stack.
+         */
+        klp_unpatch_objects(klp_transition_patch);
+        klp_synchronize_transition();
+    }
 
     /* Clear per-func transition flag */
     klp_for_each_object(klp_transition_patch, obj)
         klp_for_each_func(obj, func)
             func->transition = false;
 
-    /* For cumulative (replace) patches: unpatch all replaced patches.
-     * This removes their funcs from the func_stack. */
-    if (klp_transition_patch->replace) {
-        klp_for_each_patch(patch) {
-            if (patch == klp_transition_patch)
-                continue;
-            if (patch->enabled)
-                klp_unpatch_objects(patch);
-        }
+    /* Prevent klp_ftrace_handler() from seeing KLP_TRANSITION_IDLE state */
+    if (klp_target_state == KLP_TRANSITION_PATCHED)
+        klp_synchronize_transition();
+
+    /* Clear per-task transition state, including idle tasks */
+    read_lock(&tasklist_lock);
+    for_each_process_thread(g, task)
+        task->patch_state = KLP_TRANSITION_IDLE;
+    read_unlock(&tasklist_lock);
+
+    for_each_possible_cpu(cpu)
+        idle_task(cpu)->patch_state = KLP_TRANSITION_IDLE;
+
+    /* Run any post-(un)patch callbacks now that the transition is done */
+    klp_for_each_object(klp_transition_patch, obj) {
+        if (!klp_is_object_loaded(obj))
+            continue;
+        if (klp_target_state == KLP_TRANSITION_PATCHED)
+            klp_post_patch_callback(obj);
+        else if (klp_target_state == KLP_TRANSITION_UNPATCHED)
+            klp_post_unpatch_callback(obj);
     }
 
+    klp_target_state = KLP_TRANSITION_IDLE;
     klp_transition_patch = NULL;
 }
 ```
@@ -316,9 +462,12 @@ After `klp_complete_transition()` returns, the `transition` sysfs file reads
 cat /sys/kernel/livepatch/<patch>/transition
 # 1 = in progress, 0 = complete
 
-# Was the transition forced?
-cat /sys/kernel/livepatch/<patch>/forced
-# 0 = normal, 1 = forced
+# Whether a transition was ever forced is internal-only (struct klp_patch.forced)
+# and not exposed via sysfs. The only observable side effect is that `rmmod` is
+# permanently refused for whichever module got flagged — and that is not always
+# the one you forced: forcing a disable flags the patch being disabled, forcing
+# an enable of a .replace patch flags the patches it replaced (not itself), and
+# forcing a plain non-replace enable flags nothing at all.
 
 # Which tasks are blocking the transition?
 # (tasks that have the old function on their stack)
@@ -339,35 +488,60 @@ dmesg | grep livepatch
 ## Transition state machine
 
 ```
-klp_enable_patch()
+klp_enable_patch()  →  __klp_enable_patch()
        │
        ▼
-  Set klp_target_state = KLP_PATCHED
-  Set func->transition = true
-  Queue klp_transition_work
+  klp_init_transition():  klp_target_state = KLP_TRANSITION_PATCHED
+                          func->transition = true
+  klp_start_transition(): set TIF_PATCH_PENDING on every task
+  patch->enabled = true   ← set HERE, at the start of the transition,
+                            not when it completes
        │
-       ▼ (periodic, every ~1s)
+       ▼ (first call is immediate; then periodic, every ~1s)
   klp_try_complete_transition()
        │
-       ├── for each task:
-       │     klp_check_stack() → EAGAIN?
-       │       yes: skip (try again next round)
-       │       no:  klp_update_patch_state() → KLP_PATCHED
+       ├── for each task (and each idle task):
+       │     klp_try_switch_task() → klp_check_and_switch_task()
+       │       task unsafe to switch (-EBUSY: running; -EINVAL / -EADDRINUSE from klp_check_stack())?
+       │         yes: skip (try again next round)
+       │         no:  task->patch_state = KLP_TRANSITION_PATCHED
        │
-       ├── all tasks KLP_PATCHED?
+       ├── all tasks KLP_TRANSITION_PATCHED?
        │     no:  klp_send_signals(), reschedule work
        │     yes: klp_complete_transition()
        │             │
        │             ▼
        │         func->transition = false
-       │         patch->enabled = true
+       │         task->patch_state = KLP_TRANSITION_IDLE (all tasks)
+       │         klp_target_state = KLP_TRANSITION_IDLE
+       │         klp_transition_patch = NULL
        │         transition sysfs = 0
+       │         (enabled was already 1 throughout — it is not
+       │          touched by klp_complete_transition())
 ```
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/livepatch/transition.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/transition.c) — `klp_check_stack()`, `klp_try_complete_transition()`, `klp_update_patch_state()`, `klp_force_transition()`, and the rest of the transition state machine
+- [kernel/livepatch/patch.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.c) — `klp_ftrace_handler()`, which walks `func_stack` to pick the active replacement, plus `klp_patch_func()`/`klp_unpatch_func()`
+- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — the `/sys/kernel/livepatch/<patch>/{transition,force}` sysfs attributes
+- [include/linux/livepatch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch.h) — `struct klp_func`, `struct klp_object`, `struct klp_patch`, and the transition-state constants
+
+### Related pages
+
 - [Kernel Live Patching](klp.md) — struct klp_func/klp_patch, ftrace redirection, shadow variables
 - [Cumulative Patches and Atomic Replace](klp-cumulative.md) — patch stacking and .replace=true
+- [KLP State: Custom Consistency Checks](klp-state.md) — the `klp_state` API for changes stack scanning alone can't validate
 - [ftrace](../tracing/ftrace.md) — the ftrace hook that KLP uses
-- `kernel/livepatch/transition.c` — full transition implementation
-- `Documentation/livepatch/livepatch.rst` — upstream documentation
+
+### LWN articles
+
+- [LWN: livepatch: consistency model](https://lwn.net/Articles/632582/) — the original 2015 design writeup for the per-task, stack-checking transition model implemented in `kernel/livepatch/transition.c`
+- [LWN: An update on live kernel patching](https://lwn.net/Articles/734765/) — 2017 status report covering the hybrid lazy-migration/stack-checking model and why the ORC unwinder was needed for reliable stack checks
+
+### External
+
+- [Kernel docs: Livepatch](https://docs.kernel.org/livepatch/livepatch.html) — upstream description of the consistency model, the `force` and `transition` sysfs files, and patch stacking via `func_stack`
+- [Kernel docs: Reliable Stacktrace](https://docs.kernel.org/livepatch/reliable-stacktrace.html) — why livepatch requires a reliable (not best-effort) stack unwinder for the stack-checking path

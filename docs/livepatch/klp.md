@@ -17,7 +17,7 @@ Before patch:           After patch:
                                         └─► executes patch
 ```
 
-The original function's first bytes are never modified. The ftrace hook at function entry branches to the replacement.
+The original function's body is never rewritten and no jump is inserted into it. KLP reuses the ftrace call site the compiler already emitted at function entry (via `-mfentry`, or `-fpatchable-function-entry` on arm64), and `klp_ftrace_handler()` redirects execution by changing the saved instruction pointer, not by patching code.
 
 ## Architecture
 
@@ -26,38 +26,57 @@ The original function's first bytes are never modified. The ftrace hook at funct
 
 /* Describes one patched function */
 struct klp_func {
-    const char      *old_name;      /* name of function to patch */
-    void            *new_func;      /* replacement function */
-    unsigned long    old_sympos;    /* which occurrence (for duplicates) */
-    unsigned long    old_addr;      /* resolved at patch time */
-    struct kobject   kobj;
-    struct list_head node;
-    struct list_head stack_node;     /* position in klp_ops->func_stack */
-    bool             nop;           /* no-op patch (for rollback testing) */
-    bool             patched;       /* currently active */
-    bool             transition;    /* in consistency transition */
+    /* external */
+    const char       *old_name;     /* name of function to patch */
+    void             *new_func;     /* replacement function */
+    unsigned long     old_sympos;   /* which occurrence (for duplicates) */
+
+    /* internal */
+    void             *old_func;     /* resolved via kallsyms at patch time */
+    struct kobject    kobj;
+    struct list_head  node;         /* list node for klp_object->func_list */
+    struct list_head  stack_node;   /* position in klp_ops->func_stack */
+    unsigned long     old_size, new_size;  /* sizes of old/new function */
+    bool              nop;          /* temporary patch to use the original code
+                                       again; dynamically allocated by atomic
+                                       replace (klp-cumulative.md) */
+    bool              patched;      /* currently active */
+    bool              transition;   /* in consistency transition */
 };
 
 /* A set of functions that form one complete patch */
 struct klp_patch {
-    struct module   *mod;           /* the live patch module */
+    /* external */
+    struct module     *mod;         /* the live patch module */
     struct klp_object *objs;        /* array of objects (modules/vmlinux) */
-    bool             enabled;
-    bool             forced;        /* forced (skipped consistency check) */
-    struct work_struct free_work;
-    struct completion finish;
-    struct kobject   kobj;
-    struct list_head list;
+    struct klp_state  *states;      /* system states the patch may modify (klp-state.md) */
+    bool               replace;     /* atomic-replace: supersede other patches (klp-cumulative.md) */
+
+    /* internal */
+    struct list_head    list;
+    struct kobject       kobj;
+    struct list_head    obj_list;
+    bool                 enabled;
+    bool                 forced;    /* was involved in a forced transition —
+                                        module can never be unloaded */
+    struct work_struct   free_work;
+    struct completion    finish;
 };
 
 /* Functions grouped by the kernel module (or vmlinux) they patch */
 struct klp_object {
-    const char      *name;          /* NULL for vmlinux */
-    struct klp_func *funcs;         /* array of functions to patch */
-    struct module   *mod;           /* resolved target module */
-    struct kobject   kobj;
-    struct list_head node;
-    bool             dynamic;       /* for dynamically added funcs */
+    /* external */
+    const char           *name;      /* NULL for vmlinux */
+    struct klp_func       *funcs;    /* array of functions to patch */
+    struct klp_callbacks  callbacks; /* pre/post-(un)patch hooks */
+
+    /* internal */
+    struct kobject       kobj;
+    struct list_head     func_list;  /* dynamic list of func entries */
+    struct list_head     node;
+    struct module        *mod;       /* resolved target module */
+    bool                  dynamic;   /* for dynamically added funcs */
+    bool                  patched;
 };
 ```
 
@@ -68,16 +87,27 @@ struct klp_object {
 #include <linux/kernel.h>
 #include <linux/livepatch.h>
 
-/* The replacement function */
-static int patched_vfs_read(struct file *file, char __user *buf,
-                             size_t count, loff_t *pos)
+/*
+ * The replacement function. Its prototype must match the original exactly:
+ * include/linux/fs.h declares
+ *   ssize_t vfs_read(struct file *, char __user *, size_t, loff_t *);
+ * Getting this wrong is silent — .new_func is a void *, so a mismatched
+ * return type (int here) would compile without a warning and truncate
+ * every result the patched function hands back to its callers.
+ */
+static ssize_t patched_vfs_read(struct file *file, char __user *buf,
+                                size_t count, loff_t *pos)
 {
     /* New implementation with the bug fixed */
     if (!file || !file->f_op)
         return -EBADF;   /* was: NULL deref here */
 
-    /* Re-implement the fixed logic entirely — KLP has no klp_call_orig() */
-    return orig_vfs_read_impl(file, buf, count, pos);
+    /*
+     * ... rest of vfs_read()'s body, copied verbatim from fs/read_write.c,
+     * elided here. KLP has no klp_call_orig(): there is no supported way to
+     * chain back into the original function, so the patch module carries the
+     * whole body and applies the fix inside its own copy.
+     */
 }
 
 /* Patch descriptor */
@@ -127,52 +157,86 @@ apply only the targeted fix.
 
 ## ftrace-based redirection
 
-KLP uses ftrace's `FTRACE_OPS_FL_SAVE_REGS` to redirect function calls:
+KLP registers an `ftrace_ops` per patched function with `FTRACE_OPS_FL_IPMODIFY`
+(permission to change the instruction pointer) and `klp_ftrace_handler()` redirects
+execution to whichever patch is on top of the target function's `func_stack`:
 
 ```c
 /* kernel/livepatch/patch.c */
 static void notrace klp_ftrace_handler(unsigned long ip,
-                                         unsigned long parent_ip,
-                                         struct ftrace_ops *fops,
-                                         struct ftrace_regs *fregs)
+                                        unsigned long parent_ip,
+                                        struct ftrace_ops *fops,
+                                        struct ftrace_regs *fregs)
 {
     struct klp_ops *ops;
     struct klp_func *func;
     int patch_state;
+    int bit;
 
     ops = container_of(fops, struct klp_ops, fops);
 
-    /* Find the active patch for this function */
-    func = list_first_or_null_rcu(&ops->func_stack, struct klp_func, stack_node);
-    if (!func)
+    /* Recursion guard. It also disables preemption, which is required by
+       kernel/livepatch/transition.c's klp_synchronize_transition() — a
+       schedule_on_each_cpu()-based stand-in for synchronize_rcu(), used
+       because livepatch must also patch functions where RCU isn't watching
+       (e.g. before user_exit()), so it can't rely on RCU itself */
+    bit = ftrace_test_recursion_trylock(ip, parent_ip);
+    if (WARN_ON_ONCE(bit < 0))
         return;
 
-    /* Check consistency: is this task in a safe state? */
-    patch_state = current->patch_state;
-    if (patch_state == KLP_UNDEFINED)
-        patch_state = current->patch_state = KLP_UNPATCHED;
+    /* Top of func_stack is the most recently applied patch for this function */
+    func = list_first_or_null_rcu(&ops->func_stack, struct klp_func, stack_node);
+    if (WARN_ON_ONCE(!func))
+        goto unlock;
 
-    if (func->transition) {
-        if (patch_state == KLP_UNPATCHED)
-            return;  /* task not yet transitioned */
+    if (unlikely(func->transition)) {
+        patch_state = current->patch_state;
+        WARN_ON_ONCE(patch_state == KLP_TRANSITION_IDLE);
+
+        if (patch_state == KLP_TRANSITION_UNPATCHED) {
+            /*
+             * This task hasn't transitioned yet. Fall back to the
+             * next-oldest patch still on the stack (if any); with no
+             * older patch, fall through to the original function.
+             */
+            func = list_entry_rcu(func->stack_node.next,
+                                   struct klp_func, stack_node);
+            if (&func->stack_node == &ops->func_stack)
+                goto unlock;
+        }
     }
 
-    /* Redirect: change IP to point to patched function */
-    klp_arch_set_pc(fregs, (unsigned long)func->new_func);
+    /* NOPs restore the original code — leave the instruction pointer alone */
+    if (func->nop)
+        goto unlock;
+
+    ftrace_regs_set_instruction_pointer(fregs, (unsigned long)func->new_func);
+
+unlock:
+    ftrace_test_recursion_unlock(bit);
 }
 ```
+
+Because `func_stack` is a stack, this is also how patch **stacking** works: if
+patch B is applied on top of patch A and a task hasn't transitioned to B yet,
+the handler walks past B to A's version of the function rather than the
+original — so already-patched behavior from A is preserved during B's
+transition.
 
 ## The consistency model
 
 KLP can't simply redirect calls immediately — a task might be in the middle of executing the old function. The **consistency model** ensures all tasks have transitioned before the patch is considered active:
 
 ```
-State: KLP_UNPATCHED → (patch applied) → KLP_PATCHED
+State: KLP_TRANSITION_UNPATCHED → (patch applied) → KLP_TRANSITION_PATCHED
 
 For each task:
-  1. When task returns to userspace (schedule point), mark as KLP_PATCHED
-  2. Tasks already in kernel get KLP_PATCHED at their next schedule
-  3. Until all tasks are KLP_PATCHED, the patch is in "transition" state
+  1. On return to userspace, klp_update_patch_state() marks it KLP_TRANSITION_PATCHED
+  2. Tasks that stay in the kernel are switched by the ~1s transition workqueue's
+     stack check, or by klp_sched_try_switch() in __schedule() — which only fires
+     when the outgoing task is entering a freezable (TASK_FREEZABLE) sleep, not at
+     every schedule point
+  3. Until all tasks are KLP_TRANSITION_PATCHED, the patch is in "transition" state
 
 During transition:
   - New task entries: use new (patched) function
@@ -192,7 +256,7 @@ echo 1 > /sys/kernel/livepatch/mypatch/force
 
 ### Sleepy tasks
 
-A task blocked in `D` state (uninterruptible sleep) inside the old function will delay the transition. The kernel uses `klp_send_signals()` to wake such tasks and a periodic workqueue to re-check transition completion:
+A task blocked in `D` state (`TASK_UNINTERRUPTIBLE`) inside the old function will delay the transition, and the livepatch core cannot shorten that wait: `klp_send_signals()` reaches only tasks in interruptible sleep (`wake_up_state(task, TASK_INTERRUPTIBLE)` for kthreads, `set_notify_signal()` — itself only a `TASK_INTERRUPTIBLE` wakeup — for user tasks). A D-state task has to leave that state on its own; the periodic workqueue just re-checks until it does. See [KLP Consistency Model](klp-consistency.md):
 
 ```bash
 # If transition is stuck: find who's blocking it
@@ -262,9 +326,10 @@ for p in /sys/kernel/livepatch/*/; do
     echo "  transition: $(cat $p/transition)"
 done
 
-# Which functions are patched
-cat /sys/kernel/livepatch/*/objs/*/funcs/*/patched
-cat /sys/kernel/livepatch/*/objs/*/funcs/*/old_addr
+# Which objects (vmlinux or a module) are patched
+cat /sys/kernel/livepatch/*/*/patched
+# Note: the per-function directory (<object>/<function,sympos>/) exists but
+# currently exposes no attributes of its own.
 
 # Kernel taint from live patch
 cat /proc/sys/kernel/tainted
@@ -279,8 +344,31 @@ dmesg | grep livepatch
 
 ## Further reading
 
-- [kexec](kexec.md) — loading and booting a new kernel
-- [Kernel Modules](../modules/module-basics.md) — KLP uses the module system
-- [Tracing: ftrace](../tracing/ftrace.md) — ftrace function hooks used by KLP
-- `kernel/livepatch/` in the kernel tree — KLP implementation
-- `Documentation/livepatch/` in the kernel tree
+### Kernel source
+
+- [include/linux/livepatch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch.h) — `struct klp_func`, `struct klp_object`, `struct klp_patch`, and the `klp_shadow_*()` prototypes
+- [kernel/livepatch/patch.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.c) — `klp_ftrace_handler()`, the ftrace ops registration (`FTRACE_OPS_FL_IPMODIFY`), and the func-stack redirection logic
+- [kernel/livepatch/transition.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/transition.c) — the consistency-model state machine, `klp_try_complete_transition()`, and `klp_send_signals()`
+- [kernel/livepatch/shadow.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/shadow.c) — the shadow-variable hash table and the `klp_shadow_alloc()`/`klp_shadow_get()`/`klp_shadow_free()` implementation
+- [samples/livepatch/livepatch-sample.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/samples/livepatch/livepatch-sample.c) — the canonical minimal live patch module (patches `cmdline_proc_show`)
+- [Documentation/ABI/testing/sysfs-kernel-livepatch](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/ABI/testing/sysfs-kernel-livepatch) — the authoritative `/sys/kernel/livepatch/` attribute list (`enabled`, `transition`, `force`, `replace`, `stack_order`, and per-object `patched`)
+
+### Related pages
+
+- [KLP Consistency Model](klp-consistency.md) — deep dive on per-task patch state, stack checking, and the transition workqueue
+- [Cumulative Patches and Atomic Replace](klp-cumulative.md) — patch stacking, `.replace`, and `struct klp_ops`
+- [KLP State: Custom Consistency Checks](klp-state.md) — the `klp_state` API for consistency checks beyond stack scanning
+- [kexec](kexec.md) — loading and booting a new kernel, the alternative to live patching for changes KLP can't express
+- [Kernel Modules](../modules/module-basics.md) — KLP patches are distributed and loaded as regular kernel modules
+- [Tracing: ftrace](../tracing/ftrace.md) — the function-entry hook mechanism KLP builds on
+
+### LWN articles
+
+- [Kernel Live Patching](https://lwn.net/Articles/619390/) — Seth Jennings' original 2014 writeup of the ftrace-based core: the pre-merge `lp_patch`-based design (renamed `klp_` before merge) and the original sysfs interface
+- [livepatch: hybrid consistency model](https://lwn.net/Articles/685464/) — Josh Poimboeuf's 2016 series introducing per-task transitions, stack-reliability checking, and `TIF_PATCH_PENDING`
+- [livepatch: introduce shadow variable API](https://lwn.net/Articles/731585/) — Joe Lawrence's 2017 patch introducing `klp_shadow_alloc()`/`klp_shadow_get()`/`klp_shadow_free()`
+
+### External
+
+- [Livepatch — The Linux Kernel documentation](https://docs.kernel.org/livepatch/livepatch.html) — official documentation: motivation, the consistency model, module life-cycle, and known limitations
+- [Shadow Variables — The Linux Kernel documentation](https://docs.kernel.org/livepatch/shadow-vars.html) — official shadow-variable API reference and usage notes
