@@ -202,10 +202,30 @@ echo 100 > /sys/kernel/debug/kcsan/delay_task  # force 100µs delay
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/kcsan/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kcsan/core.c) — the watchpoint-based race detection engine
+- [kernel/kcsan/report.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kcsan/report.c) — report formatting: the two racing call stacks and the "value changed" line
+- [kernel/kcsan/debugfs.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kcsan/debugfs.c) — the `/sys/kernel/debug/kcsan` control file (on/off, blacklist/whitelist)
+- [lib/Kconfig.kcsan](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/Kconfig.kcsan) — Kconfig options and defaults (`KCSAN_NUM_WATCHPOINTS` defaults to 64, `KCSAN_REPORT_ONCE_IN_MS` defaults to 3000, `KCSAN_DELAY_RANDOMIZE` defaults to y)
+- [include/linux/compiler.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/compiler.h) — `data_race()` macro definition
+- [include/linux/compiler_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/compiler_types.h) — `__no_kcsan` function attribute definition
+- [Documentation/dev-tools/kcsan.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/dev-tools/kcsan.rst) — official KCSAN documentation
+- [tools/memory-model/](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/memory-model/) — Linux Kernel Memory Model (LKMM) formal specification
+
+### Related pages
+
 - [KASAN](../mm/kasan.md) — memory error detection (use-after-free, OOB)
 - [KFENCE](../mm/kfence.md) — lightweight sampling memory error detector
 - [Atomics and Memory Barriers](../locking/atomics.md) — correct concurrent access
 - [RCU](../locking/rcu.md) — RCU is a race-free read-mostly pattern
 - [Spinlock](../locking/spinlock.md) — spinlocks prevent races
-- `Documentation/dev-tools/kcsan.rst`
-- `tools/memory-model/` — Linux Kernel Memory Model (LKMM) formal specification
+
+### LWN articles
+
+- [Finding race conditions with KCSAN](https://lwn.net/Articles/802128/) — Jonathan Corbet's introduction to KCSAN shortly after it was merged (October 2019)
+- [Concurrency bugs should fear the big bad data-race detector](https://lwn.net/Articles/816850/) — a joint writeup by the KCSAN and Linux Kernel Memory Model developers on how the two projects fit together (April 2020)
+
+### External
+
+- [docs.kernel.org: Kernel Concurrency Sanitizer (KCSAN)](https://docs.kernel.org/dev-tools/kcsan.html) — rendered official documentation, including the debugfs interface and tuning parameters

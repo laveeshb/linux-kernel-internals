@@ -251,8 +251,31 @@ echo 120 > /proc/sys/kernel/hung_task_timeout_secs
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/panic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/panic.c) — `panic_timeout` and `panic_on_oops`: the variables behind the `kernel.panic` and `kernel.panic_on_oops` sysctl entries in `kern_panic_table[]`
+- [kernel/watchdog.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/watchdog.c) — `softlockup_panic`: the variable behind `kernel.softlockup_panic`, checked when the soft lockup watchdog fires
+- [kernel/hung_task.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/hung_task.c) — `sysctl_hung_task_timeout_secs`: backs `kernel.hung_task_timeout_secs`
+- [fs/pstore/ram.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/pstore/ram.c) — `mem_address`/`mem_size` module parameters: back the `ramoops.mem_address=`/`ramoops.mem_size=` boot parameters used to reserve the ramoops region
+
+### Man pages
+
+- [`kexec_load(2)`](https://man7.org/linux/man-pages/man2/kexec_load.2.html) — documents `KEXEC_ON_CRASH`, the flag that registers a kernel image as the crash kernel loaded into the memory reserved by `crashkernel=`
+
+### Related pages
+
 - [Oops analysis](oops-analysis.md) — reading oops without crash tool
 - [KGDB](kgdb.md) — live kernel debugging
+- [Kernel Panic and Oops](../kernel/panic-oops.md) — the `die()`/`panic()` code path that actually triggers kdump (`crash_kexec()`/`__crash_kexec()`)
 - [Memory Management: KASAN](../mm/kasan.md) — catching use-after-free before crashes
 - [Memory Management: KFENCE](../mm/kfence.md) — lightweight memory error detection
-- `Documentation/admin-guide/kdump/kdump.rst` in the kernel tree
+
+### LWN articles
+
+- [Crash dumps with kexec](https://lwn.net/Articles/108595/) — Jonathan Corbet on the original kexec-based crash dump design (2004)
+- [Persistent storage for a kernel's "dying breath"](https://lwn.net/Articles/434821/) — Jake Edge's introduction to pstore, the mechanism behind ramoops (2011)
+
+### External
+
+- [Kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html) — official kdump setup guide: `crashkernel=` syntax, `/proc/vmcore`, `makedumpfile` usage
+- [Ramoops oops/panic logger](https://docs.kernel.org/admin-guide/ramoops.html) — the ramoops pstore backend, including the `mem_address`/`mem_size` parameters

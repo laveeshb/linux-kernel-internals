@@ -43,7 +43,7 @@ The error code `0000`:
 G — all loaded modules are GPL-compatible (no proprietary modules)
 P — proprietary (non-GPL) module loaded
 F — forced module load (bad signature or version mismatch)
-S — SMP unsafe module (obsolete)
+S — kernel running on a CPU/system out of specification
 M — machine check exception
 B — bad page
 U — user (userspace explicitly loaded)
@@ -51,7 +51,7 @@ D — died (OOPS has been recorded, tainted from now on)
 A — ACPI table overridden
 W — warning (taint on WARN())
 C — staging driver loaded
-I — ACPI workaround applied
+I — workaround for a bug in platform firmware applied
 K — live patched
 ```
 
@@ -257,9 +257,27 @@ echo 1                > /sys/kernel/config/netconsole/target1/enabled
 
 ## Further reading
 
+### Kernel source
+
+- [arch/x86/include/asm/trap_pf.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/trap_pf.h) — the `X86_PF_*` bit definitions behind the page-fault `error_code` breakdown (bit 0 = not-present/protection, bit 1 = read/write, bit 2 = kernel/user)
+- [kernel/panic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/panic.c) — the `taint_flags[]` table: the authoritative letter-to-meaning mapping behind the `Tainted:` line
+- [scripts/decode_stacktrace.sh](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/decode_stacktrace.sh) — resolves `function+0xNN/0xNN` entries in a captured oops to `function (file.c:line)`
+- [Documentation/networking/netconsole.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/networking/netconsole.rst) — the `netconsole=` module parameter format and the configfs-based dynamic reconfiguration interface (`dev_name`, `local_ip`, `remote_ip`, `remote_mac`, `enabled`, ...)
+
+### Man pages
+
+- [`addr2line(1)`](https://man7.org/linux/man-pages/man1/addr2line.1.html) — converts addresses (or `function+offset`) into file names and line numbers
+- [`objdump(1)`](https://man7.org/linux/man-pages/man1/objdump.1.html) — disassembles object files; used here with `--start-address`/`--stop-address` to inspect the faulting instruction
+
+### Related pages
+
+- [Kernel Panic and Oops](../kernel/panic-oops.md) — the kernel-side code path: `die()`, `oops_begin()`/`oops_end()`, ORC unwinding, and `panic()`
 - [kdump and crash](kdump.md) — automated crash dump collection
 - [KGDB](kgdb.md) — live kernel debugging
 - [Memory Management: KASAN](../mm/kasan.md) — memory error detection
 - [Memory Management: KFENCE](../mm/kfence.md) — lightweight production memory checking
 - [Tracing: kprobes](../tracing/kprobes-tracepoints.md) — probing without crashing
-- `scripts/decode_stacktrace.sh` in the kernel tree
+
+### External
+
+- [Tainted kernels](https://docs.kernel.org/admin-guide/tainted-kernels.html) — full taint flag reference with official descriptions for every letter

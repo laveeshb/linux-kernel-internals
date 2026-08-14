@@ -216,11 +216,35 @@ crash> dis -l sock_destroy  # disassemble with source lines
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/kcov.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kcov.c) — `__sanitizer_cov_trace_pc()`, the per-edge hook the compiler inserts under `CONFIG_KCOV`, and `kcov_ioctl()`'s handling of `KCOV_INIT_TRACE`/`KCOV_ENABLE`/`KCOV_DISABLE`
+- [scripts/faddr2line](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/faddr2line) — the crash-address-to-source-line decoder used in the Triage and analysis section
+
+### Man pages
+
+- [`ioctl(2)`](https://man7.org/linux/man-pages/man2/ioctl.2.html) — the `ioctl()` interface kcov uses for `KCOV_INIT_TRACE`, `KCOV_ENABLE`, and `KCOV_DISABLE`
+
+### Related pages
+
 - [KASAN](../mm/kasan.md) — memory error sanitizer used alongside syzkaller
 - [KCSAN](kcsan.md) — data race detector
 - [Oops Analysis](oops-analysis.md) — analyzing crash reports
 - [kdump and crash](kdump.md) — capturing crash dumps
 - [Fault Injection](../mm/fault-injection.md) — forcing error paths
-- `Documentation/dev-tools/kcov.rst` — kcov coverage tool
-- https://github.com/google/syzkaller — syzkaller repository
-- https://syzkaller.appspot.com — syzbot dashboard
+
+### LWN articles
+
+- [Coverage-guided kernel fuzzing with syzkaller](https://lwn.net/Articles/677764/) (2016) — the original deep dive into syzkaller's design and its coupling with KCOV and KASAN
+- [Scrutinizing bugs found by syzbot](https://lwn.net/Articles/872649/) (2021) — analysis of the roughly 4,000 bugs syzbot found in its first four years
+- [Troubles with triaging syzbot reports](https://lwn.net/Articles/917762/) (2022) — the maintainer-side cost of syzbot's automated bug reports
+
+### External
+
+- [syzkaller](https://github.com/google/syzkaller) — the official Google repository
+- [syzbot documentation](https://github.com/google/syzkaller/blob/master/docs/syzbot.md) — the `#syz fix:`, `#syz dup:`, and other commands for triaging syzbot reports by email
+- [Reproducing crashes](https://github.com/google/syzkaller/blob/master/docs/reproducing_crashes.md) — how syzkaller generates Syz and C reproducers, and the `syz-repro` tool
+- [Syscall description syntax](https://github.com/google/syzkaller/blob/master/docs/syscall_descriptions_syntax.md) — the syzlang grammar used in `sys/linux/*.txt`
+- [Setting up syzkaller for Linux](https://github.com/google/syzkaller/blob/master/docs/linux/setup.md) — kernel config (`CONFIG_KCOV`, `CONFIG_KASAN`, ...) and `syz-manager` setup
+- [syzbot](https://syzkaller.appspot.com) — the continuous fuzzing dashboard
+- [KCOV: code coverage for fuzzing](https://docs.kernel.org/dev-tools/kcov.html) — the kernel's own documentation of the KCOV interface, including the ioctl/mmap sequence and the `cover[0]`-as-count, `cover[1..n]`-as-PC-addresses buffer layout used in this page's example
