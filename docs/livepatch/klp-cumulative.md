@@ -186,15 +186,21 @@ public livepatch API exported via `EXPORT_SYMBOL_GPL` — `core.c` also exports
 `klp_shadow_alloc()`, `klp_shadow_get_or_alloc()`, `klp_shadow_free()`, and
 `klp_shadow_free_all()`, and `state.c` exports `klp_get_state()` and
 `klp_get_prev_state()`. A livepatch module's `module_exit` should be empty or
-omitted entirely — the livepatch core handles cleanup via `klp_module_going()`,
-which `kernel/module/main.c` calls directly during module load/unload state
-transitions (it is not registered on the module notifier chain):
+omitted entirely — the teardown already happened when the patch was disabled:
+`klp_complete_transition()` calls `klp_unpatch_objects()`, which unregisters
+each function's ftrace hook, and `klp_free_patch_async()` then frees the
+`struct klp_patch` and drops the module reference. There is nothing left to
+clean up by the time `rmmod` runs.
+
+(`klp_module_going()`, called directly by `kernel/module/main.c` during
+module load/unload — not via the module notifier chain — is a different
+mechanism: it reverts a patch applied to some *other*, target module that is
+itself being unloaded, not the livepatch module's own cleanup.)
 
 ```c
-/* Livepatch module exit: no explicit unregister needed.
- * The module loader calls klp_module_going() directly during the module's
- * exit path, and the livepatch core uses it to clean up when the module
- * is unloaded.
+/* Livepatch module exit: no explicit unregister needed. The transition
+ * already tore down the ftrace hooks and freed the patch when it was
+ * disabled below.
  * Before unloading, disable the patch via sysfs:
  *   echo 0 > /sys/kernel/livepatch/<patch>/enabled
  * Then: rmmod <patch_module>
@@ -243,7 +249,7 @@ enabled=0, transition=0 (disabled, can unload)
   │
   │  rmmod mypatch.ko
   ▼
-(patch removed, ftrace hooks cleaned up via klp_module_going)
+(patch module unloaded; ftrace hooks were already removed when the patch was disabled)
 ```
 
 ## Observing the func_stack
@@ -363,7 +369,7 @@ shipped without `.replace` and a superseded fix never reverted.
 ### Kernel source
 
 - [include/linux/livepatch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch.h) — `struct klp_patch`, `struct klp_func`, `struct klp_object`, and the `KLP_TRANSITION_IDLE`/`KLP_TRANSITION_UNPATCHED`/`KLP_TRANSITION_PATCHED` task-state constants
-- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — `klp_enable_patch()`, `klp_add_nops()`, `klp_unpatch_replaced_patches()`, `klp_module_going()`, the `if (klp_transition_patch) return -EBUSY;` guard shared by `__klp_enable_patch()`/`__klp_disable_patch()`, and a comment block documenting the full `/sys/kernel/livepatch/...` sysfs layout
+- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — `klp_enable_patch()`, `klp_add_nops()`, `klp_unpatch_replaced_patches()`, `klp_module_going()` (reverts a patch on a target module being unloaded), the `if (klp_transition_patch) return -EBUSY;` guard shared by `__klp_enable_patch()`/`__klp_disable_patch()`, and a comment block documenting the full `/sys/kernel/livepatch/...` sysfs layout
 - [kernel/livepatch/patch.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.c) — `klp_patch_func()`/`klp_unpatch_func()`: pushing and popping `klp_func` entries on `ops->func_stack` via `list_add_rcu()`/`list_del_rcu()`
 - [kernel/livepatch/patch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.h) — `struct klp_ops` definition (`node`, `func_stack`, `fops`)
 - [Documentation/livepatch/cumulative-patches.rst](https://docs.kernel.org/livepatch/cumulative-patches.html) — the upstream usage guide for atomic replace, including the callback and shadow-variable limitations

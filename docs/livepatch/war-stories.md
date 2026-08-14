@@ -416,8 +416,10 @@ So the ambiguity that fails loudly is the safe one. A wrong-but-valid
 `dmesg` was clean, which was itself the clue — this was not a resolution
 failure, so the question was *what* had been resolved. `old_func` is
 deliberately not exposed through sysfs, but the effective position is, in the
-per-function directory name (a `.old_sympos` of 0 would also show as `,1` —
-the field records what was actually used, not the raw source value):
+per-function directory name — the directory is named `"%s,%lu"` with
+`old_sympos ? old_sympos : 1`, so a `.old_sympos` of `0` also shows as `,1`
+(the struct field itself stays `0`; only the directory name substitutes the
+effective position):
 
 ```bash
 ls /sys/kernel/livepatch/rx-fix/vmlinux/

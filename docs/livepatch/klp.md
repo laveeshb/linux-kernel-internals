@@ -17,7 +17,7 @@ Before patch:           After patch:
                                         └─► executes patch
 ```
 
-The original function's body is never rewritten and no jump is inserted into it. KLP reuses the ftrace call site the compiler already emitted at function entry (via `-fentry`/`-mfentry`), and `klp_ftrace_handler()` redirects execution by changing the saved instruction pointer, not by patching code.
+The original function's body is never rewritten and no jump is inserted into it. KLP reuses the ftrace call site the compiler already emitted at function entry (via `-mfentry`, or `-fpatchable-function-entry` on arm64), and `klp_ftrace_handler()` redirects execution by changing the saved instruction pointer, not by patching code.
 
 ## Architecture
 
