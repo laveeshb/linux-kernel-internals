@@ -24,7 +24,7 @@ The DMAR unit uses a two-level structure:
 3. Each context entry points to the device's **IOMMU page tables**
 
 ```c
-/* drivers/iommu/intel/iommu.c */
+/* drivers/iommu/intel/iommu.h — the struct definition, not iommu.c */
 struct intel_iommu {
     void __iomem    *reg;        /* MMIO registers */
     u64              cap;        /* capability register */
@@ -32,7 +32,7 @@ struct intel_iommu {
     /* ... */
     struct root_entry *root_entry; /* root table (bus indexed) */
     int              seq_id;
-    struct iommu_device iommu_dev;
+    struct iommu_device iommu;   /* not "iommu_dev" */
 };
 ```
 
@@ -41,18 +41,21 @@ struct intel_iommu {
 AMD uses a single system-wide Device Table (indexed by 16-bit device ID = bus+dev+fn). Each entry points to the device's page table and control flags:
 
 ```c
-/* drivers/iommu/amd/amd_iommu_types.h */
+/* drivers/iommu/amd/amd_iommu_types.h — the real struct is a bare 256-bit
+ * union with no in-source bitfield comment; illustrative bit meanings below */
 struct dev_table_entry {
-    u64 data[4];
-    /*
-     * Bits define:
-     *   [0]    V:  valid
-     *   [1]    TV: translation valid
-     *   [11:9] Mode: page table levels
-     *   [51:12] PTP: page table pointer
-     *   (interrupt remapping fields are in data[2] of the 256-bit entry)
-     */
+    union {
+        u64  data[4];
+        u128 data128[2];
+    };
 };
+/* AMD-Vi hardware bit layout (per the AMD I/O Virtualization spec, not
+ * documented inline in this header):
+ *   [0]    V:  valid
+ *   [1]    TV: translation valid
+ *   [11:9] Mode: page table levels
+ *   [51:12] PTP: page table pointer
+ *   (interrupt remapping fields are in data[2] of the 256-bit entry) */
 ```
 
 ## The IOMMU subsystem
@@ -75,8 +78,11 @@ struct iommu_domain {
 };
 
 struct iommu_domain_ops {
-    int  (*attach_dev)(struct iommu_domain *domain, struct device *dev);
-    void (*detach_dev)(struct iommu_domain *domain, struct device *dev);
+    /* `old` is the domain being replaced. There is no separate detach_dev
+     * callback -- detachment happens by attaching a different domain
+     * (e.g. the blocking domain), not via a dedicated callback. */
+    int  (*attach_dev)(struct iommu_domain *domain, struct device *dev,
+                       struct iommu_domain *old);
 
     int  (*map_pages)(struct iommu_domain *domain, unsigned long iova,
                       phys_addr_t paddr, size_t pgsize, size_t pgcount,
@@ -200,24 +206,34 @@ echo "8086 154c" > /sys/bus/pci/drivers/vfio-pci/new_id
 The IOMMU has its own TLB (IOTLB) that caches IOVA→PA translations. After unmapping, the kernel must flush the IOTLB:
 
 ```c
-/* drivers/iommu/iommu.c */
-void iommu_iotlb_gather_add_page(struct iommu_domain *domain,
-                                  struct iommu_iotlb_gather *gather,
-                                  unsigned long iova, size_t size)
+/* include/linux/iommu.h — these are static inline helpers in the header,
+ * not functions defined in drivers/iommu/iommu.c */
+static inline void iommu_iotlb_gather_add_page(struct iommu_domain *domain,
+                                                struct iommu_iotlb_gather *gather,
+                                                unsigned long iova, size_t size)
 {
-    /* Accumulate unmapped ranges */
+    /* If the new range is disjoint from what's gathered, or uses a
+     * different page size, flush what's gathered first rather than
+     * silently merging non-contiguous ranges into one invalidation */
+    if ((gather->pgsize && gather->pgsize != size) ||
+        iommu_iotlb_gather_is_disjoint(gather, iova, size))
+        iommu_iotlb_sync(domain, gather);
+
+    gather->pgsize = size;
+    /* Accumulate the (now-compatible) range */
     if (gather->start > iova)
         gather->start = iova;
-    if (gather->end < iova + size)
-        gather->end   = iova + size;
-    gather->pgsize = size;
+    if (gather->end < iova + size - 1)
+        gather->end = iova + size - 1;
 }
 
 /* Flush accumulated ranges (batch for efficiency) */
-void iommu_iotlb_sync(struct iommu_domain *domain,
-                       struct iommu_iotlb_gather *iotlb_gather)
+static inline void iommu_iotlb_sync(struct iommu_domain *domain,
+                                     struct iommu_iotlb_gather *iotlb_gather)
 {
-    if (domain->ops->iotlb_sync)
+    /* Only call into the driver if something was actually gathered --
+     * avoids a spurious sync on every call */
+    if (domain->ops->iotlb_sync && iotlb_gather->start < iotlb_gather->end)
         domain->ops->iotlb_sync(domain, iotlb_gather);
     iommu_iotlb_gather_init(iotlb_gather);
 }
@@ -248,9 +264,30 @@ modprobe vfio-pci
 
 ## Further reading
 
-- [DMA API](dma-api.md) — kernel driver DMA programming
-- [Memory Management: DMA](../mm/dma.md) — DMA zones and device coherency
-- [Memory Management: Device Coherency](../mm/device-coherency.md) — cache coherency with devices
-- [Virtualization: KVM Memory](../virtualization/kvm-memory.md) — EPT complements IOMMU for VMs
-- `drivers/iommu/` in the kernel tree — IOMMU subsystem
-- `Documentation/userspace-api/iommu.rst` in the kernel tree
+### Kernel source
+
+- [include/linux/iommu.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/iommu.h) — `struct iommu_domain`, `struct iommu_domain_ops`, the `IOMMU_DOMAIN_*` type constants, and the `iommu_iotlb_gather_add_page()`/`iommu_iotlb_sync()` inline helpers
+- [drivers/iommu/iommu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iommu.c) — `iommu_group_alloc()` and the rest of IOMMU group/domain management
+- [drivers/iommu/intel/iommu.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/intel/iommu.h) — `struct intel_iommu`: the VT-d per-remapping-unit state (root table, capability registers, queued invalidation)
+- [drivers/iommu/amd/amd_iommu_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/amd/amd_iommu_types.h) — `struct dev_table_entry`: the AMD-Vi per-device-ID table entry
+- [Documentation/ABI/testing/sysfs-kernel-iommu_groups](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/ABI/testing/sysfs-kernel-iommu_groups) — the `/sys/kernel/iommu_groups/` ABI referenced in this page's group examples
+
+### Related pages
+
+- [DMA API](dma-api.md) — kernel driver DMA programming built on top of the domain/group model described here
+- [IOVA Allocator](iova-allocator.md) — how `alloc_iova()`/`free_iova()` manage the address space inside an `IOMMU_DOMAIN_DMA` domain
+- [Shared Virtual Addressing](sva.md) — PASID-based translation that shares a process's page tables with a device, built on the same `iommu_domain` infrastructure
+- [VFIO Internals](vfio-internals.md) — the container/group/device hierarchy and type1 IOMMU backend behind the VFIO API shown here
+- [IOMMU War Stories](war-stories.md) — real DMAR fault storms and group-isolation incidents diagnosed with the tools in this page
+- [VFIO: Virtual Function I/O and Device Passthrough](../virtualization/vfio.md) — the VM-passthrough walkthrough this page's VFIO section summarizes
+- [Memory Virtualization](../virtualization/kvm-memory.md) — EPT/NPT, the CPU-side counterpart to IOMMU device translation
+- [Memory Management: DMA](../mm/dma.md) — DMA zones, SWIOTLB, and device coherency
+- [Memory Management: Device Coherency](../mm/device-coherency.md) — cache coherency rules for DMA-capable devices
+
+### LWN articles
+
+- [LWN: Safe device assignment with VFIO](https://lwn.net/Articles/474088/) — Jonathan Corbet's coverage of Alex Williamson's VFIO framework, explaining why "any device can access any memory regions made available to any other devices in the same group" and how groups became the unit of ownership for passthrough (January 3, 2012)
+
+### External
+
+- [x86 IOMMU Support](https://docs.kernel.org/arch/x86/iommu.html) — official kernel documentation on DMAR/IVRS ACPI tables, the `intel_iommu=igfx_off`/`iommu=pt` boot options, and fault-reporting formats for both vendors

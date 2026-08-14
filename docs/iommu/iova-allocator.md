@@ -27,6 +27,7 @@ struct iova_domain {
     unsigned long   max32_alloc_size; /* max single alloc below 4GB */
     struct iova      anchor;          /* sentinel node in rbtree */
     struct iova_rcache *rcaches; /* dynamically allocated in iova_domain_init_rcaches() */
+    struct hlist_node cpuhp_dead;     /* CPU-hotplug teardown of rcache state */
 };
 ```
 
@@ -98,7 +99,8 @@ The magazine-style per-CPU cache is the key to keeping IOVA allocation off the r
 ### struct iova_rcache and struct iova_cpu_rcache
 
 ```c
-/* include/linux/iova.h */
+/* drivers/iommu/iova.c — these are all internal to iova.c, not exposed
+ * in include/linux/iova.h, which only forward-declares struct iova_rcache */
 
 /* 127 chosen so sizeof(struct iova_magazine) = exactly 1024 bytes
  * (127 × 8 + 8 = 1024), avoiding kmalloc internal fragmentation. */
@@ -120,11 +122,16 @@ struct iova_cpu_rcache {
 
 struct iova_rcache {
     spinlock_t          lock;       /* protects depot */
-    unsigned long       depot_size;
+    unsigned int         depot_size;
     struct iova_magazine *depot;    /* singly-linked list of depot magazines */
     struct iova_cpu_rcache __percpu *cpu_rcaches;
+    struct iova_domain  *iovad;     /* owning domain, for the depot-trim worker below */
+    struct delayed_work  work;      /* periodically trims the depot back down */
 };
 ```
+
+A delayed-work callback (`iova_depot_work_func()`, period `IOVA_DEPOT_DELAY` = 100ms) periodically
+frees depot magazines down to `num_online_cpus()` — the depot is not an unbounded stash.
 
 `IOVA_RANGE_CACHE_MAX_SIZE` is defined as 6 in recent kernels, giving 6 size classes. Each size class manages IOVAs of a specific power-of-two page count (1, 2, 4, 8, 16, 32 pages), covering the most common DMA buffer sizes for network and NVMe workloads.
 
@@ -158,19 +165,21 @@ The critical property: on the normal alloc/free cycle, no spinlock contention wi
 Introduced in Linux 5.15, flush queues decouple IOVA freeing from IOTLB invalidation. Unmapping a DMA range requires both freeing the IOVA and flushing the IOMMU TLB. IOTLB flushes are expensive — on Intel VT-d they require a write to the DMAR registers and may stall the bus.
 
 ```c
-/* include/linux/iova.h */
+/* drivers/iommu/dma-iommu.c — not include/linux/iova.h, which has no "fq" symbols at all */
 #define IOVA_DEFAULT_FQ_SIZE   256
 
 struct iova_fq_entry {
     unsigned long iova_pfn;
     unsigned long pages;
-    u64 counter;               /* monotonic counter at enqueue time */
+    struct iommu_pages_list freelist; /* IOMMU page-table pages freed with this entry,
+                                        * deferred until the batched flush actually runs */
+    u64 counter;               /* flush counter when this entry was added */
 };
 
 struct iova_fq {
-    unsigned int head;
-    unsigned int tail;
     spinlock_t lock;
+    unsigned int head, tail;
+    unsigned int mod_mask;     /* ring size - 1; entries[] is power-of-two sized */
     struct iova_fq_entry entries[]; /* flexible array member */
 };
 ```
@@ -180,19 +189,23 @@ Instead of calling `iommu_iotlb_sync()` immediately after each unmap, the flush 
 The domain type `IOMMU_DOMAIN_DMA_FQ` enables flush-queue mode:
 
 ```c
-/* drivers/iommu/dma-iommu.c */
-void iommu_dma_free_iova(struct iommu_dma_cookie *cookie,
-                          dma_addr_t iova, size_t size,
-                          struct iommu_iotlb_gather *gather)
+/* drivers/iommu/dma-iommu.c — real signature takes the domain, not the
+ * cookie directly, and handles a separate MSI-cookie teardown case */
+static void iommu_dma_free_iova(struct iommu_domain *domain, dma_addr_t iova,
+                                size_t size, struct iommu_iotlb_gather *gather)
 {
-    struct iova_domain *iovad = &cookie->iovad;
+    struct iova_domain *iovad = &domain->iova_cookie->iovad;
 
-    if (gather && gather->queued)
-        queue_iova(cookie, iova_pfn(iovad, iova),
-                   size >> iova_shift(iovad), gather);
-    else
+    if (domain->cookie_type == IOMMU_COOKIE_DMA_MSI) {
+        /* MSI case: only ever cleaning up the most recent allocation */
+        domain->msi_cookie->msi_iova -= size;
+    } else if (gather && gather->queued) {
+        queue_iova(domain->iova_cookie, iova_pfn(iovad, iova),
+                   size >> iova_shift(iovad), &gather->freelist);
+    } else {
         free_iova_fast(iovad, iova_pfn(iovad, iova),
                        size >> iova_shift(iovad));
+    }
 }
 ```
 
@@ -203,10 +216,12 @@ Many legacy and embedded devices have 32-bit DMA address registers. On a system 
 The `dma_32bit_pfn` field in `struct iova_domain` marks the upper boundary of the 32-bit IOVA region:
 
 ```c
-/* init_iova_domain() sets this based on the device DMA mask.
- * dma_32bit_pfn is the upper PFN limit for 32-bit DMA, derived from:
- *   min(DMA_BIT_MASK(32), dev->bus_dma_limit) >> PAGE_SHIFT
- * It is NOT a sum with IOVA_START_PFN. */
+/* init_iova_domain() sets a fixed 4 GB boundary, derived only from the
+ * domain's granule -- it takes no struct device and is not clamped by
+ * any device's DMA mask:
+ *   iovad->dma_32bit_pfn = 1UL << (32 - iova_shift(iovad));
+ * Per-device DMA-mask clamping happens separately, as a local dma_limit
+ * parameter inside iommu_dma_alloc_iova(), not by mutating this field. */
 ```
 
 When a driver calls `dma_set_mask(dev, DMA_BIT_MASK(32))`, subsequent allocations use `limit_pfn = iovad->dma_32bit_pfn`. The allocator satisfies the constraint by searching only the region below 4 GB.
@@ -249,7 +264,14 @@ A common tuning mistake for high-throughput drivers: using `dma_map_single()` pe
 
 ## Further reading
 
+### Kernel source
+
+- [drivers/iommu/iova.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iova.c) — `alloc_iova()`, `free_iova()`, the rbtree allocator, and the per-CPU rcache/magazine implementation
+- [include/linux/iova.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/iova.h) — `struct iova_domain` and `struct iova` definitions
+- [drivers/iommu/dma-iommu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/dma-iommu.c) — `iommu_dma_alloc_iova()` / `iommu_dma_free_iova()`, and the flush-queue (`struct iova_fq`) implementation
+
+### Related pages
+
 - [DMA API](dma-api.md) — `dma_map_single`, `dma_map_sg`, swiotlb
 - [IOMMU Architecture](iommu-arch.md) — IOMMU domains, IOTLB flush mechanics
 - [IOMMU War Stories](war-stories.md) — IOVA allocator as a perf bottleneck (real incident)
-- `Documentation/core-api/dma-api.rst` — DMA API reference

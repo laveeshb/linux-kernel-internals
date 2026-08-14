@@ -14,9 +14,9 @@ A server running a 10GbE NIC driver starts logging thousands of lines per second
 
 ```
 DMAR: [DMA Write] Request device [02:00.0] fault addr 7fa800000000
-      DMAR:[fault reason 06] Write access is not set
+      DMAR:[fault reason 05] Write access is not set
 DMAR: [DMA Write] Request device [02:00.0] fault addr 7fa800001000
-      DMAR:[fault reason 06] Write access is not set
+      DMAR:[fault reason 05] Write access is not set
 DMAR: [DMA Write] Request device [02:00.0] fault addr 7fa800002000
 ...
 ```
@@ -37,20 +37,22 @@ dmesg | grep "DMAR: IOMMU"
 # DMAR: IOMMU enabled
 
 # DMAR fault registers (Intel VT-d specific)
-# Fault reason 06 = "Write access is not set"
-# (Fault reason 05 = "Read access is not set")
+# Fault reason 05 = "Write access is not set"
+# (Fault reason 06 = "Read access is not set")
 # This means a mapping exists but with wrong permissions (write attempted to read-only mapping)
 
 # Check the IOVA allocator state for the domain
 cat /sys/kernel/debug/iommu/intel/iommu_perf_stats
 ```
 
-Fault reason 06 ("Write access is not set") is the important clue: the mapping exists, but the PTE does not allow writes and the device is trying to write. This points to a driver that incorrectly maps receive buffers as `DMA_TO_DEVICE` (read-only from device perspective) instead of `DMA_FROM_DEVICE`.
+Fault reason 05 ("Write access is not set") is the important clue: the mapping exists, but the PTE does not allow writes and the device is trying to write. This points to a driver that incorrectly maps receive buffers as `DMA_TO_DEVICE` (read-only from device perspective) instead of `DMA_FROM_DEVICE`.
 
 ```bash
-# Enable DMA API debugging to catch mismatched directions at map time
-# (requires CONFIG_DMA_API_DEBUG=y)
-echo 0 > /sys/kernel/debug/dma-api/disabled
+# DMA API debugging catches mismatched directions at map time, but it's a
+# boot-time-only Kconfig option, not something toggled live: rebuild/boot
+# with CONFIG_DMA_API_DEBUG=y first. /sys/kernel/debug/dma-api/disabled is
+# read-only -- it reports whether the framework self-disabled (e.g. after
+# exhausting its tracking pool), not a runtime on/off switch.
 dmesg | grep "DMA-API"
 # DMA-API: device 0000:02:00.0 mapping error: wrong direction
 ```
@@ -121,9 +123,9 @@ perf record -g -p $(pgrep irq/...-eth0) -- sleep 10
 perf report --sort=symbol,dso | head -40
 ```
 
-The perf callgraph shows `alloc_iova` being called from `iommu_dma_map_page` → `dma_map_page` → the NIC driver's descriptor refill function, one call per packet. At 20 Mpps, that is 20 million `alloc_iova` calls per second, each one touching the global rbtree spinlock when the rcache is exhausted.
+The perf callgraph shows `alloc_iova` being called from `iommu_dma_map_phys` → `dma_map_page` → the NIC driver's descriptor refill function, one call per packet. At 20 Mpps, that is 20 million `alloc_iova` calls per second, each one touching the global rbtree spinlock when the rcache is exhausted.
 
-Why is the rcache exhausted? The rcache holds freed IOVAs of matching sizes. With 2 KB receive buffers, the allocator uses the 1-page size class. But if the driver is allocating faster than it frees (in-flight descriptors exceed the rcache magazine size of 128), the rcache runs dry and falls through to the locked rbtree path.
+Why is the rcache exhausted? The rcache holds freed IOVAs of matching sizes. With 2 KB receive buffers, the allocator uses the 1-page size class. But if the driver is allocating faster than it frees (in-flight descriptors exceed the rcache magazine size of 127), the rcache runs dry and falls through to the locked rbtree path.
 
 ### Fix
 
@@ -333,10 +335,10 @@ When the IOMMU is active and a 32-bit device is present, the kernel still uses s
 ```bash
 # Check swiotlb usage
 cat /sys/kernel/debug/swiotlb/io_tlb_nslabs
-# 16384  (64MB / 4KB per slot)
+# 32768  (64MB / 2KB per slot)
 
 cat /sys/kernel/debug/swiotlb/io_tlb_used
-# 16384  ← fully exhausted
+# 32768  ← fully exhausted
 
 # Check IOVA space below 4GB
 # Note: this path does not exist generically — check /sys/kernel/debug/iommu/intel/ or vendor-specific paths
@@ -408,8 +410,42 @@ echo "$USED / $TOTAL"
 
 ## Further reading
 
+### Kernel source
+
+- [drivers/iommu/intel/dmar.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/intel/dmar.c) — `dmar_fault_do_one()` and the `dma_remap_fault_reasons[]` table (reason 5 = "PTE Write access is not set", reason 6 = "PTE Read access is not set") behind Case 1's DMAR fault codes
+- [kernel/dma/debug.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma/debug.c) — the `CONFIG_DMA_API_DEBUG` instrumentation framework referenced in Case 1
+- [drivers/iommu/iova.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iova.c) — `alloc_iova()`, `alloc_iova_fast()`, and the per-CPU IOVA rcache (`IOVA_RANGE_CACHE_MAX_SIZE`, `IOVA_MAG_SIZE`) behind Case 2's allocator bottleneck
+- [drivers/iommu/dma-iommu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/dma-iommu.c) — `iommu_dma_map_phys()` and `iommu_dma_map_sg()`, the streaming-DMA entry points that drive IOVA allocation in Case 2
+- [drivers/iommu/iommu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iommu.c) — `iommu_map()`, `iommu_unmap_fast()`, and the `IOMMU_DOMAIN_DMA_FQ` flush-queue domain type behind Case 2's fix
+- [drivers/pci/pci.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pci/pci.c) — `pci_enable_acs()`, the kernel-side PCIe ACS negotiation behind Case 3's IOMMU group isolation
+- [drivers/iommu/iommu-sva.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iommu-sva.c) — `iommu_sva_handle_mm()`, which calls `handle_mm_fault()` to resolve device page requests, behind Case 4
+- [drivers/iommu/intel/prq.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/intel/prq.c) — the Intel IOMMU Page Request Queue overflow handling underlying Case 4's PRI-queue scenario
+- [mm/madvise.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/madvise.c) — `MADV_POPULATE_WRITE` and `MADV_NOHUGEPAGE`, the mitigations used in Case 4
+- [kernel/dma/swiotlb.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma/swiotlb.c) — the swiotlb bounce-buffer pool and its `io_tlb_used`/`io_tlb_nslabs` debugfs counters behind Case 5
+
+### Man pages
+
+- [`madvise(2)`](https://man7.org/linux/man-pages/man2/madvise.2.html) — documents `MADV_POPULATE_WRITE` (since Linux 5.14) and `MADV_NOHUGEPAGE`, used in Case 4
+- [`lspci(8)`](https://man7.org/linux/man-pages/man8/lspci.8.html) — the PCI topology tool used to check ACS capability in Case 3
+
+### Related pages
+
 - [IOMMU Architecture](iommu-arch.md) — IOMMU domains, IOTLB, DMAR fault registers
 - [DMA API](dma-api.md) — `dma_map_single`, scatter-gather, swiotlb internals
 - [IOVA Allocator](iova-allocator.md) — rcache, flush queues, 32-bit limit
 - [SVA](sva.md) — PASID, PRI page fault handling
 - [VFIO Internals](vfio-internals.md) — IOMMU groups, security model
+
+### LWN articles
+
+- [Kernel Summit 2006: DMA and IOMMU issues](https://lwn.net/Articles/191931/) (July 19, 2006) — early discussion of scatter-gather batching (`dma_map_sg()`) to reduce per-mapping overhead, the same principle behind Case 2's fix
+- [Driver API: sleeping poll(), exclusive I/O memory, and DMA API debugging](https://lwn.net/Articles/308426/) (November 24, 2008) — covers the `CONFIG_DMA_API_DEBUG` framework used to catch direction mismatches in Case 1
+- [Safe device assignment with VFIO](https://lwn.net/Articles/474088/) (January 3, 2012) — explains why IOMMU groups exist and why every device in a group must be bound to the same driver, the mechanism behind Case 3
+- [A security fix briefly breaks DMA](https://lwn.net/Articles/889593/) (April 1, 2022) — swiotlb bounce-buffer mechanics and the tension between security assumptions and driver behavior, background for Case 5
+
+### External
+
+- [Kernel documentation: DMA API](https://docs.kernel.org/core-api/dma-api.html) and [DMA API HOWTO](https://docs.kernel.org/core-api/dma-api-howto.html) — `dma_map_single()` and the `DMA_TO_DEVICE`/`DMA_FROM_DEVICE` direction flags at the center of Case 1
+- [Kernel documentation: VFIO](https://docs.kernel.org/driver-api/vfio.html) — the "group is viable" check (every device in the group must be bound to vfio) behind Case 3
+- [Kernel documentation: Shared Virtual Addressing (SVA) with ENQCMD](https://docs.kernel.org/arch/x86/sva.html) — PASID, ATS, and PRI page-fault mechanics behind Case 4
+- [Kernel boot parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) — `iommu=pt`, `intel_iommu=`, and `swiotlb=`, used across Cases 1, 3, and 5
