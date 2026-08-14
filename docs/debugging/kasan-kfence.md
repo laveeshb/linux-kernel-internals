@@ -31,15 +31,15 @@ The shadow byte encoding:
 |---|---|
 | `0` | All 8 bytes are accessible |
 | `1`–`7` | First N bytes are accessible; bytes N+1–8 are in a redzone |
-| `0xFB` (`KASAN_KMALLOC_FREE`) | Object was freed (use-after-free) |
-| `0xFC` (`KASAN_KMALLOC_REDZONE`) | kmalloc right redzone |
+| `0xFB` (`KASAN_SLAB_FREE`) | Object was freed (use-after-free) |
+| `0xFC` (`KASAN_SLAB_REDZONE`) | kmalloc right redzone |
 | `0xf9` (`KASAN_GLOBAL_REDZONE`) | Global variable redzone |
 | `0xF1` (`KASAN_STACK_LEFT`) | Left stack redzone |
 | `0xF2` (`KASAN_STACK_MID`) | Stack mid-redzone |
 | `0xF3` (`KASAN_STACK_RIGHT`) | Right stack redzone |
 | `0xF4` (`KASAN_STACK_PARTIAL`) | Partial stack frame redzone |
 
-These constants are defined in `mm/kasan/kasan.h` (older kernels) and `include/linux/kasan-tags.h`.
+These constants are defined in `mm/kasan/kasan.h`. (`include/linux/kasan-tags.h` defines a separate set of pointer-tag constants — `KASAN_TAG_KERNEL`, `KASAN_TAG_INVALID`, etc. — used by the SW-tag/HW-tag modes below, not these poison/redzone values.)
 
 ### Compiler instrumentation
 
@@ -56,7 +56,7 @@ __asan_store4(ptr);
 These functions are implemented in `mm/kasan/generic.c` (`kasan_check_range()` is the common entry point). They compute the shadow address, read the shadow byte, and report if the access is invalid.
 
 ```c
-/* Simplified shadow check (mm/kasan/shadow.c): */
+/* Simplified shadow check (mm/kasan/generic.c): */
 static __always_inline bool memory_is_poisoned_1(unsigned long addr)
 {
     s8 shadow_value = *(s8 *)kasan_mem_to_shadow((void *)addr);
@@ -81,20 +81,26 @@ KASAN hooks into the slab allocator via functions defined in `mm/kasan/common.c`
 - `kasan_unpoison_pages(page, order, init)` — called from `__alloc_pages()` to unpoison a newly allocated page
 - `kasan_poison_pages(page, order, init)` — called on page free to poison the region
 - `kasan_slab_alloc(cache, object, flags, init)` — unpoisons a slab object returned to the caller
-- `kasan_slab_free(cache, object, ip)` — poisons a freed slab object with `KASAN_KMALLOC_FREE (0xFB)`
+- `kasan_slab_free(cache, object, ...)` — poisons a freed slab object with `KASAN_SLAB_FREE (0xFB)`
 
 For use-after-free detection, KASAN also records allocation and free stack traces:
 
 - `kasan_save_stack(flags)` — captures the current call stack into a ring buffer of stack records
-- `kasan_set_track(track, flags)` — stores the captured stack in the object's `kasan_track` metadata
+- `kasan_set_track(track, stack)` — stores the captured stack in the object's `kasan_track` metadata
 
-The metadata is stored in a `struct kasan_alloc_meta` appended to each object:
+The allocation-side metadata is stored in a `struct kasan_alloc_meta`, held inside the object's redzone; free-side metadata lives in a separate `struct kasan_free_meta`, stored within the freed object's own memory:
 
 ```c
-/* include/linux/kasan.h */
+/* mm/kasan/kasan.h */
 struct kasan_alloc_meta {
     struct kasan_track alloc_track;
-    struct kasan_track free_track[KASAN_NR_FREE_STACKS];
+    /* Free track is stored in kasan_free_meta. */
+    depot_stack_handle_t aux_stack[2];
+};
+
+struct kasan_free_meta {
+    struct qlist_node quarantine_link;
+    struct kasan_track free_track;
 };
 ```
 
@@ -159,7 +165,7 @@ Key sections:
 1. **Bug type and location** — access type, size, address, offending function
 2. **Allocation stack** — where the object was originally allocated
 3. **Free stack** — where the object was freed
-4. **Shadow dump** — surrounding shadow bytes; `fb` = `KASAN_KMALLOC_FREE` (freed slab object)
+4. **Shadow dump** — surrounding shadow bytes; `fb` = `KASAN_SLAB_FREE` (freed slab object)
 
 ### Overhead
 
@@ -201,36 +207,36 @@ KFENCE pool layout (one slot):
 ┌─────────────────┐  ← unmapped guard page (4 KB)
 │  GUARD PAGE     │    OOB access here → page fault → KFENCE report
 ├─────────────────┤
-│  object (N bytes)│   ← the actual allocation (right-aligned in page)
+│  object (N bytes)│   ← the actual allocation (left- or right-aligned, chosen at random)
 ├─────────────────┤
 │  GUARD PAGE     │  ← unmapped guard page (4 KB)
 │                 │    OOB access here → page fault → KFENCE report
 └─────────────────┘
 ```
 
-Objects are **right-aligned** within their page so that a one-byte overrun immediately hits the following guard page.
+Each object is placed against **either the left or right page boundary, chosen at random per allocation** (`get_random_u32_below(2)` in `mm/kfence/core.c`), so that a one-byte overrun in that direction immediately hits the adjacent guard page.
 
 For **use-after-free** detection: when a KFENCE object is freed, its page is marked inaccessible (similar to `mprotect(PROT_NONE)`). Any subsequent access faults and triggers a KFENCE report.
 
 ### Sampling
 
-KFENCE is not invoked for every allocation. Instead, the slab allocator calls `kfence_alloc()` at a configurable rate:
+KFENCE is not invoked for every allocation. Instead, the slab allocator calls `__kfence_alloc()` at a configurable rate:
 
 ```c
-/* mm/kfence/core.c — called from slab allocator hot path */
+/* mm/kfence/core.c — simplified; called from slab allocator hot path */
 void *__kfence_alloc(struct kmem_cache *s, size_t size, gfp_t flags)
 {
-    /* Gate is set to 1 by a periodic timer every kfence_sample_interval ms */
-    if (!atomic_read(&kfence_allocation_gate))
-        return NULL;        /* not time to sample yet */
-    /* Atomically claim the slot; only one allocation per interval wins */
-    if (atomic_cmpxchg(&kfence_allocation_gate, 1, 0) != 1)
-        return NULL;
-    return kfence_alloc(s, size, flags);
+    /* Each call claims one tick of the gate; only the call that brings
+     * it from 0 to 1 samples this allocation into the KFENCE pool. */
+    int allocation_gate = atomic_inc_return(&kfence_allocation_gate);
+    if (allocation_gate > 1)
+        return NULL;         /* not this allocation's turn */
+
+    return kfence_guarded_alloc(s, size, flags, ...);
 }
 ```
 
-A periodic timer fires every `kfence_sample_interval` milliseconds and sets `kfence_allocation_gate` to `1`. When the slab allocator calls `kfence_alloc()`, it atomically tests and clears the gate: if the gate is `1` (timer has fired), this allocation is redirected into the KFENCE pool. The sampling is purely time-driven — the gate is never decremented per allocation.
+A periodic work item (`toggle_allocation_gate()`) fires every `kfence_sample_interval` milliseconds and resets `kfence_allocation_gate` to `-kfence_burst` — allowing a burst of up to `kfence_burst + 1` samples per interval, not just one (`kfence_burst` defaults to 0, i.e. one sample per interval). Each call to `__kfence_alloc()` atomically increments the gate via `atomic_inc_return()`; only the call whose result is `≤ 1` gets redirected into the KFENCE pool. When `CONFIG_KFENCE_STATIC_KEYS` is enabled, a static branch (`kfence_allocation_key`) also gates the fast path so non-sampled allocations skip this check almost entirely.
 
 ### Configuration
 
@@ -252,7 +258,7 @@ echo 50 > /sys/module/kfence/parameters/sample_interval
 
 ### KFENCE pool size
 
-With `CONFIG_KFENCE_NUM_OBJECTS=255` and 2 pages (8 KB) per slot, the pool uses ~2 MB of physical memory. Each slot is a fixed-size region; objects smaller than a page are right-aligned within the slot's data page.
+With `CONFIG_KFENCE_NUM_OBJECTS=255` and 2 pages (8 KB) per slot, the pool uses ~2 MB of physical memory. Each slot is a fixed-size region; objects smaller than a page are placed against a randomly chosen left or right boundary within the slot's data page.
 
 The pool is allocated at boot in `kfence_init()` (`mm/kfence/core.c`) and registered with the page allocator to keep it from being reclaimed.
 
@@ -300,7 +306,7 @@ KFENCE only catches errors in the sampled allocations. An OOB or UAF in a non-sa
 | Deterministic | Yes | No (sampling) |
 | Production use | No | Yes |
 | OOB detection | Shadow byte check | Guard page fault |
-| UAF detection | Shadow byte (`KASAN_KMALLOC_FREE`, 0xFB) | Guard page (mprotect) |
+| UAF detection | Shadow byte (`KASAN_SLAB_FREE`, 0xFB) | Guard page (mprotect) |
 | Allocation stack | Yes | Yes |
 | Free stack | Yes | Yes |
 | Kernel version | 4.0+ | 5.12+ |
@@ -320,12 +326,22 @@ CONFIG_KFENCE=y
 
 ## Further reading
 
+### Kernel source
+
+- [mm/kasan/report.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kasan/report.c) — `kasan_report()` and `print_report()`: the report-generation code behind the KASAN report format shown above
+- [mm/kasan/kasan.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kasan/kasan.h) — internal header holding the actual shadow-byte constants (`KASAN_SLAB_FREE`, `KASAN_SLAB_REDZONE`, etc.) and the `kasan_alloc_meta`/`kasan_free_meta` layout
+- [mm/kfence/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kfence/core.c) — `__kfence_alloc()` and the `kfence_allocation_gate` sampling counter referenced above
+- [mm/kfence/report.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kfence/report.c) — `kfence_report_error()`: the report-generation code behind the KFENCE report format shown above
+
+### Related pages
+
 - [KCSAN](kcsan.md) — data race detection (complements KASAN)
 - [syzkaller](syzkaller.md) — fuzzer that uses KASAN to find bugs automatically
 - [Oops Analysis](oops-analysis.md) — decoding stack traces from KASAN reports
-- [KASAN in mm/](../mm/kasan.md) — memory-management perspective
-- [KFENCE in mm/](../mm/kfence.md) — allocator integration details
-- `mm/kasan/` — KASAN implementation
-- `mm/kfence/` — KFENCE implementation
-- `Documentation/dev-tools/kasan.rst`
-- `Documentation/dev-tools/kfence.rst`
+- [KASAN in mm/](../mm/kasan.md) — shadow memory layout, the three tagging modes, and compiler instrumentation in depth
+- [KFENCE in mm/](../mm/kfence.md) — pool layout, guard-page mechanics, and sampling design in depth
+
+### External
+
+- [KASAN official documentation](https://docs.kernel.org/dev-tools/kasan.html) — report-format reference, boot parameters (`kasan.mode`, `kasan.fault`, `kasan.stacktrace`), and how to run the KUnit test suite
+- [KFENCE official documentation](https://docs.kernel.org/dev-tools/kfence.html) — report-format reference, the `/sys/kernel/debug/kfence/{stats,objects}` interface, and boot/sysfs tuning parameters

@@ -210,7 +210,7 @@ Reproduced with:
 ### The root cause
 
 ```c
-/* Before (buggy) — io_uring/filetable.c: */
+/* Before (buggy) — io_uring/io_uring.c: */
 static struct file *io_file_get_fixed(struct io_ring_ctx *ctx,
                                       struct io_kiocb *req,
                                       unsigned int issue_flags)
@@ -307,9 +307,9 @@ char *make_name(const char *prefix, const char *suffix)
 }
 ```
 
-The bug had existed for several kernel releases. KASAN had **not** caught it, because KASAN's redzone granularity is 8 bytes: a 7-byte allocation occupies a full 8-byte KASAN slot, so the NUL write at byte 8 landed in what KASAN treated as padding within the redzone — KASAN's shadow byte said "first 7 bytes accessible", but the write to byte 8 was within the same 8-byte-aligned shadow slot and KASAN reported it as a write to a redzone, but in some configurations the write was silently tolerated because the shadow value indicated `1`–`7` accessible.
+The bug had existed for several kernel releases, but no KASAN-enabled kernel had ever exercised this exact code path: `make_name()` was reached only from a driver probe path tied to hardware that wasn't present in the KASAN-enabled CI fleet or on developers' local test rigs. This was a coverage gap, not a KASAN detection-granularity gap — generic KASAN's shadow byte encodes the exact accessible-byte count within each 8-byte granule (see [KASAN and KFENCE](kasan-kfence.md) for the shadow-byte table), so a NUL write to byte 8 of a 7-byte `kmalloc-8` object would have been flagged immediately had it run under KASAN. The bug survived because KASAN's ~2–3× CPU overhead means it typically runs only in development and CI, on whatever hardware and code paths engineers happen to exercise there — not because an off-by-one at this exact boundary is somehow invisible to it.
 
-KFENCE caught it because the 7-byte allocation happened to land in a KFENCE slot, right-aligned in a 4 KB data page. The guard page immediately followed byte 7. The NUL write to byte 8 hit the guard page and faulted.
+KFENCE, by contrast, samples allocations in production at near-zero overhead, so it eventually caught this allocation once it landed in a KFENCE slot that happened to be right-aligned in its 4 KB data page (KFENCE randomizes left/right placement per allocation). The guard page immediately followed byte 7. The NUL write to byte 8 hit the guard page and faulted.
 
 ### The fix
 
@@ -335,7 +335,7 @@ char *make_name(const char *prefix, const char *suffix)
 }
 ```
 
-**Lesson:** KFENCE's guard-page design provides byte-exact boundary enforcement that shadow-byte mechanisms (KASAN, SLUB debug redzones) can miss when allocations are not aligned to the shadow granularity. Running KFENCE in production caught a bug that had slipped past both code review and KASAN-enabled CI.
+**Lesson:** KASAN and KFENCE are both precise detectors, but neither can catch a bug on a code path it never executes. KASAN's overhead confines it to development and CI, which only cover the hardware and workloads engineers test there; KFENCE's near-zero overhead lets it sample production traffic continuously. Running KFENCE in production caught a bug that had slipped past code review and every KASAN-enabled test run simply because none of them had ever reached this code path.
 
 ---
 
@@ -460,9 +460,29 @@ static void myblk_end_io(struct bio *bio)
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/locking/lockdep.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/locking/lockdep.c) — `check_noncircular()` and `check_deadlock()`, the runtime cycle-detection code behind Case 2's splat
+- [mm/kfence/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kfence/core.c) and [lib/Kconfig.kfence](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/Kconfig.kfence) — the sampling-gate implementation and `CONFIG_KFENCE_SAMPLE_INTERVAL` (default 100, in milliseconds), confirming Case 4's "default 100ms sample interval" claim
+- [mm/slub.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/slub.c) — `get_freepointer()`/`set_freepointer()`, the freelist-pointer mechanics behind the corrupted `bio` freelist in Case 5
+- [mm/kasan/report.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/kasan/report.c) — `kasan_report()`, the reporting path behind Case 1 and Case 5's follow-up KASAN report
+- [io_uring/io_uring.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/io_uring/io_uring.c) — `io_file_get_fixed()`, the real fixed-file resolution function Case 3's illustrative bug is modeled on (current source validates through `io_rsrc_node_lookup()` rather than the simplified direct index check shown here)
+
+### Related pages
+
 - [KASAN and KFENCE](kasan-kfence.md) — memory error detector reference
 - [lockdep in Practice](dynamic-debug-lockdep.md) — reading splats, annotating false positives
 - [syzkaller](syzkaller.md) — setting up and using the kernel fuzzer
 - [kdump and crash](kdump.md) — capturing and analyzing kernel crash dumps
 - [Oops Analysis](oops-analysis.md) — decoding stack traces
 - [KCSAN](kcsan.md) — data race detection
+
+### External
+
+- [Kernel documentation: KASAN](https://docs.kernel.org/dev-tools/kasan.html) — shadow memory and use-after-free/out-of-bounds detection, the mechanism behind Case 1's report and Case 5's follow-up KASAN run
+- [Kernel documentation: KFENCE](https://docs.kernel.org/dev-tools/kfence.html) — the sampling guard-page detector, its production-safe overhead, and left/right allocation alignment within a slot, behind Case 4
+- [Kernel documentation: Lockdep Design](https://docs.kernel.org/locking/lockdep-design.html) — the dependency-cycle proof engine that produces the "possible circular locking dependency detected" splat in Case 2
+- [Kernel documentation: kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html) — kexec-based crash-kernel capture and the `crash` utility used to analyze the vmcore in Case 5
+- [Kernel documentation: SLUB debugging](https://docs.kernel.org/admin-guide/mm/slab.html) — `CONFIG_SLUB_DEBUG`, redzoning, and object poisoning — the mechanism that let `crash` trace the corrupted `bio`'s allocation backtrace in Case 5
+
+No specific commit hashes, CVE numbers, or kernel-version-tied feature claims appear in this page's prose — the five cases are composite scenarios illustrating real, recurring bug-and-tool patterns (following the same approach as `docs/kernel/war-stories.md`) rather than write-ups of a single named historical incident, so there is nothing of that kind to cite in place. The references above verify the underlying kernel mechanisms — KASAN/KFENCE detection internals, lockdep cycle detection, kdump/crash capture, SLUB debug metadata, and io_uring fixed-file resolution — against current mainline source and documentation.

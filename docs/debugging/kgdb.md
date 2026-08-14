@@ -160,7 +160,7 @@ The kernel ships Python-based GDB scripts (`scripts/gdb/`) that add kernel-speci
 # Pretty-printers: struct task_struct, list_head, etc.
 (gdb) p $lx_per_cpu("runqueues", 0)  # runqueue of CPU 0
 (gdb) p $lx_current()               # current task
-(gdb) $lx_container_of(ptr, "struct task_struct", "mm")
+(gdb) $container_of(ptr, "struct task_struct", "mm")
 ```
 
 ## Debugging a kernel module
@@ -240,8 +240,27 @@ KDB (`CONFIG_KGDB_KDB=y`) provides a simpler text-based debugger that runs entir
 
 ## Further reading
 
+### Kernel source
+
+- [Documentation/process/debugging/kgdb.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/process/debugging/kgdb.rst) — the canonical kgdb/kdb documentation: config options, `kgdboc` syntax, and the kdb command reference (note: this file lived at `Documentation/dev-tools/kgdb.rst` in older trees; it was relocated to `Documentation/process/debugging/`)
+- [kernel/debug/debug_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/debug/debug_core.c) — the debug core shared by both kgdb and kdb: exception entry and breakpoint handling
+- [kernel/debug/kdb/kdb_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/debug/kdb/kdb_main.c) — the kdb command table (`ps`, `bt`, `btp`, `go`, `dmesg`, `lsmod`, `md`, `mm`, `help`, ...)
+- [drivers/tty/serial/kgdboc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/tty/serial/kgdboc.c) — the `kgdboc` I/O driver that binds kgdb to a serial console
+- [scripts/gdb/vmlinux-gdb.py](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/gdb/vmlinux-gdb.py) — entry point that loads the `lx-*` GDB helper commands (`lx-ps`, `lx-dmesg`, `lx-lsmod`, `lx-symbols`, ...) and convenience functions (`$lx_current()`, `$lx_per_cpu()`, `$container_of()`) from `scripts/gdb/linux/`
+
+### Related pages
+
 - [kdump and crash](kdump.md) — post-mortem crash analysis
 - [Oops analysis](oops-analysis.md) — decoding oops without a debugger
 - [Kernel Modules](../modules/module-basics.md) — loading module debug symbols
 - [Tracing: ftrace](../tracing/ftrace.md) — lighter-weight alternative to breakpoints
-- `Documentation/dev-tools/kgdb.rst` in the kernel tree
+
+### LWN articles
+
+- [Bringing kgdb into 2.6](https://lwn.net/Articles/70465/) (2004) — the early, contested push to get kgdb merged, over Linus Torvalds's historical resistance to in-tree debuggers
+- [Merging kdb and kgdb](https://lwn.net/Articles/374633/) (2010) — Jason Wessel's work to unify the kdb shell and kgdb's gdb-remote stub around a common debug core, extending kdb beyond x86
+
+### External
+
+- [Using kgdb, kdb and the kernel debugger internals](https://docs.kernel.org/process/debugging/kgdb.html) — docs.kernel.org rendering of the canonical documentation
+- [GDB kernel debugging](https://docs.kernel.org/process/debugging/gdb-kernel-debugging.html) — docs.kernel.org page on the `scripts/gdb/` Python helpers and convenience functions

@@ -291,14 +291,14 @@ CONFIG_LOCK_STAT=y              # enables /proc/lock_stat
 
 ## Lockdep limits
 
-Lockdep maintains a compile-time-bounded data structure:
+Lockdep maintains a compile-time-bounded data structure. `MAX_LOCKDEP_KEYS` is a fixed cap; the others are Kconfig-tunable (`CONFIG_LOCKDEP_BITS`, `CONFIG_LOCKDEP_CHAINS_BITS`, `CONFIG_LOCKDEP_STACK_TRACE_BITS`), each defaulting to the value shown below (`MAX_STACK_TRACE_ENTRIES` defaults higher, to 2M, under `CONFIG_KASAN`):
 
 ```c
-/* kernel/locking/lockdep.c */
-#define MAX_LOCKDEP_KEYS        8192   /* max lock classes */
-#define MAX_LOCKDEP_ENTRIES     (1UL << 14)  /* 16384 lock-class entries */
-#define MAX_LOCKDEP_CHAINS      (1UL << 16)  /* 65536 dependency chains */
-#define MAX_STACK_TRACE_ENTRIES (1UL << 20)  /* 1M stack trace entries */
+/* include/linux/lockdep_types.h, kernel/locking/lockdep_internals.h */
+#define MAX_LOCKDEP_KEYS        8192   /* max lock classes (fixed) */
+#define MAX_LOCKDEP_ENTRIES     (1UL << CONFIG_LOCKDEP_BITS)         /* default 32768 */
+#define MAX_LOCKDEP_CHAINS      (1UL << CONFIG_LOCKDEP_CHAINS_BITS)  /* default 65536 */
+#define MAX_STACK_TRACE_ENTRIES (1UL << CONFIG_LOCKDEP_STACK_TRACE_BITS)  /* default 524288 */
 ```
 
 Once the tables are full, new lock classes are silently dropped — lockdep stops tracking them. Check usage at runtime:
@@ -309,11 +309,11 @@ cat /proc/lockdep_stats
 
 ```
 lock-classes:                          3456 [max: 8192]
-direct dependencies:                  12345 [max: 16384]
+direct dependencies:                  12345 [max: 32768]
 indirect dependencies:                56789
 all direct dependencies:              23456
 dependency chains:                     8901 [max: 65536]
-stack-trace entries:                 234567 [max: 1048576]
+stack-trace entries:                 234567 [max: 524288]
 ```
 
 If `lock-classes` is near the maximum, consider booting with a config that has fewer drivers, or increase `MAX_LOCKDEP_KEYS` in the source.
@@ -392,10 +392,31 @@ dmesg | grep -A 80 "possible circular locking"
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/locking/lockdep.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/locking/lockdep.c) — the validator implementation; `lock_acquire()` and `lock_release()` are the hooks that `spin_lock()`/`mutex_lock()` and friends call internally
+- [kernel/locking/lockdep_internals.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/locking/lockdep_internals.h) — `MAX_LOCKDEP_ENTRIES`, `MAX_LOCKDEP_CHAINS`, `MAX_STACK_TRACE_ENTRIES`; on current kernels these are derived from the `CONFIG_LOCKDEP_BITS`/`CONFIG_LOCKDEP_CHAINS_BITS`/`CONFIG_LOCKDEP_STACK_TRACE_BITS` Kconfig options rather than fixed at compile time
+- [include/linux/lockdep_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/lockdep_types.h) — `MAX_LOCKDEP_KEYS_BITS`/`MAX_LOCKDEP_KEYS`, the fixed cap on lock classes
+- [kernel/locking/lockdep_proc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/locking/lockdep_proc.c) — `/proc/lockdep_stats` and `/proc/lock_stat` output formatting (`lock-classes`, `con-bounces`, `contentions`, `waittime-min`, etc.)
+- [include/linux/fs.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/fs.h) — the `I_MUTEX_NORMAL`/`I_MUTEX_PARENT`/`I_MUTEX_CHILD`/`I_MUTEX_XATTR`/`I_MUTEX_NONDIR2` subclass enum used with `lockdep_set_subclass()`
+- [include/linux/spinlock.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/spinlock.h) — `spin_lock_init()`, which allocates the per-call-site `lock_class_key`
+- [scripts/faddr2line](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/faddr2line) — resolves `func+0x123/0x456`-style offsets from a splat back to source lines
+- [Documentation/locking/lockdep-design.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/locking/lockdep-design.rst) — lockdep's own design document
+- [Documentation/locking/lockstat.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/locking/lockstat.rst) — `/proc/lock_stat` design document
+
+### Related pages
+
 - [Lockdep fundamentals](../locking/lockdep.md) — dependency graph, lock classes, basic splat reading
 - [Lock Contention Debugging](../locking/lock-debugging.md) — `/proc/lock_stat`, perf lock
 - [KASAN and KFENCE](kasan-kfence.md) — complementary memory error detectors
 - [KCSAN](kcsan.md) — data race detection
-- `kernel/locking/lockdep.c` — lockdep implementation
-- `Documentation/locking/lockdep-design.rst`
-- `Documentation/locking/lockstat.rst`
+
+### LWN articles
+
+- [Enhancing lockdep with crossrelease](https://lwn.net/Articles/709849/) — Byungchul Park lays out lockdep's dependency-graph fundamentals (lock classes, cycle detection) before proposing the crossrelease extension (December 2016)
+- [The dependency tracker for complex deadlock detection](https://lwn.net/Articles/1036222/) — Jonathan Corbet on DEPT, a proposed lockdep alternative; explains what lockdep does and does not catch (September 2025)
+
+### External
+
+- [docs.kernel.org: Runtime locking correctness validator](https://docs.kernel.org/locking/lockdep-design.html) — rendered version of lockdep-design.rst
+- [docs.kernel.org: Lock Statistics](https://docs.kernel.org/locking/lockstat.html) — rendered version of lockstat.rst
