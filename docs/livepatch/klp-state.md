@@ -163,10 +163,21 @@ The patch must quiesce all old-code users before the new code becomes active:
  * patch's state via klp_get_state(&subsys_patch, ...), but the full
  * struct klp_patch definition (which needs the callbacks and objects
  * defined first) only comes together at the end of the file -- the
- * same order real livepatch modules use, e.g.
- * samples/livepatch/livepatch-callbacks-demo.c.
+ * same end-of-file struct-definition order real livepatch modules
+ * use (most samples, e.g. samples/livepatch/livepatch-callbacks-demo.c,
+ * don't need a forward declaration since their callbacks don't
+ * reference their own patch struct by address, but a klp_state user
+ * that calls klp_get_state(&this_patch, ...) from pre_patch does).
  */
 static struct klp_patch subsys_patch;
+
+/* Pre-existing subsystem lock and state, declared elsewhere -- omitted
+ * here for brevity, the same way subsys_patch_v2 is omitted later on
+ * this page. */
+extern spinlock_t subsys_spinlock;
+extern bool subsys_use_mutex;
+/* New lock the patch introduces. */
+static DEFINE_MUTEX(subsys_mutex);
 
 static int pre_patch_subsys(struct klp_object *obj)
 {
@@ -179,14 +190,17 @@ static int pre_patch_subsys(struct klp_object *obj)
     /*
      * Briefly take the subsystem's existing spinlock just long enough
      * to confirm no old-code caller is mid-critical-section, then
-     * release it immediately. The lock must NOT be held across the
-     * rest of the transition (steps 2-3 below): the consistency
-     * model's stack scan can take an unbounded amount of time while
-     * it waits for every task in the system, and holding a spinlock
-     * for that long is itself a correctness bug, not a safe pattern.
+     * release it immediately. This is a quiescence check only -- the
+     * actual semantic switch-over happens in post_patch_subsys(),
+     * once the consistency transition has confirmed every task is off
+     * the old code. The lock must NOT be held across the rest of the
+     * transition (steps 2-3): the consistency model's stack scan can
+     * take an unbounded amount of time while it waits for every task
+     * in the system, and holding a spinlock for that long is itself a
+     * correctness bug, not a safe pattern.
      */
     spin_lock(&subsys_spinlock);
-    state->data = (void *)1UL;   /* mark: transition to mutex started */
+    state->data = (void *)1UL;   /* mark: quiesced, ready for post_patch */
     spin_unlock(&subsys_spinlock);
 
     return 0;
@@ -198,10 +212,15 @@ static void post_patch_subsys(struct klp_object *obj)
      * By the time post_patch runs, the consistency model has already
      * confirmed that no task is still executing inside the old
      * subsys_do_work() -- so nothing can still be holding
-     * subsys_spinlock across a call into it. Every caller from here
-     * on uses the new, mutex-based code path; there is no lock left
-     * to release here.
+     * subsys_spinlock across a call into it. This is where the actual
+     * semantic hand-off happens: publish that mutex-based accessors
+     * are now the only ones in use, per the upstream guidance to
+     * modify system state in post_patch() rather than pre_patch()
+     * (Documentation/livepatch/system-state.rst).
      */
+    mutex_lock(&subsys_mutex);
+    subsys_use_mutex = true;
+    mutex_unlock(&subsys_mutex);
 }
 
 static void pre_unpatch_subsys(struct klp_object *obj)
@@ -210,7 +229,9 @@ static void pre_unpatch_subsys(struct klp_object *obj)
      * Reverse transition: briefly take the mutex to confirm no
      * new-code caller is mid-critical-section, then release it right
      * away. As with pre_patch_subsys() above, the lock must not be
-     * held across the reverse transition itself.
+     * held across the reverse transition itself, and the actual
+     * hand-back to spinlock-based accessors happens in
+     * post_unpatch_subsys() below.
      */
     mutex_lock(&subsys_mutex);
     mutex_unlock(&subsys_mutex);
@@ -221,8 +242,11 @@ static void post_unpatch_subsys(struct klp_object *obj)
     /*
      * The reverse transition has completed and the ftrace hooks are
      * gone, so the original spinlock-based code is running again for
-     * every caller. There is nothing left to release here.
+     * every caller. Publish that hand-back now that it's safe.
      */
+    spin_lock(&subsys_spinlock);
+    subsys_use_mutex = false;
+    spin_unlock(&subsys_spinlock);
 }
 
 static struct klp_state subsys_states[] = {
@@ -281,6 +305,8 @@ static int pre_patch_v2(struct klp_object *obj)
 
     prev = klp_get_prev_state(SUBSYS_LOCK_STATE_ID);
     cur  = klp_get_state(&subsys_patch_v2, SUBSYS_LOCK_STATE_ID);
+    if (!cur)
+        return -EINVAL;
 
     if (prev && prev->data) {
         /*

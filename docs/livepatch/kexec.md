@@ -71,9 +71,10 @@ void machine_kexec(struct kimage *image)
     unsigned int relocate_kernel_flags;
     void *control_page;
 
-    /* By this point migrate_to_reboot_cpu() (called earlier from
-       kernel_kexec()) has already parked every other CPU; this
-       function does not stop CPUs itself. */
+    /* By this point kernel_kexec() has already parked every other CPU
+       via machine_shutdown()'s stop_other_cpus() (or, on the
+       CONFIG_KEXEC_JUMP preserve-context path, suspend_disable_secondary_cpus());
+       this function does not stop CPUs itself. */
 
     /* Interrupts aren't acceptable while we reboot */
     local_irq_disable();

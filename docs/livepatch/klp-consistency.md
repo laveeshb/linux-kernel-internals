@@ -28,10 +28,13 @@ of three values, defined in `include/linux/livepatch.h`:
 #define KLP_TRANSITION_PATCHED     1   /* task should call the patched function */
 ```
 
-At the start of a patching transition every task is `KLP_TRANSITION_IDLE`. The
-ftrace handler in `kernel/livepatch/patch.c` treats `KLP_TRANSITION_IDLE` the
-same as `KLP_TRANSITION_UNPATCHED` — the task gets the old behavior until
-explicitly transitioned.
+`KLP_TRANSITION_IDLE` is the resting value when no transition is in progress.
+`klp_init_transition()` assigns every task's real starting state —
+`KLP_TRANSITION_UNPATCHED` or `KLP_TRANSITION_PATCHED`, whichever isn't the
+target — before a transition becomes visible, so no live task is ever actually
+observed at `KLP_TRANSITION_IDLE` mid-transition; the ftrace handler in
+`kernel/livepatch/patch.c` even asserts this with `WARN_ON_ONCE(patch_state ==
+KLP_TRANSITION_IDLE)`.
 
 The transition direction can be either forward (enabling a patch:
 `KLP_TRANSITION_UNPATCHED` → `KLP_TRANSITION_PATCHED`) or backward (disabling
@@ -84,7 +87,8 @@ Two other paths *do* run a stack check, both funneling through
   calls `klp_sched_try_switch(prev)` (`kernel/sched/core.c`), which — gated by
   a static key that `klp_resched_enable()`/`klp_resched_disable()` toggle for
   the duration of the transition — calls `klp_try_switch_task(current)` on
-  every context switch. This exists specifically to help CPU-bound kthreads
+  context switches where the outgoing task is entering a freezable sleep
+  state (`TASK_FREEZABLE`), not on every context switch. This exists specifically to help CPU-bound kthreads
   get patched: such a task may rarely (or never) go through the
   kernel-exit-to-userspace path, so relying on that path alone could stall
   the transition indefinitely.
@@ -325,7 +329,9 @@ function changes data layouts or assumptions, those tasks can access
 inconsistent state.
 
 After a forced transition the `forced` field of `struct klp_patch` is set to
-`true`. The `/sys/kernel/livepatch/<patch>/forced` sysfs file reflects this.
+`true`. This is internal-only — there is no sysfs file to read it back; the
+only externally visible trace is that `rmmod` on the patch module is
+permanently disabled from that point on.
 
 `TAINT_LIVEPATCH` is applied at **module load time** for every livepatch module — not conditionally on forced transitions. Every live patch application taints the kernel with `TAINT_LIVEPATCH` (bit 15). `klp_force_transition()` itself does not add any additional taint — `TAINT_FORCED_MODULE` is unrelated; it's set when a module is force-loaded with `insmod -f`, not when a livepatch transition is forced.
 
@@ -405,9 +411,9 @@ After `klp_complete_transition()` returns, the `transition` sysfs file reads
 cat /sys/kernel/livepatch/<patch>/transition
 # 1 = in progress, 0 = complete
 
-# Was the transition forced?
-cat /sys/kernel/livepatch/<patch>/forced
-# 0 = normal, 1 = forced
+# Whether a transition was ever forced is internal-only (struct klp_patch.forced)
+# and not exposed via sysfs — the only observable side effect is that `rmmod`
+# on the patch module will be permanently refused from that point on.
 
 # Which tasks are blocking the transition?
 # (tasks that have the old function on their stack)
@@ -440,7 +446,7 @@ klp_enable_patch()
        │
        ├── for each task (and each idle task):
        │     klp_try_switch_task() → klp_check_and_switch_task()
-       │       klp_check_stack() unsafe (-EINVAL / -EADDRINUSE / -EBUSY)?
+       │       task unsafe to switch (-EBUSY: running; -EINVAL / -EADDRINUSE from klp_check_stack())?
        │         yes: skip (try again next round)
        │         no:  task->patch_state = KLP_TRANSITION_PATCHED
        │
@@ -459,9 +465,9 @@ klp_enable_patch()
 
 ### Kernel source
 
-- [kernel/livepatch/transition.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/transition.c) — `klp_check_stack()`, `klp_try_complete_transition()`, `klp_update_patch_state()`, and the rest of the transition state machine
+- [kernel/livepatch/transition.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/transition.c) — `klp_check_stack()`, `klp_try_complete_transition()`, `klp_update_patch_state()`, `klp_force_transition()`, and the rest of the transition state machine
 - [kernel/livepatch/patch.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.c) — `klp_ftrace_handler()`, which walks `func_stack` to pick the active replacement, plus `klp_patch_func()`/`klp_unpatch_func()`
-- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — `klp_force_transition()` and the `/sys/kernel/livepatch/<patch>/{transition,force,forced}` sysfs attributes
+- [kernel/livepatch/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/core.c) — the `/sys/kernel/livepatch/<patch>/{transition,force}` sysfs attributes
 - [include/linux/livepatch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/livepatch.h) — `struct klp_func`, `struct klp_object`, `struct klp_patch`, and the transition-state constants
 
 ### Related pages

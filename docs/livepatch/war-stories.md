@@ -32,12 +32,13 @@ static int net_kthread(void *arg)
 ```
 
 Because the kthread never yielded the CPU voluntarily and never entered sleep,
-the scheduler had no opportunity to call `klp_update_patch_state()` for it.
-`klp_send_signals()` calls `wake_up_state(task, TASK_INTERRUPTIBLE)` for
-kthreads — this can only wake tasks in interruptible sleep, not tasks actively
-running in a tight loop. The kthread's tight loop without `cond_resched()`
-prevented both scheduling and the `TASK_INTERRUPTIBLE` wakeup from taking
-effect.
+it never hit a context switch where `klp_sched_try_switch()` could try it —
+that scheduler-path check only runs when the outgoing task is entering a
+freezable sleep state, exactly what this kthread never did. `klp_send_signals()`
+calls `wake_up_state(task, TASK_INTERRUPTIBLE)` for kthreads — this can only
+wake tasks in interruptible sleep, not tasks actively running in a tight loop.
+The kthread's tight loop without `cond_resched()` prevented both the
+scheduler-path check and the `TASK_INTERRUPTIBLE` wakeup from taking effect.
 
 The kthread's stack confirmed it:
 
@@ -312,8 +313,8 @@ absent — but the ftrace hook was never installed. The `patched` sysfs file
 revealed this:
 
 ```bash
-cat /sys/kernel/livepatch/bounds-fix/vmlinux/check_buffer_bounds/patched
-# 0  ← hook never fired
+cat /sys/kernel/livepatch/bounds-fix/vmlinux/patched
+# 0  ← hook never fired for any function in this object
 ```
 
 The transition completed instantly because there was nothing to transition.
@@ -445,10 +446,10 @@ transition state machine.
 - [KLP Consistency Model](klp-consistency.md) — per-task transition states and stack checking behind Cases 1 and 5
 - [Cumulative Patches and Atomic Replace](klp-cumulative.md) — `.replace=true` and `func_stack` stacking behind Case 5
 - [KLP State: Custom Consistency Checks](klp-state.md) — the API for patches where stack scanning alone isn't sufficient, relevant background for Case 5's ordering lesson
-- [kexec](kexec.md) — the fast-reboot mechanism used as the fallback once a stuck transition can't be forced safely, as in Case 1's resolution
+- [kexec](kexec.md) — reboot without a full firmware POST, an alternative to live patching when a fix requires downtime
 
 ### LWN articles
 
-- [livepatch: consistency model](https://lwn.net/Articles/632582/) (February 9, 2015) — the original per-task consistency model RFC, which explicitly flags kthreads that never sleep or transition as an open problem, the root cause behind Case 1
+- [livepatch: consistency model](https://lwn.net/Articles/632582/) (February 9, 2015) — the original per-task consistency model RFC and per-task transition design behind Case 1
 - [livepatch: introduce shadow variable API](https://lwn.net/Articles/731585/) (August 21, 2017) — Joe Lawrence's patch introducing `klp_shadow_alloc()`/`klp_shadow_get()`/`klp_shadow_free()` and the `(obj, id)`-keyed hashtable behind Case 2
 - [livepatch: introduce atomic replace](https://lwn.net/Articles/734997/) (September 27, 2017) — the atomic replace / cumulative patch design discussed in Case 5

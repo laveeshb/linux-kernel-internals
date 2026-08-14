@@ -161,7 +161,9 @@ static void notrace klp_ftrace_handler(unsigned long ip,
 
     ops = container_of(fops, struct klp_ops, fops);
 
-    /* Recursion guard (also needed for the RCU-less sync variant below) */
+    /* Recursion guard (disabling preemption is also required by
+       kernel/livepatch/transition.c's synchronize_rcu()-based sync
+       path, not shown on this page) */
     bit = ftrace_test_recursion_trylock(ip, parent_ip);
     if (WARN_ON_ONCE(bit < 0))
         return;
@@ -343,7 +345,7 @@ dmesg | grep livepatch
 
 ### LWN articles
 
-- [Kernel Live Patching](https://lwn.net/Articles/619390/) — Seth Jennings' original 2014 writeup of the ftrace-based core: the `klp_patch`/`klp_object`/`klp_func` structures and the sysfs interface
+- [Kernel Live Patching](https://lwn.net/Articles/619390/) — Seth Jennings' original 2014 writeup of the ftrace-based core: the pre-merge `lp_patch`-based design (renamed `klp_` before merge) and the original sysfs interface
 - [livepatch: hybrid consistency model](https://lwn.net/Articles/685464/) — Josh Poimboeuf's 2016 series introducing per-task transitions, stack-reliability checking, and `TIF_PATCH_PENDING`
 - [livepatch: introduce shadow variable API](https://lwn.net/Articles/731585/) — Joe Lawrence's 2017 patch introducing `klp_shadow_alloc()`/`klp_shadow_get()`/`klp_shadow_free()`
 

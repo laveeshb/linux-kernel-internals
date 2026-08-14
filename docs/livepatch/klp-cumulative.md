@@ -260,7 +260,7 @@ cat /sys/kernel/livepatch/mypatch/vmlinux/patched
 # under the object — its mere presence is the signal, it has no attribute
 # files of its own:
 ls /sys/kernel/livepatch/mypatch/vmlinux/
-# patched  tcp_sendmsg,0
+# patched  tcp_sendmsg,1
 
 # old_addr is NOT exposed via sysfs
 # To find the original function address, use /proc/kallsyms:
@@ -332,11 +332,11 @@ violated.
 - [kernel/livepatch/patch.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.c) — `klp_patch_func()`/`klp_unpatch_func()`: pushing and popping `klp_func` entries on `ops->func_stack` via `list_add_rcu()`/`list_del_rcu()`
 - [kernel/livepatch/patch.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/livepatch/patch.h) — `struct klp_ops` definition (`node`, `func_stack`, `fops`)
 - [Documentation/livepatch/cumulative-patches.rst](https://docs.kernel.org/livepatch/cumulative-patches.html) — the upstream usage guide for atomic replace, including the callback and shadow-variable limitations
-- [`e1452b607c48` — livepatch: Add atomic replace](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e1452b607c48c642caf57299f4da83aa002f8533) — Petr Mladek's commit adding the `.replace` field to `struct klp_patch`, merged for Linux 5.1
+- [`e1452b607c48` — livepatch: Add atomic replace](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e1452b607c48c642caf57299f4da83aa002f8533) — Jason Baron's commit (reworked/split by Petr Mladek) adding the `.replace` field to `struct klp_patch`, merged for Linux 5.1
 
 ### Man pages
 
-- [`rmmod(8)`](https://man7.org/linux/man-pages/man8/rmmod.8.html) — module removal; the `-f`/`--force` option bypasses the in-use refcount check this page warns against using on a still-enabled live patch
+- [`rmmod(8)`](https://man7.org/linux/man-pages/man8/rmmod.8.html) — module removal; the `-f`/`--force` option bypasses the in-use refcount check this page warns is dangerous — the danger applies to a still-enabled live patch just as to any in-use module
 
 ### Related pages
 
