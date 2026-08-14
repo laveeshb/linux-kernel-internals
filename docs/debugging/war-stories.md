@@ -210,7 +210,7 @@ Reproduced with:
 ### The root cause
 
 ```c
-/* Before (buggy) — io_uring/filetable.c: */
+/* Before (buggy) — io_uring/io_uring.c: */
 static struct file *io_file_get_fixed(struct io_ring_ctx *ctx,
                                       struct io_kiocb *req,
                                       unsigned int issue_flags)

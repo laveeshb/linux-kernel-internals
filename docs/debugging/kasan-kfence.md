@@ -207,14 +207,14 @@ KFENCE pool layout (one slot):
 ┌─────────────────┐  ← unmapped guard page (4 KB)
 │  GUARD PAGE     │    OOB access here → page fault → KFENCE report
 ├─────────────────┤
-│  object (N bytes)│   ← the actual allocation (right-aligned in page)
+│  object (N bytes)│   ← the actual allocation (left- or right-aligned, chosen at random)
 ├─────────────────┤
 │  GUARD PAGE     │  ← unmapped guard page (4 KB)
 │                 │    OOB access here → page fault → KFENCE report
 └─────────────────┘
 ```
 
-Objects are **right-aligned** within their page so that a one-byte overrun immediately hits the following guard page.
+Each object is placed against **either the left or right page boundary, chosen at random per allocation** (`get_random_u32_below(2)` in `mm/kfence/core.c`), so that a one-byte overrun in that direction immediately hits the adjacent guard page.
 
 For **use-after-free** detection: when a KFENCE object is freed, its page is marked inaccessible (similar to `mprotect(PROT_NONE)`). Any subsequent access faults and triggers a KFENCE report.
 
@@ -258,7 +258,7 @@ echo 50 > /sys/module/kfence/parameters/sample_interval
 
 ### KFENCE pool size
 
-With `CONFIG_KFENCE_NUM_OBJECTS=255` and 2 pages (8 KB) per slot, the pool uses ~2 MB of physical memory. Each slot is a fixed-size region; objects smaller than a page are right-aligned within the slot's data page.
+With `CONFIG_KFENCE_NUM_OBJECTS=255` and 2 pages (8 KB) per slot, the pool uses ~2 MB of physical memory. Each slot is a fixed-size region; objects smaller than a page are placed against a randomly chosen left or right boundary within the slot's data page.
 
 The pool is allocated at boot in `kfence_init()` (`mm/kfence/core.c`) and registered with the page allocator to keep it from being reclaimed.
 
