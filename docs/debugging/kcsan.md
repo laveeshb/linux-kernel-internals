@@ -223,7 +223,7 @@ echo 100 > /sys/kernel/debug/kcsan/delay_task  # force 100µs delay
 
 ### LWN articles
 
-- [Finding race conditions with KCSAN](https://lwn.net/Articles/802128/) — Jonathan Corbet's introduction to KCSAN shortly after it was merged (October 2019)
+- [Finding race conditions with KCSAN](https://lwn.net/Articles/802128/) — Jonathan Corbet's introduction to KCSAN shortly after it was announced (October 2019, ahead of its eventual merge in 5.8)
 - [Concurrency bugs should fear the big bad data-race detector](https://lwn.net/Articles/816850/) — a joint writeup by the KCSAN and Linux Kernel Memory Model developers on how the two projects fit together (April 2020)
 
 ### External

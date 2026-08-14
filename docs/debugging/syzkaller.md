@@ -235,7 +235,7 @@ crash> dis -l sock_destroy  # disassemble with source lines
 
 ### LWN articles
 
-- [Coverage-guided kernel fuzzing with syzkaller](https://lwn.net/Articles/677764/) (2016) — the original deep dive into syzkaller's design and its coupling with KCOV and KASAN
+- [Coverage-guided kernel fuzzing with syzkaller](https://lwn.net/Articles/677764/) (2016) — the original LWN introduction to syzkaller: motivation, a reproduction walkthrough, and its use of KCOV/KASAN
 - [Scrutinizing bugs found by syzbot](https://lwn.net/Articles/872649/) (2021) — analysis of the roughly 4,000 bugs syzbot found in its first four years
 - [Troubles with triaging syzbot reports](https://lwn.net/Articles/917762/) (2022) — the maintainer-side cost of syzbot's automated bug reports
 

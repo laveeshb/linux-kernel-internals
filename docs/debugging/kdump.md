@@ -273,7 +273,7 @@ echo 120 > /proc/sys/kernel/hung_task_timeout_secs
 ### LWN articles
 
 - [Crash dumps with kexec](https://lwn.net/Articles/108595/) — Jonathan Corbet on the original kexec-based crash dump design (2004)
-- [Persistent storage for a kernel's "dying breath"](https://lwn.net/Articles/434821/) — Jake Edge's introduction to pstore, the mechanism behind ramoops (2011)
+- [Persistent storage for a kernel's "dying breath"](https://lwn.net/Articles/434821/) — Jake Edge's introduction to pstore (2011); ramoops, then a separate mechanism, was later refactored into a pstore backend, which is how it works today
 
 ### External
 
