@@ -65,7 +65,7 @@ lsof -p <worker_pid> | grep passwd  # many open copies of /etc/passwd
 
 ### Root cause
 
-When `SCM_RIGHTS` delivers a file descriptor, the kernel calls `receive_fd()` (in `fs/file.c`), which allocates a new file descriptor in the receiver's `files_struct` via `alloc_fd()`. This is a full kernel-level `dup()` — the receiver's fd table grows by one per received fd, completely independently of the sender. The sender closing its copy has no effect on the receiver's copy.
+When `SCM_RIGHTS` delivers a file descriptor, the kernel calls `receive_fd()` (in `fs/file.c`), which reserves and installs a new file descriptor in the receiver's `files_struct` (via `get_unused_fd_flags()`/`fd_install()`, which in turn reach the underlying slot-allocator `alloc_fd()`). This is a full kernel-level `dup()` — the receiver's fd table grows by one per received fd, completely independently of the sender. The sender closing its copy has no effect on the receiver's copy.
 
 In-flight `SCM_RIGHTS` fds are tracked per-`user_struct` (`user->unix_inflight`), not on `struct unix_sock` itself. Once delivered, the fd is solely the receiver's responsibility.
 
@@ -248,7 +248,7 @@ The general principle: `EFD_NONBLOCK` is appropriate only when `EAGAIN` is expli
 
 - [ipc/util.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/util.c) — `ipc_addid()`, `ipc_rmid()`, and the per-namespace `ipc_ids` table that SysV objects live in until explicitly removed, behind Case 1
 - [ipc/sem.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/sem.c) — `semget()`, `semctl()`, and the `SEM_UNDO` adjustment-on-exit handling behind Case 1's fix
-- [fs/file.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/file.c) — `receive_fd()` and `alloc_fd()`, which install a received `SCM_RIGHTS` descriptor into the receiver's own `files_struct`, behind Case 2
+- [fs/file.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/file.c) — `receive_fd()`, which reserves and installs a received `SCM_RIGHTS` descriptor into the receiver's own `files_struct`, behind Case 2
 - [net/core/scm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/core/scm.c) — `scm_detach_fds()` and `scm_recv_one_fd()`, the control-message path that calls `receive_fd()` for each `SCM_RIGHTS` descriptor, behind Case 2
 - [net/unix/garbage.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/unix/garbage.c) — the per-user `unix_inflight` counter and cycle-detecting garbage collector for in-flight `SCM_RIGHTS` fds, behind Case 2
 - [include/linux/pipe_fs_i.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pipe_fs_i.h) — `struct pipe_inode_info` and `struct pipe_buffer`, the fixed-size ring behind Case 3
