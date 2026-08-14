@@ -420,7 +420,7 @@ cat /sys/kernel/debug/tracing/trace | grep 'do_one_initcall'
 - [Module Init and Initcalls](initcalls-modules.md) — the module side of `module_init()`
 - [printk and Kernel Logging](printk.md) — why printk works after `console_init()` but not before
 - [memblock: The Boot-Time Memory Allocator](../mm/memblock.md) — the allocator `setup_arch()` initializes, used before the buddy allocator exists
-- [SLUB Allocator Internals](../mm/slab-internals.md) — what `kmem_cache_init()` bootstraps
+- [SLUB Allocator Internals](../mm/slab-internals.md) — `struct kmem_cache`, freelist mechanics, and per-CPU caches: the runtime machinery `kmem_cache_init()` bootstraps
 - [Runqueues and Task Selection](../sched/runqueues.md) — the per-CPU `struct rq` that `sched_init()` allocates
 - [RCU (Read-Copy-Update)](../locking/rcu.md) — what becomes safe to use after `rcu_init()`
 

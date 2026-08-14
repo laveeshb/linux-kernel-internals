@@ -41,7 +41,8 @@ cat /proc/sys/kernel/printk
    1 ALERT   — action must be taken immediately
    2 CRIT    — critical conditions
    3 ERR     — error conditions
-   4 WARNING — warning conditions (console_loglevel default = 4)
+   4 WARNING — warning conditions (many distros set console_loglevel to 4; the
+                upstream Kconfig default, CONFIG_CONSOLE_LOGLEVEL_DEFAULT, is 7)
    5 NOTICE  — normal but significant
    6 INFO    — informational
    7 DEBUG   — debug messages (never shown at default level)
@@ -214,7 +215,7 @@ kprobe:vprintk_emit {
 - [kernel/printk/printk.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/printk/printk.c) — `vprintk_emit()`, `wake_up_klogd()`, `console_flush_all()`: the core implementation
 - [kernel/printk/printk_ringbuffer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/printk/printk_ringbuffer.h) — `struct printk_info`, `struct printk_ringbuffer`, `prb_reserve()`/`prb_commit()`: the lock-free ring buffer
 - [include/linux/printk.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/printk.h) — the `pr_*()` convenience macros and `printk_ratelimited()`
-- [include/linux/ratelimit.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/ratelimit.h) — `DEFINE_RATELIMIT_STATE()` and `__ratelimit()`: the rate-limiting primitives
+- [include/linux/ratelimit_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/ratelimit_types.h) — `DEFINE_RATELIMIT_STATE()` and `__ratelimit()`: the rate-limiting primitives
 - [include/linux/dev_printk.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/dev_printk.h) — `dev_err()`, `dev_info()`, `dev_warn()`, `dev_dbg()`: the device-aware wrappers
 
 ### Man pages

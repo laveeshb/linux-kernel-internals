@@ -409,7 +409,7 @@ kprobe:do_init_module {
 
 ### LWN articles
 
-- [LWN: Enforcement (or not) for module-specific exported symbols](https://lwn.net/Articles/1029492/) — `EXPORT_SYMBOL_GPL_FOR_MODULES()` and the debate over restricting exports to a named set of in-tree modules
+- [LWN: Enforcement (or not) for module-specific exported symbols](https://lwn.net/Articles/1029492/) — the debate over restricting exports to a named set of in-tree modules; the macro discussed was proposed as `EXPORT_SYMBOL_GPL_FOR_MODULES()` and merged as `EXPORT_SYMBOL_FOR_MODULES()`, dropping the `GPL_` (see the Kernel source entry above)
 - [LWN: The proper use of EXPORT_SYMBOL_GPL()](https://lwn.net/Articles/769471/) — how maintainers decide when an exported symbol should be GPL-only
 
 ### External
