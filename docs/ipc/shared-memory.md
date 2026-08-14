@@ -251,8 +251,37 @@ send_fd_over_socket(socket_fd, fd);
 
 ## Further reading
 
-- [Signals](signals.md) — SIGSEGV from shared memory access violations
-- [Futex Internals](../locking/futex.md) — How semaphores are implemented
-- [Memory Management: mmap](../mm/mmap.md) — How MAP_SHARED mappings work
-- `man 7 shm_overview` — POSIX shared memory overview
-- `man 2 eventfd` — eventfd semantics
+### Kernel source
+
+- [ipc/shm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/shm.c) — `shmget()`, `shmat()`/`shmdt()`, and `shmctl()` syscalls; `newseg()` creates the segment's hidden backing file via `shmem_kernel_file_setup()` (or `hugetlb_file_setup()` for `SHM_HUGETLB`)
+- [mm/shmem.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/shmem.c) — `shmem_file_setup()`/`shmem_kernel_file_setup()`: the tmpfs backing shared by both POSIX `shm_open()` objects and SysV `shmget()` segments
+- [mm/memfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/memfd.c) — `memfd_create()` syscall and the `F_SEAL_*` sealing checks
+- [fs/eventfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/eventfd.c) — `eventfd_write()`/`eventfd_read()` and the `struct eventfd_ctx` counter/wait-queue implementation
+
+### Man pages
+
+- [`shmget(2)`](https://man7.org/linux/man-pages/man2/shmget.2.html) — allocate a System V shared memory segment
+- [`shmat(2)`/`shmdt(2)`](https://man7.org/linux/man-pages/man2/shmat.2.html) — attach/detach a System V segment
+- [`shmctl(2)`](https://man7.org/linux/man-pages/man2/shmctl.2.html) — control operations, including `IPC_RMID`
+- [`shm_open(3)`](https://man7.org/linux/man-pages/man3/shm_open.3.html) — POSIX shared memory objects; documents the `/dev/shm` tmpfs implementation on Linux
+- [`shm_overview(7)`](https://man7.org/linux/man-pages/man7/shm_overview.7.html) — POSIX shared memory API overview
+- [`sem_overview(7)`](https://man7.org/linux/man-pages/man7/sem_overview.7.html) — POSIX semaphores: named vs. unnamed, `/dev/shm` persistence for named semaphores
+- [`memfd_create(2)`](https://man7.org/linux/man-pages/man2/memfd_create.2.html) — anonymous sealable memory files
+- [`eventfd(2)`](https://man7.org/linux/man-pages/man2/eventfd.2.html) — counter-backed notification fd, including `EFD_SEMAPHORE`
+
+### Related pages
+
+- [Process Address Space](../mm/mmap.md) — VMAs and the `MAP_SHARED` flag that both POSIX shm and anonymous shared mappings rely on
+- [File-Backed mmap and Page Faults](../mm/file-mmap.md) — `MAP_PRIVATE` vs `MAP_SHARED` fault handling in detail
+- [Futex Internals](../locking/futex.md) — how `sem_wait()`/`sem_post()` fall back to the kernel when the uncontended fast-path atomic isn't enough
+- [SysV IPC: Semaphores and Message Queues](sysv-semaphores.md) — `semget`/`semop`, `SEM_UNDO`, and the SysV IPC leak problem
+- [eventfd and signalfd](eventfd-signalfd.md) — `struct eventfd_ctx`, epoll integration, and signalfd covered in depth
+- [Unix Domain Sockets](unix-sockets.md) — `SCM_RIGHTS`, the mechanism used to pass `memfd_create()` descriptors between processes
+
+### LWN articles
+
+- [Sealed files](https://lwn.net/Articles/593918/) (2014) — Jonathan Corbet on the `memfd_create()` and `F_SEAL_*` sealing mechanism described in this page's memfd section
+
+### External
+
+- [tmpfs — The Linux Kernel documentation](https://docs.kernel.org/filesystems/tmpfs.html) — confirms both POSIX `shm_open()`/`/dev/shm` and SysV `shmget()` segments are backed by tmpfs (SysV via an internal, non-visible mount)

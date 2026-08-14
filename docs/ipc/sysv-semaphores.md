@@ -103,7 +103,6 @@ semctl(semid, 0, IPC_RMID);
 struct sem_array {
     struct kern_ipc_perm  sem_perm;    /* permissions + IPC id */
     time64_t              sem_ctime;   /* last semctl() time */
-    time64_t              sem_otime;   /* last semop() time */
     struct list_head      pending_alter;  /* pending sops that alter the set */
     struct list_head      pending_const;  /* pending sops that don't alter (wait-for-zero) */
     struct list_head      list_id;     /* list of all sem_arrays */
@@ -119,10 +118,13 @@ struct sem {
     spinlock_t   lock;          /* per-semaphore lock (simple ops) */
     struct list_head pending_alter;  /* simple pending alter ops */
     struct list_head pending_const;  /* simple pending const ops */
+    time64_t     sem_otime;     /* last semop() time -- per-semaphore, not
+                                  * on sem_array, replicated to avoid
+                                  * cache line trashing under concurrent ops */
 };
 ```
 
-Waiting operations are tracked in `struct sem_queue` (defined in `ipc/sem.c`, an internal structure not exported in headers). When `semop()` cannot complete immediately, it enqueues a `sem_queue` entry and sleeps. `do_semop()` in `ipc/sem.c` walks the pending queue and wakes sleepers when a semaphore increment makes their operation satisfiable.
+Waiting operations are tracked in `struct sem_queue` (defined in `ipc/sem.c`, an internal structure not exported in headers). When `semop()` cannot complete immediately, it enqueues a `sem_queue` entry and sleeps. `do_semtimedop()` (the common path behind both the `semop()` and `semtimedop()` syscalls) in `ipc/sem.c` walks the pending queue and wakes sleepers when a semaphore increment makes their operation satisfiable.
 
 ## SysV Message Queues
 
@@ -261,8 +263,8 @@ ipcs -s | awk 'NR>2 && $1 != "" {print $2}' | xargs -I{} ipcrm -s {}
 ```bash
 # Max semaphore sets system-wide
 sysctl kernel.sem
-# kernel.sem = 250 32000 32 128
-#              SEMMSL SEMMNS SEMOPM SEMMNI
+# kernel.sem = 32000 1024000000 500 32000
+#              SEMMSL SEMMNS      SEMOPM SEMMNI
 #   SEMMSL: max semaphores per set
 #   SEMMNS: max semaphores system-wide
 #   SEMOPM: max ops per semop() call
@@ -316,8 +318,33 @@ ipcs -s | awk 'NR>2 {print $5}' | sort | uniq -c | sort -rn
 
 ## Further reading
 
-- `ipc/sem.c`, `ipc/msg.c` — kernel implementations
-- `include/linux/sem.h`, `include/uapi/linux/sem.h` — data structures
-- [Shared Memory](shared-memory.md) — SysV `shmget`/`shmat` and POSIX `shm_open`
-- [eventfd and signalfd](eventfd-signalfd.md) — pollable alternatives to semaphores
-- `semop(2)`, `msgop(2)`, `ipcs(1)`, `ipcrm(1)` man pages
+### Kernel source
+
+- [ipc/sem.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/sem.c) — `struct sem_array`, `struct sem`, `struct sem_undo`; `do_semtimedop()` (the operation-processing path backing `semop()`) and `exit_sem()`
+- [ipc/msg.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/msg.c) — `struct msg_queue` and the `msgget()`/`msgsnd()`/`msgrcv()`/`msgctl()` implementation
+- [include/uapi/linux/sem.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/sem.h) — `struct sembuf`, `union semun`, and the `SEMMSL`/`SEMMNS`/`SEMOPM`/`SEMMNI` defaults
+- [include/uapi/linux/msg.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/msg.h) — `struct msgbuf`, `struct msqid_ds`, and the `MSGMNI`/`MSGMAX`/`MSGMNB` defaults
+
+### Man pages
+
+- [`semget(2)`](https://man7.org/linux/man-pages/man2/semget.2.html) — create/open a semaphore set, `IPC_PRIVATE`, and the `nsems` limit
+- [`semop(2)`](https://man7.org/linux/man-pages/man2/semop.2.html) — `semop()`/`semtimedop()`, `SEM_UNDO`, and atomic multi-operation semantics
+- [`semctl(2)`](https://man7.org/linux/man-pages/man2/semctl.2.html) — `union semun`, `GETALL`/`SETALL`/`SETVAL`/`IPC_RMID`
+- [`msgget(2)`](https://man7.org/linux/man-pages/man2/msgget.2.html) — create/open a message queue
+- [`msgop(2)`](https://man7.org/linux/man-pages/man2/msgop.2.html) — `msgsnd()`/`msgrcv()`, including the `msgtyp` filtering rules
+- [`msgctl(2)`](https://man7.org/linux/man-pages/man2/msgctl.2.html) — `IPC_STAT`/`IPC_SET`/`IPC_RMID` for message queues
+- [`ftok(3)`](https://man7.org/linux/man-pages/man3/ftok.3.html) — deriving an IPC key from a path and project ID
+- [`ipcs(1)`](https://man7.org/linux/man-pages/man1/ipcs.1.html) — inspect active SysV IPC objects
+- [`ipcrm(1)`](https://man7.org/linux/man-pages/man1/ipcrm.1.html) — remove SysV IPC objects by key or identifier
+- [`proc_sysvipc(5)`](https://man7.org/linux/man-pages/man5/proc_sysvipc.5.html) — the `/proc/sysvipc/{msg,sem,shm}` files
+
+### Related pages
+
+- [Shared Memory, Semaphores, and eventfd](shared-memory.md) — SysV `shmget`/`shmat` and POSIX semaphores, contrasted with the SysV semaphores covered here
+- [POSIX Message Queues](mqueue.md) — the POSIX counterpart to this page's message-queue section, including a priority-ordering comparison
+- [eventfd and signalfd](eventfd-signalfd.md) — the pollable, fd-based alternative to blocking on `semop()`
+- [IPC War Stories](war-stories.md) — a real orphaned-semaphore-set incident walking through the `SEMMNI` exhaustion failure mode described above
+
+### External
+
+- [Kernel docs: sysctl/kernel.rst — msgmax, msgmnb, and msgmni](https://docs.kernel.org/admin-guide/sysctl/kernel.html#msgmax-msgmnb-and-msgmni) — official documentation of the current default values for the message-queue limits shown above

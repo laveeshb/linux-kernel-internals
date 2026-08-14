@@ -212,25 +212,47 @@ struct unix_sock {
     struct path     path;           /* socket file path (filesystem sockets) */
     struct mutex    iolock, bindlock;
     struct sock    *peer;           /* connected peer (SOCK_STREAM/SEQPACKET) */
-    struct list_head link;          /* list of all unix sockets */
-    atomic_long_t   inflight;       /* SCM_RIGHTS fds in flight */
+    struct sock    *listener;
+    struct unix_vertex *vertex;     /* this socket's node in the GC graph */
     spinlock_t      lock;
-    unsigned long   gc_flags;
     struct socket_wq peer_wq;
     wait_queue_entry_t peer_wake;
     struct scm_stat scm_stat;       /* SCM stats for this socket */
-    /* ... */
+    int             inq_len;
+    bool            recvmsg_inq;
+    /* struct sk_buff *oob_skb; -- only under CONFIG_AF_UNIX_OOB */
 };
 ```
 
 Messages for `SOCK_DGRAM` and `SOCK_SEQPACKET` are stored as `sk_buff` entries in `sk->sk_receive_queue`. For `SOCK_STREAM`, `unix_stream_sendmsg()` copies data into the peer's receive queue directly.
 
-The `inflight` counter tracks file descriptors currently in-flight via `SCM_RIGHTS`. The kernel garbage collector (`net/unix/garbage.c`) detects cycles where in-flight fds reference the very sockets they are being sent over, preventing reference count leaks.
+There is no per-socket in-flight-fd counter on `struct unix_sock` (an earlier kernel design tracked this via a `struct list_head link`/`atomic_long_t inflight` pair; both are gone). In-flight `SCM_RIGHTS` accounting is now per-`user_struct` (`user->unix_inflight`). The garbage collector (`net/unix/garbage.c`) builds an explicit graph of sockets and their fd references — each socket is a `struct unix_vertex` (linked from `unix_sock.vertex` above), each in-flight-fd reference an edge (`struct unix_edge`) — and runs a Tarjan-style strongly-connected-component search over that graph to find and free reference cycles, rather than a simple inflight-counter check.
 
 ## Further reading
 
-- `net/unix/af_unix.c`, `net/unix/garbage.c` — full implementation
+### Kernel source
+
+- [net/unix/af_unix.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/unix/af_unix.c) — core `AF_UNIX` implementation: `unix_stream_sendmsg()`, `unix_dgram_sendmsg()`, `unix_attach_fds()` / `unix_detach_fds()`, `unix_scm_to_skb()`
+- [net/unix/garbage.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/unix/garbage.c) — cycle-collecting garbage collector for `SCM_RIGHTS` reference cycles (`struct unix_vertex`, `struct unix_edge`)
+- [net/core/scm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/core/scm.c) — generic ancillary-data handling: `scm_detach_fds()`, `scm_check_creds()` (the `SCM_CREDENTIALS` uid/gid check)
+- [include/net/af_unix.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/net/af_unix.h) — `struct unix_sock` definition
+- [include/uapi/linux/un.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/un.h) — `struct sockaddr_un` and `UNIX_PATH_MAX`
+
+### Man pages
+
+- [`unix(7)`](https://man7.org/linux/man-pages/man7/unix.7.html) — the canonical reference: socket types, `sockaddr_un`, abstract namespace, `SCM_RIGHTS`, `SCM_CREDENTIALS`, `SO_PEERCRED`
+- [`socket(2)`](https://man7.org/linux/man-pages/man2/socket.2.html) — the `socket()` syscall and the `SOCK_STREAM` / `SOCK_DGRAM` / `SOCK_SEQPACKET` types
+- [`sendmsg(2)`](https://man7.org/linux/man-pages/man2/sendmsg.2.html) — `sendmsg()`/`recvmsg()`, `struct msghdr`, and ancillary data
+- [`cmsg(3)`](https://man7.org/linux/man-pages/man3/cmsg.3.html) — the `CMSG_FIRSTHDR`/`CMSG_DATA`/`CMSG_LEN`/`CMSG_SPACE` macros
+
+### Related pages
+
 - [Pipes and FIFOs](pipes.md) — unidirectional byte-stream IPC
 - [Shared Memory](shared-memory.md) — zero-copy data exchange
 - [eventfd and signalfd](eventfd-signalfd.md) — pollable notification fds
-- `unix(7)` man page — complete API reference
+- [IPC War Stories](war-stories.md) — a real `SCM_RIGHTS` fd-leak incident from a privilege-separated daemon
+- [Socket Layer Overview](../net/socket-layer.md) — the generic `struct socket`/`struct sock`/`proto_ops` stack that `AF_UNIX` plugs into
+
+### LWN articles
+
+- [io_uring, SCM_RIGHTS, and reference-count cycles](https://lwn.net/Articles/779472/) (Jonathan Corbet, February 2019) — how `io_uring` file registration created a new variant of the fd reference-count cycle that the `AF_UNIX` garbage collector exists to break

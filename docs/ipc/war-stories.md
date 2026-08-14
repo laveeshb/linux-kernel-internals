@@ -65,9 +65,9 @@ lsof -p <worker_pid> | grep passwd  # many open copies of /etc/passwd
 
 ### Root cause
 
-When `SCM_RIGHTS` delivers a file descriptor, the kernel calls `receive_fd()` (in `fs/file.c`), which allocates a new file descriptor in the receiver's `files_struct` via `__alloc_fd()`. This is a full kernel-level `dup()` — the receiver's fd table grows by one per received fd, completely independently of the sender. The sender closing its copy has no effect on the receiver's copy.
+When `SCM_RIGHTS` delivers a file descriptor, the kernel calls `receive_fd()` (in `fs/file.c`), which allocates a new file descriptor in the receiver's `files_struct` via `alloc_fd()`. This is a full kernel-level `dup()` — the receiver's fd table grows by one per received fd, completely independently of the sender. The sender closing its copy has no effect on the receiver's copy.
 
-The `inflight` counter in `struct unix_sock` tracks fds currently in socket buffers. Once delivered, the fd is solely the receiver's responsibility.
+In-flight `SCM_RIGHTS` fds are tracked per-`user_struct` (`user->unix_inflight`), not on `struct unix_sock` itself. Once delivered, the fd is solely the receiver's responsibility.
 
 ### Fix
 
@@ -108,7 +108,7 @@ cat /proc/sys/fs/pipe-max-size  # system-wide maximum
 
 ### Root cause
 
-A pipe is a fixed-capacity circular buffer. `struct pipe_inode_info` (defined in `include/linux/pipe_fs_i.h`) tracks the ring of `struct pipe_buffer` pages. When all pages are full, `pipe_write()` in `fs/pipe.c` either blocks (default) or returns `EAGAIN` (if `O_NONBLOCK`). There is no automatic buffering beyond the kernel pipe capacity.
+A pipe is a fixed-capacity circular buffer. `struct pipe_inode_info` (defined in `include/linux/pipe_fs_i.h`) tracks the ring of `struct pipe_buffer` pages. When all pages are full, `anon_pipe_write()` in `fs/pipe.c` either blocks (default) or returns `EAGAIN` (if `O_NONBLOCK`). There is no automatic buffering beyond the kernel pipe capacity.
 
 ### Fix
 
@@ -146,7 +146,7 @@ ps -o pid,stat,ppid | awk '$2 ~ /Z/ && $3 == <parent_pid> {count++} END {print c
 
 Standard signals (1–31) use a single-bit pending mask per thread (`pending` in `struct task_struct`, type `struct sigpending`). The mask has one bit per signal number. If `SIGCHLD` is already pending when another child exits, the new delivery is silently discarded — the mask bit is already set. The signal handler sees only one delivery regardless of how many children exited.
 
-Real-time signals (`SIGRTMIN` through `SIGRTMAX`, kernel range 32–63, user-visible range 34–63) use a queue (`struct sigqueue`) and are not subject to this merging, but `SIGCHLD` is a standard signal.
+Real-time signals (`SIGRTMIN` through `SIGRTMAX`, kernel range 32–64, user-visible range 34–64 once glibc's two reserved signals are excluded) use a queue (`struct sigqueue`) and are not subject to this merging, but `SIGCHLD` is a standard signal.
 
 ### Fix
 
@@ -244,9 +244,43 @@ The general principle: `EFD_NONBLOCK` is appropriate only when `EAGAIN` is expli
 
 ## Further reading
 
+### Kernel source
+
+- [ipc/util.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/util.c) — `ipc_addid()`, `ipc_rmid()`, and the per-namespace `ipc_ids` table that SysV objects live in until explicitly removed, behind Case 1
+- [ipc/sem.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/sem.c) — `semget()`, `semctl()`, and the `SEM_UNDO` adjustment-on-exit handling behind Case 1's fix
+- [fs/file.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/file.c) — `receive_fd()` and `alloc_fd()`, which install a received `SCM_RIGHTS` descriptor into the receiver's own `files_struct`, behind Case 2
+- [net/core/scm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/core/scm.c) — `scm_detach_fds()` and `scm_recv_one_fd()`, the control-message path that calls `receive_fd()` for each `SCM_RIGHTS` descriptor, behind Case 2
+- [net/unix/garbage.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/unix/garbage.c) — the per-user `unix_inflight` counter and cycle-detecting garbage collector for in-flight `SCM_RIGHTS` fds, behind Case 2
+- [include/linux/pipe_fs_i.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pipe_fs_i.h) — `struct pipe_inode_info` and `struct pipe_buffer`, the fixed-size ring behind Case 3
+- [fs/pipe.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/pipe.c) — `anon_pipe_write()`, the `pipe_max_size` sysctl, and `F_SETPIPE_SZ` handling behind Case 3
+- [kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/signal.c) — `legacy_queue()` and `__send_signal_locked()`, which drop a standard signal that is already pending on the target, behind Case 4
+- [include/linux/signal_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/signal_types.h) — `struct sigpending` (a bitmask) versus `struct sigqueue` (a queued list entry), the data structures behind Case 4's standard/real-time distinction
+- [fs/eventfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/eventfd.c) — `eventfd_write()` and the `ULLONG_MAX - 1` saturation check behind Case 5
+
+### Man pages
+
+- [`semop(2)`](https://man7.org/linux/man-pages/man2/semop.2.html) — documents `SEM_UNDO`: adjustments are automatically reversed when a process terminates, used in Case 1
+- [`sem_unlink(3)`](https://man7.org/linux/man-pages/man3/sem_unlink.3.html) — confirms a named POSIX semaphore is destroyed only once every process that has it open has closed it, the mechanism behind Case 1's "migrate to POSIX semaphores" fix
+- [`ipcs(1)`](https://man7.org/linux/man-pages/man1/ipcs.1.html) — the diagnostic tool used in Case 1
+- [`unix(7)`](https://man7.org/linux/man-pages/man7/unix.7.html) — documents `SCM_RIGHTS` ancillary data for passing open file descriptors between processes, used in Case 2
+- [`pipe(7)`](https://man7.org/linux/man-pages/man7/pipe.7.html) — documents pipe capacity (16 pages / 65,536 bytes by default since Linux 2.6.11) and blocking-write behavior, used in Case 3
+- [`fcntl(2)`](https://man7.org/linux/man-pages/man2/fcntl.2.html) — documents `F_SETPIPE_SZ`/`F_GETPIPE_SZ` for resizing a pipe, used in Case 3's fix
+- [`signal(7)`](https://man7.org/linux/man-pages/man7/signal.7.html) — documents that standard signals do not queue (multiple pending instances collapse to one) while real-time signals do, the mechanism behind Case 4
+- [`wait(2)`](https://man7.org/linux/man-pages/man2/waitpid.2.html) — documents `waitpid()` and `WNOHANG`, used in Case 4's fix
+- [`eventfd(2)`](https://man7.org/linux/man-pages/man2/eventfd.2.html) — documents `EFD_SEMAPHORE`, `EFD_NONBLOCK`, and the counter's `UINT64_MAX - 1` saturation point, used in Case 5
+- [`mq_send(3)`](https://man7.org/linux/man-pages/man3/mq_send.3.html) — documents the blocking/`EAGAIN` behavior when `mq_maxmsg` is reached, the alternative mechanism mentioned in Case 5's fix
+
+### Related pages
+
 - [Signals](signals.md) — `SIGCHLD`, `sigaction`, `sigprocmask`
 - [Pipes and FIFOs](pipes.md) — `struct pipe_inode_info`, `PIPE_BUF`, `F_SETPIPE_SZ`
 - [Unix Domain Sockets](unix-sockets.md) — `SCM_RIGHTS`, `SCM_CREDENTIALS`, fd passing internals
-- [SysV Semaphores and Message Queues](sysv-semaphores.md) — `SEM_UNDO`, `IPC_RMID`, `SEMMNI`
+- [SysV IPC: Semaphores and Message Queues](sysv-semaphores.md) — `SEM_UNDO`, `IPC_RMID`, `SEMMNI`
 - [eventfd and signalfd](eventfd-signalfd.md) — `EFD_SEMAPHORE`, `EFD_NONBLOCK`, counter semantics
-- `fs/eventfd.c`, `fs/pipe.c`, `net/unix/af_unix.c`, `ipc/sem.c` — kernel implementations
+- [POSIX Message Queues](mqueue.md) — `mq_send`, `mq_maxmsg`, blocking/backpressure semantics, the alternative discussed in Case 5
+
+### LWN articles
+
+- [Circular pipes](https://lwn.net/Articles/118750/) (January 11, 2005) — the introduction of the multi-page circular pipe buffer in 2.6.11, the ancestor of the `struct pipe_inode_info` ring behind Case 3
+- [The evolution of pipe buffers](https://lwn.net/Articles/119682/) (January 18, 2005) — follow-up on the pipe buffer redesign, including the 16-page capacity ceiling behind Case 3's default 64 KiB pipe size
+- [io_uring, SCM_RIGHTS, and reference-count cycles](https://lwn.net/Articles/779472/) (February 13, 2019) — how the kernel tracks and garbage-collects in-flight `SCM_RIGHTS` file descriptors, the mechanism behind Case 2
