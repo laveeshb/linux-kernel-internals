@@ -80,16 +80,17 @@ forever.
 
 ### The fix
 
-The fix was to key futexes on the **physical address** of the page, combined with the page offset. The
-kernel now computes a `struct futex_key`:
+The fix was to key shared futexes on the identity of the underlying object — an inode sequence number,
+combined with the page offset — rather than on the virtual address at all. The kernel now computes a
+`union futex_key`:
 
 ```c
-/* kernel/futex/core.c */
+/* include/linux/futex.h */
 union futex_key {
     struct {
-        u64     i_seq;      /* inode sequence number (for file-backed) */
+        u64           i_seq;   /* inode sequence number (for file-backed) */
         unsigned long pgoff;
-        unsigned int  bitset;
+        unsigned int  offset;
     } shared;
     struct {
         union {
@@ -97,20 +98,20 @@ union futex_key {
             u64 __tmp;
         };
         unsigned long address;
-        unsigned int  bitset;
+        unsigned int  offset;
     } private;
     struct {
-        u64     ptr;        /* physical address bits */
+        u64           ptr;
         unsigned long word;
-        unsigned int  bitset;
+        unsigned int  offset;
     } both;
 };
 ```
 
-For shared mappings, `get_futex_key()` calls `get_user_pages()` to pin the page, then uses the page's
-physical address (via `page_to_pfn()`) as the hash key. Private mappings (anonymous, `MAP_PRIVATE`) still
-use the virtual address plus the `mm_struct` pointer, which uniquely identifies the mapping within a
-process.
+For shared mappings, `get_futex_key()` derives the key from the backing inode's sequence number and the
+page's offset within that file — an identity that's the same no matter which process's virtual address
+space maps the page. Private mappings (anonymous, `MAP_PRIVATE`) key on the virtual address plus the
+`mm_struct` pointer, which uniquely identifies the mapping within a process.
 
 ### The lesson
 

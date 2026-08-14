@@ -93,7 +93,7 @@ number skips dispatch entirely, leaving `regs->ax` exactly as the tracer set it.
 mechanism for injecting a return value or no-op'ing a syscall via ptrace: set `orig_rax = -1` and set
 `rax` to whatever return value you want the traced process to see.
 
-## TIF_SYSCALL_TRACE
+## SYSCALL_WORK_SYSCALL_TRACE
 
 The flag that triggers ptrace syscall-stops is `SYSCALL_WORK_SYSCALL_TRACE` in the task's
 `thread_info.syscall_work`. It is set by `ptrace_resume()` when a `PTRACE_SYSCALL` request is issued

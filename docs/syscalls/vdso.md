@@ -236,7 +236,7 @@ static __always_inline int __vdso_getcpu(unsigned *cpu, unsigned *node,
 ## Debugging vDSO issues
 
 **strace always shows clock_gettime as a real syscall**: strace injects ptrace, which sets
-`TIF_SYSCALL_TRACE` on the tracee. This causes the kernel to intercept the `syscall` instruction path, but
+`SYSCALL_WORK_SYSCALL_TRACE` on the tracee. This causes the kernel to intercept the `syscall` instruction path, but
 the vDSO *bypasses* `syscall` entirely — the vDSO function runs in userspace without ever entering the
 kernel. strace therefore never sees vDSO-accelerated calls unless the vDSO falls back.
 
