@@ -41,7 +41,7 @@ Called from `start_kernel()` after `setup_arch()` and the per-CPU areas are set 
 Anything not matched by `__setup()` or `early_param()` is treated as either:
 - A module parameter for a built-in module (`module.param=value` form)
 - An environment variable to pass to the init process
-- An unknown parameter (logged as a warning)
+- An unknown parameter (logged via `pr_notice()`, not a warning)
 
 ### Phase 3: module parameters — at module load time
 

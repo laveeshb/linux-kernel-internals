@@ -20,31 +20,25 @@ The CPU raises an exception, the IDT handler runs, and control reaches `do_page_
 ## `die()` and the oops path
 
 ```c
-/* arch/x86/kernel/traps.c (die() implementation) */
+/* arch/x86/kernel/dumpstack.c */
 
 void die(const char *str, struct pt_regs *regs, long err)
 {
     unsigned long flags = oops_begin();
     int sig = SIGSEGV;
 
-    if (!user_mode(regs))
-        report_bug(regs->ip, regs);
-
-    if (notify_die(DIE_OOPS, str, regs, err, 0, SIGSEGV) == NOTIFY_STOP)
+    if (__die(str, regs, err))   /* formats and prints the oops message */
         sig = 0;
 
-    __die(str, regs, err);      /* formats and prints the oops message */
-
-    if (regs && kexec_should_crash(current))
-        crash_kexec(regs);
-
-    oops_end(flags, regs, sig); /* decides: kill task or panic */
+    oops_end(flags, regs, sig);  /* decides: kill task or panic */
 }
 ```
 
 ### `oops_begin()` / `oops_end()`
 
-`oops_begin()` disables the watchdog timer (to prevent a watchdog reset before the oops is printed), calls `bust_spinlocks(1)` to flush any spinning consolse writers, and increments `oops_count` (visible in `/proc/sys/kernel/oops_count`). It returns the interrupt flags so `oops_end()` can restore them.
+`oops_begin()` takes a raw spinlock (`die_lock`) to serialize concurrent oopses across CPUs — nested oopses on the *same* CPU (tracked via `die_owner`/`die_nest_count`) are allowed through rather than deadlocking — then calls `console_verbose()` and `bust_spinlocks(1)` to flush any spinning console writers. It returns the saved interrupt flags so `oops_end()` can restore them. Neither function touches any watchdog, and there is no `oops_count` sysctl.
+
+`oops_end()` is where `kexec_should_crash()`/`crash_kexec()` are actually invoked (not inside `die()` itself), followed by releasing `die_lock`, tainting the kernel (`TAINT_DIE`), and — if `signr` is nonzero — deciding whether to `panic()` (always in interrupt context, or if `panic_on_oops` is set) or otherwise kill the offending task.
 
 `oops_end()` re-enables the watchdog, calls `bust_spinlocks(0)`, and then either:
 - Delivers `SIGSEGV` to the current task (if the task can be killed)
@@ -131,7 +125,7 @@ struct orc_entry {
     s16     bp_offset;   /* base pointer offset */
     unsigned int sp_reg:4;   /* register containing the CFA */
     unsigned int bp_reg:4;
-    unsigned int type:2;
+    unsigned int type:3;
     unsigned int signal:1;
 };
 ```
@@ -374,10 +368,10 @@ KFENCE does not catch every bug (only sampled allocations are guarded), but it p
 
 - [kernel/panic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/panic.c) — `panic()`/`vpanic()`: message formatting, the panic notifier chain, and the reboot/halt sequence
 - [kernel/crash_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/crash_core.c) — `kexec_should_crash()` and `crash_kexec()`: the kdump entry point invoked from both `oops_end()` and `vpanic()`
-- [arch/x86/kernel/dumpstack.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/dumpstack.c) — `die()`, `oops_begin()`, `oops_end()`: the actual x86 oops path (see note below — the page's `die()` code block is out of date)
+- [arch/x86/kernel/dumpstack.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/dumpstack.c) — `die()`, `oops_begin()`, `oops_end()`: the actual x86 oops path
 - [arch/x86/kernel/traps.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/traps.c) — exception entry points (`exc_general_protection()`, `exc_invalid_op()`, `exc_double_fault()`, etc.) that call `die()`
 - [arch/x86/kernel/unwind_orc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/unwind_orc.c) — `orc_find()`: ORC entry lookup used to produce `Call Trace`
-- [arch/x86/include/asm/orc_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/orc_types.h) — `struct orc_entry` layout (note: `type` is a 3-bit field, not 2 — see below)
+- [arch/x86/include/asm/orc_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/orc_types.h) — `struct orc_entry` layout
 - [include/asm-generic/bug.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/bug.h) — `WARN()`/`BUG()` family, and the `warn_slowpath_fmt()`/`__warn()` declarations
 - [lib/bust_spinlocks.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/bust_spinlocks.c) — `bust_spinlocks()`: the `oops_in_progress` counter used to keep console output readable during an oops
 
