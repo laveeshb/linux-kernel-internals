@@ -309,27 +309,25 @@ static int __init mydriver_init(void)
 }
 ```
 
-The `return 1` on PCI registration failure returned a *positive* value instead of a negative errno. The kernel's `do_one_initcall()` checks the return value:
+The `return 1` on PCI registration failure returned a *positive* value instead of a negative errno. For a loadable module, `init()` runs via `do_one_initcall(mod->init)`, which just calls the function and returns whatever it returned — no success/failure interpretation happens there. That interpretation happens back in the caller, `do_init_module()`:
 
 ```c
-/* init/main.c */
-static int __init_or_module do_one_initcall(initcall_t fn)
-{
-    int ret;
-    ...
-    ret = fn();
-    ...
-    if (ret >= 0)
-        pr_debug("initcall %pF returned %d after %llu usecs\n",
-                 fn, ret, duration);
-    else
-        pr_warn("initcall %pF returned %d after %llu usecs\n",
-                fn, ret, duration);
-    return ret;
+/* kernel/module/main.c */
+if (mod->init != NULL)
+    ret = do_one_initcall(mod->init);
+if (ret < 0) {
+    /* ... module load fails, unwinds ... */
+    goto fail_free_freeinit;
 }
+if (ret > 0)
+    pr_warn("%s: init suspiciously returned %d, it should follow 0/-E convention\n",
+            mod->name, ret);
+
+/* Now it's a first class citizen! */
+mod->state = MODULE_STATE_LIVE;
 ```
 
-A return value `>= 0` is treated as success by the initcall machinery and by `load_module()`. The module was reported as loaded. But because `pci_register_driver()` had actually failed, the `cdev_del()` and `kfree()` cleanup branches ran — freeing the character device registration and the allocated state. The module was in a state where `init()` returned "success" but had cleaned up everything, leaving a partially-initialized shell.
+A return value `> 0` only triggers a warning — it does *not* fail the load. The module was reported as loaded. But because `pci_register_driver()` had actually failed, the `cdev_del()` and `kfree()` cleanup branches ran — freeing the character device registration and the allocated state. The module was in a state where `init()` returned "success" but had cleaned up everything, leaving a partially-initialized shell.
 
 Subsequent access through the character device (or driver framework callbacks) reached freed memory or missing registrations. The kmemleaks came from a slightly different path: on machines where the PCI device was present but returned a transient error, `cdev_add` had registered the device but `pci_register_driver` failed. The `cdev_del` ran, but a racing process had already opened the character device, preventing the `cdev_del` from fully completing. The state allocation (`mydriver_state`) was freed while references to it still existed.
 
