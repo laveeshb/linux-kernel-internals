@@ -58,13 +58,22 @@ The build system generates `arch/x86/include/generated/asm/syscalls_32.h`, which
 
 ```c
 /* arch/x86/entry/syscall_32.c */
-asmlinkage const sys_call_ptr_t ia32_sys_call_table[] = {
-#include <asm/syscalls_32.h>
-};
+#define __SYSCALL(nr, sym) case nr: return __ia32_##sym(regs);
+long ia32_sys_call(const struct pt_regs *regs, unsigned int nr)
+{
+	switch (nr) {
+	#include <asm/syscalls_32.h>
+	default: return __ia32_sys_ni_syscall(regs);
+	}
+}
 ```
 
 When a 32-bit process enters the kernel via `int 0x80` or `sysenter`, the entry code detects the 32-bit CS
-segment, loads `ia32_sys_call_table` instead of `sys_call_table`, and dispatches from there.
+segment and calls `ia32_sys_call()`, which switches on the syscall number to the matching `__ia32_*` stub —
+the same switch-based dispatch pattern the native 64-bit path uses (`x64_sys_call()`; see
+[Syscall Entry Path](syscall-entry.md)). A `sys_call_table[]` array is still built for `CONFIG_X86_32`, but
+only because `kernel/trace/trace_syscalls.c` needs a syscall-number-to-address table for tracing — it is not
+used for dispatch.
 
 ## Key compat types
 
@@ -249,7 +258,7 @@ static long my_compat_ioctl(struct file *file, unsigned int cmd,
 ## Practical example: compat_sys_read vs sys_read
 
 `read()` only passes a 32-bit pointer and a 32-bit count. On x86-64, the kernel handles this transparently:
-the `ia32_sys_call_table` entry for `read` points to the native `sys_read`, because `compat_ptr()` of the
+`ia32_sys_call()`'s `read` case dispatches straight to the native `sys_read` handler, because `compat_ptr()` of the
 32-bit buffer address produces the correct 64-bit user pointer, and `compat_size_t` (u32) fits in `size_t`.
 No separate compat handler is needed.
 
@@ -321,9 +330,28 @@ structs instead.
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/compat.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/compat.h) — `COMPAT_SYSCALL_DEFINEx()` macros, `compat_ptr()`/`ptr_to_compat()`, `struct compat_iovec`
+- [include/asm-generic/compat.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/compat.h) — the base `compat_uptr_t`, `compat_size_t`, `compat_long_t`, `compat_s64`/`compat_u64` typedefs (pulled in by each arch's `asm/compat.h`)
+- [arch/x86/include/asm/compat.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/compat.h) — `struct compat_stat` and the x86-64 override of `in_compat_syscall()`
+- [arch/x86/include/asm/syscall_wrapper.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/syscall_wrapper.h) — `__IA32_COMPAT_SYS_STUBx()`: generates the `__ia32_compat_sys_xxx` entry stub
+- [arch/x86/entry/syscalls/syscall_32.tbl](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/syscalls/syscall_32.tbl) — the ia32 syscall table, including its compat-entry-point column
+- [include/uapi/linux/openat2.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/openat2.h) — `struct open_how`: an explicit-width UAPI struct that needs no compat handler
+- [net/compat.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/compat.c) — `compat_sys_sendmsg`/`compat_sys_recvmsg` and `get_compat_msghdr()`
+- [include/linux/fs.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/fs.h) — `struct file_operations`, including the `compat_ioctl` member
+- [fs/ioctl.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/ioctl.c) — `compat_ptr_ioctl()` and the compat `ioctl()` syscall's dispatch logic
+
+### Related pages
+
 - [SYSCALL_DEFINE and Dispatch](syscall-define.md) — How native syscalls are defined and dispatched
-- [Syscall Entry Path](syscall-entry.md) — How 32-bit processes enter the kernel on x86-64
-- `include/linux/compat.h` — All compat types and helper macros
-- `include/linux/syscalls.h` — `COMPAT_SYSCALL_DEFINE` definition
-- `arch/x86/entry/syscalls/syscall_32.tbl` — ia32 compat syscall table
-- `Documentation/process/adding-syscalls.rst` — Notes on writing compat handlers
+- [Syscall Entry Path](syscall-entry.md) — `do_syscall_64()`'s dispatch and the `do_syscall_x32()` x32 path; ia32 compat dispatches through its own separate entry point (`ia32_sys_call()`) rather than through either of these
+- [Adding a New Syscall](adding-syscall.md) — Includes the checklist for deciding whether a new syscall needs a compat handler
+
+### LWN articles
+
+- [LWN: System calls and 64-bit architectures](https://lwn.net/Articles/311630/) — Jake Edge, December 2008; the `preadv()`/`pwritev()` design debate that illustrates why some syscalls need a `compat_sys_*` handler and others don't
+
+### External
+
+- [Adding System Calls — The Linux Kernel documentation](https://docs.kernel.org/process/adding-syscalls.html) — Rendered version of `Documentation/process/adding-syscalls.rst`; see "Compatibility System Calls (Generic)" for when a compat handler is required

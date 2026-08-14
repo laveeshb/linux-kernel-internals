@@ -20,7 +20,7 @@ Adding `stat64()` and `lstat64()` helped 32-bit architectures get 64-bit file si
 in `struct stat64` on 32-bit Linux still used 32-bit `time_t`. The real fix required new syscalls with
 genuinely 64-bit timestamps throughout.
 
-Linux 4.11 (2017) added `statx()` (`fs/stat.c`, commit `a528d35e8bfc`), which uses `__kernel_timespec`
+Linux 4.11 (2017) added `statx()` (`fs/stat.c`, commit [`a528d35e8bfc`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a528d35e8bfcc521d7cb70aaf03e1bd296c8493f)), which uses `struct statx_timestamp`
 with a 64-bit `tv_sec`:
 
 ```c
@@ -80,16 +80,17 @@ forever.
 
 ### The fix
 
-The fix was to key futexes on the **physical address** of the page, combined with the page offset. The
-kernel now computes a `struct futex_key`:
+The fix was to key shared futexes on the identity of the underlying object — an inode sequence number,
+combined with the page offset — rather than on the virtual address at all. The kernel now computes a
+`union futex_key`:
 
 ```c
-/* kernel/futex/core.c */
+/* include/linux/futex.h */
 union futex_key {
     struct {
-        u64     i_seq;      /* inode sequence number (for file-backed) */
+        u64           i_seq;   /* inode sequence number (for file-backed) */
         unsigned long pgoff;
-        unsigned int  bitset;
+        unsigned int  offset;
     } shared;
     struct {
         union {
@@ -97,20 +98,20 @@ union futex_key {
             u64 __tmp;
         };
         unsigned long address;
-        unsigned int  bitset;
+        unsigned int  offset;
     } private;
     struct {
-        u64     ptr;        /* physical address bits */
+        u64           ptr;
         unsigned long word;
-        unsigned int  bitset;
+        unsigned int  offset;
     } both;
 };
 ```
 
-For shared mappings, `get_futex_key()` calls `get_user_pages()` to pin the page, then uses the page's
-physical address (via `page_to_pfn()`) as the hash key. Private mappings (anonymous, `MAP_PRIVATE`) still
-use the virtual address plus the `mm_struct` pointer, which uniquely identifies the mapping within a
-process.
+For shared mappings, `get_futex_key()` derives the key from the backing inode's sequence number and the
+page's offset within that file — an identity that's the same no matter which process's virtual address
+space maps the page. Private mappings (anonymous, `MAP_PRIVATE`) key on the virtual address plus the
+`mm_struct` pointer, which uniquely identifies the mapping within a process.
 
 ### The lesson
 
@@ -308,8 +309,17 @@ modification.
 ## Further reading
 
 - [SYSCALL_DEFINE and Dispatch](syscall-define.md) — ABI stability guarantees and struct-based syscalls
-- [32-bit Compat Syscalls](compat.md) — How Y2038 affected the compat syscall tables
+- [32-bit Compat Syscalls](compat.md) — the 32-bit ABI machinery (`compat_stat`'s 32-bit time fields among them) that the Y2038 fix had to work around
+- [Syscall Restart Mechanisms](restart-block.md) — ERESTARTSYS, ERESTART_RESTARTBLOCK, and restart_syscall() in full, the mechanism behind the EINTR story above
+- [Signals](../ipc/signals.md) — signal delivery, `sigaction`, and `SA_RESTART` semantics behind the EINTR story above
+- [Futex Internals](../locking/futex.md) — how futex_wait()/futex_wake() and futex key hashing work today
 - [ptrace and Syscall Interception](ptrace-interception.md) — seccomp-notify as an alternative to custom syscalls
 - [Adding a New Syscall](adding-syscall.md) — The right way to add a syscall and avoid the pitfalls above
-- `Documentation/process/adding-syscalls.rst` — Upstream guidance on ABI design
-- `kernel/futex/core.c` — futex_key and physical address hashing
+- [kernel/futex/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/futex/core.c) — `get_futex_key()`: keys on the `mm_struct` pointer and address for private futexes, or an inode sequence number and page offset for shared ones — not a physical address
+
+## External references
+
+- [git.kernel.org: a528d35e8bfc](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a528d35e8bfcc521d7cb70aaf03e1bd296c8493f) — "statx: Add a system call to make enhanced file info available," David Howells, merged for Linux 4.11 (fs/stat.c)
+- [git.kernel.org: 3075d9da0b4c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3075d9da0b4ccc88959db30de80ebd11d2dde175) — "Use ERESTART_RESTARTBLOCK if poll() is interrupted by a signal," the fs/select.c change (merged for Linux 2.6.24) behind the EINTR story's central claim about `poll()`
+- [Kernel documentation: ktime accessors](https://docs.kernel.org/core-api/timekeeping.html) — "Deprecated time interfaces" section: "all interfaces returning a 'struct timeval' or 'struct timespec' have been replaced because the tv_sec member overflows in year 2038 on 32-bit architectures"
+- [Kernel documentation: Adding a New System Call](https://docs.kernel.org/process/adding-syscalls.html) — upstream guidance on syscall numbering ("these numbers are liable to be changed if there are conflicts in the relevant merge window") and on preferring ioctl/sysfs/other interfaces over new syscalls

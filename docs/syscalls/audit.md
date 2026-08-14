@@ -61,11 +61,11 @@ static inline void audit_syscall_exit(void *pt_regs);
 ```
 
 These are called from `syscall_enter_from_user_mode()` and
-`syscall_exit_to_user_mode()` in `kernel/entry/common.c` when the
-`TIF_SYSCALL_AUDIT` thread-info flag is set on the current task.
+`syscall_exit_to_user_mode()` in `include/linux/entry-common.h` when the
+`SYSCALL_WORK_SYSCALL_AUDIT` flag is set in the current task's `syscall_work`.
 
-`TIF_SYSCALL_AUDIT` is set when audit rules are loaded that could match the
-task. Tasks with no matching rules never set `TIF_SYSCALL_AUDIT` and never pay
+`SYSCALL_WORK_SYSCALL_AUDIT` is set when audit rules are loaded that could match the
+task. Tasks with no matching rules never set `SYSCALL_WORK_SYSCALL_AUDIT` and never pay
 the cost of audit context allocation.
 
 ## struct audit_context
@@ -291,9 +291,9 @@ void audit_inode(struct filename *name, const struct dentry *dentry,
 }
 ```
 
-`TIF_SYSCALL_AUDIT` ensures the per-syscall hooks run only for tasks that have
+`SYSCALL_WORK_SYSCALL_AUDIT` ensures the per-syscall hooks run only for tasks that have
 been selected by at least one rule. Tasks that are never matched by any rule
-never set `TIF_SYSCALL_AUDIT`, so `audit_syscall_entry()` and
+never set `SYSCALL_WORK_SYSCALL_AUDIT`, so `audit_syscall_entry()` and
 `audit_syscall_exit()` are never called for them.
 
 The `AUDIT_BACKLOG_LIMIT` (configurable via `auditctl -b`) bounds the number of
@@ -304,10 +304,28 @@ on the `backlog_wait_time` setting.
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/audit.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/audit.h) — the public `audit_syscall_entry()`/`audit_syscall_exit()`/`audit_inode()` inline wrappers, which call the real `__audit_syscall_entry()`/`__audit_syscall_exit()`/`__audit_inode()` only when a context is present, plus `audit_dummy_context()`
+- [kernel/auditsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/auditsc.c) — `__audit_syscall_entry()`, `__audit_syscall_exit()`, `audit_filter_syscall()`, and `__audit_inode()`: the real implementations behind the inline wrappers
+- [kernel/audit.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/audit.h) — the internal `struct audit_context` and `struct audit_stamp` definitions
+- [kernel/audit.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/audit.c) — the `NETLINK_AUDIT` socket, `audit_log_start()`/`audit_log_format()`/`audit_log_end()`, and `audit_backlog_limit` handling
+- [include/linux/entry-common.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/entry-common.h) — `syscall_enter_from_user_mode()` and `syscall_exit_to_user_mode()`, where `audit_syscall_entry()`/`audit_syscall_exit()` are actually invoked, gated on the `SYSCALL_WORK_SYSCALL_AUDIT` flag
+
+### Man pages
+
+- [`auditctl(8)`](https://man7.org/linux/man-pages/man8/auditctl.8.html) — utility for loading, listing, and deleting kernel audit rules
+- [`ausearch(8)`](https://man7.org/linux/man-pages/man8/ausearch.8.html) — searching audit logs by key, syscall, executable, or file
+- [`aureport(8)`](https://man7.org/linux/man-pages/man8/aureport.8.html) — summary reports over audit logs
+- [`auditd.conf(5)`](https://man7.org/linux/man-pages/man5/auditd.conf.5.html) — audit daemon configuration: log path, rotation, and disk-full behavior
+
+### Related pages
+
 - [Syscall Entry Path](syscall-entry.md) — `syscall_enter_from_user_mode()` and `syscall_exit_to_user_mode()` where the audit hooks are called
 - [Linux Audit Subsystem](../security/audit.md) — broader audit coverage including IMA, PAM integration, and file watch rules
-- [LSM Framework](../security/lsm.md) — LSM hooks that emit additional audit records
+- [LSM Framework](../security/lsm.md) — the LSM hook framework; its SELinux subsection covers reading SELinux's own AVC-denial audit records via `ausearch -m AVC`
 - [seccomp BPF](../security/seccomp.md) — seccomp denials appear in the audit log
-- `kernel/audit.c` — netlink socket, `audit_log_start/format/end()`
-- `kernel/auditsc.c` — `audit_syscall_entry()`, `audit_syscall_exit()`, `struct audit_context`
-- `man 8 auditctl`, `man 8 ausearch`, `man 8 aureport`, `man 5 auditd.conf`
+
+### External
+
+- [docs.kernel.org: Core kernel API — audit functions](https://docs.kernel.org/core-api/kernel-api.html#c.audit_log_start) — kernel-doc reference for `audit_log_start()`, `audit_log_format()`, `audit_log_end()`, `__audit_syscall_entry()`, and `__audit_syscall_exit()`

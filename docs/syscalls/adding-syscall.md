@@ -309,7 +309,24 @@ Expect these questions from reviewers:
 
 ## Further reading
 
-- [Syscall Entry Path](syscall-entry.md) — How the new syscall gets called
-- [SYSCALL_DEFINE and dispatch](syscall-define.md) — The dispatch mechanism
-- `Documentation/process/adding-syscalls.rst` — The authoritative kernel guide
-- `man 2 syscall` — Low-level syscall invocation from C
+### Kernel source
+
+- [include/linux/syscalls.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/syscalls.h) — the `SYSCALL_DEFINE0`...`SYSCALL_DEFINE6` macros and the `SYSCALL_DEFINEx`/`__SYSCALL_DEFINEx` chain they expand into
+- [arch/x86/entry/syscalls/syscall_64.tbl](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/syscalls/syscall_64.tbl) — the x86-64 syscall number table (`<number> <abi> <name> <entry point>`)
+- [include/uapi/asm-generic/unistd.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/asm-generic/unistd.h) — the generic syscall table shared by ARM64 and other architectures; `__NR_syscalls` and the `__SYSCALL()` macro
+- [include/linux/uaccess.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/uaccess.h) — `copy_struct_from_user()`, the versioned-struct copy helper for extensible syscall ABIs
+
+### Man pages
+
+- [`syscall(2)`](https://man7.org/linux/man-pages/man2/syscall.2.html) — low-level syscall invocation from C, and the `SYS_*` number macros
+- [`syscalls(2)`](https://man7.org/linux/man-pages/man2/syscalls.2.html) — the full list of Linux system calls, by kernel version and architecture availability
+
+### Related pages
+
+- [Syscall Entry Path](syscall-entry.md) — how the new syscall gets called
+- [SYSCALL_DEFINE and dispatch](syscall-define.md) — the dispatch mechanism
+- [32-bit Compat Syscalls](compat.md) — the compat layer referenced in Step 3
+
+### External
+
+- [Adding a New System Call](https://docs.kernel.org/process/adding-syscalls.html) — the authoritative kernel guide (`Documentation/process/adding-syscalls.rst`), covering syscall alternatives, ABI extensibility, table wiring, and compat entry points

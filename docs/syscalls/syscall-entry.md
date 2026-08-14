@@ -78,13 +78,13 @@ struct pt_regs {
 ## do_syscall_64: the dispatch
 
 ```c
-/* arch/x86/entry/common.c */
-__visible noinstr void do_syscall_64(struct pt_regs *regs, int nr)
+/* arch/x86/entry/syscall_64.c */
+__visible noinstr bool do_syscall_64(struct pt_regs *regs, int nr)
 {
-    add_random_kstack_offset();
     nr = syscall_enter_from_user_mode(regs, nr);
 
     instrumentation_begin();
+    add_random_kstack_offset();
 
     if (!do_syscall_x64(regs, nr) && !do_syscall_x32(regs, nr) && nr != -1) {
         /* syscall number out of range */
@@ -93,6 +93,7 @@ __visible noinstr void do_syscall_64(struct pt_regs *regs, int nr)
 
     instrumentation_end();
     syscall_exit_to_user_mode(regs);
+    /* ... SYSRET-vs-IRET decision, see below ... */
 }
 
 static __always_inline bool do_syscall_x64(struct pt_regs *regs, int nr)
@@ -101,21 +102,34 @@ static __always_inline bool do_syscall_x64(struct pt_regs *regs, int nr)
 
     if (likely(unr < NR_syscalls)) {
         unr = array_index_nospec(unr, NR_syscalls);  /* Spectre mitigation */
-        regs->ax = sys_call_table[unr](regs);         /* dispatch! */
+        regs->ax = x64_sys_call(regs, unr);           /* dispatch! */
         return true;
     }
     return false;
 }
 ```
 
-## sys_call_table: the dispatch table
+`do_syscall_64()` returns `bool` — its final lines (elided above) decide whether the fast `SYSRET`
+instruction is safe to use for the return to userspace, or whether the slower `IRET` path is needed.
+
+## x64_sys_call: the dispatch switch
 
 ```c
 /* arch/x86/entry/syscall_64.c */
-asmlinkage const sys_call_ptr_t sys_call_table[] = {
-#include <asm/syscalls_64.h>
-};
+#define __SYSCALL(nr, sym) case nr: return __x64_##sym(regs);
+long x64_sys_call(const struct pt_regs *regs, unsigned int nr)
+{
+    switch (nr) {
+    #include <asm/syscalls_64.h>
+    default: return __x64_sys_ni_syscall(regs);
+    }
+}
 ```
+
+A `sys_call_table[]` array is also built in the same file from the same `syscalls_64.h`, but — per the
+kernel's own comment above its definition — "is no longer used for system calls;
+`kernel/trace/trace_syscalls.c` still wants to know the system call address." Actual dispatch is the
+switch statement above.
 
 The `syscalls_64.h` is generated from `syscall_64.tbl`:
 
@@ -258,8 +272,36 @@ These special codes (`< -MAX_ERRNO`) never reach userspace — the signal path c
 
 ## Further reading
 
+### Kernel source
+
+- [arch/x86/entry/entry_64.S](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/entry_64.S) — `entry_SYSCALL_64`: the assembly syscall entry point (swapgs, `pt_regs` construction, call to `do_syscall_64`)
+- [arch/x86/entry/syscall_64.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/syscall_64.c) — `do_syscall_64()` and `do_syscall_x64()`: the current dispatch path. Note: in current mainline this file (not `common.c`) is where these functions live, and dispatch itself goes through `x64_sys_call()`, a `switch` statement — `sys_call_table[]` is kept only for `kernel/trace/trace_syscalls.c`, not for dispatch
+- [arch/x86/entry/syscalls/syscall_64.tbl](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/syscalls/syscall_64.tbl) — the syscall number table that `syscalls_64.h` is generated from
+- [arch/x86/include/asm/ptrace.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/ptrace.h) — `struct pt_regs`: the saved register frame
+- [include/linux/uaccess.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/uaccess.h) — `copy_from_user()`, `copy_to_user()`, `access_ok()`
+- [kernel/seccomp.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/seccomp.c) — `seccomp_run_filters()`: BPF filter evaluation on syscall entry
+- [lib/vdso/gettimeofday.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/vdso/gettimeofday.c) — `do_hres()`: the architecture-shared vDSO high-resolution clock read
+- [include/linux/errno.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/errno.h) — `ERESTARTSYS`, `ERESTARTNOINTR`, `ERESTARTNOHAND`: the internal syscall-restart codes
+
+### Man pages
+
+- [`syscall(2)`](https://man7.org/linux/man-pages/man2/syscall.2.html) — raw syscall invocation and the x86-64 register calling convention
+- [`vdso(7)`](https://man7.org/linux/man-pages/man7/vdso.7.html) — the virtual dynamic shared object
+
+### Related pages
+
 - [SYSCALL_DEFINE and dispatch](syscall-define.md) — Defining syscalls in C
 - [Adding a new syscall](adding-syscall.md) — Practical guide for kernel contributors
-- `arch/x86/entry/entry_64.S` — Assembly entry point
-- `arch/x86/entry/common.c` — do_syscall_64()
-- `Documentation/process/adding-syscalls.rst` — kernel documentation
+- [vDSO and Virtual System Calls](vdso.md) — the shared `vvar` timekeeping page and fast-path clock reads
+- [Syscall Restart Mechanisms](restart-block.md) — `ERESTARTSYS`, `ERESTART_RESTARTBLOCK`, and `restart_syscall()`
+- [32-bit Compat Syscalls](compat.md) — the ia32 compat layer that handles true 32-bit userspace, a conceptual sibling to `do_syscall_x32()`'s x32 path (64-bit mode, ILP32 pointers) but dispatched through its own separate entry point (`ia32_sys_call()`), not through `do_syscall_64()`/`do_syscall_x32()`
+
+### LWN articles
+
+- [LWN: The current state of kernel page-table isolation](https://lwn.net/Articles/741878/) — Jonathan Corbet on KPTI, the Meltdown mitigation behind the CR3 switching described on this page
+
+### External
+
+- [Kernel Entries](https://docs.kernel.org/arch/x86/entry_64.html) — the canonical kernel documentation for `arch/x86/entry/entry_64.S`, covering swapgs and the different x86-64 entry paths
+- [Page Table Isolation (PTI)](https://docs.kernel.org/arch/x86/pti.html) — the Meltdown mitigation behind the CR3 switching described on this page
+- [Adding a New System Call](https://docs.kernel.org/process/adding-syscalls.html) — kernel documentation for contributors
