@@ -127,6 +127,7 @@ struct vfio_domain {
     struct iommu_domain    *domain;
     struct list_head       next;
     struct list_head       group_list;
+    /* ... */
 };
 
 struct vfio_dma {

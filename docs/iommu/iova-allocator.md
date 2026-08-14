@@ -220,8 +220,8 @@ The `dma_32bit_pfn` field in `struct iova_domain` marks the upper boundary of th
  * domain's granule -- it takes no struct device and is not clamped by
  * any device's DMA mask:
  *   iovad->dma_32bit_pfn = 1UL << (32 - iova_shift(iovad));
- * Per-device DMA-mask clamping happens separately, as a local limit_pfn
- * inside iommu_dma_alloc_iova(), not by mutating this field. */
+ * Per-device DMA-mask clamping happens separately, as a local dma_limit
+ * parameter inside iommu_dma_alloc_iova(), not by mutating this field. */
 ```
 
 When a driver calls `dma_set_mask(dev, DMA_BIT_MASK(32))`, subsequent allocations use `limit_pfn = iovad->dma_32bit_pfn`. The allocator satisfies the constraint by searching only the region below 4 GB.
