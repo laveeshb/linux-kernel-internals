@@ -42,7 +42,7 @@ The driver's registration macro read:
 core_initcall(mydriver_core_init);
 ```
 
-It had been written as `core_initcall` because the developer confused "core" to mean "this is a core part of our system" rather than "this runs at initcall level 2, before subsystems like networking."
+It had been written as `core_initcall` because the developer confused "core" to mean "this is a core part of our system" rather than "this runs at initcall level 1, before subsystems like networking."
 
 ### Fix
 
@@ -233,7 +233,7 @@ dmesg | grep -i 'unknown\|mxcpus'
 # Unknown kernel command line parameters "mxcpus=4", will be passed to userspace
 ```
 
-The message is at `KERN_WARNING` level, which at the default console loglevel of 4 does not appear on the screen during boot — it goes only to the ring buffer. The SMP initialization code never saw the parameter, so all 8 CPUs came online.
+The message is logged via `pr_notice()` (`KERN_NOTICE`, level 5) — not `KERN_WARNING` — but at a console loglevel of 4, as many distributions configure for a quiet boot (the upstream Kconfig default, `CONFIG_CONSOLE_LOGLEVEL_DEFAULT`, is actually 7), it still does not appear on the screen: only messages below the console loglevel are printed. The message goes only to the ring buffer. The SMP initialization code never saw the parameter, so all 8 CPUs came online.
 
 ### Root cause
 
@@ -309,27 +309,25 @@ static int __init mydriver_init(void)
 }
 ```
 
-The `return 1` on PCI registration failure returned a *positive* value instead of a negative errno. The kernel's `do_one_initcall()` checks the return value:
+The `return 1` on PCI registration failure returned a *positive* value instead of a negative errno. For a loadable module, `init()` runs via `do_one_initcall(mod->init)`, which just calls the function and returns whatever it returned — no success/failure interpretation happens there. That interpretation happens back in the caller, `do_init_module()`:
 
 ```c
-/* init/main.c */
-static int __init_or_module do_one_initcall(initcall_t fn)
-{
-    int ret;
-    ...
-    ret = fn();
-    ...
-    if (ret >= 0)
-        pr_debug("initcall %pF returned %d after %llu usecs\n",
-                 fn, ret, duration);
-    else
-        pr_warn("initcall %pF returned %d after %llu usecs\n",
-                fn, ret, duration);
-    return ret;
+/* kernel/module/main.c */
+if (mod->init != NULL)
+    ret = do_one_initcall(mod->init);
+if (ret < 0) {
+    /* ... module load fails, unwinds ... */
+    goto fail_free_freeinit;
 }
+if (ret > 0)
+    pr_warn("%s: init suspiciously returned %d, it should follow 0/-E convention\n",
+            mod->name, ret);
+
+/* Now it's a first class citizen! */
+mod->state = MODULE_STATE_LIVE;
 ```
 
-A return value `>= 0` is treated as success by the initcall machinery and by `load_module()`. The module was reported as loaded. But because `pci_register_driver()` had actually failed, the `cdev_del()` and `kfree()` cleanup branches ran — freeing the character device registration and the allocated state. The module was in a state where `init()` returned "success" but had cleaned up everything, leaving a partially-initialized shell.
+A return value `> 0` only triggers a warning — it does *not* fail the load. The module was reported as loaded. But because `pci_register_driver()` had actually failed, the `cdev_del()` and `kfree()` cleanup branches ran — freeing the character device registration and the allocated state. The module was in a state where `init()` returned "success" but had cleaned up everything, leaving a partially-initialized shell.
 
 Subsequent access through the character device (or driver framework callbacks) reached freed memory or missing registrations. The kmemleaks came from a slightly different path: on machines where the PCI device was present but returned a transient error, `cdev_add` had registered the device but `pci_register_driver` failed. The `cdev_del` ran, but a racing process had already opened the character device, preventing the `cdev_del` from fully completing. The state allocation (`mydriver_state`) was freed while references to it still existed.
 
@@ -392,5 +390,17 @@ Module init functions must return 0 on success or a negative errno on failure. A
 - [Kernel Panic and Oops](panic-oops.md) — crash analysis and kdump setup
 - [Boot Parameters](boot-params.md) — `__setup()`, `early_param()`, unknown parameter handling
 - [Kmemleak](../mm/kmemleak.md) — detecting memory leaks like Case 5
-- `Documentation/admin-guide/kdump/kdump.rst` — kdump sizing guidelines
-- `Documentation/process/coding-style.rst` — error path conventions in kernel code
+- [KASAN](../mm/kasan.md) — `CONFIG_KASAN_GENERIC`, `CONFIG_KASAN_SW_TAGS`, and `CONFIG_KASAN_HW_TAGS`, the detection strategies behind Case 2 (see the External reference below for the `CONFIG_KASAN_VMALLOC` distinction specifically)
+- [include/linux/init.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/init.h) — the initcall level macros: `core_initcall()` = level 1, `subsys_initcall()` = level 4, `device_initcall()` = level 6, confirming the ordering behind Case 1
+- [init/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/init/main.c) — `do_one_initcall()` and the level-by-level initcall dispatch (`do_initcall_level()`), plus `unknown_bootoption()`/`print_unknown_bootoptions()` behind Case 4
+- [kernel/module/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/main.c) — `do_init_module()`: `if (ret > 0) pr_warn("%s: init suspiciously returned %d, it should follow 0/-E convention\n", ...)`, the real kernel code that would have caught Case 5's bug at load time
+
+## External references
+
+- [Kernel documentation: Kdump Support](https://docs.kernel.org/admin-guide/kdump/kdump.html) — `crashkernel=` sizing syntax and guidance (e.g. `crashkernel=512M-2G:64M,2G-:128M`), the scaling-with-RAM rule behind Case 3
+- [Kernel documentation: Kernel Parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) — "if it doesn't recognize a parameter and it doesn't contain a '.', the parameter gets passed to init: parameters with '=' go into init's environment" — the exact mechanism behind Case 4's silent `mxcpus=4` typo
+- [Kernel documentation: Linux kernel coding style, §16 "Function return values and names"](https://docs.kernel.org/process/coding-style.html) — the 0-success/negative-errno convention that Case 5's `return 1;` violated
+- [Kernel documentation: KASAN](https://docs.kernel.org/dev-tools/kasan.html) — by default, only the linear mapping gets real shadow memory; vmalloc space gets a read-only placeholder shadow page with no real detection, and `CONFIG_KASAN_VMALLOC` is what makes vmalloc allocations individually shadow-tracked — confirming Case 2's claim that `CONFIG_KASAN_VMALLOC` doesn't apply to a direct-mapped `__init` text page in the first place, since that page was never in vmalloc space to begin with
+- [Kernel documentation: Kmemleak](https://docs.kernel.org/dev-tools/kmemleak.html) — "detecting possible kernel memory leaks ... the orphan objects are not freed but only reported," the tool that surfaces the bug in Case 5
+
+No specific commit hashes, CVE numbers, or kernel-version-tied feature claims appear in this page's prose — the five cases are composite scenarios illustrating real, recurring bug patterns rather than write-ups of a single named incident, so there is nothing of that kind to cite in place. The references above verify the underlying kernel mechanisms (initcall ordering, `__init`/KASAN, kdump/crashkernel sizing, unknown-boot-parameter handling, and module init return codes) against current mainline source and documentation.

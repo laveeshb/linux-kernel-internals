@@ -67,15 +67,12 @@ struct module {
 
     char name[MODULE_NAME_LEN];     /* module name (e.g., "e1000e") */
 
-    /* Exported symbols */
+    /* Exported symbols (GPL and non-GPL share one unified table;
+     * each entry's license is carried in flagstab, not a separate array) */
     const struct kernel_symbol *syms;
+    const u32 *crcs;
+    const u8 *flagstab;
     unsigned int num_syms;
-    const s32 *crcs;
-
-    /* GPL-exported symbols */
-    const struct kernel_symbol *gpl_syms;
-    unsigned int num_gpl_syms;
-    const s32 *gpl_crcs;
 
     /* Init and exit functions */
     int (*init)(void);
@@ -116,7 +113,7 @@ Module states (`enum module_state`):
 The kernel exposes two syscalls for loading modules:
 
 - `init_module(buf, len, params)` — loads a module image from a buffer in userspace memory
-- `finit_module(fd, params, flags)` — loads a module from a file descriptor (preferred since 3.8; enables module signing verification on the file)
+- `finit_module(fd, params, flags)` — loads a module from an already-open file descriptor rather than a userspace buffer (preferred since 3.8, especially by container runtimes and systemd); both syscalls funnel into the same `load_module()`, so `module_sig_check()` runs identically either way — `finit_module` doesn't change signature handling, it changes how the module image gets to the kernel
 
 `insmod` uses `init_module`; `modprobe` uses `finit_module`.
 
@@ -144,9 +141,9 @@ load_module()
     5. Apply ELF relocations
        - apply_relocations(): resolve symbol references
        - Symbols resolved against:
-         a. __ksymtab (EXPORT_SYMBOL)
-         b. __ksymtab_gpl (EXPORT_SYMBOL_GPL)
-         c. Other loaded modules' exported symbols
+         a. __ksymtab (unified table; each entry carries its own
+            GPL/non-GPL license string, not a separate table)
+         b. Other loaded modules' exported symbols
 
     6. module_finalize()
        - Set up alternatives (CPU feature patching)
@@ -203,15 +200,16 @@ Modules cannot be unloaded while any code is executing in them (tracked by `refc
 
 ## Symbol export
 
-Only explicitly exported symbols are accessible to loadable modules. The mechanism uses two ELF sections:
+Only explicitly exported symbols are accessible to loadable modules. Both macros funnel into the same underlying `__EXPORT_SYMBOL()`, differing only in the license string each entry carries:
 
 ```c
 /* include/linux/export.h */
-#define EXPORT_SYMBOL(sym)      __EXPORT_SYMBOL(sym, "")
-#define EXPORT_SYMBOL_GPL(sym)  __EXPORT_SYMBOL(sym, "_gpl")
+#define _EXPORT_SYMBOL(sym, license)  __EXPORT_SYMBOL(sym, license, DEFAULT_SYMBOL_NAMESPACE)
+#define EXPORT_SYMBOL(sym)            _EXPORT_SYMBOL(sym, "")
+#define EXPORT_SYMBOL_GPL(sym)        _EXPORT_SYMBOL(sym, "GPL")
 ```
 
-Each `EXPORT_SYMBOL()` creates a `struct kernel_symbol` in `__ksymtab`:
+Each export creates a `struct kernel_symbol` in a single unified `__ksymtab` section (`kernel/module/internal.h`):
 
 ```c
 struct kernel_symbol {
@@ -221,7 +219,7 @@ struct kernel_symbol {
 };
 ```
 
-During module loading, the relocation step resolves undefined symbols by searching `__ksymtab` (and the `__ksymtab` of already-loaded modules). If a symbol is in `__ksymtab_gpl` and the loading module's `MODULE_LICENSE` is not GPL-compatible, the load fails:
+The license string itself lives in the module's `flagstab` array (see `struct module` above), not a separate symbol table — there is no `__ksymtab_gpl`. During module loading, the relocation step resolves undefined symbols by searching `__ksymtab` (and the `__ksymtab` of already-loaded modules). If a resolved symbol's license is GPL-only and the loading module's `MODULE_LICENSE` is not GPL-compatible, the load fails:
 
 ```
 ERROR: "some_gpl_function" [drivers/mydriver/mydriver.ko] undefined!
@@ -384,11 +382,36 @@ kprobe:do_init_module {
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/module.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/module.h) — `module_init()` / `module_exit()` macros and the `struct module` definition
+- [include/linux/init.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/init.h) — the initcall level macros (`early_initcall()` through `late_initcall()`) and `__define_initcall()`
+- [kernel/module/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/main.c) — `load_module()`, `do_init_module()`, `free_module()`
+- [include/linux/export.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/export.h) — `EXPORT_SYMBOL()` and `EXPORT_SYMBOL_GPL()`
+- [kernel/module/internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/internal.h) — the current `struct kernel_symbol` definition and the `__ksymtab` boundary symbols
+
+### Man pages
+
+- [`init_module(2)`](https://man7.org/linux/man-pages/man2/init_module.2.html) — loads a module from a userspace buffer
+- [`finit_module(2)`](https://man7.org/linux/man-pages/man2/finit_module.2.html) — loads a module from a file descriptor; added in Linux 3.8
+- [`delete_module(2)`](https://man7.org/linux/man-pages/man2/delete_module.2.html) — the syscall behind `rmmod`
+- [`modprobe(8)`](https://man7.org/linux/man-pages/man8/modprobe.8.html) — dependency-aware module loading/removal
+- [`depmod(8)`](https://man7.org/linux/man-pages/man8/depmod.8.html) — builds `modules.dep` from each module's undefined symbols
+
+### Related pages
+
 - [Early Boot and start_kernel()](early-boot.md) — the initcall levels and `do_initcalls()`
 - [Kernel Modules](../modules/README.md) — writing and building out-of-tree modules
 - [Module Signing](../modules/module-signing.md) — key generation and signing workflow
 - [Parameters, Symbols, and Kconfig](../modules/module-params.md) — `module_param()` in depth
-- `kernel/module/main.c` — `load_module()`, `free_module()`, `do_init_module()`
-- `include/linux/module.h` — `struct module`, `module_init()`, `EXPORT_SYMBOL()`
-- `Documentation/kbuild/modules.rst` — building out-of-tree modules
-- `Documentation/core-api/symbol-namespaces.rst` — EXPORT_SYMBOL_NS() for namespaced exports
+
+### LWN articles
+
+- [LWN: Enforcement (or not) for module-specific exported symbols](https://lwn.net/Articles/1029492/) — the debate over restricting exports to a named set of in-tree modules; the macro discussed was proposed as `EXPORT_SYMBOL_GPL_FOR_MODULES()` and merged as `EXPORT_SYMBOL_FOR_MODULES()`, dropping the `GPL_` (see the Kernel source entry above)
+- [LWN: The proper use of EXPORT_SYMBOL_GPL()](https://lwn.net/Articles/769471/) — how maintainers decide when an exported symbol should be GPL-only
+
+### External
+
+- [Kernel module signing facility](https://docs.kernel.org/admin-guide/module-signing.html) — `CONFIG_MODULE_SIG`, key generation, and `scripts/sign-file`
+- [Building External Modules](https://docs.kernel.org/kbuild/modules.html) — kbuild mechanics for out-of-tree modules
+- [Symbol Namespaces](https://docs.kernel.org/core-api/symbol-namespaces.html) — `EXPORT_SYMBOL_NS()` for namespaced exports

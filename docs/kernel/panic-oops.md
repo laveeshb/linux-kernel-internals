@@ -20,35 +20,25 @@ The CPU raises an exception, the IDT handler runs, and control reaches `do_page_
 ## `die()` and the oops path
 
 ```c
-/* arch/x86/kernel/traps.c (die() implementation) */
+/* arch/x86/kernel/dumpstack.c */
 
 void die(const char *str, struct pt_regs *regs, long err)
 {
     unsigned long flags = oops_begin();
     int sig = SIGSEGV;
 
-    if (!user_mode(regs))
-        report_bug(regs->ip, regs);
-
-    if (notify_die(DIE_OOPS, str, regs, err, 0, SIGSEGV) == NOTIFY_STOP)
+    if (__die(str, regs, err))   /* formats and prints the oops message */
         sig = 0;
 
-    __die(str, regs, err);      /* formats and prints the oops message */
-
-    if (regs && kexec_should_crash(current))
-        crash_kexec(regs);
-
-    oops_end(flags, regs, sig); /* decides: kill task or panic */
+    oops_end(flags, regs, sig);  /* decides: kill task or panic */
 }
 ```
 
 ### `oops_begin()` / `oops_end()`
 
-`oops_begin()` disables the watchdog timer (to prevent a watchdog reset before the oops is printed), calls `bust_spinlocks(1)` to flush any spinning consolse writers, and increments `oops_count` (visible in `/proc/sys/kernel/oops_count`). It returns the interrupt flags so `oops_end()` can restore them.
+`oops_begin()` takes a raw spinlock (`die_lock`) to serialize concurrent oopses across CPUs — nested oopses on the *same* CPU (tracked via `die_owner`/`die_nest_count`) are allowed through rather than deadlocking — then calls `console_verbose()` and `bust_spinlocks(1)` to flush any spinning console writers. It returns the saved interrupt flags so `oops_end()` can restore them. Neither function touches any watchdog, and there is no `oops_count` sysctl.
 
-`oops_end()` re-enables the watchdog, calls `bust_spinlocks(0)`, and then either:
-- Delivers `SIGSEGV` to the current task (if the task can be killed)
-- Calls `panic()` if `panic_on_oops` sysctl is set or if the task cannot be killed (e.g., kernel thread)
+`oops_end()` is where `kexec_should_crash()`/`crash_kexec()` are actually invoked (not inside `die()` itself), followed by releasing `die_lock`, tainting the kernel (`TAINT_DIE`), and — if `signr` is nonzero — deciding whether to `panic()` (always in interrupt context, or if `panic_on_oops` is set) or otherwise kill the offending task.
 
 ---
 
@@ -131,7 +121,7 @@ struct orc_entry {
     s16     bp_offset;   /* base pointer offset */
     unsigned int sp_reg:4;   /* register containing the CFA */
     unsigned int bp_reg:4;
-    unsigned int type:2;
+    unsigned int type:3;
     unsigned int signal:1;
 };
 ```
@@ -160,7 +150,7 @@ BUG_ON(condition)
 
 `BUG()` on x86 expands to the `ud2` instruction (undefined instruction opcode `0x0f 0x0b`). This raises a `#UD` exception, which reaches the kernel's `invalid_op` handler, which calls `die()`.
 
-`WARN()` calls `warn_slowpath_fmt()` → `__warn()`, which calls `dump_stack()` and `print_oops_end_marker()` but does not trigger `die()`. Execution continues after `WARN()`.
+On x86 (and other architectures defining `__WARN_FLAGS`), `WARN()` expands to a `ud2` trap instruction rather than a direct function call — the resulting invalid-opcode exception is caught by `exc_invalid_op()`, which recognizes the `ud2` as a warning site and calls `report_bug()` → `__warn()`. (`warn_slowpath_fmt()` is the fallback path for architectures without trap-based warnings; it's dead code on x86.) Either way, `__warn()` calls `dump_stack()` and `print_oops_end_marker()` but does not trigger `die()` — execution continues after `WARN()`.
 
 ---
 
@@ -180,7 +170,7 @@ void panic(const char *fmt, ...)
     atomic_notifier_call_chain(&panic_notifier_list, 0, buf);
 
     /* 4. Attempt to kexec into the crash kernel */
-    crash_kexec(NULL);
+    __crash_kexec(NULL);  /* panic() bypasses the public wrapper's panic-cpu check */
 
     /* 5. If kdump didn't take over, try to reboot */
     if (panic_timeout > 0) {
@@ -240,7 +230,7 @@ kexec -p /boot/vmlinuz-$(uname -r) \
 
 ### What happens on panic
 
-1. `crash_kexec()` is called from `panic()` or `die()`
+1. kdump is triggered from `panic()` (via the internal `__crash_kexec()`) or from `die()`'s `oops_end()` (via the public `crash_kexec()`)
 2. kexec switches to the crash kernel's page tables and jumps to its entry point
 3. The crash kernel boots as a fresh kernel (using only the reserved memory region)
 4. The crash kernel exposes the original kernel's memory as `/proc/vmcore` (an ELF core dump)
@@ -370,12 +360,36 @@ KFENCE does not catch every bug (only sampled allocations are guarded), but it p
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/panic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/panic.c) — `panic()`/`vpanic()`: message formatting, the panic notifier chain, and the reboot/halt sequence
+- [kernel/crash_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/crash_core.c) — `kexec_should_crash()` and `crash_kexec()`: the kdump entry point; `oops_end()` calls the public `crash_kexec()`, while `vpanic()` calls the internal `__crash_kexec()` directly to bypass the panic-cpu check
+- [arch/x86/kernel/dumpstack.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/dumpstack.c) — `die()`, `oops_begin()`, `oops_end()`: the actual x86 oops path
+- [arch/x86/kernel/traps.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/traps.c) — exception entry points (`exc_general_protection()`, `exc_invalid_op()`, `exc_double_fault()`, etc.) that call `die()`
+- [arch/x86/kernel/unwind_orc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/unwind_orc.c) — `orc_find()`: ORC entry lookup used to produce `Call Trace`
+- [arch/x86/include/asm/orc_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/orc_types.h) — `struct orc_entry` layout
+- [include/asm-generic/bug.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/bug.h) — `WARN()`/`BUG()` family and the `__warn()` declaration; on x86 the trap-based path (`report_bug()`, called from `exc_invalid_op()`) is what actually reaches it, not `warn_slowpath_fmt()`
+- [lib/bust_spinlocks.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/bust_spinlocks.c) — `bust_spinlocks()`: the `oops_in_progress` counter used to keep console output readable during an oops
+
+### Man pages
+
+- [`kexec_load(2)`](https://man7.org/linux/man-pages/man2/kexec_load.2.html) — the underlying syscall behind `kexec -p`; documents `KEXEC_ON_CRASH`, the flag that registers a crash kernel
+
+### Related pages
+
 - [Oops Analysis](../debugging/oops-analysis.md) — step-by-step guide to reading an oops
 - [kdump and crash](../debugging/kdump.md) — setting up and using kdump in depth
 - [KASAN](../mm/kasan.md) — KASAN configuration and use
 - [KFENCE](../mm/kfence.md) — KFENCE in production
-- `kernel/panic.c` — `panic()` implementation
-- `arch/x86/kernel/traps.c` — x86 exception handlers, `die()`
-- `arch/x86/kernel/unwind_orc.c` — ORC stack unwinder
-- `Documentation/admin-guide/tainted-kernels.rst` — taint flag reference
-- `Documentation/admin-guide/kdump/kdump.rst` — kdump setup guide
+
+### LWN articles
+
+- [ORC unwinder](https://lwn.net/Articles/728721/) — Josh Poimboeuf's patch series and design writeup introducing the ORC unwinder and objtool-generated unwind tables (2017)
+- [Crash dumps with kexec](https://lwn.net/Articles/108595/) — Jonathan Corbet on the original kexec-based crash dump design (2004)
+- [The kernel address sanitizer](https://lwn.net/Articles/612153/) — Jake Edge's introduction to KASAN (2014)
+- [KFENCE: A low-overhead sampling-based memory safety error detector](https://lwn.net/Articles/830877/) — Marco Elver's design writeup for KFENCE (2020)
+
+### External
+
+- [Tainted kernels](https://docs.kernel.org/admin-guide/tainted-kernels.html) — full taint flag reference
+- [Kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html) — kdump setup guide
