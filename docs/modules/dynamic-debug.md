@@ -22,7 +22,9 @@ For every `pr_debug()` and `dev_dbg()` call site in the kernel, the compiler emi
 1. A `static struct _ddebug` descriptor in the `__dyndbg` section of the object file, containing metadata about that call site.
 2. A NOP instruction at the call site in `.text`, via the jump label (static key) infrastructure.
 
-Dynamic debug uses the jump label (static key) infrastructure (`CONFIG_JUMP_LABEL`). Each `pr_debug()` call site has a static key embedded in its `_ddebug` descriptor — the `key` union shown below, of which dynamic debug uses the `dd_key_true` member. When disabled, the site is a NOP (via a `jump_label` that doesn't branch). When enabled, `static_branch_enable()` / `jump_label_update()` patches the NOP to a short jump. The patching is done by the jump label subsystem — dynamic debug itself just calls `static_branch_enable()` or `static_branch_disable()` on `dp->key.dd_key_true`. When disabled, the call site is a NOP with zero runtime overhead.
+Dynamic debug uses the jump label (static key) infrastructure (`CONFIG_JUMP_LABEL`). Each `pr_debug()` call site has a static key embedded in its `_ddebug` descriptor — the `key` union shown below. When disabled, the site is a NOP (via a `jump_label` that doesn't branch). When enabled, `static_branch_enable()` / `jump_label_update()` patches the NOP to a short jump. The patching is done by the jump label subsystem — dynamic debug itself just calls `static_branch_enable()` or `static_branch_disable()` on `dp->key.dd_key_true`. When disabled, the call site is a NOP with zero runtime overhead.
+
+The two union members are the reason a `key` is a union at all, and the control path and the call site read it differently. `ddebug_change()` always flips `dd_key_true`. The call site, by contrast, expands `DYNAMIC_DEBUG_BRANCH()`, which picks its member from whether the translation unit was compiled with `DEBUG` defined: without it — the normal case — the branch is `static_branch_unlikely(&descriptor.key.dd_key_false)`, initialized off, so the compiler lays the debug call out on the unlikely path; with `-DDEBUG` it becomes `static_branch_likely(&descriptor.key.dd_key_true)`, initialized on, so the site starts out printing and the fast path is the one that logs. Both members alias the same underlying key, so the control file toggles either build identically.
 
 ## struct _ddebug
 
@@ -48,7 +50,7 @@ struct _ddebug {
 
 The `flags` field tracks which output decorations are enabled for this site (print, line, file, module, thread info, and so on).
 
-Descriptors are not kept in one flat global array. The linker groups each module's (and the built-in kernel's) descriptors into a contiguous `__dyndbg` section, and `lib/dynamic_debug.c` registers each such group as a `struct ddebug_table` on the global `ddebug_tables` linked list:
+Descriptors are not searched as one flat global array. Each loadable module carries its own `__dyndbg` section, and `lib/dynamic_debug.c` registers it as a `struct ddebug_table` on the global `ddebug_tables` linked list:
 
 ```c
 /* lib/dynamic_debug.c */
@@ -63,7 +65,11 @@ static DEFINE_MUTEX(ddebug_lock);
 static LIST_HEAD(ddebug_tables);
 ```
 
-So a control command is matched in two nested loops. `ddebug_change()` takes `ddebug_lock`, walks `ddebug_tables` and tests each table's `mod_name` against the query's `module` and `class` specs — letting it skip an entire module's descriptors in one comparison — then iterates the `dt->ddebugs[]` array of that table, testing `filename`, `function`, `format`, and `lineno` per call site.
+Built-in code is the case where section and table stop being one-to-one. The vmlinux linker script gathers every built-in call site into a *single* bounded `__dyndbg` section, so there is one section for the whole image no matter how many built-in modules contributed to it. `dynamic_debug_init()` then walks that section from `__start___dyndbg` to `__stop___dyndbg` and carves it into many tables: because the descriptors arrive grouped by translation unit, it simply watches for `iter->modname` to change and calls `ddebug_add_module()` for each run of same-named entries. One section in, one `ddebug_table` per distinct `modname` out — matching the per-module tables that loadable modules register through the notifier.
+
+So a control command is matched in two nested loops. `ddebug_change()` takes `ddebug_lock` and walks `ddebug_tables`. Per table it does two cheap rejections before looking at any call site: the table's `mod_name` is tested against the query's `module` spec — letting it skip an entire module's descriptors in one comparison — and, if the query carries a `class` spec, `ddebug_find_valid_class()` resolves that class *name* to a numeric `class_id` by searching the table's `maps` list of `ddebug_class_map`s, skipping the whole table if this module never declared that class. It then iterates the `dt->ddebugs[]` array, testing `class_id`, `filename`, `function`, `format`, and `lineno` per call site.
+
+The class test comes first in that inner loop, and it is not optional: when the query has no `class` spec, `valid_class` defaults to `_DPRINTK_CLASS_DFLT`, and every site whose `class_id` differs is skipped. So an ordinary query never touches class'd call sites — including the `module mymodule +p` form below, which enables that module's unclassed sites only. Reaching a subsystem's classed sites (DRM's debug categories, say) always requires naming the class explicitly.
 
 ## The control interface
 
@@ -72,7 +78,8 @@ The control file is at `/sys/kernel/debug/dynamic_debug/control`. Writing a quer
 Since v5.7 the same control file is also exposed at `/proc/dynamic_debug/control`, so dynamic debug stays usable on systems that build without debugfs. The two are interchangeable; the examples below use the debugfs path, but upstream documentation now leads with the procfs one.
 
 ```bash
-# Enable all pr_debug() calls in a module
+# Enable a module's unclassed pr_debug() calls
+# (classed sites need an explicit "class" spec — see above)
 echo "module mymodule +p" > /sys/kernel/debug/dynamic_debug/control
 
 # Enable by source file (relative path from kernel root)
@@ -124,7 +131,7 @@ Where `match-spec` can be:
 
 Multiple match specs are ANDed, and an absent keyword behaves like `*`. Because a query with no match spec at all is legal, the flags are parsed first — so a bad flag letter masks a bad keyword in the error message.
 
-Every match spec except `class` accepts glob wildcards: `*` for zero or more characters, `?` for exactly one. `module drm*` matches both `drm` and `drm_kms_helper`; `file "drivers/usb/*"` matches everything under that directory (quote it to stop the shell expanding it first).
+Wildcards are not universal. The `module`, `file`, and `func` specs are the ones that go through `match_wildcard()`, so they accept globs: `*` for zero or more characters, `?` for exactly one. `module drm*` matches both `drm` and `drm_kms_helper`; `file "drivers/usb/*"` matches everything under that directory (quote it to stop the shell expanding it first). The other three specs do not glob: `format` is always a literal substring search (optionally anchored with a leading `^`), so `*` and `?` in it are ordinary characters; `line` takes only numbers and ranges, and a wildcard there is rejected as a bad line number; `class` names are matched exactly.
 
 A single `write()` may carry several queries, separated by `;` or newlines, applied left to right:
 
@@ -245,10 +252,10 @@ print_hex_dump_debug("rx buf: ", DUMP_PREFIX_OFFSET, 16, 1,
 
 This produces output like:
 ```
-rx buf: 00000000: 45 00 00 3c 1c 46 40 00  40 06 ac 10 7f 00 00 01  E..<.F@.@.......
+rx buf: 00000000: 45 00 00 3c 1c 46 40 00 40 06 ac 10 7f 00 00 01  E..<.F@.@.......
 ```
 
-Hex-dump call sites are a partial exception to the flag rules above: for `print_hex_dump_debug()` and `print_hex_dump_bytes()`, only the `p` flag has any meaning. The decorator flags (`t`, `m`, `f`, `s`, `l`, `d`) are accepted by the parser but ignored for these sites, because the output is produced by `print_hex_dump()` rather than by the usual `__dynamic_pr_debug()` prefix-building path.
+Hex-dump call sites are a partial exception to the flag rules above: for `print_hex_dump_debug()` and `print_hex_dump_bytes()`, only `p` and `d` have any effect. The prefix decorators (`t`, `m`, `f`, `s`, `l`) are accepted by the parser but inert for these sites, because the output is produced by `print_hex_dump()` rather than by `__dynamic_emit_prefix()`, the function that builds the decorated prefix for `__dynamic_pr_debug()`. `d` still fires, though: `dump_stack()` is invoked by the `__dynamic_func_call*` wrapper macro in `include/linux/dynamic_debug.h`, which guards every dynamic debug site — hex dumps included — not by the prefix path.
 
 Matching them with `format` works, but on the `prefix_str` argument rather than a real format string: the descriptor records `prefix_str` if it is a constant string, and the literal `hexdump` if it is built at runtime. So the call above is selected by `format "rx buf: "`.
 
@@ -270,7 +277,7 @@ cat /sys/kernel/debug/tracing/trace_pipe &
 # Run your workload — pr_debug output and ftrace appear on the same timeline
 ```
 
-A bare `echo mymodule > set_ftrace_filter` does *not* do this — it is read as a function-name glob and will simply fail to match anything (or match an unrelated function that happens to share the name). The `mod:` filter command takes a function glob before the module name, so `'*:mod:mymodule'` means "every function in `mymodule`", while `'e1000_tx*:mod:e1000'` narrows to a subset. Append with `>>` to add another module's functions, and prefix an entry with `!` to remove it.
+A bare `echo mymodule > set_ftrace_filter` does *not* do this — it is read as a function-name glob. Since no function is likely to be named after the module, nothing matches, and `ftrace_process_regex()` turns a zero-match write into `-EINVAL`, so the shell reports `write error: Invalid argument` rather than silently ignoring it. (If some unrelated function does happen to share the name, the write succeeds and traces that function instead.) The `mod:` filter command takes a function glob before the module name, so `'*:mod:mymodule'` means "every function in `mymodule`", while `'e1000_tx*:mod:e1000'` narrows to a subset. Append with `>>` to add another module's functions, and prefix an entry with `!` to remove it.
 
 ## Implementation: jump label patching
 
@@ -290,7 +297,8 @@ cat /sys/kernel/debug/dynamic_debug/control
 # The file's own header line gives the format:
 # filename:lineno [module]function flags format
 #
-# example (the two netdev_dbg() sites in the e1000 driver, one enabled):
+# example (two of the ~109 netdev_dbg() sites the e1000 module registers,
+# one enabled; most of the rest come from the e_dbg() wrapper in e1000.h):
 # drivers/net/ethernet/intel/e1000/e1000_main.c:3573 [e1000]e1000_change_mtu =p "changing MTU from %d to %d\n"
 # drivers/net/ethernet/intel/e1000/e1000_main.c:4429 [e1000]e1000_clean_rx_irq =_ "Receive packet consumed multiple buffers\n"
 
@@ -301,7 +309,14 @@ grep -c "=p" /sys/kernel/debug/dynamic_debug/control
 echo "module mymodule -p" > /sys/kernel/debug/dynamic_debug/control
 ```
 
-The line numbers above are from v7.2-rc7 and drift with every kernel release; the file, module, and function columns are the stable parts. Note also that the filename column is the source-root-relative path, which is exactly the form the `file` match spec accepts — so a line from this output can be turned into a query by copying its first two columns.
+The line numbers above are from v7.2-rc7 and drift with every kernel release; the file, module, and function columns are the stable parts. Note also that the first column is the source-root-relative path, which is exactly the form the `file` match spec accepts — so a line from this output can be turned into a query by pasting that first column, `:lineno` tail and all, after `file`:
+
+```bash
+echo "file drivers/net/ethernet/intel/e1000/e1000_main.c:3573 +p" \
+    > /sys/kernel/debug/dynamic_debug/control
+```
+
+`ddebug_parse_query()` splits the `:3573` tail off and reparses it as a one-line range, so this selects exactly the site the output line came from. The second column, `[module]function`, is display formatting rather than query syntax — it has to be retyped as separate `module` and `func` specs to be used in a query.
 
 ## Further reading
 
@@ -324,7 +339,7 @@ The line numbers above are from v7.2-rc7 and drift with every kernel release; th
 
 - [Writing and Loading Kernel Modules](module-basics.md) — where `pr_debug()`/`dev_dbg()` fit in the module author's logging toolkit
 - [Module Loading Internals](module-loading-internals.md) — `load_module()`, section parsing, and the `MODULE_STATE_COMING`/`MODULE_STATE_GOING` notifier chain that dynamic debug hooks
-- [Module Parameters, Symbols, and Kconfig](module-params.md) — the `module_param()` machinery that `dyndbg=` deliberately sidesteps: it is never a registered parameter, so it falls through to the unknown-parameter callback
+- [Module Parameters, Symbols, and Kconfig](module-params.md) — the `module_param()` machinery that a load-time `dyndbg=` argument deliberately sidesteps by never registering itself as a parameter at all
 - [printk: Kernel Logging Internals](../kernel/printk.md) — the log buffer and loglevel filtering that debug output still has to get past once a call site is enabled
 - [ftrace: Function Tracer](../tracing/ftrace.md) — the tracer paired with dynamic debug in the correlation recipe above
 

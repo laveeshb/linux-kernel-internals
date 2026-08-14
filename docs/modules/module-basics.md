@@ -65,24 +65,30 @@ dmesg | tail -3
 ## Module lifecycle
 
 ```
-insmod/modprobe                         rmmod
-    │                                     │
-    ▼                                     ▼
-load_module()                      delete_module()
-    │                                     │
-    ├── elf_validity_cache_copy()         ├── refcount must be 0
-    ├── layout_sections()                 │   (try_stop_module)
-    ├── relocate symbols                  ├── mod->exit()
-    │     ├── parse .modinfo              │
-    │     ├── check MODULE_LICENSE        └── free_module()
-    │     └── do_init_module()                └── free_mod_mem()
-    │              │  (runs mod->init)            └── module_memory_free()
-    │              │                                  └── execmem_free(mem->base)
-    │              └── return 0: success
-    │              └── return -errno: unload immediately
+insmod/modprobe                                rmmod
+    │                                              │
+    ▼                                              ▼
+load_module()                                  delete_module()
+    │                                              │
+    ├── module_sig_check()                         ├── refcount must be 0
+    ├── elf_validity_cache_copy()                  │   (try_stop_module)
+    ├── early_mod_check()                          ├── mod->exit()
+    │     └── parse .modinfo, check vermagic       │
+    ├── layout_and_allocate()                      └── free_module()
+    │     └── layout_sections()                        └── free_mod_mem()
+    ├── add_unformed_module()                              └── module_memory_free()
+    ├── module_augment_kernel_taints()                         └── execmem_free(mem->base)
+    │     └── MODULE_LICENSE check (kernel taint set here)
+    ├── find_module_sections()   /* mod->syms, crcs, flagstab */
+    ├── simplify_symbols() / apply_relocations()
+    ├── complete_formation()
+    │     └── MODULE_STATE_COMING: module now visible in
+    │         /proc/modules; symbols exported to other modules
     │
-    └── add to modules list (/proc/modules)
-        export symbols to other modules
+    └── return do_init_module(mod);   /* final statement of load_module() */
+        │  (runs mod->init)
+        ├── return 0: MODULE_STATE_LIVE
+        └── return -errno: module unloaded immediately
 ```
 
 ## Module sections
@@ -90,7 +96,7 @@ load_module()                      delete_module()
 A module `.ko` file is an ELF with special sections:
 
 ```bash
-objdump -h hello.ko | grep -E "(\.init|\.exit|\.text|\.data|__param|__mod)"
+objdump -h hello.ko | grep -E "(\.init|\.exit|\.text|\.data|\.rodata|__param|\.modinfo)"
 # .init.text   contains hello_init() (freed after module loads)
 # .exit.text   contains hello_exit() (kept until module unloads)
 # .text        normal code
@@ -187,7 +193,7 @@ pr_err("...");     /* KERN_ERR — error conditions */
 pr_warn("...");    /* KERN_WARNING */
 pr_notice("...");  /* KERN_NOTICE */
 pr_info("...");    /* KERN_INFO */
-pr_debug("...");   /* KERN_DEBUG — only printed if CONFIG_DYNAMIC_DEBUG */
+pr_debug("...");   /* KERN_DEBUG — compiled out unless CONFIG_DYNAMIC_DEBUG (runtime-switchable) or DEBUG is defined */
 
 /* Device-specific logging (prefixes with device name): */
 dev_err(&pdev->dev, "failed to allocate: %d\n", ret);
@@ -207,7 +213,10 @@ Modern kernels can enforce that modules are signed by a trusted key:
 
 ```bash
 # Check if kernel requires signed modules
-cat /proc/sys/kernel/modules_disabled  # 0=allow, 1=completely disable module loading (irreversible)
+cat /sys/module/module/parameters/sig_enforce  # Y = unsigned modules rejected
+
+# Unrelated kill switch: blocks ALL module loading *and* unloading once set
+cat /proc/sys/kernel/modules_disabled  # 0=allow, 1=no init_module/finit_module/delete_module (irreversible)
 
 # Sign a module
 /usr/src/linux-headers-$(uname -r)/scripts/sign-file \
@@ -225,7 +234,7 @@ modinfo hello.ko | grep sig
 ```bash
 # Dynamic debug: enable pr_debug() for a module
 # Control file: /proc/dynamic_debug/control, or the equivalent
-# /sys/kernel/debug/dynamic_debug/control when debugfs is mounted
+# /sys/kernel/debug/dynamic_debug/control when debugfs is enabled
 echo "module hello +p" > /proc/dynamic_debug/control
 echo "file hello.c +p" > /proc/dynamic_debug/control
 echo "func hello_init +p" > /proc/dynamic_debug/control
@@ -238,13 +247,19 @@ cat /proc/dynamic_debug/control
 
 # Check module's kallsyms
 grep hello /proc/kallsyms
-# ffffffffc0401000 t hello_init [hello]
-# ffffffffc0401020 t hello_exit [hello]
+# ffffffffc0401000 t hello_exit [hello]
+# Note: hello_init does NOT show up here. do_init_module() switches
+# mod->kallsyms over to core_kallsyms once init has run, and that table
+# excludes every symbol living in an init-type section — so __init
+# symbols vanish as soon as the module finishes loading.
 
-# Crash debugging with gdb
+# Crash debugging with gdb: the .text base comes from sysfs, not from a
+# symbol address (__init code lives in a separate MOD_INIT_TEXT region)
+cat /sys/module/hello/sections/.text
+# 0xffffffffc0401000
 gdb vmlinux
 (gdb) add-symbol-file /path/to/hello.ko 0xffffffffc0401000
-(gdb) list hello_init
+(gdb) list hello_exit
 ```
 
 ## Further reading
@@ -260,10 +275,10 @@ gdb vmlinux
 
 ### Man pages
 
-- [`insmod(8)`](https://man7.org/linux/man-pages/man8/insmod.8.html) — the "trivial program to insert a module"; explicitly notes it does *not* resolve dependencies
+- [`insmod(8)`](https://man7.org/linux/man-pages/man8/insmod.8.html) — the "trivial program to insert a module"; points readers at `modprobe(8)`, which is what handles module dependencies
 - [`rmmod(8)`](https://man7.org/linux/man-pages/man8/rmmod.8.html) — unloading, and why `-f`/`--force` needs `CONFIG_MODULE_FORCE_UNLOAD`
 - [`modprobe(8)`](https://man7.org/linux/man-pages/man8/modprobe.8.html) — dependency-aware loading via `modules.dep.bin`, and `-r` to remove a module plus its now-unused dependencies
-- [`modinfo(8)`](https://man7.org/linux/man-pages/man8/modinfo.8.html) — dumps the `.modinfo` fields (`license`, `author`, `description`, `parm`, `depends`) and the signature data a `.ko` carries
+- [`modinfo(8)`](https://man7.org/linux/man-pages/man8/modinfo.8.html) — dumps the `.modinfo` fields (`license`, `author`, `description`, `parm`, `depends`, `alias`, `filename`); note that kmod also prints the `sig*` signature fields, which this man page does not document
 - [`lsmod(8)`](https://man7.org/linux/man-pages/man8/lsmod.8.html) — the formatted view of `/proc/modules` shown above
 - [`depmod(8)`](https://man7.org/linux/man-pages/man8/depmod.8.html) — builds the `modules.dep` file that `modprobe` reads
 

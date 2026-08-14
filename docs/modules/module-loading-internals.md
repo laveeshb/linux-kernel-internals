@@ -20,7 +20,7 @@ long finit_module(int fd, const char __user *uargs, int flags);
 
 - `MODULE_INIT_IGNORE_MODVERSIONS` — zero out the version-section indices so the CRC comparison is skipped
 - `MODULE_INIT_IGNORE_VERMAGIC` — treat the module as having no vermagic string, skipping the version-string comparison
-- `MODULE_INIT_COMPRESSED_FILE` — the file is a compressed `.ko` (`.gz`, `.xz`, or `.zst`); the kernel decompresses it itself via `module_decompress()`
+- `MODULE_INIT_COMPRESSED_FILE` — the file is a compressed `.ko` in whichever single format the kernel was built with (`CONFIG_MODULE_COMPRESS_GZIP`, `_XZ`, or `_ZSTD` — `kernel/module/decompress.c` selects exactly one with an `#if`/`#elif` chain); the kernel decompresses it itself via `module_decompress()`
 
 The first two flags route through `try_to_force_load()`, which taints the kernel with `TAINT_FORCED_MODULE` (`F`) when `CONFIG_MODULE_FORCE_LOAD=y` and fails the load with `ENOEXEC` when it is not.
 
@@ -163,7 +163,12 @@ static int module_memory_alloc(struct module *mod, enum mod_mem_type type)
 ```c
 /* arch/x86/include/asm/pgtable_64_types.h */
 #define MODULES_VADDR   (__START_KERNEL_map + KERNEL_IMAGE_SIZE)
-#define MODULES_END     _AC(0xffffffffff000000, UL)
+
+#ifndef CONFIG_DEBUG_KMAP_LOCAL_FORCE_MAP
+# define MODULES_END    _AC(0xffffffffff000000, UL)
+#else
+# define MODULES_END    _AC(0xfffffffffe000000, UL)
+#endif
 ```
 
 With `__START_KERNEL_map` at `0xffffffff80000000` and `KERNEL_IMAGE_SIZE` at 1 GiB — the value used when `CONFIG_RANDOMIZE_BASE` (KASLR) is enabled, as it is in essentially every distribution kernel — modules start at `0xffffffffc0000000`, which is why loaded modules show addresses like `0xffffffffc0400000` in `/proc/modules`. Without KASLR the image limit shrinks to 512 MiB and the module region starts at `0xffffffffa0000000` instead, growing to 1.5 GiB.
@@ -281,7 +286,7 @@ and falls back to the fixed-size `struct modversion_info` array otherwise.
 Either way, the module's recorded CRC is compared against the CRC the *providing* side supplied (`fsa.crc`, read from the provider's `__kcrctab`). A mismatch means the symbol's type signature differs between the kernel the module was built against and the running kernel. `check_version()` logs
 
 ```
-mymodule: disagrees about version of symbol module_layout
+mymodule: disagrees about version of symbol tcp_sendmsg
 ```
 
 and returns 0, whereupon `resolve_symbol()` fails that symbol with `EINVAL`:
@@ -293,12 +298,15 @@ if (!check_version(info, name, mod, fsa.crc)) {
 }
 ```
 
-It is worth keeping the three failure codes apart, because they are easy to confuse from userspace:
+That `EINVAL` path is reached only by *ordinary* imported symbols. The `module_layout` pseudo-symbol never travels it: `modpost` synthesises it with `sym_add_unresolved("module_layout", mod, false)` purely so it gets a row in the module's CRC table, and the module contains no undefined ELF reference to it — so `simplify_symbols()` and `resolve_symbol()` never see it. Its CRC is compared once, much earlier, by `check_modstruct_version()` in step 4, and `early_mod_check()` turns the failure into `ENOEXEC` (`Invalid module format`).
+
+It is worth keeping the failure codes apart, because they are easy to confuse from userspace:
 
 | Condition | errno | Raised by |
 |-----------|-------|-----------|
 | Vermagic string mismatch | `ENOEXEC` | `check_modinfo()`, step 4 |
-| Symbol CRC mismatch | `EINVAL` | `resolve_symbol()`, via `check_version()` |
+| `module_layout` CRC mismatch | `ENOEXEC` | `check_modstruct_version()` via `early_mod_check()`, step 4 |
+| Imported symbol CRC mismatch | `EINVAL` | `resolve_symbol()`, via `check_version()` |
 | Symbol missing, or GPL-only and unreachable | `ENOENT` | `simplify_symbols()` |
 
 ### 9. Apply relocations
@@ -307,7 +315,7 @@ The ELF `.rela.*` sections contain relocation entries, now resolvable because st
 
 ```c
 /* Arch-independent dispatch */
-int apply_relocations(struct module *mod, const struct load_info *info);
+static int apply_relocations(struct module *mod, const struct load_info *info);
 
 /* Arch-specific implementation (e.g., arch/x86/kernel/module.c) */
 int apply_relocate_add(Elf64_Shdr *sechdrs, const char *strtab,
@@ -489,7 +497,7 @@ insmod / modprobe
                                   free_module() → execmem_free() per mem[] class
 ```
 
-The `UNFORMED` and `GOING` states are both visible to other CPUs through the global modules list, and both are special-cased there: `find_symbol()` skips `UNFORMED` modules outright, `m_show()` omits them from `/proc/modules`, and `strong_try_module_get()` refuses a `COMING` module with `-EBUSY` so a dependent load waits rather than binding to a half-built provider. Code holding a reference to a symbol in the module must not be executing when the module reaches `GOING`, which is what the `synchronize_rcu()` calls on the teardown paths are there to guarantee.
+The `UNFORMED` and `GOING` states are both visible to other CPUs through the global modules list, and both are special-cased there: `find_symbol()` skips `UNFORMED` modules outright, `m_show()` omits them from `/proc/modules`, and `strong_try_module_get()` refuses a `COMING` module with `-EBUSY` so a dependent load waits rather than binding to a half-built provider. What guarantees no thread is still executing *inside* a module by the time it reaches `GOING` is the reference count, not RCU: `try_module_get()`/`module_put()` (and `strong_try_module_get()` behind `__symbol_get()`) hold the count up, and `delete_module()` will not set `GOING` at all until `try_stop_module()` → `try_release_module_ref()` has confirmed the count drained. The `synchronize_rcu()` calls on the teardown paths do a different job: `free_module()` unlinks the module from the modules list, the mod tree and the bug list with the `_rcu` variants — "Unlink carefully: kallsyms could be walking list" — and then waits a grace period so those RCU readers cannot touch the memory as it is freed.
 
 ## /proc/modules format
 
@@ -506,7 +514,7 @@ cat /proc/modules
 `m_show()` in `kernel/module/procfs.c` is the authority on the format. Fields:
 
 - **size**: `module_total_size(mod)`, which sums `mod->mem[type].size` over **all seven** memory classes — not just the core ones. Reading `/proc/modules` before a module's init memory has been freed therefore reports a slightly larger number than reading it afterwards.
-- **refcount**: `module_refcount(mod)`, a non-negative count. With `CONFIG_MODULE_UNLOAD=n` there is no refcount and no dependency tracking at all, and `print_unload_info()`'s stub prints two literal dashes (`- -`) in place of this field *and* the next one.
+- **refcount**: `module_refcount(mod)` — the number of held references, or `-1` once `try_stop_module()` has dropped `MODULE_REF_BASE`, i.e. for a module shown as `Unloading`. (`module_refcount()`'s own kernel-doc says it will "return the refcount or -1 if unloading"; the window is real because `delete_module()` runs `mod->exit()` after setting `GOING` but while the module is still on the modules list, and `m_show()` only skips `UNFORMED`.) With `CONFIG_MODULE_UNLOAD=n` there is no refcount and no dependency tracking at all, and `print_unload_info()`'s stub prints two literal dashes (`- -`) in place of this field *and* the next one.
 - **dependents**: the modules that depend on *this* one, not the ones it depends on. `print_unload_info()` walks `mod->source_list` and prints `use->source->name` with a trailing comma for each — the same set `lsmod` shows under "Used by". A module with an init function but no exit function additionally gets `[permanent],` appended, matching the `if (mod->init && !mod->exit)` test in `delete_module()` that refuses to unload it short of a forced removal. If nothing at all was printed, a single `-` is emitted.
 - **state**: `Live`, `Loading` (`MODULE_STATE_COMING`), or `Unloading` (`MODULE_STATE_GOING`). `MODULE_STATE_UNFORMED` modules are skipped entirely.
 - **load address**: `mod->mem[MOD_TEXT].base` — the base of the module's text region, not of some combined "core layout". Readers that fail `kallsyms_show_value()` see `0x0000000000000000` instead.
@@ -561,11 +569,11 @@ When building an out-of-tree module, `make` reads `Module.symvers` from `$(KDIR)
 - [`delete_module(2)`](https://man7.org/linux/man-pages/man2/delete_module.2.html) — the unload side; states that the call fails with `EWOULDBLOCK` when other loaded modules refer to symbols defined in this one, and what `O_NONBLOCK`/`O_TRUNC` change
 - [`lsmod(8)`](https://man7.org/linux/man-pages/man8/lsmod.8.html) — "a trivial program which nicely formats the contents of the `/proc/modules`"; the userspace view of the file dissected above
 - [`depmod(8)`](https://man7.org/linux/man-pages/man8/depmod.8.html) — determines "what symbols each module exports and needs" and writes the resulting graph to `modules.dep`, the input to dependency-ordered loading
-- [`modprobe(8)`](https://man7.org/linux/man-pages/man8/modprobe.8.html) — the tool that consults `modules.dep` and issues one `finit_module()` per module, dependencies first
+- [`modprobe(8)`](https://man7.org/linux/man-pages/man8/modprobe.8.html) — the tool that consults `modules.dep`, which "lists what other modules each module needs (if any), and modprobe uses this to add or remove these dependencies automatically"; the man page does not name the syscall it ultimately issues, but kmod's implementation loads each `.ko` with `finit_module()`
 
 ### Related pages
 
-- [Module Parameters, Symbols, and Kconfig](module-params.md) — `EXPORT_SYMBOL`, `Module.symvers`, and `KBUILD_EXTRA_SYMBOLS` from the module author's side
+- [Module Parameters, Symbols, and Kconfig](module-params.md) — `EXPORT_SYMBOL`/`EXPORT_SYMBOL_GPL`, the `has no CRC!` and `disagrees about version` symptoms, and `/proc/kallsyms`, from the module author's side
 - [Kernel Module Signing](module-signing.md) — `module_sig_check()`, which `load_module()` runs before it looks at a single ELF section
 - [Kbuild: The Kernel Build System](kbuild.md) — out-of-tree builds and cross-compilation, where the `Module.symvers` mismatches described above originate
 - [Writing and Loading Kernel Modules](module-basics.md) — the source-level view: `module_init`/`module_exit`, `__init` sections, and the `.ko` this page takes apart

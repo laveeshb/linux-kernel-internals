@@ -48,8 +48,9 @@ CONFIG_EXT4_FS=m      # built as module
 ./scripts/config --state CONFIG_SMP
 # y
 
-# Set a symbol:
-./scripts/config --enable CONFIG_DEBUG_INFO
+# Set a symbol (pick one that actually has a prompt — see the note under
+# "Compiler options and build flags" about promptless symbols):
+./scripts/config --enable CONFIG_DEBUG_KERNEL
 ./scripts/config --disable CONFIG_SWAP
 ./scripts/config --module CONFIG_EXT4_FS
 ./scripts/config --set-val CONFIG_LOG_BUF_SHIFT 18
@@ -181,9 +182,10 @@ export CROSS_COMPILE=arm-linux-gnueabihf-
 make multi_v7_defconfig   # arch/arm/configs/; includes CONFIG_ARCH_BCM2835
 make -j$(nproc)
 
-# Out-of-tree module cross-compilation:
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-     KDIR=/path/to/arm64-kernel-build M=$(PWD) modules
+# Out-of-tree module cross-compilation (invoke kbuild directly: -C points at
+# the prepared kernel build tree, M= at the module source directory):
+make -C /path/to/arm64-kernel-build M=$PWD \
+     ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
 ```
 
 ## Compiler options and build flags
@@ -207,7 +209,10 @@ CFLAGS_my_file.o += -w
 
 # Build with debugging info (for KGDB, crash analysis). CONFIG_DEBUG_INFO
 # itself has no prompt — it is selected by the "Debug information" choice,
-# so enable a choice entry instead:
+# so enable a choice entry instead. That choice is itself
+# `depends on DEBUG_KERNEL`, which has no default, so enable DEBUG_KERNEL
+# first or olddefconfig will silently drop the DWARF selection too:
+./scripts/config --enable CONFIG_DEBUG_KERNEL
 ./scripts/config --enable CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
 make olddefconfig && make -j$(nproc)
 
@@ -215,14 +220,17 @@ make olddefconfig && make -j$(nproc)
 ./scripts/config --enable CONFIG_KASAN
 make olddefconfig && make -j$(nproc)
 
-# Enable compile-time warnings:
-make W=1        # extra warnings
-make W=2        # more extra warnings
-make W=3        # all warnings
+# Enable compile-time warnings. The levels are independent, not cumulative:
+# each is gated by its own findstring test on KBUILD_EXTRA_WARN, so W=3
+# enables only the level-3 warnings, not levels 1 and 2 as well.
+make W=1        # relevant warnings that do not occur too often
+make W=2        # warnings that occur quite often but may still be relevant
+make W=3        # more obscure warnings, can most likely be ignored
+make W=123      # combine all three (W=12, W=13, ... work the same way)
 make C=1        # sparse static analysis
 make C=2        # sparse for all files
 
-# Check build dependencies:
+# Documentation:
 make htmldocs   # build kernel documentation
 ```
 
@@ -242,7 +250,8 @@ modprobe virtio_net
 # Loads whichever of virtio_net's dependencies are themselves modules
 # (here virtio, net_failover) before virtio_net. Which ones those are is
 # config-dependent: CONFIG_VIRTIO_NET selects NET_FAILOVER, DIMLIB and
-# PAGE_POOL and depends on VIRTIO, and any of them may be built-in.
+# PAGE_POOL and depends on VIRTIO. NET_FAILOVER and DIMLIB are tristate and
+# so may be modules; PAGE_POOL is a plain bool and is always built in.
 
 # Manual depmod output:
 cat /lib/modules/$(uname -r)/modules.dep | grep virtio_net
@@ -259,8 +268,11 @@ cat /lib/modules/$(uname -r)/modules.dep | grep virtio_net
 ls arch/x86/boot/
 # bzImage       ← bootable compressed kernel
 
-# Module signature (if CONFIG_MODULE_SIG_ALL=y):
-modinfo drivers/net/ethernet/intel/e1000/e1000.ko | grep sig
+# Module signature. Signing is not part of the build: `make` leaves the .ko
+# in the build tree unsigned. scripts/Makefile.modinst signs modules during
+# `make modules_install` (when CONFIG_MODULE_SIG_ALL=y) or `make modules_sign`,
+# so inspect the *installed* copy:
+modinfo /lib/modules/$(uname -r)/kernel/drivers/net/ethernet/intel/e1000/e1000.ko | grep sig
 # sig_id: PKCS#7
 # sig_hashalgo: sha256
 
@@ -273,10 +285,11 @@ modinfo drivers/net/ethernet/intel/e1000/e1000.ko
 # filename: ...
 # license: GPL v2
 # description: Intel(R) PRO/1000 Network Driver
-# author: ...
 # vermagic: 7.2.0-rc7 SMP preempt mod_unload modversions
 
-# vermagic: must match running kernel exactly
+# vermagic: must match the running kernel exactly — except that with
+# CONFIG_MODVERSIONS the leading release string is skipped and only the
+# trailing flags are compared (same_magic() in kernel/module/version.c)
 ```
 
 ## Useful build targets
@@ -301,8 +314,8 @@ make headers_install
 # Clean:
 make clean     # remove build artifacts (keep .config)
 make mrproper  # remove everything including .config
-make distclean # mrproper + editor/tag leftovers: *.orig, *.rej, *~,
-               # *.bak, core, tags/TAGS, cscope*, GPATH/GRTAGS/GSYMS/GTAGS
+make distclean # mrproper + editor/tag leftovers: *.orig, *.rej, *~, *.bak,
+               # #*#, *%, core, tags/TAGS, cscope*, GPATH/GRTAGS/GSYMS/GTAGS
 ```
 
 ## Further reading
@@ -329,7 +342,7 @@ make distclean # mrproper + editor/tag leftovers: *.orig, *.rej, *~,
 - [Module Loading Internals](module-loading-internals.md) — what the kernel does with the `.ko` afterwards: ELF parsing, relocation, and the `vermagic`/modversions checks
 - [Module Parameters, Symbols, and Kconfig](module-params.md) — `module_param()`, symbol export, and how Kconfig symbols reach module code
 - [Kernel Module Signing](module-signing.md) — `CONFIG_MODULE_SIG_ALL` and signing out-of-tree modules
-- [KGDB: Kernel GDB Debugger](../debugging/kgdb.md) — the consumer of `CONFIG_DEBUG_INFO=y` builds described above
+- [KGDB: Kernel GDB Debugger](../debugging/kgdb.md) — the consumer of the debug-info builds described above
 
 ### LWN articles
 

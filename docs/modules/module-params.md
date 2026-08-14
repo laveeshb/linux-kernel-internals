@@ -179,19 +179,23 @@ symbol the module references:
 WARNING: modpost: "tcp_sendmsg" [drivers/net/mydriver.ko] has no CRC!
 ```
 
-This warning fires *only* when `CONFIG_MODVERSIONS=y` — `add_versions()`
-returns immediately when modversions is off — and means a referenced symbol
-had no valid CRC to record, usually because the exporting side was built
-without version information. With `CONFIG_MODVERSIONS=n` there are no CRCs and
-therefore no CRC warnings or load-time version checks at all.
+The warning means a referenced symbol had no valid CRC to record, usually
+because the exporting side was built without version information. It requires
+`CONFIG_MODVERSIONS=y`, but two different `modpost` functions emit the identical
+string: `add_versions()` returns immediately unless `CONFIG_BASIC_MODVERSIONS`
+is set (it defaults to `y` under `MODVERSIONS`), and `add_extended_versions()`
+is guarded by `CONFIG_EXTENDED_MODVERSIONS` instead — so the warning can come
+from either path depending on which version format the build emits. With
+`CONFIG_MODVERSIONS=n` there are no CRCs and therefore no CRC warnings or
+load-time version checks at all.
 
 ## /proc/kallsyms: all kernel symbols
 
 ```bash
 # Find where a function lives (as root — see the note on addresses below)
 sudo grep "tcp_sendmsg" /proc/kallsyms
-# ffffffff81a12345 T tcp_sendmsg          ← T = global code, not "exported"
-# ffffffffc0401000 t hello_init [hello]   ← t = module-local code, [module]
+# ffffffff81a12345 T tcp_sendmsg              ← T = global code, not "exported"
+# ffffffffc0401000 t mymodule_reset [mymodule] ← t = module-local code, [module]
 
 # Address → function name
 sudo awk '/ffffffff81a12345/{print $3}' /proc/kallsyms
@@ -228,6 +232,13 @@ filtered out when a module's symbol table is trimmed — `is_core_symbol()`
 returns false for anything with `st_shndx == SHN_UNDEF` — so imported symbols
 are simply absent from the listing rather than shown with a type of their own.
 
+`__init` functions are missing for the same reason. `is_core_symbol()` also
+rejects anything living in an init-type section, and once the module's init
+function has run, `do_init_module()` swaps `mod->kallsyms` over to the trimmed
+`core_kallsyms` copy. So grepping for `mymodule_init` in a module that has
+finished loading finds nothing — only the symbols that survive into the module's
+core memory are listed.
+
 ## Kconfig: compile-time configuration
 
 ```kconfig
@@ -258,9 +269,18 @@ config MY_DRIVER_DEBUG
 obj-$(CONFIG_MY_DRIVER) += mydriver.o
 mydriver-y := mydriver_main.o mydriver_pci.o
 
-# Conditional compilation
-obj-$(CONFIG_MY_DRIVER_DEBUG) += mydriver_debug.o
+# Conditional compilation: add an object *into* the composite module
+mydriver-$(CONFIG_MY_DRIVER_DEBUG) += mydriver_debug.o
 ```
+
+Note the `mydriver-` prefix on the conditional line, not `obj-`. `obj-y +=
+mydriver_debug.o` would link that object straight into `built-in.a`, while
+`mydriver.ko` — built from the `mydriver-y` list — would still reference
+`debug_dump()` and fail to resolve it. `MY_DRIVER_DEBUG` is a `bool`, so it is
+only ever `y` or `n`; with `CONFIG_MY_DRIVER=m` the two halves would end up on
+opposite sides of the module boundary. `<module>-$(CONFIG_FOO) += file.o` is the
+idiom for optionally pulling an object into a composite module, and it does the
+right thing for `=y` builds too.
 
 ```c
 /* In source: */
@@ -338,18 +358,21 @@ cat /lib/modules/$(uname -r)/modules.dep | grep e1000e
 
 udev/systemd-udevd automatically loads modules based on device discovery:
 
-```bash
-# Add a MODULE_ALIAS to match hardware IDs
-# In source:
+```c
+/* Add a MODULE_ALIAS to match hardware IDs, in source: */
 MODULE_ALIAS("pci:v00008086d00001234*");  /* Intel device 0x1234 */
+```
 
+```bash
 # depmod collects it into modules.alias:
+grep 00001234 /lib/modules/$(uname -r)/modules.alias
 # alias pci:v00008086d00001234* e1000e
 ```
 
-The kernel does not invoke `modprobe` for discovered devices. When a device
-appears, the kernel emits a uevent carrying a `MODALIAS=` variable built from
-the device's IDs:
+The driver core does not invoke `modprobe` when a device is discovered. (Other
+subsystems do spawn it, via `request_module()` and `CONFIG_MODPROBE_PATH` — but
+not this path.) When a device appears, the kernel emits a uevent carrying a
+`MODALIAS=` variable built from the device's IDs:
 
 ```bash
 cat /sys/bus/pci/devices/0000:00:1f.6/modalias
@@ -360,10 +383,16 @@ cat /sys/bus/pci/devices/0000:00:1f.6/modalias
 standard one lives in `80-drivers.rules`:
 
 ```
-ENV{MODALIAS}=="?*", IMPORT{builtin}="kmod load $env{MODALIAS}"
+ACTION!="add", GOTO="drivers_end"
+ENV{MODALIAS}=="?*", RUN{builtin}+="kmod load"
 ```
 
-udev's `kmod` builtin then resolves the alias through `modules.alias` — the
+`RUN{builtin}+=` queues the builtin to run for the event (as opposed to
+`IMPORT{builtin}=`, which runs a builtin to import device properties). Note that
+no argument follows `load`: given no module names, the `kmod` builtin reads the
+device's own `MODALIAS` property off the event.
+
+The builtin then resolves that alias through `modules.alias` — the
 same libkmod lookup `modprobe` performs — and loads `e1000e`. It applies
 `modprobe.d` blacklists along the way, which is why blacklisting a module
 suppresses this autoload path while leaving an explicit `modprobe nouveau`
@@ -410,14 +439,14 @@ you.
 ### Kernel source
 
 - [include/linux/moduleparam.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/moduleparam.h) — every macro used above. `module_param()` is a thin wrapper over `module_param_named()`, which expands to `param_check_<type>()` + `module_param_cb()` + `__MODULE_PARM_TYPE()`; `MODULE_PARM_DESC()` is just `MODULE_INFO(parm, ...)`. Also `struct kernel_param_ops` (`.flags`, `.set`, `.get`, `.free`), `struct kparam_array` (whose `.num` field is an `unsigned int *`), and `__module_param_call()`, which places each `struct kernel_param` into the `__param` section
-- [kernel/params.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/params.c) — the per-type `kernel_param_ops` behind the `int`/`uint`/`charp`/`bool` type names — the numeric ones generated by the `STANDARD_PARAM_DEF()` macro, `param_ops_charp` and `param_ops_bool` written out by hand — plus `param_array_ops` (the code that parses `5,6,7` and writes the element count back through `nump`), and `add_sysfs_param()`/`module_param_sysfs_setup()`, which build `/sys/module/<name>/parameters/`. Note `add_sysfs_param()` skips parameters with `perm == 0` and only installs a `store` handler when `perm` has a write bit set
+- [kernel/params.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/params.c) — the per-type `kernel_param_ops` behind the `int`/`uint`/`charp`/`bool` type names — the numeric ones generated by the `STANDARD_PARAM_DEF()` macro, `param_ops_charp` and `param_ops_bool` written out by hand — plus `param_array_ops` (the code that parses `5,6,7` and writes the element count back through `nump`), and `add_sysfs_param()`/`module_param_sysfs_setup()`, which build `/sys/module/<name>/parameters/`. Note that the `perm == 0` skip lives in the callers — `module_param_sysfs_setup()` and `param_sysfs_builtin()` both `continue` past such parameters — while `add_sysfs_param()` itself opens with `BUG_ON(!kp->perm)` and only installs a `store` handler when `perm` has a write bit set
 - [include/linux/sysfs.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/sysfs.h) — `VERIFY_OCTAL_PERMISSIONS()`, the compile-time check `__module_param_call()` applies to the permission argument: it rejects any world-writable mode and any mode where group or other is more permissive than owner, so `0666` will not build
 - [include/linux/export.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/export.h) — `EXPORT_SYMBOL()`, `EXPORT_SYMBOL_GPL()`, `EXPORT_SYMBOL_NS()`/`EXPORT_SYMBOL_NS_GPL()`, `DEFAULT_SYMBOL_NAMESPACE`, and the newer `EXPORT_SYMBOL_FOR_MODULES()`. The license and namespace are emitted as strings into a `.export_symbol` section, which is why the namespace argument is a quoted string literal
 - [kernel/module/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/main.c) — `resolve_symbol()` and `find_exported_symbol_in_section()`, where a GPL-only symbol is simply made *invisible* to a module whose license is not GPL-compatible (the load then fails with `Unknown symbol`), plus `verify_namespace_is_imported()`, the source of the missing-`MODULE_IMPORT_NS` error
 - [kernel/module/version.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/version.c) — `check_version()`: the load-time CRC comparison behind `CONFIG_MODVERSIONS`, and where the `disagrees about version of symbol` and `no symbol version for` messages come from
 - [scripts/mod/modpost.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/mod/modpost.c) — the build-time half of the same checks: `add_versions()` emits the `has no CRC!` warning, and the GPL and namespace violations are reported as `GPL-incompatible module ... uses GPL-only symbol` and `module ... uses symbol ... from namespace ..., but does not import it`
 - [kernel/module/kallsyms.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/kallsyms.c) — `elf_type()`, which assigns the one-letter symbol types (`t`/`d`/`r`/`b`, plus `w`/`v` for weak and `a` for absolute) shown in `/proc/kallsyms`, and `is_core_symbol()`, which decides which of a module's symbols are listed at all
-- [kernel/kallsyms.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kallsyms.c) — the `/proc/kallsyms` seq_file, and `kallsyms_show_value()`, which is why an unprivileged `cat` sees `0000000000000000` for every address
+- [kernel/kallsyms.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/kallsyms.c) — the `/proc/kallsyms` seq_file: `kallsyms_open()` records the opener's credentials and `s_show()` blanks the address when they do not pass. The predicate itself, `kallsyms_show_value()` — the `kptr_restrict`/`CAP_SYSLOG` logic that is why an unprivileged `cat` sees `0000000000000000` for every address — is defined next door in `kernel/ksyms_common.c`
 
 ### Man pages
 
@@ -434,8 +463,8 @@ you.
 - [Module Loading Internals](module-loading-internals.md) — where symbol resolution, relocation, and the modversions check happen inside `load_module()`
 - [Kbuild Build System](kbuild.md) — the `obj-y`/`obj-m`/`<module>-y` mechanics and Kconfig front-ends behind the Makefile fragment above
 - [Kernel Module Signing](module-signing.md) — the other load-time gate a `.ko` has to pass
-- [Platform Drivers](../drivers/platform-driver.md) — modules as drivers, and how `MODULE_DEVICE_TABLE` feeds `modules.alias`
-- [Linux Device Model](../drivers/device-model.md) — the kobject/sysfs machinery that `/sys/module/<name>/parameters/` is built on
+- [Platform Drivers](../drivers/platform-driver.md) — modules as drivers, and `MODULE_DEVICE_TABLE()` in the context of a real driver's match tables
+- [Linux Device Model](../drivers/device-model.md) — background on the kobject/sysfs machinery that directories like `/sys/module/<name>/parameters/` are built on
 
 ### LWN articles
 

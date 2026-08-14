@@ -43,7 +43,7 @@ make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
 ```
 # After kernel update:
 modprobe mydriver
-# modprobe: ERROR: could not insert 'mydriver': Required key not available
+# modprobe: ERROR: could not insert 'mydriver': Key was rejected by service
 ```
 
 **What happened:** The admin had enrolled the public signing certificate the only way that worked on the first try: by rebuilding the distribution's kernel source package with the certificate added to `CONFIG_SYSTEM_TRUSTED_KEYS`, so it was compiled into that one kernel image. That worked, and it kept working for as long as that image stayed the default boot entry.
@@ -52,7 +52,7 @@ Then the distribution shipped a kernel errata update. The package manager instal
 
 The modules were still signed with the admin's private key. Their signatures were valid. But the running kernel had no record of the corresponding public key and refused to verify the modules.
 
-**Why it was hard to diagnose:** The modules' signatures had not changed. `modinfo mydriver.ko | grep sig` still showed a signature. The error `Required key not available` pointed to the keyring, not the signature itself. The admin initially assumed the modules needed to be re-signed.
+**Why it was hard to diagnose:** The modules' signatures had not changed. `modinfo mydriver.ko | grep sig` still showed a signature. The error `Key was rejected by service` pointed to the keyring, not the signature itself. The admin initially assumed the modules needed to be re-signed.
 
 **Fix:** Enroll the public certificate in the UEFI MOK (Machine Owner Key) database, which persists in UEFI NVRAM and survives kernel updates — but enrolling it is only half the job, because *which* kernel keyring a MOK certificate lands in decides whether module signing can use it at all.
 
@@ -100,7 +100,7 @@ Call Trace:
   blk_mq_complete_request+0x42/0x90
   nvme_complete_rq+0x31/0x70
   ...
-Tainted: P OE
+Tainted: P           OE
 # P = proprietary module loaded
 # O = out-of-tree module loaded
 # E = unsigned module loaded
@@ -207,13 +207,15 @@ The build-time net for this class of bug is `modpost`, not sparse — sparse has
 
 ## 5. The negative ring size
 
-**Symptom:** A NIC driver's receive path corrupted memory intermittently on a subset of servers, but only when the driver was loaded with a non-default RX ring size. The crashes had no consistent call trace and did not reproduce with KASAN enabled — the extra instrumentation changed the allocator's behavior enough that the overflow landed somewhere harmless.
+**Symptom:** A NIC driver crashed with a NULL-pointer dereference immediately at `insmod` time, but only on servers where an automation script had passed a non-default RX ring size. Every affected server hit it identically, at the same point in boot, on the first attempt.
 
 ```
 insmod mydriver.ko rx_ring_size=-1
-dmesg | tail -3
-# mydriver: allocated RX ring, 8 entries
-# (later, under load) BUG: unable to handle kernel paging request
+dmesg | tail -4
+# mydriver: allocating RX ring
+# ------------[ cut here ]------------
+# WARNING: ... at mm/page_alloc.c:... __alloc_pages+...
+# BUG: kernel NULL pointer dereference, address: 0000000000000018
 ```
 
 **What happened:** The module parameter was declared as a signed `int`, and validated with an upper bound only:
@@ -230,21 +232,25 @@ static int __init mydriver_init(void)
         return -EINVAL;
     }
     /* BUG: no lower-bound check */
+    pr_info("allocating RX ring\n");
     ring = dma_alloc_coherent(dev, rx_ring_size * sizeof(struct rx_desc),
                                &dma_handle, GFP_KERNEL);
+    ring[0].status = 0;   /* BUG: no NULL check either */
     ...
 }
 ```
 
 An automation script deploying the driver had a template bug and passed `rx_ring_size=-1` on one class of servers. `kstrtoint()` (the parser `param_set_int()` uses) has no concept that this particular `int` is logically a count — it accepts any value that fits in a signed 32-bit integer, and `-1` fits. The `if (rx_ring_size > 4096)` check also accepts it: `-1 > 4096` is false in signed comparison, so the only validation the driver had let it straight through.
 
-The allocation size is where it turned dangerous. `rx_ring_size * sizeof(struct rx_desc)` multiplies a **signed** `int` by an **unsigned** `size_t`. C's usual arithmetic conversions convert the `int` operand to `size_t` before the multiply — `-1` as a 32-bit int sign-extends to a 64-bit `-1` and is then reinterpreted as unsigned, becoming `0xFFFFFFFFFFFFFFFF` (`SIZE_MAX` on a 64-bit build). The multiplication by `sizeof(struct rx_desc)` then wraps modulo 2⁶⁴, and depending on the exact struct size, the wrapped result can land anywhere — including on a small, plausible-looking allocation size that `dma_alloc_coherent()` happily satisfies. The driver believed it had allocated a ring sized for a huge descriptor count; the actual allocation was undersized (or, on a build where the wrapped value stayed enormous, `dma_alloc_coherent()` failed outright with `-ENOMEM`, which is what made the bug so inconsistent across servers — some hit the wrap, some didn't, depending on the compiler's `sizeof(struct rx_desc)` and how the multiplication happened to fold).
+The allocation size is where it turned dangerous. `rx_ring_size * sizeof(struct rx_desc)` multiplies a **signed** `int` by an **unsigned** `size_t`. C's usual arithmetic conversions convert the `int` operand to `size_t` before the multiply — `-1` as a 32-bit int sign-extends to a 64-bit `-1` and is then reinterpreted as unsigned, becoming `0xFFFFFFFFFFFFFFFF` (`SIZE_MAX` on a 64-bit build). Multiplying that by `sizeof(struct rx_desc)` does **not** wrap to something small: for any negative `int` and any plausible struct size, the product stays within a few thousand bytes of `SIZE_MAX` — astronomically, not modestly, oversized. There is no struct-size or compiler variation that turns this into an undersized allocation.
 
-Either way, `rx_ring_size` itself — still `-1` — was used unmodified as the loop bound for populating ring entries. Where the wrap produced an undersized allocation, that loop wrote descriptors past the end of the buffer.
+What actually happens downstream is a size so large it breaks the allocator's own arithmetic before it ever reaches the page allocator's normal "out of memory" path: `PAGE_ALIGN()` on a value that close to `SIZE_MAX` overflows and wraps to `0`, and the resulting page order is computed at `BITS_PER_LONG - PAGE_SHIFT` — comfortably past `MAX_PAGE_ORDER`. The page allocator's own sanity check catches that and refuses the allocation outright, logging a `WARNING` and returning `NULL`. That part is deterministic: every server that loads this driver with `rx_ring_size=-1` gets the identical `NULL`, on the first call, every time.
 
-**Why it was not caught earlier:** The driver worked correctly for every positive value up to 4096; the missing lower bound was invisible in code review because nobody tried a negative RX ring size by hand. The bug needed both a negative value *and* a compiler/struct-size combination that made the wrap land on a small allocation — the same driver source built for a different target where `sizeof(struct rx_desc)` happened to be a power of two showed no corruption at all, only the clean `-ENOMEM` failure, which further obscured the root cause.
+The crash comes from what the driver does next: nothing. `ring[0].status = 0` dereferences the `NULL` `dma_alloc_coherent()` just returned, faulting immediately.
 
-**Fix:** Use the correct parameter type, and validate both bounds:
+**Why it was not caught earlier:** The driver worked correctly for every positive value up to 4096; the missing lower bound was invisible in code review because nobody tried a negative RX ring size by hand, and the missing NULL check on the allocation was invisible because `dma_alloc_coherent()` essentially never fails for the small, valid sizes the driver was tested with. Two independent, unrelated omissions — no lower bound, no failure check — had to combine before either one mattered.
+
+**Fix:** Use the correct parameter type, validate both bounds, and check the allocation:
 
 ```c
 static unsigned int rx_ring_size = 256;
@@ -261,13 +267,15 @@ static int __init mydriver_init(void)
     }
     ring = dma_alloc_coherent(dev, rx_ring_size * sizeof(struct rx_desc),
                                &dma_handle, GFP_KERNEL);
+    if (!ring)
+        return -ENOMEM;
     ...
 }
 ```
 
-`unsigned int` alone would not have caught this — `kstrtouint()` still accepts `4294967295` even though it's an unreasonable ring size — so the explicit range check matters as much as the type. For parameters that must be validated on runtime writes via sysfs as well, use `module_param_cb()` with a custom `set` function that enforces the same range on every write, not just at load time.
+Switching to `unsigned int` would, by itself, have caught this specific mistake: `kstrtouint()` rejects a leading `-` outright, so `rx_ring_size=-1` would have failed to parse at `insmod` time with `-EINVAL`, well before the driver ever ran. It is not a complete fix on its own, though — `kstrtouint()` still accepts `4294967295`, an equally nonsensical ring size that no type change alone rejects — so the explicit range check still matters. For parameters that must be validated on runtime writes via sysfs as well, use `module_param_cb()` with a custom `set` function that enforces the same range on every write, not just at load time.
 
-**Lesson:** A signed parameter with only an upper-bound check lets every negative value through. Mixed signed/unsigned arithmetic in a size calculation is where that becomes dangerous: the usual arithmetic conversions silently turn a negative count into a near-`SIZE_MAX` unsigned value before the multiply, and the wraparound from there can land anywhere — sometimes a clean allocation failure, sometimes a real overflow. Validate both bounds of a count-like parameter, and prefer an unsigned type as the second line of defense, not the first.
+**Lesson:** A signed parameter with only an upper-bound check lets every negative value through, and mixed signed/unsigned arithmetic in a size calculation turns a negative count into a value near `SIZE_MAX` rather than a small one — allocators are built to reject that cleanly, not silently accept it, so the practical risk is a `NULL` return, not a wraparound overflow. The bug that actually reaches hardware is almost always the second, unrelated mistake: not checking the allocation for failure. Validate both bounds of a count-like parameter, prefer an unsigned type as a second line of defense, and never skip the NULL check on an allocation whose size an attacker or a bad config might influence.
 
 ---
 
@@ -294,18 +302,18 @@ static int __init mydriver_init(void)
 
 ### Man pages
 
-- [`init_module(2)`](https://man7.org/linux/man-pages/man2/init_module.2.html) — the load-time errors these cases produce: `ENOEXEC` for a module image the kernel rejects (Case 1), `ENOKEY` — "Required key not available" — when the kernel has no key for the module's signature (Case 2)
+- [`init_module(2)`](https://man7.org/linux/man-pages/man2/init_module.2.html) — the load-time errors these cases produce: `ENOEXEC` for a module image the kernel rejects (Case 1); the man page documents `ENOKEY` for a missing signature key, but since v5.4 (commit `49fcf732bdae`, "lockdown: Enforce module signatures if the kernel is locked down") an enforcing kernel actually returns `EKEYREJECTED` — "Key was rejected by service" — behind Case 2
 - [`delete_module(2)`](https://man7.org/linux/man-pages/man2/delete_module.2.html) — the unload path behind the `rmmod` advice in Case 3, and its `O_TRUNC` forced-unload flag
 - [`modprobe(8)`](https://man7.org/linux/man-pages/man8/modprobe.8.html) — the loader used in Cases 2 and 5, including how trailing `name=value` module parameters are handed to the kernel
-- [`modinfo(8)`](https://man7.org/linux/man-pages/man8/modinfo.8.html) — reads the `sig*` and `vermagic` fields from a `.ko`, the inspection step in Cases 1 and 2
+- [`modinfo(8)`](https://man7.org/linux/man-pages/man8/modinfo.8.html) — `-F field` extraction of module attributes from a `.ko`, the inspection step in Cases 1 and 2 (the man page's own field list doesn't mention `sig*`/`vermagic`, but `modinfo` prints them in practice — see `Documentation/admin-guide/module-signing.rst`)
 - [`keyctl(1)`](https://man7.org/linux/man-pages/man1/keyctl.1.html) — `keyctl list` and the `%:<name>` keyring-by-name notation used in Case 2's verification step
 
 ### Related pages
 
 - [Module Loading Internals](module-loading-internals.md) — `load_module()`, the `__versions` CRC check, and `Module.symvers`, the machinery behind Case 1
 - [Module Signing](module-signing.md) — `CONFIG_MODULE_SIG_FORCE`, signature format, and key enrollment, behind Case 2
-- [Module Parameters, Symbols, and Kconfig](module-params.md) — `module_param()` types, `module_param_cb()`, and `KBUILD_EXTRA_SYMBOLS`, behind Cases 1 and 5
-- [Kbuild: The Kernel Build System](kbuild.md) — out-of-tree `M=` builds and where `Module.symvers` comes from, the build side of Case 1's fix
+- [Module Parameters, Symbols, and Kconfig](module-params.md) — `module_param()` types, `module_param_cb()`, and the same `has no CRC!`/version-mismatch symptoms, behind Cases 1 and 5
+- [Kbuild: The Kernel Build System](kbuild.md) — out-of-tree `M=` builds, the build side of Case 1's fix
 - [Writing and Loading Kernel Modules](module-basics.md) — the `__init`/`__exit` annotations and module lifecycle behind Case 4
 - [Kernel Keyring](../crypto/keyring.md) — key types and keyring search semantics behind Case 2's `keyctl` check
 - [Kernel Oops Analysis](../debugging/oops-analysis.md) — decoding the tainted call traces quoted in Cases 3 and 4

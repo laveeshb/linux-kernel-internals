@@ -269,7 +269,8 @@ keyctl show %:.builtin_trusted_keys
 keyctl show %:.secondary_trusted_keys
 ```
 
-The four keyrings, and what can reach each:
+The four keyrings that matter for module signing, and what can reach each (the
+kernel has others — `.blacklist`, `.ima`, `.evm` — that play no part here):
 
 | Keyring | Populated by | Consulted for module signatures? |
 | --- | --- | --- |
@@ -278,15 +279,41 @@ The four keyrings, and what can reach each:
 | `.machine` | MOK certs, if `CONFIG_INTEGRITY_MACHINE_KEYRING` | yes — it is linked into `.secondary_trusted_keys` |
 | `.platform` | UEFI Secure Boot `db`, and MOK certs otherwise | **no** — used for kexec images, dm-verity and similar, never modules |
 
-Adding a key at runtime is not a matter of privilege. Per
-`Documentation/admin-guide/module-signing.rst`, the kernel permits a key to be
-added to `.builtin_trusted_keys` **only if** the new key's X.509 wrapper is
-validly signed by a key already resident in that keyring — the
-`restrict_link_by_builtin_trusted()` check. `.secondary_trusted_keys` works the
-same way one level out: a new key must be vouched for by a key already in the
-builtin or secondary ring. Being root, holding `CAP_SYS_ADMIN`, or turning
-`sig_enforce` off does not help; there is no capability that lets you inject an
-unvouched-for key into the trust chain, which is rather the point.
+Adding a key at runtime is not a matter of privilege — and in current mainline
+it is not `.builtin_trusted_keys` you would be adding it to.
+`Documentation/admin-guide/module-signing.rst` still describes a `keyctl padd`
+flow against that keyring, but that flow is dead upstream. In
+`system_trusted_keyring_init()` (`certs/system_keyring.c`),
+`.builtin_trusted_keys` is allocated with `NULL` for the link-restriction
+argument — it has no link restriction at all — and its permission mask is
+`KEY_USR_VIEW | KEY_USR_READ | KEY_USR_SEARCH` with no `KEY_USR_WRITE`. It is
+also never linked into any process keyring, so nothing in userspace *possesses*
+it and the `KEY_POS_*` bits never come into play either. You can look at it;
+you cannot write to it. It is filled once, at build time, from the compiled-in
+certificates.
+
+`.secondary_trusted_keys` is the ring that actually takes runtime additions,
+and it is what the example below targets. It is allocated with `KEY_USR_WRITE`
+and with the restriction returned by `get_builtin_and_secondary_restriction()`,
+which installs `restrict_link_by_builtin_secondary_and_machine` when
+`CONFIG_INTEGRITY_MACHINE_KEYRING=y` and
+`restrict_link_by_builtin_and_secondary_trusted` otherwise. For a certificate
+the rule is the same either way: the new key's X.509 wrapper must be validly
+signed by a key already resident in the builtin or secondary ring (or, with the
+machine keyring enabled, the machine ring). The machine-aware variant differs
+only in also permitting the `.machine` keyring itself to be linked in — it
+delegates every other case straight to
+`restrict_link_by_builtin_and_secondary_trusted()`. Being root, holding
+`CAP_SYS_ADMIN`, or turning `sig_enforce` off does not help; there is no
+capability that lets you inject an unvouched-for key into the trust chain,
+which is rather the point.
+
+`restrict_link_by_builtin_trusted()` is a real function in the same file, and
+it is the one usually named in write-ups about this — but it does not guard
+`.builtin_trusted_keys`. Its users are the IMA blacklist keyring
+(`.ima_blacklist`, in `security/integrity/ima/ima_mok.c`) and the
+`"builtin_trusted"` method that `keyctl restrict_keyring` can apply to a
+keyring of asymmetric keys (`crypto/asymmetric_keys/asymmetric_type.c`).
 
 ```bash
 # Add a key that IS validly signed by a resident key:
@@ -370,6 +397,12 @@ echo integrity > /sys/kernel/security/lockdown
     On a vanilla kernel with Secure Boot on,
     `cat /sys/kernel/security/lockdown` still reports `[none]`.
 
+    Mainline *does* couple Secure Boot to one thing, just not to lockdown: with
+    `CONFIG_IMA_ARCH_POLICY=y`, detecting Secure Boot turns on module signature
+    enforcement directly, without going through lockdown at all. See
+    [the enforcement paths](#modprobe-force-does-not-defeat-enforcement) at the
+    end of this page.
+
 The reason codes are ordered in `enum lockdown_reason`, and
 `LOCKDOWN_MODULE_SIGNATURE` is the very first one after `LOCKDOWN_NONE` — so
 any lockdown level at all blocks unsigned modules. Everything up to
@@ -447,9 +480,32 @@ modprobe --force mymodule
 `Key was rejected by service` is `EKEYREJECTED`, the errno
 `module_sig_check()` returns under enforcement. There is no flag that makes an
 enforcing kernel load an unsigned module; the only ways out are to sign it with
-a key the kernel already trusts, or to run a kernel that is not enforcing —
-which means one built without `CONFIG_MODULE_SIG_FORCE` and booted without
-`module.sig_enforce=1`, since `sig_enforce` can never be cleared once set.
+a key the kernel already trusts, or to run a kernel that is not enforcing.
+
+"Not enforcing" is a narrower condition than it looks, because `sig_enforce`
+can never be cleared once set and mainline has three separate ways of setting
+it:
+
+1. **`CONFIG_MODULE_SIG_FORCE=y` at build time.** It is literally the
+   initialiser: `static bool sig_enforce = IS_ENABLED(CONFIG_MODULE_SIG_FORCE)`
+   in `kernel/module/signing.c`.
+2. **`module.sig_enforce=1` on the command line**, or a later `1` written to
+   `/sys/module/module/parameters/sig_enforce` — the same `bool_enable_only`
+   parameter, which is why the write is one-way.
+3. **Secure Boot, on a kernel with `CONFIG_IMA_ARCH_POLICY=y`.** This is the
+   one that catches people out, because neither of the first two is present.
+   `arch_get_ima_policy()` in `security/integrity/ima/ima_efi.c` calls
+   `set_module_sig_enforced()` — unconditionally, before it returns the
+   architecture rule set — as soon as `arch_get_secureboot()` reports Secure
+   Boot on. `arch/powerpc/kernel/ima_arch.c` has the equivalent for
+   `is_ppc_secureboot_enabled()`. So on x86, arm64 or powerpc (the three
+   architectures that select the underlying
+   `CONFIG_IMA_SECURE_AND_OR_TRUSTED_BOOT`), a kernel built with the IMA arch
+   policy and booted under Secure Boot enforces module signatures even though
+   `CONFIG_MODULE_SIG_FORCE` is unset, the command line says nothing about
+   `sig_enforce`, and — per the warning above — lockdown still reads `[none]`.
+   `cat /sys/module/module/parameters/sig_enforce` is the thing to check, not
+   the config or the command line.
 
 ## Further reading
 
@@ -459,7 +515,7 @@ which means one built without `CONFIG_MODULE_SIG_FORCE` and booted without
 - [include/uapi/linux/module_signature.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/module_signature.h) — `MODULE_SIGNATURE_MARKER` (`"~Module signature appended~\n"`) and `struct module_signature`, with the field-order comment describing the signer/key-id/signature/info-block layout
 - [kernel/module_signature.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module_signature.c) — `mod_check_sig()`: the sanity check that rejects anything whose `id_type` is not `MODULE_SIGNATURE_TYPE_PKCS7`, or whose `algo`/`hash`/`signer_len`/`key_id_len` fields are non-zero
 - [scripts/sign-file.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/sign-file.c) — the signing tool: argument order, the OpenSSL CMS/PKCS#7 call, and its four flags (`-s`, `-p`, `-d`, `-k`)
-- [certs/system_keyring.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/certs/system_keyring.c) — allocation of `.builtin_trusted_keys`, `.secondary_trusted_keys` and `.machine`, and the link restrictions that govern what may be added to each
+- [certs/system_keyring.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/certs/system_keyring.c) — allocation of `.builtin_trusted_keys` and `.secondary_trusted_keys` (the only two `keyring_alloc()` calls in the file), the link restriction on the latter via `get_builtin_and_secondary_restriction()`, and `set_machine_trusted_keys()`, which links the `.machine` ring — allocated over in `security/integrity/digsig.c` — into the secondary ring
 - [certs/Kconfig](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/certs/Kconfig) — `CONFIG_MODULE_SIG_KEY`, the RSA/ECDSA/ML-DSA key-type choice, `CONFIG_SYSTEM_TRUSTED_KEYS`, and `CONFIG_SECONDARY_TRUSTED_KEYRING`
 - [kernel/module/Kconfig](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/Kconfig) — `CONFIG_MODULE_SIG`, `CONFIG_MODULE_SIG_FORCE`, `CONFIG_MODULE_SIG_ALL`, and the full `CONFIG_MODULE_SIG_SHA*` hash choice
 - [security/lockdown/lockdown.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/security/lockdown/lockdown.c) — the lockdown LSM: the `lockdown=` boot parameter, the `/sys/kernel/security/lockdown` securityfs file, and `lock_kernel_down()`'s refusal to move to a weaker level
@@ -468,7 +524,7 @@ which means one built without `CONFIG_MODULE_SIG_FORCE` and booted without
 
 ### Man pages
 
-- [`finit_module(2)`](https://man7.org/linux/man-pages/man2/finit_module.2.html) — the load path itself; documents `EBADMSG` (misformatted signature) and `ENOKEY` ("returned only if the kernel was configured with `CONFIG_MODULE_SIG_FORCE`"), plus the `MODULE_INIT_IGNORE_MODVERSIONS`/`MODULE_INIT_IGNORE_VERMAGIC` flags
+- [`finit_module(2)`](https://man7.org/linux/man-pages/man2/finit_module.2.html) — the load path itself; documents `EBADMSG` (misformatted signature) and `ENOKEY` ("returned only if the kernel was configured with `CONFIG_MODULE_SIG_FORCE`"), plus the `MODULE_INIT_IGNORE_MODVERSIONS`/`MODULE_INIT_IGNORE_VERMAGIC` flags. Note that the `ENOKEY` text is stale and contradicts the kernel as described above: since 5.4 an enforcing kernel returns `EKEYREJECTED`, not `ENOKEY`, and `ENOKEY` is instead one of the three *tolerated* errors inside `module_sig_check()`
 - [`kernel_lockdown(7)`](https://man7.org/linux/man-pages/man7/kernel_lockdown.7.html) — what lockdown actually blocks: unsigned modules, `/dev/mem`, `/dev/kmem`, `/dev/kcore`, `/dev/ioports`, unsigned kexec images, BPF and kprobes
 - [`keyctl(1)`](https://man7.org/linux/man-pages/man1/keyctl.1.html) — the `keyctl show` and `keyctl padd` subcommands and the `%:<name>` syntax used above to name `.builtin_trusted_keys`
 - [`modprobe(8)`](https://man7.org/linux/man-pages/man8/modprobe.8.html) — what `--force` really is (`--force-vermagic` plus `--force-modversion`), which matters because a mangled module is no longer the module that was signed
@@ -479,8 +535,8 @@ which means one built without `CONFIG_MODULE_SIG_FORCE` and booted without
 - [Writing and Loading Kernel Modules](module-basics.md) — the module lifecycle this verification sits in front of
 - [Module Loading Internals](module-loading-internals.md) — `load_module()`, ELF parsing, and where the signature check happens relative to relocation and symbol resolution
 - [Kernel Keyring](../crypto/keyring.md) — key types, keyrings, and the key retention service that holds the trusted certificates
-- [Kernel Crypto API](../crypto/crypto-api.md) — the hash and public-key machinery underneath PKCS#7 verification
-- [LSM Framework](../security/lsm.md) — lockdown is implemented as an LSM with a single `locked_down` hook
+- [Kernel Crypto API](../crypto/crypto-api.md) — the hash machinery (`crypto_shash`) underneath signature verification; for the asymmetric side, see the "asymmetric" key type on the keyring page above
+- [LSM Framework](../security/lsm.md) — the hook tables, `security_add_hooks()`, and how a module registers itself, which is the machinery the lockdown LSM plugs into
 - [Linux Capabilities](../security/capabilities.md) — `CAP_SYS_MODULE`, the privilege required before signature checking is even reached
 
 ### LWN articles
