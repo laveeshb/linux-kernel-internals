@@ -40,10 +40,6 @@ void die(const char *str, struct pt_regs *regs, long err)
 
 `oops_end()` is where `kexec_should_crash()`/`crash_kexec()` are actually invoked (not inside `die()` itself), followed by releasing `die_lock`, tainting the kernel (`TAINT_DIE`), and — if `signr` is nonzero — deciding whether to `panic()` (always in interrupt context, or if `panic_on_oops` is set) or otherwise kill the offending task.
 
-`oops_end()` re-enables the watchdog, calls `bust_spinlocks(0)`, and then either:
-- Delivers `SIGSEGV` to the current task (if the task can be killed)
-- Calls `panic()` if `panic_on_oops` sysctl is set or if the task cannot be killed (e.g., kernel thread)
-
 ---
 
 ## Anatomy of an oops message

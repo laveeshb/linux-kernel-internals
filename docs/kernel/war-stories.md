@@ -42,7 +42,7 @@ The driver's registration macro read:
 core_initcall(mydriver_core_init);
 ```
 
-It had been written as `core_initcall` because the developer confused "core" to mean "this is a core part of our system" rather than "this runs at initcall level 2, before subsystems like networking."
+It had been written as `core_initcall` because the developer confused "core" to mean "this is a core part of our system" rather than "this runs at initcall level 1, before subsystems like networking."
 
 ### Fix
 
@@ -392,7 +392,7 @@ Module init functions must return 0 on success or a negative errno on failure. A
 - [Kernel Panic and Oops](panic-oops.md) — crash analysis and kdump setup
 - [Boot Parameters](boot-params.md) — `__setup()`, `early_param()`, unknown parameter handling
 - [Kmemleak](../mm/kmemleak.md) — detecting memory leaks like Case 5
-- [KASAN](../mm/kasan.md) — `CONFIG_KASAN_GENERIC` vs `CONFIG_KASAN_VMALLOC`, the detection strategies discussed in Case 2
+- [KASAN](../mm/kasan.md) — `CONFIG_KASAN_GENERIC`, `CONFIG_KASAN_SW_TAGS`, and `CONFIG_KASAN_HW_TAGS`, the detection strategies behind Case 2 (see the External reference below for the `CONFIG_KASAN_VMALLOC` distinction specifically)
 - [include/linux/init.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/init.h) — the initcall level macros: `core_initcall()` = level 1, `subsys_initcall()` = level 4, `device_initcall()` = level 6, confirming the ordering behind Case 1
 - [init/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/init/main.c) — `do_one_initcall()` and the level-by-level initcall dispatch (`do_initcall_level()`), plus `unknown_bootoption()`/`print_unknown_bootoptions()` behind Case 4
 - [kernel/module/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/main.c) — `do_init_module()`: `if (ret > 0) pr_warn("%s: init suspiciously returned %d, it should follow 0/-E convention\n", ...)`, the real kernel code that would have caught Case 5's bug at load time
