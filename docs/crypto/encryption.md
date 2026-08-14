@@ -61,19 +61,25 @@ struct crypt_config {
     struct workqueue_struct *crypt_queue;
 
     /* Crypto transform */
-    struct crypto_skcipher **tfms;      /* one per CPU for parallelism */
+    union {
+        struct crypto_skcipher **tfms;  /* one per CPU for parallelism */
+        struct crypto_aead    **tfms_aead;
+    } cipher_tfm;
     unsigned int          tfms_count;
 
     /* IV generator */
-    struct iv_operations  *iv_gen_ops;  /* ESSIV, plain64, benbi, ... */
-    char                  iv_mode[CRYPTO_MAX_ALG_NAME];
+    const struct crypt_iv_operations *iv_gen_ops;  /* ESSIV, plain64, benbi, ... */
+    union {
+        struct iv_benbi_private    benbi;
+        struct iv_lmk_private      lmk;
+        struct iv_tcw_private      tcw;
+        struct iv_elephant_private elephant;
+    } iv_gen_private;                   /* per-IV-mode private state */
 
-    unsigned long long    iv_offset;    /* sector number offset for IV */
-    unsigned int          iv_size;
+    u64                    iv_offset;   /* sector number offset for IV */
+    unsigned int           iv_size;
 
-    char                  cipher_string[CRYPTO_MAX_ALG_NAME];
-
-    struct crypt_iv_operations *iv_gen_private;
+    char                  *cipher_string;  /* allocated, not embedded */
 };
 
 /* Each I/O is processed in a crypt_io */
@@ -221,18 +227,22 @@ int fscrypt_decrypt_pagecache_blocks(struct folio *folio, size_t len,
                                       size_t offs)
 {
     const struct inode *inode = folio->mapping->host;
-    const unsigned int du_bits = inode->i_crypt_info->ci_data_unit_bits;
+    const struct fscrypt_inode_info *ci = fscrypt_get_inode_info_raw(inode);
+    const unsigned int du_bits = ci->ci_data_unit_bits;
     const unsigned int du_size = 1U << du_bits;
     u64 index = ((u64)folio->index << (PAGE_SHIFT - du_bits)) + (offs >> du_bits);
-    unsigned int i;
+    size_t i;
+    int err;
 
     for (i = offs; i < offs + len; i += du_size, index++) {
-        /* Derive IV from file offset (sector number equivalent) */
-        u64 lblk_num = index;  /* logical block number */
+        struct page *page = folio_page(folio, i >> PAGE_SHIFT);
 
-        /* Decrypt using per-file key */
-        fscrypt_crypt_block(inode, FS_DECRYPT, lblk_num,
-                            folio_page(folio, i >> PAGE_SHIFT), ...);
+        /* Decrypt one data unit using the per-file key; index doubles
+         * as the IV input (logical data-unit number) */
+        err = fscrypt_crypt_data_unit(ci, FS_DECRYPT, index, page,
+                                      page, du_size, i & ~PAGE_MASK);
+        if (err)
+            return err;
     }
     return 0;
 }
@@ -302,10 +312,33 @@ cat /sys/block/dm-0/stat
 
 ## Further reading
 
-- [Kernel Crypto API](crypto-api.md) — AES-XTS and AEAD internals
-- [Memory Management: DMA](../mm/dma.md) — DMA for hardware crypto engines
-- [Security: Capabilities](../security/capabilities.md) — `CAP_SYS_ADMIN` for dm setup
-- [Block Layer: bio and request](../block/bio-request.md) — bio processing through dm-crypt
-- `drivers/md/dm-crypt.c` — dm-crypt implementation
-- `fs/crypto/` — fscrypt implementation
-- `man 8 cryptsetup` — LUKS management
+### Kernel source
+
+- [drivers/md/dm-crypt.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/md/dm-crypt.c) — `struct crypt_config`, `crypt_map()`, and the per-CPU cipher/IV setup
+- [fs/crypto/crypto.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/crypto/crypto.c) — `fscrypt_decrypt_pagecache_blocks()`
+- [include/uapi/linux/fscrypt.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/fscrypt.h) — `struct fscrypt_policy_v2` and the `FSCRYPT_MODE_*` constants
+
+### Man pages
+
+- [`cryptsetup(8)`](https://man.archlinux.org/man/cryptsetup.8.en) — LUKS/dm-crypt volume management
+- [`keyctl(1)`](https://man7.org/linux/man-pages/man1/keyctl.1.html) — keyring command-line tool (`add`, `show`, `new_session`, ...)
+- [`keyrings(7)`](https://man7.org/linux/man-pages/man7/keyrings.7.html) — the in-kernel key management facility
+
+### Related pages
+
+- [dm-crypt: Block-Level Encryption](../security/dm-crypt.md) — deeper dive into LUKS2's on-disk format, key derivation, and the kernel-side `crypt_map()` I/O path
+- [fscrypt: Per-File Encryption](../security/fscrypt.md) — deeper dive into the key hierarchy, the `FS_IOC_*` ioctl API, and inline encryption hardware
+- [Kernel Keyring](keyring.md) — the `logon` key type both dm-crypt and fscrypt use to store key material
+- [Kernel Crypto API](crypto-api.md) — the `skcipher` and AEAD transforms (`xts(aes)`, `gcm(aes)`) that dm-crypt and fscrypt call into
+- [crypto_engine: Hardware Offload Framework](crypto-engine.md) — how hardware crypto accelerators plug in beneath callers like dm-crypt
+- [Random Number Generation](rng.md) — where key material (`/dev/urandom`, `get_random_bytes()`) comes from
+
+### LWN articles
+
+- [Ext4 encryption](https://lwn.net/Articles/639427/) — Jonathan Corbet, April 8, 2015 — the original per-file encryption design that became fscrypt
+- [Adiantum: encryption for the low end](https://lwn.net/Articles/776721/) — Jake Edge, January 16, 2019 — the `FSCRYPT_MODE_ADIANTUM` cipher for devices without AES-NI
+
+### External
+
+- [Documentation/filesystems/fscrypt.rst](https://docs.kernel.org/filesystems/fscrypt.html) — the kernel's own fscrypt design and threat-model documentation
+- [Documentation/admin-guide/device-mapper/dm-crypt.rst](https://docs.kernel.org/admin-guide/device-mapper/dm-crypt.html) — the kernel's own dm-crypt target documentation

@@ -23,10 +23,11 @@ struct key {
     key_serial_t            serial;         /* unique key ID (keyctl show prints these) */
     union {
         struct list_head    graveyard_link;
-        /* internal linkage — varies by kernel version */
+        struct rb_node      serial_node;
     };
     struct rw_semaphore     sem;            /* protects key contents */
     struct key_user         *user;          /* owner accounting */
+    void                    *security;      /* LSM security blob */
     union {
         time64_t            expiry;         /* 0 = no expiry */
         time64_t            revoked_at;
@@ -39,23 +40,35 @@ struct key {
 
     unsigned short          quotalen;       /* bytes charged against quota */
     unsigned short          datalen;        /* payload length */
+    short                   state;          /* key state (+) or rejection error (-);
+                                              * KEY_IS_UNINSTANTIATED / KEY_IS_POSITIVE */
 
     unsigned long           flags;
-    /* KEY_FLAG_INSTANTIATED, KEY_FLAG_DEAD, KEY_FLAG_REVOKED, ... */
+    /* KEY_FLAG_DEAD, KEY_FLAG_REVOKED, KEY_FLAG_IN_QUOTA, KEY_FLAG_INVALIDATED, ...
+     * (instantiation is tracked by `state` above, not a flag bit) */
 
-    char                    *description;  /* human-readable name */
-
-    const struct key_type   *type;         /* "user", "logon", "keyring", ... */
-
-    struct keyring_index_key index_key; /* holds type and description */
+    /* type + description: overlaid two ways depending on how they're accessed */
+    union {
+        struct keyring_index_key index_key;
+        struct {
+            unsigned long    hash;
+            unsigned long    len_desc;
+            struct key_type  *type;         /* "user", "logon", "keyring", ... */
+            struct key_tag   *domain_tag;   /* domain of operation */
+            char             *description;  /* human-readable name */
+        };
+    };
 
     union {
         union key_payload   payload;        /* the actual key material */
         struct {
             /* For keyrings: */
+            struct list_head name_link;
             struct assoc_array      keys;
         };
     };
+
+    struct key_restriction  *restrict_link; /* keyring only: gates what can be linked in */
 };
 ```
 
@@ -114,13 +127,15 @@ plaintext never leaves kernel space:
 /* security/keys/encrypted-keys/encrypted.c */
 struct encrypted_key_payload {
     struct rcu_head     rcu;
+    char               *format;         /* datablob: format */
     char               *master_desc;    /* description of the encrypting key */
     char               *datalen;
     u8                 *iv;
     u8                 *encrypted_data;
+    unsigned short      datablob_len;         /* length of datablob */
     unsigned short      decrypted_datalen;
     unsigned short      payload_datalen;
-    unsigned short      format;
+    unsigned short      encrypted_key_format; /* encrypted key format */
     u8                 *decrypted_data;         /* AES-CBC decrypted in kernel */
     u8                  payload_data[];
 };
@@ -151,7 +166,7 @@ key material is never exposed to userspace — it only exists inside the TPM or 
 memory while unsealed:
 
 ```c
-/* security/keys/trusted-keys/trusted_tpm1.c and trusted_tpm2.c */
+/* include/keys/trusted-type.h (used by security/keys/trusted-keys/trusted_tpm1.c and trusted_tpm2.c) */
 struct trusted_key_payload {
     struct rcu_head     rcu;
     unsigned int        key_len;            /* key size in bytes */
@@ -514,7 +529,30 @@ keyctl search @u logon fscrypt:0123456789abcdef
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/key.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/key.h) — `struct key`, `struct key_type`, and the `KEY_POS_*`/`KEY_USR_*` permission bit definitions
+- [security/keys/](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/security/keys) — core keyring implementation: `keyctl()` syscall dispatch (`keyctl.c`), `request_key()` (`request_key.c`), permission checks (`permission.c`)
+- [include/keys/trusted-type.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/keys/trusted-type.h) — `struct trusted_key_payload`, the TPM-sealed key payload
+- [include/keys/encrypted-type.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/keys/encrypted-type.h) — `struct encrypted_key_payload`, the AES-CBC + HMAC-SHA256 datablob format
+- [include/uapi/linux/keyctl.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/keyctl.h) — `KEYCTL_*` operation codes and `KEY_SPEC_*` special-keyring constants
+- [Documentation/security/keys/core.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/security/keys/core.rst) — the kernel's own Key Retention Service documentation
+
+### Man pages
+
+- [`add_key(2)`](https://man7.org/linux/man-pages/man2/add_key.2.html) — add a key to the kernel's key management facility
+- [`request_key(2)`](https://man7.org/linux/man-pages/man2/request_key.2.html) — search for a key, invoking a userspace upcall if it isn't found
+- [`keyctl(2)`](https://man7.org/linux/man-pages/man2/keyctl.2.html) — the syscall behind every `KEYCTL_*` operation
+- [`keyrings(7)`](https://man7.org/linux/man-pages/man7/keyrings.7.html) — overview of the in-kernel key management and retention facility
+- [`keyctl(1)`](https://man7.org/linux/man-pages/man1/keyctl.1.html) — the keyutils command-line tool used throughout this page
+
+### Related pages
+
 - [dm-crypt and fscrypt](encryption.md) — how logon keys integrate with fscrypt and dm-crypt
-- [Kernel Crypto API](crypto-api.md) — the crypto primitives that process key material
-- `man 7 keyrings` — userspace keyring overview
-- `man 1 keyctl` — shell commands for key management
+- [Kernel Crypto API](crypto-api.md) — the AES-CBC and HMAC-SHA256 primitives that encrypted and trusted keys build on
+- [fscrypt: Per-File Encryption](../security/fscrypt.md) — detailed walkthrough of `FS_IOC_ADD_ENCRYPTION_KEY` and how fscrypt stores its master key as a logon key
+- [User Namespaces and Credential Mapping](../security/user-namespaces.md) — the uid/gid mapping model behind the container-isolation behavior described above
+
+### LWN articles
+
+- [Trusted and encrypted keys](https://lwn.net/Articles/408439/) — Jake Edge, October 2010: the introduction of the "trusted" and "encrypted" key types for EVM, including TPM sealing and the AES + HMAC datablob format

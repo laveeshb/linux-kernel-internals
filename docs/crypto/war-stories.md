@@ -132,14 +132,15 @@ in ways that create timing variation.
 Linux added `crypto_memneq()` in kernel 3.14 (commit b839da0f) specifically to address this:
 
 ```c
-/* include/crypto/algapi.h */
+/* include/crypto/utils.h */
 static inline int crypto_memneq(const void *a, const void *b, size_t size)
 {
-    return __crypto_memneq(a, b, size);
+    return __crypto_memneq(a, b, size) != 0UL ? 1 : 0;
 }
 
-/* crypto/memneq.c */
-noinline int __crypto_memneq(const void *a, const void *b, size_t size)
+/* lib/crypto/memneq.c — simplified generic path; the real implementation
+ * also has a loop-free 16-byte fast path and an unaligned-access variant */
+noinline unsigned long __crypto_memneq_generic(const void *a, const void *b, size_t size)
 {
     unsigned long neq = 0;
 
@@ -147,32 +148,27 @@ noinline int __crypto_memneq(const void *a, const void *b, size_t size)
      * Every byte is always read; no early exit. */
     while (size >= sizeof(unsigned long)) {
         neq |= *(unsigned long *)a ^ *(unsigned long *)b;
+        OPTIMIZER_HIDE_VAR(neq);
         a   += sizeof(unsigned long);
         b   += sizeof(unsigned long);
         size -= sizeof(unsigned long);
     }
     while (size > 0) {
         neq |= *(unsigned char *)a ^ *(unsigned char *)b;
+        OPTIMIZER_HIDE_VAR(neq);
         a++;
         b++;
         size--;
     }
-    return (neq != 0) ? 1 : 0;
+    return neq;
 }
 ```
 
-The function is compiled with special care:
-
-```makefile
-# crypto/Makefile
-CFLAGS_memneq.o := -Os
-```
-
-The `-Os` (optimize for size) flag prevents loop unrolling and early-exit optimizations that
-could introduce timing variation. Combined with the `noinline` attribute (which prevents
-inlining that could allow the surrounding code's optimization context to affect it) and
-`OPTIMIZER_HIDE_VAR()` (which hides the accumulator from the optimizer), the function
-maintains its constant-time property.
+`OPTIMIZER_HIDE_VAR(neq)` after every accumulation step (not a `-Os` compiler flag — there is
+no such override for this file) hides the running accumulator from the optimizer, preventing
+it from proving the loop could exit early. Combined with `noinline` (which prevents the
+surrounding code's optimization context from affecting it), the function maintains its
+constant-time property.
 
 ### Fix
 
@@ -180,7 +176,7 @@ Replace all `memcmp()` calls in authentication paths with `crypto_memneq()`:
 
 ```c
 /* Correct: constant-time comparison */
-#include <crypto/algapi.h>
+#include <crypto/utils.h>
 
 if (crypto_memneq(received_tag, expected_tag, TAG_LEN)) {
     return -EBADMSG;
@@ -533,17 +529,46 @@ validate hardware with workload-realistic test patterns before relying on new ac
 | Incident | Core mistake | Correct approach |
 |---|---|---|
 | IV reuse (dm-crypt) | Legacy `aes-cbc-plain` cipher string | Use `aes-xts-plain64` (LUKS2 default) |
-| Timing attack (memcmp) | `memcmp()` for secret comparison | `crypto_memneq()` from `<crypto/algapi.h>` |
+| Timing attack (memcmp) | `memcmp()` for secret comparison | `crypto_memneq()` from `<crypto/utils.h>` |
 | Boot entropy starvation | No hardware RNG in VM | virtio-rng device + saved seed |
 | Keyring description leak | Sensitive data in key description | Opaque descriptions + logon key type |
 | Hardware silent corruption | Trusted self-tests as sufficient validation | DMA boundary checks + fallback |
 
 ## Further reading
 
+### Kernel source
+
+- [drivers/md/dm-crypt.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/md/dm-crypt.c) — `crypt_iv_plain_gen()` and `crypt_iv_essiv_gen()`, the IV generators behind Case 1's plain-IV watermarking issue
+- [include/crypto/utils.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/crypto/utils.h) and [lib/crypto/memneq.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/crypto/memneq.c) — `crypto_memneq()`/`__crypto_memneq()`, the constant-time comparison behind Case 2
+- [drivers/char/random.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/char/random.c) — `add_hwgenerator_randomness()` and the `pr_notice("crng init done\n")` log line behind Case 3
+- [drivers/char/hw_random/virtio-rng.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/char/hw_random/virtio-rng.c) — the virtio-rng guest driver's `hwrng.read` callback that Case 3's fix relies on to feed host entropy into the guest pool
+- [security/keys/proc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/security/keys/proc.c) — `proc_keys_show()` and its `key_task_permission(..., KEY_NEED_VIEW)` check, the `/proc/keys` view-permission filtering behind Case 4
+- [include/linux/crypto.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/crypto.h) — `CRYPTO_ALG_TESTED` (`0x00000400`), the self-test gate behind Case 5
+- [crypto/testmgr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/crypto/testmgr.c) and [crypto/tcrypt.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/crypto/tcrypt.c) — the mandatory self-test framework and the standalone stress-test module referenced in Case 5's fix
+
+### Man pages
+
+- [`cryptsetup(8)`](https://man7.org/linux/man-pages/man8/cryptsetup.8.html) — the LUKS/dm-crypt command-line tool used throughout Case 1
+- [`getrandom(2)`](https://man7.org/linux/man-pages/man2/getrandom.2.html) — documents the blocking-until-seeded behavior behind Case 3
+- [`random(4)`](https://man7.org/linux/man-pages/man4/random.4.html) — `/dev/random` vs `/dev/urandom`, entropy pool initialization, and why `getrandom(2)` is recommended during early boot
+- [`keyctl(1)`](https://man7.org/linux/man-pages/man1/keyctl.1.html) — `setperm`, `print`, and the view/read/write/search/link/setattr permission bits used in Case 4
+
+### Related pages
+
 - [Kernel Crypto API](crypto-api.md) — AEAD, SKCIPHER, the algorithm registration model
 - [dm-crypt and fscrypt](encryption.md) — IV modes and cipher choices
 - [Kernel Keyring](keyring.md) — key types and permission model
 - [crypto_engine](crypto-engine.md) — the fallback pattern for hardware drivers
 - [Random Number Generation](rng.md) — entropy at boot
-- `crypto/testmgr.c` — the kernel self-test framework
-- `crypto/memneq.c` — constant-time comparison
+
+### LWN articles
+
+- [Constant-time instructions and processor optimizations](https://lwn.net/Articles/921511/) (February 2023) — timing side channels and the tension between constant-time code and CPU-level optimizations, directly behind Case 2
+- [FIPS-compliant random numbers for the kernel](https://lwn.net/Articles/877607/) (December 2021) — the debate over faster boot-time entropy collection, the broader context behind Case 3
+
+### External
+
+- [Kernel documentation: dm-crypt](https://docs.kernel.org/admin-guide/device-mapper/dm-crypt.html) — the `cipher-chainmode-ivmode[:ivopts]` specification format, including `aes-cbc-essiv:sha256` and `aes-xts-plain64`, behind Case 1
+- [Kernel documentation: hw_random](https://docs.kernel.org/admin-guide/hw_random.html) — the `/dev/hwrng` framework that hardware RNG drivers (including virtio-rng) feed, behind Case 3's fix
+- [Kernel documentation: Key Service (core)](https://docs.kernel.org/security/keys/core.html) — `/proc/keys` semantics, the view/read/write/search/link/setattr permission bits, and the `logon` key type, behind Case 4
+- [Kernel documentation: Kernel Crypto API Architecture](https://docs.kernel.org/crypto/architecture.html) — the `priority` and `selftest` fields shown in `/proc/crypto` and the priority-based implementation selection behind Case 5

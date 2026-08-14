@@ -46,36 +46,36 @@ Caller (IPsec, dm-crypt, TLS)
 
 ## struct crypto_engine
 
-Defined in `include/crypto/engine.h`:
+Defined in the driver-internal header `include/crypto/internal/engine.h` (not the public
+`include/crypto/engine.h`):
 
 ```c
-/* simplified — see include/crypto/engine.h for authoritative layout */
+/* include/crypto/internal/engine.h */
 struct crypto_engine {
     char                    name[ENGINE_NAME_LEN];
-    bool                    idling;
-    bool                    retry_support;
-
-    struct crypto_async_request *cur_req;
-
+    bool                    busy;         /* request pump is busy */
     bool                    running;
-    int                     cur_req_prepared;
+
+    bool                    retry_support;
+    bool                    rt;           /* run the pump as a realtime task */
 
     struct list_head        list;
     spinlock_t              queue_lock;
     struct crypto_queue     queue;              /* pending requests */
+    struct device           *dev;
 
-    struct work_struct      pump_requests;      /* work item pumping the queue */
-    struct workqueue_struct *wq;
+    struct kthread_worker   *kworker;
+    struct kthread_work     pump_requests;      /* work item pumping the queue */
 
-    int (*prepare_crypt_hardware)(struct crypto_engine *engine);
-    int (*unprepare_crypt_hardware)(struct crypto_engine *engine);
-    int (*do_batch_requests)(struct crypto_engine *engine);
+    void                    *priv_data;
+    struct crypto_async_request *cur_req;
 };
 ```
 
-The `wq` workqueue runs `pump_requests` to dequeue and dispatch requests to hardware. Most
-drivers allocate one engine per hardware channel, or one per device if the hardware is
-single-channel.
+A dedicated kthread worker (`kworker`) runs `pump_requests` to dequeue and dispatch requests
+to hardware — not a generic workqueue. Most drivers allocate one engine per hardware channel,
+or one per device if the hardware is single-channel. There is no batching callback on this
+struct; see "Batching" below.
 
 ## Driver callbacks: crypto_engine_op
 
@@ -95,8 +95,9 @@ struct crypto_engine_op {
 
 `do_one_request` is required and is the only callback in modern kernels (5.13+).
 
-> **Note**: Before kernel ~5.13, this struct also contained `prepare_request` and
-> `unprepare_request` callbacks, which were removed in the engine refactor.
+> **Note**: Before kernel ~5.13, the equivalent per-request-type structs also contained
+> `prepare_cipher_request`/`unprepare_cipher_request` (and the `hash`-suffixed equivalents),
+> removed in the engine refactor.
 
 ## Algorithm registration: skcipher_engine_alg
 
@@ -375,30 +376,28 @@ ahash, and akcipher.
 
 ## Retry support
 
-When `engine->retry_support = true`, the re-queuing behavior depends on the error returned
-by `do_one_request()`:
+When `engine->retry_support = true`, `crypto_pump_requests()` in `crypto/crypto_engine.c`
+handles a `do_one_request()` failure differently depending on the error:
 
-- **`-ENOSPC`**: ALL pending requests in the engine queue are re-queued and retried after a
-  delay. This handles drivers whose hardware command FIFOs can fill up under sustained load
-  (e.g., Marvell CESA, Allwinner CE).
-- **Any other error**: only requests that have the `CRYPTO_TFM_REQ_MAY_BACKLOG` flag set are
-  re-queued; requests without that flag fail immediately with the error.
+- **`-ENOSPC`**: only the single request that just failed is re-queued, at the *head* of the
+  engine queue (`crypto_enqueue_request_head()`) to preserve ordering, and the pump is
+  rescheduled to retry it on the next cycle. This handles drivers whose hardware command
+  FIFOs can fill up under sustained load (e.g., Marvell CESA, Allwinner CE).
+- **Any other error**: the request fails immediately (`crypto_request_complete()`) regardless
+  of retry support. The `CRYPTO_TFM_REQ_MAY_BACKLOG` flag is unrelated to this retry path —
+  it governs backlog behavior when a request is first submitted to an already-full queue, not
+  what happens after `do_one_request()` fails.
 
-Without retry support, any error from the hardware causes the request to fail immediately
-with an error back to the caller.
+Without retry support (or on any non-`-ENOSPC` error), a hardware failure causes the request
+to fail immediately with an error back to the caller.
 
-## Batching: do_batch_requests
+## Batching
 
-Some hardware (like QAT) can process a batch of requests in one DMA pass. The engine
-supports this via the optional `do_batch_requests` callback on the engine itself:
-
-```c
-dd->engine->do_batch_requests = mydrv_do_batch;
-```
-
-When set, the engine calls `do_batch_requests` instead of `do_one_request` for each pump
-cycle. The driver can then dequeue multiple requests from `engine->queue` and program them
-all in a single hardware submission.
+There is no batching callback in `crypto_engine` — `struct crypto_engine` has no
+`do_batch_requests`-style hook, and `crypto_pump_requests()` always dispatches exactly one
+request per `do_one_request()` call. Hardware capable of submitting several requests in a
+single DMA pass (e.g., QAT) implements its own batching outside of `crypto_engine`, or
+processes requests one at a time through it regardless.
 
 ## crypto_engine vs. writing directly to the crypto API
 
@@ -406,7 +405,7 @@ all in a single hardware submission.
 |---|---|---|
 | Hardware is DMA-based, async completion via IRQ | Yes | — |
 | Hardware can only do one operation at a time | Yes | — |
-| Hardware has a deep command queue (e.g., 64 slots) | Use do_batch_requests | — |
+| Hardware has a deep command queue (e.g., 64 slots) | Optional | Driver can manage its own queue instead |
 | Pure software algorithm (no DMA) | No | Yes (`crypto_register_skcipher`) |
 | SIMD-accelerated (AES-NI, ARM CE) | No | Yes (use kernel_fpu_begin) |
 | PCIe offload card with its own scheduler | Optional | Sometimes better |
@@ -416,9 +415,9 @@ all in a single hardware submission.
 | Driver | Source | Notable pattern |
 |---|---|---|
 | stm32-cryp | `drivers/crypto/stm32/stm32-cryp.c` | Single-channel, full fallback, rotate IV in CBC |
-| sun8i-ce | `drivers/crypto/allwinner/sun8i-ce/` | Multi-algorithm, retry support, scatter-gather |
-| marvell/cesa | `drivers/crypto/marvell/cesa/` | Batching via chain descriptors |
-| bcm2835 | `drivers/crypto/bcm/cipher.c` | Broadcom scatter-gather DMA engine |
+| sun8i-ce | `drivers/crypto/allwinner/sun8i-ce/` | Multi-algorithm crypto_engine user, scatter-gather |
+| marvell/cesa | `drivers/crypto/marvell/cesa/` | Does *not* use `crypto_engine` — its own TDMA-chain-based queueing |
+| bcm2835 | `drivers/crypto/bcm/cipher.c` | Does *not* use `crypto_engine` — its own kthread-based queue |
 
 ## Observing crypto_engine
 
@@ -440,15 +439,22 @@ modprobe tcrypt mode=0
 # This exercises all registered algorithms including hardware ones
 ```
 
-## Relevant source
-
-- `crypto/engine.c` — the engine implementation
-- `include/crypto/engine.h` — structs and prototypes
-- `drivers/crypto/` — all upstream hardware crypto drivers
-- `Documentation/crypto/crypto_engine.rst` — kernel documentation
-
 ## Further reading
 
-- [Kernel Crypto API](crypto-api.md) — SKCIPHER, AEAD, ahash interfaces
+### Kernel source
+
+- [crypto/crypto_engine.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/crypto/crypto_engine.c) — the engine implementation: `crypto_pump_requests()`, the retry/backlog logic, and the `crypto_engine_register_*()` helpers
+- [include/crypto/engine.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/crypto/engine.h) — the public API: `struct crypto_engine_op`, the `*_engine_alg` wrapper structs, `crypto_transfer_*_request_to_engine()`, `crypto_finalize_*_request()`
+- [include/crypto/internal/engine.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/crypto/internal/engine.h) — the actual `struct crypto_engine` definition (driver-internal header)
+- [Documentation/crypto/crypto_engine.rst](https://docs.kernel.org/crypto/crypto_engine.html) — kernel documentation; note it still describes the older `enginectx`/`prepare_cipher_request` design and has not been updated for the `crypto_engine_op`/`do_one_request` model in current code
+
+### Related pages
+
+- [Kernel Crypto API](crypto-api.md) — SKCIPHER, AEAD, ahash interfaces that `crypto_engine` sits underneath
 - [dm-crypt and fscrypt](encryption.md) — consumers of hardware crypto
-- [Memory Management: DMA](../mm/dma.md) — scatter-gather and DMA mapping
+- [Crypto War Stories](war-stories.md) — incident 5 covers a hardware accelerator silently corrupting ciphertext and the fallback pattern used to work around it
+- [Memory Management: DMA](../mm/dma.md) — scatter-gather and DMA mapping used by `do_one_request()` implementations
+
+### LWN articles
+
+- [LWN: Asynchronous crypto](https://lwn.net/Articles/109475/) (November 3, 2004) — the original design discussion for queueing crypto requests to hardware accelerators with async completion callbacks; the conceptual ancestor of the `-EINPROGRESS` / completion-callback model `crypto_engine` implements
