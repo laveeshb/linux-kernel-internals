@@ -170,7 +170,7 @@ void panic(const char *fmt, ...)
     atomic_notifier_call_chain(&panic_notifier_list, 0, buf);
 
     /* 4. Attempt to kexec into the crash kernel */
-    crash_kexec(NULL);
+    __crash_kexec(NULL);  /* panic() bypasses the public wrapper's panic-cpu check */
 
     /* 5. If kdump didn't take over, try to reboot */
     if (panic_timeout > 0) {
@@ -230,7 +230,7 @@ kexec -p /boot/vmlinuz-$(uname -r) \
 
 ### What happens on panic
 
-1. `crash_kexec()` is called from `panic()` or `die()`
+1. kdump is triggered from `panic()` (via the internal `__crash_kexec()`) or from `die()`'s `oops_end()` (via the public `crash_kexec()`)
 2. kexec switches to the crash kernel's page tables and jumps to its entry point
 3. The crash kernel boots as a fresh kernel (using only the reserved memory region)
 4. The crash kernel exposes the original kernel's memory as `/proc/vmcore` (an ELF core dump)
