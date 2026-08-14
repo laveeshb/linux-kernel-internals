@@ -36,7 +36,6 @@ VFIO source lives in `drivers/vfio/` with headers in `include/linux/vfio.h`.
 
 ```c
 /* include/linux/vfio.h */
-
 struct vfio_device {
     struct device            *dev;
     const struct vfio_device_ops *ops;
@@ -45,25 +44,31 @@ struct vfio_device {
     /* ... */
 };
 
+/* drivers/vfio/vfio.h -- private to the VFIO core, not the public header above */
 struct vfio_group {
+    struct device             dev;
+    struct cdev                cdev;
+    refcount_t                drivers;
+    unsigned int               container_users;
     struct iommu_group       *iommu_group;
     struct vfio_container    *container;
     struct list_head          device_list;
-    refcount_t                drivers;
     /* ... */
 };
 
+/* drivers/vfio/container.c -- no domain pointer; the container just
+ * dispatches to whichever IOMMU backend (iommu_driver) is set */
 struct vfio_container {
-    struct iommu_domain      *domain;   /* NULL until IOMMU type set */
-    struct vfio_iommu_driver *iommu_driver;
-    void                     *iommu_data; /* driver-private (e.g. vfio_iommu) */
+    struct kref                kref;
     struct list_head          group_list;
     struct rw_semaphore       group_lock;
-    /* ... */
+    struct vfio_iommu_driver *iommu_driver;
+    void                     *iommu_data; /* driver-private (e.g. vfio_iommu) */
+    bool                        noiommu;
 };
 ```
 
-The `vfio_device_ops` structure defines per-device operations (open, release, read, write, ioctl for MMIO/interrupt/reset).
+The `vfio_device_ops` structure defines per-device operations (`open_device`/`close_device`, read, write, ioctl for MMIO/interrupt/reset).
 
 ## IOMMU type1 backend
 
@@ -89,20 +94,22 @@ static int vfio_dma_do_map(struct vfio_iommu *iommu,
     ret = pin_user_pages_remote(current->mm, vaddr,
                                  npage, gup_flags, pages);
 
-    /* Record the mapping in our radix tree */
+    /* Record the mapping in our rb-tree */
     dma = vfio_find_dma(iommu, iova, size);  /* ensure no overlap */
     vfio_link_dma(iommu, new_dma);           /* insert into tree */
 
-    /* Create IOMMU page table entries: IOVA → HPA */
-    iommu_map(iommu->domain, iova, phys, pgsize, prot);
+    /* Create IOMMU page table entries: IOVA → HPA, across every
+     * domain in iommu->domain_list (a container can span more than
+     * one IOMMU domain) -- not a single iommu->domain pointer */
+    vfio_pin_map_dma(iommu, dma, size);
 }
 ```
 
 The `pin_user_pages_remote()` call (introduced in kernel 5.6 to replace `get_user_pages_remote()` for DMA pinning) increments the page refcount and marks pages as pinned, preventing them from being swapped or moved while the device may be accessing them.
 
-### The DMA map radix tree
+### The DMA map rb-tree
 
-All active DMA mappings are tracked in a radix tree (or interval tree in recent kernels) keyed by IOVA. This allows the kernel to:
+All active DMA mappings are tracked in a red-black tree, keyed and searched for overlap by IOVA (`vfio_find_dma()`) — not a radix tree or the kernel's interval-tree API. This allows the kernel to:
 - Detect and reject overlapping `MAP_DMA` requests.
 - Enumerate all mappings for cleanup when a group is removed.
 - Implement `VFIO_IOMMU_UNMAP_DMA` by looking up and removing entries.
@@ -110,10 +117,16 @@ All active DMA mappings are tracked in a radix tree (or interval tree in recent 
 ```c
 /* struct vfio_iommu tracks mappings */
 struct vfio_iommu {
-    struct rb_root        dma_list;    /* interval tree of vfio_dma */
-    struct iommu_domain  *domain;
-    unsigned int          dma_avail;   /* remaining DMA map limit */
+    struct list_head       domain_list; /* one container can span >1 IOMMU domain */
+    struct rb_root          dma_list;   /* rb-tree of vfio_dma, overlap-searched by IOVA */
+    unsigned int            dma_avail;   /* remaining DMA map limit */
     /* ... */
+};
+
+struct vfio_domain {
+    struct iommu_domain    *domain;
+    struct list_head       next;
+    struct list_head       group_list;
 };
 
 struct vfio_dma {
@@ -204,19 +217,22 @@ mdev allows a physical device with internal resources (GPU compute engines, NIC 
 ### Architecture (kernel 5.x)
 
 ```c
-/* include/linux/mdev.h */
-
+/* include/linux/mdev.h — current struct shape; the mdev_parent_ops-based
+ * design this section otherwise describes predates this and was replaced
+ * (see "struct vfio_device_ops" below) */
 struct mdev_parent {
-    struct device           *dev;        /* physical device (PF) */
-    const struct mdev_parent_ops *ops;
-    struct list_head         mdev_list;
+    struct device            *dev;         /* physical device (PF) */
+    struct mdev_driver       *mdev_driver;
+    struct mdev_type        **types;       /* each type is a resource slice */
+    unsigned int              nr_types;
+    atomic_t                  available_instances;
     /* ... */
 };
 
 struct mdev_device {
-    struct device            dev;
-    struct mdev_parent      *parent;
-    guid_t                   uuid;       /* identifies the mdev type */
+    struct device             dev;
+    guid_t                    uuid;        /* identifies the mdev instance */
+    struct mdev_type         *type;        /* reached via type->parent, not a direct field */
     /* ... */
 };
 ```
@@ -234,9 +250,9 @@ ls /sys/bus/mdev/devices/
 # $UUID
 ```
 
-### struct vfio_device_ops (kernel 6.0+)
+### struct vfio_device_ops (kernel 5.19+)
 
-In Linux 6.0, the older `mdev_parent_ops` interface was consolidated into `struct vfio_device_ops`. Physical device drivers that support mdev now implement `vfio_device_ops` directly:
+In Linux 5.19, the older `mdev_parent_ops` interface was consolidated into `struct vfio_device_ops` (commit `6b42f491e17c`, "vfio/mdev: Remove mdev_parent_ops"). Physical device drivers that support mdev now implement `vfio_device_ops` directly:
 
 ```c
 /* include/linux/vfio.h */
@@ -264,7 +280,7 @@ struct vfio_device_ops {
 };
 ```
 
-**Intel GVT-g** (Intel integrated GPU virtualization, deprecated and removed from the Linux kernel around 6.8) and **nvidia vGPU** implement their own `vfio_device_ops`. The mdev device appears to QEMU as a standard VFIO device, so no QEMU changes are needed — QEMU just opens `/dev/vfio/<group>` and operates normally.
+**Intel GVT-g** (Intel integrated GPU virtualization, `drivers/gpu/drm/i915/gvt/`) and **nvidia vGPU** implement their own `vfio_device_ops`. The mdev device appears to QEMU as a standard VFIO device, so no QEMU changes are needed — QEMU just opens `/dev/vfio/<group>` and operates normally.
 
 ### mdev isolation model
 
@@ -375,8 +391,34 @@ grep vfio /proc/interrupts
 
 ## Further reading
 
+### Kernel source
+
+- [drivers/vfio/vfio_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_main.c) — `vfio_register_group_dev()` and core device/group/container lifecycle
+- [drivers/vfio/vfio.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio.h) — `struct vfio_group` (private to the VFIO core, not `include/linux/vfio.h`)
+- [drivers/vfio/container.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/container.c) — `struct vfio_container` and the `VFIO_SET_IOMMU`/group-attach path
+- [drivers/vfio/vfio_iommu_type1.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_iommu_type1.c) — `vfio_dma_do_map()`, `struct vfio_iommu`, `struct vfio_dma`: the type1 IOMMU backend
+- [include/linux/vfio.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/vfio.h) — `struct vfio_device` and `struct vfio_device_ops`, the public bus-driver API
+- [drivers/vfio/pci/vfio_pci_intrs.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/pci/vfio_pci_intrs.c) — `struct vfio_pci_irq_ctx`: MSI/MSI-X/INTx eventfd setup
+- [drivers/vfio/mdev/mdev_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/mdev/mdev_core.c) — `mdev_register_parent()` and the mediated-device bus core
+- [virt/kvm/eventfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/virt/kvm/eventfd.c) — `irqfd`: a workqueue calls `kvm_set_irq()` when the bound eventfd fires
+
+### Man pages
+
+- [`ioctl(2)`](https://man7.org/linux/man-pages/man2/ioctl.2.html) — every VFIO container/group/device operation (`VFIO_SET_IOMMU`, `VFIO_IOMMU_MAP_DMA`, `VFIO_DEVICE_SET_IRQS`, …) is an ioctl on a `/dev/vfio` file descriptor
+
+### Related pages
+
 - [IOMMU Architecture](iommu-arch.md) — IOMMU domains, groups, SR-IOV
-- [IOVA Allocator](iova-allocator.md) — IOVA allocation used in DMA mappings
+- [IOVA Allocator](iova-allocator.md) — the in-kernel IOVA allocator used by `dma_map_*()`; VFIO's type1 backend bypasses it, since userspace supplies the IOVA directly in `VFIO_IOMMU_MAP_DMA`
 - [IOMMU War Stories](war-stories.md) — group isolation blocking passthrough (real incident)
-- `Documentation/driver-api/vfio.rst` — VFIO userspace API documentation
-- `Documentation/driver-api/vfio-mediated-device.rst` — mdev documentation
+- [VFIO: Virtual Function I/O and Device Passthrough](../virtualization/vfio.md) — the same subsystem from a setup/operations angle: QEMU passthrough, SR-IOV, mdev walkthrough
+- [Getting User Pages (GUP)](../mm/gup.md) — `pin_user_pages_remote()`, the page-pinning primitive behind VFIO's DMA mapping path
+
+### LWN articles
+
+- [Safe device assignment with VFIO](https://lwn.net/Articles/474088/) — Jonathan Corbet's original coverage of the VFIO framework and IOMMU-group-based device assignment (January 3, 2012)
+
+### External
+
+- [VFIO — "Virtual Function I/O"](https://docs.kernel.org/driver-api/vfio.html) — official kernel documentation for the container/group/device model and userspace API
+- [VFIO Mediated devices](https://docs.kernel.org/driver-api/vfio-mediated-device.html) — official documentation for the mdev framework

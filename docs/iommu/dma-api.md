@@ -138,23 +138,30 @@ With an IOMMU, `dma_map_sg` can coalesce adjacent pages into a single IOVA range
 With an IOMMU, each streaming DMA map requires an IOVA allocation:
 
 ```c
-/* drivers/iommu/dma-iommu.c */
-static dma_addr_t iommu_dma_map_page(struct device *dev, struct page *page,
-                                      unsigned long offset, size_t size,
-                                      enum dma_data_direction dir,
-                                      unsigned long attrs)
+/* drivers/iommu/dma-iommu.c — current signature takes a phys_addr_t directly,
+ * not a struct page + offset pair (older kernels used the page+offset form) */
+dma_addr_t iommu_dma_map_phys(struct device *dev, phys_addr_t phys, size_t size,
+                               enum dma_data_direction dir, unsigned long attrs)
 {
+    bool coherent = dev_is_dma_coherent(dev);
+    int prot = dma_info_to_prot(dir, coherent, attrs);
     struct iommu_domain *domain = iommu_get_dma_domain(dev);
     struct iommu_dma_cookie *cookie = domain->iova_cookie;
     struct iova_domain *iovad = &cookie->iovad;
+    dma_addr_t iova, dma_mask = dma_get_mask(dev);
 
-    /* Allocate an IOVA (I/O virtual address range) */
-    dma_addr_t iova = iommu_dma_alloc_iova(domain, size, dma_get_mask(dev), dev);
+    /* If the buffer needs bouncing (unaligned for the device), swiotlb
+     * handles that here before IOVA allocation */
+    if (dev_use_swiotlb(dev, size, dir) && iova_unaligned(iovad, phys, size)) {
+        phys = iommu_dma_map_swiotlb(dev, phys, size, dir, attrs);
+        if (phys == (phys_addr_t)DMA_MAPPING_ERROR)
+            return DMA_MAPPING_ERROR;
+    }
+
+    /* Allocate an IOVA (I/O virtual address range) and map it to phys */
+    iova = iommu_dma_alloc_iova(domain, size, dma_mask, dev);
     if (!iova)
         return DMA_MAPPING_ERROR;
-
-    /* Create IOMMU page table entry: IOVA → physical page */
-    phys_addr_t phys = page_to_phys(page) + offset;
     if (iommu_map(domain, iova, phys, size, prot, GFP_ATOMIC)) {
         iommu_dma_free_iova(cookie, iova, size, NULL);
         return DMA_MAPPING_ERROR;
@@ -182,19 +189,26 @@ Bounce buffer mechanism:
 ```
 
 ```c
-/* kernel/dma/swiotlb.c */
+/* kernel/dma/swiotlb.c — simplified; real function has no separate
+ * alloc_size parameter (it's derived from mapping_size + alignment
+ * padding) and slots are tracked per struct io_tlb_pool, since a
+ * system can have more than one swiotlb pool (CONFIG_SWIOTLB_DYNAMIC) */
 phys_addr_t swiotlb_tbl_map_single(struct device *dev,
                                      phys_addr_t orig_addr,
                                      size_t mapping_size,
-                                     size_t alloc_size,
                                      unsigned int alloc_align_mask,
                                      enum dma_data_direction dir,
                                      unsigned long attrs)
 {
-    struct io_tlb_mem *mem = dev->dma_io_tlb_mem;
-    /* Find a free slot in the swiotlb pool */
-    index = find_slots(dev, mem, orig_addr, alloc_size, alloc_align_mask);
-    tlb_addr = slot_addr(mem->start, index);
+    unsigned int offset = swiotlb_align_offset(dev, alloc_align_mask, orig_addr);
+    size_t size = ALIGN(mapping_size + offset, alloc_align_mask + 1);
+    struct io_tlb_pool *pool;
+    int index;
+    phys_addr_t tlb_addr;
+
+    /* Find a free slot, in whichever pool has room */
+    index = swiotlb_find_slots(dev, orig_addr, size, alloc_align_mask, &pool);
+    tlb_addr = slot_addr(pool->start, index);
 
     /* Copy data to bounce buffer for DMA_TO_DEVICE */
     if (!(attrs & DMA_ATTR_SKIP_CPU_SYNC) &&
@@ -293,9 +307,26 @@ priv->dma_rx = dma_request_chan(dev, "rx");
 
 ## Further reading
 
-- [IOMMU Architecture](iommu-arch.md) — IOMMU hardware and domains
-- [Memory Management: DMA zones](../mm/dma.md) — DMA zone in the buddy allocator
-- [Memory Management: Device Coherency](../mm/device-coherency.md) — cache coherency
-- [Device Drivers: platform driver](../drivers/platform-driver.md) — devm_request_mem_region
-- `include/linux/dma-mapping.h` — DMA API declarations
-- `Documentation/core-api/dma-api.rst` — full DMA API reference
+### Kernel source
+
+- [include/linux/dma-mapping.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/dma-mapping.h) — `dma_map_single()`, `dma_alloc_coherent()`, `dma_mapping_error()`, `dma_set_mask_and_coherent()`: the API declarations used throughout this page
+- [kernel/dma/mapping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma/mapping.c) — `dma_map_sg_attrs()`, `dma_alloc_attrs()`: the core implementation that dispatches to the platform's `dma_map_ops`
+- [kernel/dma/swiotlb.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma/swiotlb.c) — `swiotlb_tbl_map_single()`, `swiotlb_find_slots()`: the real bounce-buffer implementation
+- [drivers/iommu/dma-iommu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/dma-iommu.c) — `iommu_dma_map_phys()`: the current IOMMU-backed streaming-DMA mapping function
+- [mm/dmapool.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/dmapool.c) — `dma_pool_create_node()`, `dma_pool_alloc()`, `dma_pool_free()`: the DMA pool allocator behind `dma_pool_create()`
+- [Documentation/core-api/dma-api-howto.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/core-api/dma-api-howto.rst) — the kernel's own practical guide to when to use coherent vs. streaming mappings
+
+### Related pages
+
+- [IOMMU Architecture](iommu-arch.md) — `iommu_domain`, IOTLB, and the hardware DMA remapping this API relies on when an IOMMU is present
+- [IOVA Allocator](iova-allocator.md) — the rbtree/rcache allocator behind every IOMMU-backed `dma_map_single()`/`dma_map_sg()` call
+- [IOMMU War Stories](war-stories.md) — a real incident where per-packet `dma_map_single()` calls became a CPU bottleneck, fixed by batching with `dma_map_sg()`
+- [Memory Management: DMA](../mm/dma.md) — a companion deep-dive on the same API, covering `dma_sync_*`, DMA zones, and swiotlb internals in more depth
+- [Memory Management: Device Coherency](../mm/device-coherency.md) — the cache-coherency rules that govern when `dma_map_single()`/`dma_sync_*` actually need to do anything
+- [Device Drivers: PCI driver](../drivers/pci-driver.md) — `dma_alloc_coherent()`/`dma_map_single()` used in a real PCI network driver
+
+### LWN articles
+
+- [The trouble with 64-bit DMA](https://lwn.net/Articles/904210/) — Jonathan Corbet, August 11, 2022: why the IOMMU layer conservatively picks IOVAs below 4GB even for 64-bit-capable devices, and what went wrong when Robin Murphy tried to relax it — background for the `DMA_BIT_MASK()`/`dma_set_mask_and_coherent()` masks used in this page's setup section
+- [Noncoherent DMA mappings](https://lwn.net/Articles/855328/) — Jonathan Corbet, May 7, 2021: the `dma_alloc_noncontiguous()` API and manual cache synchronization (`dma_sync_sgtable_for_device()`/`_for_cpu()`) for non-cache-coherent architectures — background for this page's coherent-vs-streaming distinction
+- [Restricted DMA](https://lwn.net/Articles/841916/) — Jonathan Corbet, January 7, 2021: Claire Chang's per-device restricted SWIOTLB pools, used to isolate untrusted devices without a full IOMMU — background for the swiotlb bounce-buffer mechanism described on this page
