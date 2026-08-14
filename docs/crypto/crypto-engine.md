@@ -93,11 +93,12 @@ struct crypto_engine_op {
 |---|---|---|
 | `do_one_request` | Hardware is idle, request at head of queue | Start DMA, return `-EINPROGRESS` |
 
-`do_one_request` is required and is the only callback in modern kernels (5.13+).
+`do_one_request` is required and is the only callback in current kernels.
 
-> **Note**: Before kernel ~5.13, the equivalent per-request-type structs also contained
-> `prepare_cipher_request`/`unprepare_cipher_request` (and the `hash`-suffixed equivalents),
-> removed in the engine refactor.
+> **Note**: Through kernel 6.5, `struct crypto_engine_op` was a single generic struct (not
+> split by request type) with three callbacks: `prepare_request`, `unprepare_request`, and
+> `do_one_request`. The refactor to today's model — `do_one_request` only, wrapped in
+> per-type structs like `skcipher_engine_alg` — landed between 6.5 and 6.6.
 
 ## Algorithm registration: skcipher_engine_alg
 
