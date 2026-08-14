@@ -202,7 +202,7 @@ if (ULLONG_MAX - ctx->count <= ucnt) {
 }
 ```
 
-The counter saturates at `UINT64_MAX - 1` (not `UINT64_MAX`, because `UINT64_MAX` is the sentinel value used internally). With `EFD_NONBLOCK`, the write returns `EAGAIN` silently rather than blocking. The event is lost if the caller does not handle `EAGAIN` as backpressure.
+The counter has a ceiling of `UINT64_MAX - 1` (not `UINT64_MAX`, because `UINT64_MAX` is the sentinel value used internally) — it does not saturate at that ceiling, it blocks or fails. With `EFD_NONBLOCK`, the write returns `EAGAIN` silently rather than blocking. The event is lost if the caller does not handle `EAGAIN` as backpressure.
 
 ### Fix
 
@@ -213,7 +213,7 @@ uint64_t one = 1;
 ssize_t n = write(efd, &one, sizeof(one));
 if (n < 0) {
     if (errno == EAGAIN) {
-        /* Counter is saturated: consumer is behind. */
+        /* Counter is at its ceiling: consumer is behind. */
         /* Apply backpressure: slow down, log, or wake consumer another way. */
         apply_backpressure();
     } else {
@@ -255,7 +255,7 @@ The general principle: `EFD_NONBLOCK` is appropriate only when `EAGAIN` is expli
 - [fs/pipe.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/pipe.c) — `anon_pipe_write()`, the `pipe_max_size` sysctl, and `F_SETPIPE_SZ` handling behind Case 3
 - [kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/signal.c) — `legacy_queue()` and `__send_signal_locked()`, which drop a standard signal that is already pending on the target, behind Case 4
 - [include/linux/signal_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/signal_types.h) — `struct sigpending` (a bitmask) versus `struct sigqueue` (a queued list entry), the data structures behind Case 4's standard/real-time distinction
-- [fs/eventfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/eventfd.c) — `eventfd_write()` and the `ULLONG_MAX - 1` saturation check behind Case 5
+- [fs/eventfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/eventfd.c) — `eventfd_write()` and the `ULLONG_MAX - 1` blocking/EAGAIN ceiling behind Case 5
 
 ### Man pages
 
@@ -267,7 +267,7 @@ The general principle: `EFD_NONBLOCK` is appropriate only when `EAGAIN` is expli
 - [`fcntl(2)`](https://man7.org/linux/man-pages/man2/fcntl.2.html) — documents `F_SETPIPE_SZ`/`F_GETPIPE_SZ` for resizing a pipe, used in Case 3's fix
 - [`signal(7)`](https://man7.org/linux/man-pages/man7/signal.7.html) — documents that standard signals do not queue (multiple pending instances collapse to one) while real-time signals do, the mechanism behind Case 4
 - [`wait(2)`](https://man7.org/linux/man-pages/man2/waitpid.2.html) — documents `waitpid()` and `WNOHANG`, used in Case 4's fix
-- [`eventfd(2)`](https://man7.org/linux/man-pages/man2/eventfd.2.html) — documents `EFD_SEMAPHORE`, `EFD_NONBLOCK`, and the counter's `UINT64_MAX - 1` saturation point, used in Case 5
+- [`eventfd(2)`](https://man7.org/linux/man-pages/man2/eventfd.2.html) — documents `EFD_SEMAPHORE`, `EFD_NONBLOCK`, and the counter's `UINT64_MAX - 1` blocking/EAGAIN ceiling, used in Case 5
 - [`mq_send(3)`](https://man7.org/linux/man-pages/man3/mq_send.3.html) — documents the blocking/`EAGAIN` behavior when `mq_maxmsg` is reached, the alternative mechanism mentioned in Case 5's fix
 
 ### Related pages

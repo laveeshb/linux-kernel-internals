@@ -29,8 +29,8 @@ write(efd, &value, sizeof(value));  /* counter += 1 */
 value = 5;
 write(efd, &value, sizeof(value));  /* counter += 5 */
 
-/* Counter saturates at UINT64_MAX - 1 */
-/* write blocks (or returns EAGAIN with EFD_NONBLOCK) when at max */
+/* Counter has a ceiling of UINT64_MAX - 1 */
+/* write blocks (or returns EAGAIN with EFD_NONBLOCK) when at max, it does not saturate */
 ```
 
 ### Reading (consuming)
@@ -368,7 +368,6 @@ static ssize_t signalfd_read_iter(struct kiocb *iocb, struct iov_iter *to)
 ```
 
 `dequeue_signal()` itself takes exactly three arguments — `(sigset_t *mask, kernel_siginfo_t *info, enum pid_type *type)` — with no explicit `current` argument (it operates on the caller's own pending signals). There is no `copy_siginfo_to_user_sighand()` anywhere in the kernel; the real translation to the userspace `struct signalfd_siginfo` layout is done by `signalfd_copyinfo()`, which maps fields via a `siginfo_layout()` switch.
-```
 
 ## timerfd: pollable timers
 
@@ -394,7 +393,7 @@ epoll_ctl(epfd, EPOLL_CTL_ADD, sock_fd,  &ev_socket);
 
 ### Man pages
 
-- [`eventfd(2)`](https://man7.org/linux/man-pages/man2/eventfd.2.html) — counter semantics, `EFD_SEMAPHORE`, and the `ULLONG_MAX - 1` saturation limit
+- [`eventfd(2)`](https://man7.org/linux/man-pages/man2/eventfd.2.html) — counter semantics, `EFD_SEMAPHORE`, and the `ULLONG_MAX - 1` blocking/EAGAIN ceiling
 - [`signalfd(2)`](https://man7.org/linux/man-pages/man2/signalfd.2.html) — `signalfd_siginfo` fields and the epoll+`fork()` caveat
 
 ### Related pages
@@ -403,4 +402,4 @@ epoll_ctl(epfd, EPOLL_CTL_ADD, sock_fd,  &ev_socket);
 - [epoll Internals](../net/epoll.md) — the event loop eventfd/signalfd are designed to integrate with
 - [POSIX Timers and timerfd](../time/posix-timers.md) — the third pollable-fd primitive that rounds out an all-fd event loop
 - [Completions and Wait Queues](../locking/completions.md) — the `wait_queue_head_t` primitive `eventfd_ctx` and signalfd's per-sighand queue build on
-- [IPC War Stories](war-stories.md) — a real eventfd counter-saturation incident, walked through against `eventfd_write()`
+- [IPC War Stories](war-stories.md) — a real eventfd `EAGAIN`/backpressure incident, walked through against `eventfd_write()`

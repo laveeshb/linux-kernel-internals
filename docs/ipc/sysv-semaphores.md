@@ -105,7 +105,7 @@ struct sem_array {
     time64_t              sem_ctime;   /* last semctl() time */
     struct list_head      pending_alter;  /* pending sops that alter the set */
     struct list_head      pending_const;  /* pending sops that don't alter (wait-for-zero) */
-    struct list_head      list_id;     /* list of all sem_arrays */
+    struct list_head      list_id;     /* head of this array's sem_undo list */
     int                   sem_nsems;   /* number of semaphores in set */
     int                   complex_count; /* # of multi-semaphore operations pending */
     unsigned int          use_global_lock; /* use global sem_lock or per-sem lock */
@@ -272,8 +272,11 @@ sysctl kernel.sem
 
 # Message queue limits
 sysctl kernel.msgmni    # max message queues
+# kernel.msgmni = 32000
 sysctl kernel.msgmax    # max message size in bytes
+# kernel.msgmax = 8192
 sysctl kernel.msgmnb    # max bytes per queue (default msg_qbytes)
+# kernel.msgmnb = 16384
 ```
 
 ## Comparison: semaphore mechanisms
@@ -292,7 +295,7 @@ SysV IPC objects — semaphore sets and message queues — **persist until expli
 
 This causes two classes of failures:
 
-1. **Resource exhaustion**: `SEMMNI` (typically 128–32768) limits semaphore sets. When the limit is hit, `semget()` returns `ENOSPC`. New service instances cannot start.
+1. **Resource exhaustion**: `SEMMNI` (32000 by default, tunable via `kernel.sem`) limits semaphore sets. When the limit is hit, `semget()` returns `ENOSPC`. New service instances cannot start.
 
 2. **Stale state**: An orphaned semaphore with a non-zero value can cause the next service instance to block indefinitely on `semop()`.
 

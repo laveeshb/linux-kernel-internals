@@ -276,7 +276,7 @@ send_fd_over_socket(socket_fd, fd);
 - [Futex Internals](../locking/futex.md) — how `sem_wait()`/`sem_post()` fall back to the kernel when the uncontended fast-path atomic isn't enough
 - [SysV IPC: Semaphores and Message Queues](sysv-semaphores.md) — `semget`/`semop`, `SEM_UNDO`, and the SysV IPC leak problem
 - [eventfd and signalfd](eventfd-signalfd.md) — `struct eventfd_ctx`, epoll integration, and signalfd covered in depth
-- [Unix Domain Sockets](unix-sockets.md) — `SCM_RIGHTS`, the mechanism used to pass `memfd_create()` descriptors between processes
+- [Unix Domain Sockets](unix-sockets.md) — `SCM_RIGHTS`, the generic mechanism for passing any open file descriptor (including a `memfd_create()` fd) between processes
 
 ### LWN articles
 
