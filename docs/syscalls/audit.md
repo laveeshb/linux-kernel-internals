@@ -61,11 +61,11 @@ static inline void audit_syscall_exit(void *pt_regs);
 ```
 
 These are called from `syscall_enter_from_user_mode()` and
-`syscall_exit_to_user_mode()` in `kernel/entry/common.c` when the
-`TIF_SYSCALL_AUDIT` thread-info flag is set on the current task.
+`syscall_exit_to_user_mode()` in `include/linux/entry-common.h` when the
+`SYSCALL_WORK_SYSCALL_AUDIT` flag is set in the current task's `syscall_work`.
 
-`TIF_SYSCALL_AUDIT` is set when audit rules are loaded that could match the
-task. Tasks with no matching rules never set `TIF_SYSCALL_AUDIT` and never pay
+`SYSCALL_WORK_SYSCALL_AUDIT` is set when audit rules are loaded that could match the
+task. Tasks with no matching rules never set `SYSCALL_WORK_SYSCALL_AUDIT` and never pay
 the cost of audit context allocation.
 
 ## struct audit_context
@@ -291,9 +291,9 @@ void audit_inode(struct filename *name, const struct dentry *dentry,
 }
 ```
 
-`TIF_SYSCALL_AUDIT` ensures the per-syscall hooks run only for tasks that have
+`SYSCALL_WORK_SYSCALL_AUDIT` ensures the per-syscall hooks run only for tasks that have
 been selected by at least one rule. Tasks that are never matched by any rule
-never set `TIF_SYSCALL_AUDIT`, so `audit_syscall_entry()` and
+never set `SYSCALL_WORK_SYSCALL_AUDIT`, so `audit_syscall_entry()` and
 `audit_syscall_exit()` are never called for them.
 
 The `AUDIT_BACKLOG_LIMIT` (configurable via `auditctl -b`) bounds the number of

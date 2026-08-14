@@ -208,7 +208,7 @@ Userspace never sees `__NR_restart_syscall` in normal operation. It appears in
     → starts a new hrtimer for the remaining 2 seconds
     → task sleeps again
 
-9.  If no further signals: nanosleep_restart() returns 0 to userspace.
+9.  If no further signals: hrtimer_nanosleep_restart() returns 0 to userspace.
     If another signal arrives: the whole cycle repeats with the new
     remaining time.
 ```

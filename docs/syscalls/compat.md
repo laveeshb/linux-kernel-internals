@@ -58,13 +58,22 @@ The build system generates `arch/x86/include/generated/asm/syscalls_32.h`, which
 
 ```c
 /* arch/x86/entry/syscall_32.c */
-asmlinkage const sys_call_ptr_t ia32_sys_call_table[] = {
-#include <asm/syscalls_32.h>
-};
+#define __SYSCALL(nr, sym) case nr: return __ia32_##sym(regs);
+long ia32_sys_call(const struct pt_regs *regs, unsigned int nr)
+{
+	switch (nr) {
+	#include <asm/syscalls_32.h>
+	default: return __ia32_sys_ni_syscall(regs);
+	}
+}
 ```
 
 When a 32-bit process enters the kernel via `int 0x80` or `sysenter`, the entry code detects the 32-bit CS
-segment, loads `ia32_sys_call_table` instead of `sys_call_table`, and dispatches from there.
+segment and calls `ia32_sys_call()`, which switches on the syscall number to the matching `__ia32_*` stub —
+the same switch-based dispatch pattern the native 64-bit path uses (`x64_sys_call()`; see
+[Syscall Entry Path](syscall-entry.md)). A `sys_call_table[]` array is still built for `CONFIG_X86_32`, but
+only because `kernel/trace/trace_syscalls.c` needs a syscall-number-to-address table for tracing — it is not
+used for dispatch.
 
 ## Key compat types
 
@@ -249,7 +258,7 @@ static long my_compat_ioctl(struct file *file, unsigned int cmd,
 ## Practical example: compat_sys_read vs sys_read
 
 `read()` only passes a 32-bit pointer and a 32-bit count. On x86-64, the kernel handles this transparently:
-the `ia32_sys_call_table` entry for `read` points to the native `sys_read`, because `compat_ptr()` of the
+`ia32_sys_call()`'s `read` case dispatches straight to the native `sys_read` handler, because `compat_ptr()` of the
 32-bit buffer address produces the correct 64-bit user pointer, and `compat_size_t` (u32) fits in `size_t`.
 No separate compat handler is needed.
 

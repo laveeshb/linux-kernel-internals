@@ -314,7 +314,7 @@ modification.
 - [Futex Internals](../locking/futex.md) — how futex_wait()/futex_wake() and futex key hashing work today
 - [ptrace and Syscall Interception](ptrace-interception.md) — seccomp-notify as an alternative to custom syscalls
 - [Adding a New Syscall](adding-syscall.md) — The right way to add a syscall and avoid the pitfalls above
-- [kernel/futex/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/futex/core.c) — `get_futex_key()`: hashes on the backing `mm_struct`/`address_space` pointer and page offset, not a physical address
+- [kernel/futex/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/futex/core.c) — `get_futex_key()`: keys on the `mm_struct` pointer and address for private futexes, or an inode sequence number and page offset for shared ones — not a physical address
 
 ## External references
 
