@@ -170,7 +170,7 @@ Reads the hardware clock source and initializes `timekeeper`. After this, `ktime
 
 Architecture-specific time initialization. On x86 this calibrates the TSC against the PIT or HPET and sets up the clock event device for the timer interrupt.
 
-**[27] `kmem_cache_init()`** (`mm/slab.c` or `mm/slub.c`)
+**[27] `kmem_cache_init()`** (`mm/slub.c` — SLAB has been removed; SLUB is the only allocator remaining)
 
 Bootstraps the slab allocator. This is a multi-stage process because the slab allocator needs to allocate memory for its own metadata, but it needs the slab allocator to do so. The bootstrap uses static arrays then migrates. After this call, `kmalloc()` works.
 

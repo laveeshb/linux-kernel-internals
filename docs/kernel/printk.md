@@ -67,7 +67,8 @@ struct printk_info {
     u64     ts_nsec;     /* timestamp in nanoseconds */
     u16     text_len;    /* length of message text */
     u8      facility;    /* syslog facility */
-    u8      level;       /* 0-7 */
+    u8      flags:5;     /* internal record flags */
+    u8      level:3;     /* syslog level, 0-7 */
     u32     caller_id;   /* cpu/task ID */
 };
 

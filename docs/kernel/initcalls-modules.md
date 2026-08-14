@@ -116,7 +116,7 @@ Module states (`enum module_state`):
 The kernel exposes two syscalls for loading modules:
 
 - `init_module(buf, len, params)` — loads a module image from a buffer in userspace memory
-- `finit_module(fd, params, flags)` — loads a module from a file descriptor (preferred since 3.8; enables module signing verification on the file)
+- `finit_module(fd, params, flags)` — loads a module from a file descriptor (preferred since 3.8; signature verification runs the same way regardless of which load syscall is used — `finit_module`'s benefit is that when a module's authenticity can already be established from its filesystem location, the signature-check overhead can be skipped entirely)
 
 `insmod` uses `init_module`; `modprobe` uses `finit_module`.
 
