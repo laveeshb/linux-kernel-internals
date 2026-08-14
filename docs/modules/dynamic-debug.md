@@ -161,7 +161,7 @@ The `flags-spec` is `+` (add), `-` (remove), or `=` (set exactly) followed by on
 | `_` | No flags (use `=_` to clear everything) |
 
 The decorator flags (`t`, `m`, `f`, `s`, `l`, `d`) are added to the message
-prefix in that fixed order, regardless of the order you type them in the query.
+prefix in that fixed order, regardless of the order you type them in the query. `d` is not a prefix decorator at all — it appends a `dump_stack()` call after the message, handled separately from `__dynamic_emit_prefix()`.
 
 ## Boot-time enablement
 

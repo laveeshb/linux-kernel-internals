@@ -117,7 +117,9 @@ lsmod
 # ptp                   28672  1 e1000e
 
 cat /proc/modules
-# e1000e 262144 0 - Live 0xffffffffc0400000 (OE)
+# e1000e 262144 0 - Live 0xffffffffc0400000 (illustrative only -- a
+#   stock distro-signed e1000e has no taint flags; (OE) would mean an
+#   out-of-tree, unsigned build)
 # Field: name size refcount deps state address (flags)
 # Flags: O=out-of-tree, E=unsigned, F=forced
 
@@ -197,7 +199,9 @@ pr_debug("...");   /* KERN_DEBUG — compiled out unless CONFIG_DYNAMIC_DEBUG (r
 
 /* Device-specific logging (prefixes with device name): */
 dev_err(&pdev->dev, "failed to allocate: %d\n", ret);
-dev_info(&pdev->dev, "initialized at %p\n", base);
+dev_info(&pdev->dev, "initialized at %px\n", base);  /* %p alone prints a
+                                                        hashed, useless
+                                                        value since 4.15 */
 
 /* Rate-limited logging: */
 pr_info_ratelimited("too many events\n");
@@ -253,9 +257,11 @@ grep hello /proc/kallsyms
 # excludes every symbol living in an init-type section — so __init
 # symbols vanish as soon as the module finishes loading.
 
-# Crash debugging with gdb: the .text base comes from sysfs, not from a
-# symbol address (__init code lives in a separate MOD_INIT_TEXT region)
-cat /sys/module/hello/sections/.text
+# Crash debugging with gdb: the section base comes from sysfs, not from a
+# symbol address (this module's only two functions are __init/__exit, so
+# .text itself is empty and has no sysfs entry -- read .exit.text instead,
+# since hello_exit is what's still resident and is what we're debugging)
+cat /sys/module/hello/sections/.exit.text
 # 0xffffffffc0401000
 gdb vmlinux
 (gdb) add-symbol-file /path/to/hello.ko 0xffffffffc0401000
@@ -290,7 +296,7 @@ gdb vmlinux
 - [Kbuild](kbuild.md) — how `obj-m` and the out-of-tree `M=$PWD` build actually work
 - [Dynamic Debug](dynamic-debug.md) — the full query syntax behind `echo "module hello +p"`
 - [Platform Drivers](../drivers/platform-driver.md) — most drivers are modules
-- [BPF Verifier](../bpf/bpf-verifier.md) — an alternative to modules for safe kernel extension
+- [BPF Verifier](../bpf/bpf-verifier.md) — how the kernel admits untrusted extension code without the `.ko` load path: static verification instead of signature and symbol checks
 
 ### LWN articles
 

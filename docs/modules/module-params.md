@@ -193,7 +193,7 @@ load-time version checks at all.
 
 ```bash
 # Find where a function lives (as root — see the note on addresses below)
-sudo grep "tcp_sendmsg" /proc/kallsyms
+sudo grep -E "tcp_sendmsg|mymodule_reset" /proc/kallsyms
 # ffffffff81a12345 T tcp_sendmsg              ← T = global code, not "exported"
 # ffffffffc0401000 t mymodule_reset [mymodule] ← t = module-local code, [module]
 
@@ -227,7 +227,7 @@ about whether the symbol was passed to `EXPORT_SYMBOL`. For module symbols,
 `s_show()` re-cases the letter itself: uppercase if the symbol is exported,
 lowercase if not.
 
-`nm`'s `U` (undefined) never appears in `/proc/kallsyms`. Undefined symbols are
+`nm`'s `U` (undefined) isn't listed once a module has finished loading. Undefined symbols are
 filtered out when a module's symbol table is trimmed — `is_core_symbol()`
 returns false for anything with `st_shndx == SHN_UNDEF` — so imported symbols
 are simply absent from the listing rather than shown with a type of their own.
@@ -299,7 +299,7 @@ make menuconfig
 # Check what's enabled
 grep MY_DRIVER .config
 # CONFIG_MY_DRIVER=m
-# CONFIG_MY_DRIVER_DEBUG=n
+# # CONFIG_MY_DRIVER_DEBUG is not set
 
 # Build only this directory (in-tree single target)
 make drivers/mydriver/

@@ -7,7 +7,7 @@
 Without module signing, anyone with root access can insert arbitrary kernel code via `insmod`. Module signing prevents loading unauthorized modules in security-sensitive environments:
 - **Secure Boot**: UEFI firmware verifies the boot chain; modules must also be verified
 - **Locked-down kernel**: `lockdown=integrity` mode prevents unsigned modules
-- **Compliance**: PCI-DSS, FIPS 140-2 requirements
+- **Compliance**: PCI-DSS, FIPS 140-3 requirements
 
 ## Configuration
 
@@ -15,7 +15,7 @@ Without module signing, anyone with root access can insert arbitrary kernel code
 # Kconfig options:
 CONFIG_MODULE_SIG=y           # Enable module signature support
 CONFIG_MODULE_SIG_FORCE=y     # Require signatures (refuse unsigned)
-CONFIG_MODULE_SIG_ALL=y       # Automatically sign all modules at build
+CONFIG_MODULE_SIG_ALL=y       # Automatically sign all modules during 'make modules_install'
 CONFIG_MODULE_SIG_SHA512=y    # Use SHA-512 for signing hash. The choice in
                               # kernel/module/Kconfig is SHA-256/384/512 and
                               # SHA3-256/384/512 (SHA-1 and SHA-224 are gone);
@@ -30,8 +30,10 @@ zcat /proc/config.gz | grep CONFIG_MODULE_SIG
 
 ```bash
 # Generate a new key pair (during kernel build):
-# The kernel build system auto-generates if CONFIG_MODULE_SIG_KEY points
-# to a non-existent file.
+# The kernel build system auto-generates a key ONLY if CONFIG_MODULE_SIG_KEY
+# is left at its default "certs/signing_key.pem" and that file is absent.
+# Point it at any other path and the file must already exist -- the build
+# has no rule to create it.
 
 # Manual generation:
 openssl req -new -nodes -utf8 -sha512 -days 36500 \
@@ -468,11 +470,20 @@ all; the module is treated as unsigned regardless of whether it carries a
 perfectly valid signature.
 
 ```bash
-# On a kernel with enforcement OFF: this loads, and taints with 'E'
+# On a kernel built with CONFIG_MODULE_FORCE_LOAD=y and enforcement OFF:
+# this loads, and taints with both 'F' (forced) and 'E' (unsigned)
 modprobe --force mymodule
 
-# On a kernel with enforcement ON: this FAILS, even for a signed module,
-# because forcing marks it mangled and the unsigned path then rejects it
+# On the far more common CONFIG_MODULE_FORCE_LOAD=n (the default): the
+# IGNORE_VERMAGIC flag reaches try_to_force_load() in check_modinfo(),
+# which returns -ENOEXEC outright when CONFIG_MODULE_FORCE_LOAD isn't
+# built in -- the load fails before signature checking is even reached
+modprobe --force mymodule
+# modprobe: ERROR: could not insert 'mymodule': Invalid module format
+
+# On a kernel with enforcement ON (any CONFIG_MODULE_FORCE_LOAD setting):
+# this FAILS for a different reason, even for a signed module -- forcing
+# marks it mangled, and the now-unsigned path is rejected by enforcement
 modprobe --force mymodule
 # modprobe: ERROR: could not insert 'mymodule': Key was rejected by service
 ```
@@ -542,7 +553,7 @@ it:
 ### LWN articles
 
 - [Loading signed kernel modules](https://lwn.net/Articles/470906/) — Jake Edge, December 2011, on David Howells's early signed-module patches, which carried the signature in a `.module_sig` ELF section rather than appending it outside the ELF container
-- [The module signing endgame](https://lwn.net/Articles/525592/) — Jake Edge, November 2012, on the build-time versus install-time signing argument that shaped `CONFIG_MODULE_SIG_ALL` and the standalone `scripts/sign-file` tool
+- [The module signing endgame](https://lwn.net/Articles/525592/) — Jake Edge, November 2012, on the build-time versus install-time signing argument that led to Torvalds moving signing into `make modules_install`
 - [Kernel lockdown locked out — for now](https://lwn.net/Articles/751061/) — Jonathan Corbet, April 2018, on Torvalds's objection to automatically enabling lockdown when UEFI Secure Boot is detected; worth reading before assuming any given kernel couples the two
 - [Lockdown as a security module](https://lwn.net/Articles/791863/) — Jonathan Corbet, June 2019, on the LSM rework that landed, including why integrity reasons sort below confidentiality ones and where `LOCKDOWN_MODULE_SIGNATURE` fits
 

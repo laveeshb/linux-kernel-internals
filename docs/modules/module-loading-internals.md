@@ -26,7 +26,7 @@ The first two flags route through `try_to_force_load()`, which taints the kernel
 
 ## load_module(): step by step
 
-`load_module()` takes the raw ELF bytes and produces a running module. Step 1 happens in the syscall wrappers, just before `load_module()` is entered; steps 2 through 11 are the body of `load_module()` itself, in the order its calls appear.
+`load_module()` takes the raw ELF bytes and produces a running module. Step 1 happens in the syscall wrappers, just before `load_module()` is entered; steps 2 through 11 are the body of `load_module()` itself, in the order its work happens (step 8's version check runs inside step 7's symbol resolution, not as a separate pass).
 
 ### 1. Get the ELF image into the kernel
 
@@ -195,6 +195,7 @@ With the module at its final address, `find_module_sections()` records pointers 
 There is no longer a separate `__ksymtab_gpl`. Since commit `55fcb926b6d8` (v7.1) GPL-only status is a bit in the parallel `__kflagstab` byte array, and the loader warns if it finds the old sections:
 
 ```c
+/* — abridged, omitting the earlier mod->kp = section_objs(info, "__param", ...) — */
 mod->syms = section_objs(info, "__ksymtab", sizeof(*mod->syms), &mod->num_syms);
 mod->crcs = section_addr(info, "__kcrctab");
 mod->flagstab = section_addr(info, "__kflagstab");
@@ -332,7 +333,7 @@ On x86-64, the common relocation types are:
 | `R_X86_64_PLT32` | 32-bit PC-relative via PLT — used for calls that may go through a thunk |
 | `R_X86_64_32S` | 32-bit sign-extended absolute |
 
-For each entry the kernel computes `val = sym->st_value + r_addend`, subtracts the relocation's own address for the PC-relative types, range-checks the truncating ones, and writes the result at the relocation offset. `R_X86_64_32S` and `R_X86_64_32` fail the load with `ENOEXEC` (`overflow`) if the value does not survive the narrowing — the concrete symptom of a module landing outside the ±2 GB window discussed in step 5.
+For each entry the kernel computes `val = sym->st_value + r_addend`, subtracts the relocation's own address for the PC-relative types, and writes the result at the relocation offset. The PC-relative types (`R_X86_64_PC32`/`PLT32`) are not range-checked at all — if a target exceeds the ±2 GB reach discussed in step 5, the truncation is silent. `R_X86_64_32S` and `R_X86_64_32` are absolute-address types instead: they fail the load with `ENOEXEC` ("overflow") if `val` doesn't survive the narrowing, which is the `-mcmodel=kernel` constraint (a module's absolute symbol references must fit the top 2 GB of the address space), not the same ±2 GB PC-relative window.
 
 ### 10. Complete formation and fire the COMING notifiers
 
@@ -497,7 +498,7 @@ insmod / modprobe
                                   free_module() → execmem_free() per mem[] class
 ```
 
-The `UNFORMED` and `GOING` states are both visible to other CPUs through the global modules list, and both are special-cased there: `find_symbol()` skips `UNFORMED` modules outright, `m_show()` omits them from `/proc/modules`, and `strong_try_module_get()` refuses a `COMING` module with `-EBUSY` so a dependent load waits rather than binding to a half-built provider. What guarantees no thread is still executing *inside* a module by the time it reaches `GOING` is the reference count, not RCU: `try_module_get()`/`module_put()` (and `strong_try_module_get()` behind `__symbol_get()`) hold the count up, and `delete_module()` will not set `GOING` at all until `try_stop_module()` → `try_release_module_ref()` has confirmed the count drained. The `synchronize_rcu()` calls on the teardown paths do a different job: `free_module()` unlinks the module from the modules list, the mod tree and the bug list with the `_rcu` variants — "Unlink carefully: kallsyms could be walking list" — and then waits a grace period so those RCU readers cannot touch the memory as it is freed.
+The `UNFORMED` and `GOING` states are both visible to other CPUs through the global modules list, and both are special-cased there: `find_symbol()` skips `UNFORMED` modules outright, `m_show()` omits them from `/proc/modules`, and `strong_try_module_get()` refuses a `COMING` module with `-EBUSY` so a dependent load waits rather than binding to a half-built provider. What guarantees no thread is still executing *inside* a module by the time it reaches `GOING` is the reference count, not RCU: `try_module_get()`/`module_put()` (and `strong_try_module_get()` behind `__symbol_get()`) hold the count up, and `delete_module()` will not set `GOING` with a live count remaining unless the caller forces it (`try_stop_module()` sets `GOING` regardless of count when `try_force_unload()` succeeds, gated on `CONFIG_MODULE_FORCE_UNLOAD` and the `O_TRUNC` flag to `delete_module(2)`) — otherwise it waits until `try_release_module_ref()` has confirmed the count drained. The `synchronize_rcu()` calls on the teardown paths do a different job: `free_module()` unlinks the module from the modules list, the mod tree and the bug list with the `_rcu` variants — "Unlink carefully: kallsyms could be walking list" — and then waits a grace period so those RCU readers cannot touch the memory as it is freed.
 
 ## /proc/modules format
 
@@ -575,7 +576,7 @@ When building an out-of-tree module, `make` reads `Module.symvers` from `$(KDIR)
 
 - [Module Parameters, Symbols, and Kconfig](module-params.md) — `EXPORT_SYMBOL`/`EXPORT_SYMBOL_GPL`, the `has no CRC!` and `disagrees about version` symptoms, and `/proc/kallsyms`, from the module author's side
 - [Kernel Module Signing](module-signing.md) — `module_sig_check()`, which `load_module()` runs before it looks at a single ELF section
-- [Kbuild: The Kernel Build System](kbuild.md) — out-of-tree builds and cross-compilation, where the `Module.symvers` mismatches described above originate
+- [Kbuild: The Kernel Build System](kbuild.md) — out-of-tree builds and cross-compilation, the build side of getting a module's `Module.symvers` right in the first place
 - [Writing and Loading Kernel Modules](module-basics.md) — the source-level view: `module_init`/`module_exit`, `__init` sections, and the `.ko` this page takes apart
 - [Module War Stories](war-stories.md) — CRC mismatches, taint cascades, and versioning surprises seen in production
 

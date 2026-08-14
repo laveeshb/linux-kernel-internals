@@ -276,7 +276,7 @@ modinfo /lib/modules/$(uname -r)/kernel/drivers/net/ethernet/intel/e1000/e1000.k
 # sig_id: PKCS#7
 # sig_hashalgo: sha256
 
-# Symbols a module exports:
+# Global text symbols defined by a module (not the same as EXPORT_SYMBOL exports):
 nm --defined-only drivers/net/ethernet/intel/e1000/e1000.ko | grep " T "
 # Only text (function) symbols defined in the module
 
@@ -334,7 +334,7 @@ make distclean # mrproper + editor/tag leftovers: *.orig, *.rej, *~, *.bak,
 - [`modprobe(8)`](https://man7.org/linux/man-pages/man8/modprobe.8.html) — dependency-aware module loading, `-r`, and module parameters on the command line
 - [`depmod(8)`](https://man7.org/linux/man-pages/man8/depmod.8.html) — generates `modules.dep` and the map files; `-a`, `-b basedir`, and the optional `version` argument
 - [`modules.dep(5)`](https://man7.org/linux/man-pages/man5/modules.dep.5.html) — the format of `modules.dep`/`modules.dep.bin`, the dependency database `modprobe` consults
-- [`modinfo(8)`](https://man7.org/linux/man-pages/man8/modinfo.8.html) — `-F field` extraction of `depends`, `vermagic`, `sig_id`, and the other `.modinfo` fields shown above
+- [`modinfo(8)`](https://man7.org/linux/man-pages/man8/modinfo.8.html) — `-F field` extraction of the documented `.modinfo` fields (`depends`, `license`, `alias`, `parm`, …); kmod also prints `vermagic` and the `sig*` fields shown above, which the man page's own field list does not enumerate
 
 ### Related pages
 
@@ -347,7 +347,7 @@ make distclean # mrproper + editor/tag leftovers: *.orig, *.rej, *~, *.bak,
 ### LWN articles
 
 - [How many ways are there to configure the Linux kernel?](https://lwn.net/Articles/1034811/) — Daroc Alden, September 10, 2025: 32,468 Kconfig options on x86_64 in 6.16, and what `depends on`/`select` constraints do to the space of valid configurations
-- [A kbuild and kconfig maintainer change](https://lwn.net/Articles/1032722/) — August 6, 2025: Masahiro Yamada steps down after eight years; kbuild moves to "odd fixes" under Nathan Chancellor and Nicolas Schier, and Kconfig is left unmaintained
+- [A kbuild and kconfig maintainer change](https://lwn.net/Articles/1032722/) — August 6, 2025: Masahiro Yamada steps down after eight years; kbuild moves to "odd fixes" under Nathan Chancellor and Nicolas Schier, with Kconfig orphaned outright at the time — the same two have since picked up Kconfig as well, also under "odd fixes"
 
 ### External
 
