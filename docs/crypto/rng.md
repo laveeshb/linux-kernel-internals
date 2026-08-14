@@ -43,10 +43,12 @@ The new pool:
 
 /* The primary pool is 256 bits mixed through BLAKE2s (input pool, not CRNG output) */
 static struct {
-    struct blake2s_state    hash;
+    struct blake2s_ctx      hash;
     spinlock_t              lock;
     unsigned int            init_bits;  /* accumulated so far */
 } input_pool = {
+    .hash.h = { /* BLAKE2s IV, pre-mixed with the output length */ ... },
+    .hash.outlen = BLAKE2S_HASH_SIZE,
     .lock = __SPIN_LOCK_UNLOCKED(input_pool.lock),
 };
 ```
@@ -57,7 +59,8 @@ is 0 → 1 → 2. After `crng_init` reaches 2, the pool is periodically reseeded
 entropy, but the CRNG output is already cryptographically indistinguishable from random.
 
 The CRNG (Cryptographically Secure Random Number Generator) uses ChaCha20 as its stream
-cipher. Per-CPU CRNGs (added in 5.14) allow fast, lock-free generation:
+cipher. Per-CPU CRNGs (added in 5.18, replacing an earlier per-NUMA-node design) allow fast,
+lock-free generation:
 
 ```c
 /* struct crng — internal type, wraps ChaCha20 state; not a public kernel API */
@@ -72,7 +75,7 @@ The kernel feeds entropy into the pool from multiple sources:
 |---|---|---|
 | Interrupt timing | `add_interrupt_randomness()` — called from interrupt handlers | Jitter between interrupts carries entropy |
 | Hardware RNG | `add_hwgenerator_randomness()` — from `/dev/hwrng` | RDRAND, TPM, virtio-rng |
-| Disk I/O | Block layer timing via `add_disk_randomness()` | Removed in 5.18 as negligible |
+| Disk I/O | Block layer timing via `add_disk_randomness()` | Still present and exported (`EXPORT_SYMBOL_GPL`) |
 | Boot-time | Seed file from previous boot via rng-tools/systemd-random-seed | Critical for VMs |
 | CPU RDRAND | `arch_get_random_long()` — used during CRNG initialization | See note on RDRAND below |
 
@@ -84,9 +87,9 @@ not as the sole source:
 
 ```c
 /* arch/x86/kernel/cpu/rdrand.c */
-static void __init x86_init_rdrand(struct cpuinfo_x86 *c)
+void x86_init_rdrand(struct cpuinfo_x86 *c)
 {
-    /* Test: generate 8 values; if any fail, disable RDRAND usage */
+    /* Test: generate 8 values; if any fail or don't change enough, disable RDRAND usage */
     ...
 }
 ```
@@ -172,8 +175,8 @@ The kernel implements NIST SP 800-90A Deterministic Random Bit Generators via th
 ```c
 #include <crypto/rng.h>
 
-/* Allocate an HMAC-SHA256 based DRBG (no prediction resistance) */
-struct crypto_rng *rng = crypto_alloc_rng("drbg_nopr_hmac_sha256", 0, 0);
+/* Allocate the kernel's registered DRBG (exposed under the generic "stdrng" name) */
+struct crypto_rng *rng = crypto_alloc_rng("stdrng", 0, 0);
 if (IS_ERR(rng))
     return PTR_ERR(rng);
 
@@ -189,17 +192,13 @@ ret = crypto_rng_get_bytes(rng, output, sizeof(output));
 crypto_free_rng(rng);
 ```
 
-DRBG algorithm names follow the pattern `drbg_{pr,nopr}_{hmac,hash,ctr}_{hash_alg}`:
-
-```
-drbg_pr_hmac_sha256    HMAC-DRBG SHA-256, with prediction resistance
-drbg_nopr_hmac_sha256  HMAC-DRBG SHA-256, no prediction resistance (faster)
-drbg_pr_sha256         Hash-DRBG SHA-256, with prediction resistance
-drbg_nopr_ctr_aes256   CTR-DRBG AES-256, no prediction resistance
-```
-
-Prediction resistance means the DRBG is reseeded from the entropy pool before each generate
-call, providing forward secrecy. `nopr` variants reseed only periodically or on request.
+As of this kernel, `crypto/drbg.c` registers a single algorithm: `cra_name = "stdrng"`,
+`cra_driver_name = "drbg_nopr_hmac_sha512"` — an HMAC-DRBG built on SHA-512, without
+prediction resistance. The older design registered a family of names following the pattern
+`drbg_{pr,nopr}_{hmac,hash,ctr}_{hash_alg}` (letting callers pick a specific mode/hash and
+choose prediction resistance); that family, and support for prediction resistance itself,
+were removed in a later simplification, leaving `crypto_alloc_rng("stdrng", 0, 0)` as the way
+to reach it.
 
 ## Kernel internal interfaces
 
@@ -209,17 +208,15 @@ For kernel code that needs random data:
 /* General: block until CRNG is initialized, then return bytes */
 void get_random_bytes(void *buf, size_t len);
 
-/* Fast per-CPU versions (lock-free, 5.14+) */
+/* Fast per-CPU versions (lock-free, 5.18+) */
 u32 get_random_u32(void);
 u64 get_random_u64(void);
 u32 get_random_u32_below(u32 ceil);  /* uniform in [0, ceil) — added 6.2 */
-
-/* For filling structures with random data */
-void get_random_bytes_arch(void *buf, size_t len);  /* prefers RDRAND */
-
-/* For non-cryptographic random numbers (fast, no entropy guarantee) */
-u32 prandom_u32(void);   /* deprecated; use get_random_u32() */
 ```
+
+`get_random_bytes_arch()` and the zero-argument `prandom_u32()` — both older APIs sometimes
+referenced in outdated documentation — no longer exist in the current tree; `get_random_u32()`
+is the current replacement for both use cases.
 
 ```c
 /* Example: generate a random nonce for a network protocol */
@@ -249,7 +246,7 @@ Power on
     │  crng_init_done()              ← wake_up_all() for getrandom() waiters
     │  pr_notice("random: crng init done")
     │
-    └─ Periodic reseed               ← every ~5 minutes from fresh entropy
+    └─ Periodic reseed               ← every CRNG_RESEED_INTERVAL (60 seconds) from fresh entropy
 ```
 
 In a typical boot on bare metal, `crng_init_done` happens within the first few seconds.
@@ -306,14 +303,29 @@ machine generation ID (VMGENID) ACPI device. When the hypervisor changes the gen
 
 ```c
 /* drivers/virt/vmgenid.c */
-/* ACPI device publishes a 128-bit generation counter in ACPI table */
-/* On generation ID change, kernel calls add_vmfork_randomness() */
-static void vmgenid_notify(struct acpi_device *device, u32 event)
+/* ACPI/DT device publishes a 128-bit generation counter */
+struct vmgenid_state {
+    u8 *next_id;              /* pointer to the live counter in device memory */
+    u8 this_id[VMGENID_SIZE]; /* last-seen copy */
+};
+
+static void vmgenid_notify(struct device *device)
 {
-    ...
-    add_vmfork_randomness(new_id, sizeof(new_id));
+    struct vmgenid_state *state = device->driver_data;
+    u8 old_id[VMGENID_SIZE];
+
+    memcpy(old_id, state->this_id, sizeof(old_id));
+    memcpy(state->this_id, state->next_id, sizeof(state->this_id));
+    if (!memcmp(old_id, state->this_id, sizeof(old_id)))
+        return;  /* unchanged: not a fork/resume event */
+
+    add_vmfork_randomness(state->this_id, sizeof(state->this_id));
 }
 ```
+
+The ACPI notify handler is a thin wrapper that just calls `vmgenid_notify(dev)` when the
+platform signals a generation-ID change; the diff-and-reseed logic above is what actually
+detects the change and reseeds.
 
 ## getrandom() in containers
 
@@ -333,9 +345,9 @@ cat /proc/sys/kernel/random/entropy_avail
 
 # Pool parameters
 cat /proc/sys/kernel/random/poolsize      # 256
-# Note: read_wakeup_threshold and write_wakeup_threshold were removed in Linux 5.17.
-# They do not exist on modern kernels. Use entropy_avail, poolsize, and
-# urandom_min_reseed_secs instead.
+# Note: read_wakeup_threshold was removed in Linux 5.17. write_wakeup_threshold is
+# still a live sysctl node but is now vestigial (reads return a value; writes are
+# silently ignored). Use entropy_avail, poolsize, and urandom_min_reseed_secs instead.
 
 # UUID generated from /dev/urandom (convenient test)
 cat /proc/sys/kernel/random/uuid
@@ -377,8 +389,32 @@ rngd -f -r /dev/hwrng
 
 ## Further reading
 
-- [Kernel Crypto API](crypto-api.md) — DRBG via crypto_alloc_rng()
-- [Kernel Keyring](keyring.md) — key generation uses get_random_bytes()
-- `man 2 getrandom` — syscall documentation
-- `man 4 random` — /dev/random and /dev/urandom
-- Donenfeld, "A New Random Number Generator" (LWN, 2022) — design rationale for the 5.17 rewrite
+### Kernel source
+
+- [drivers/char/random.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/char/random.c) — the BLAKE2s input pool, ChaCha20 CRNG, and the `getrandom()`/`/dev/random`/`/dev/urandom` implementation
+- [crypto/drbg.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/crypto/drbg.c) — the NIST SP 800-90A DRBG exposed through `crypto_alloc_rng()`
+- [include/linux/random.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/random.h) — `get_random_bytes()`, `get_random_u32()`/`get_random_u64()`, `get_random_u32_below()`, and the `add_*_randomness()` entropy-feeding API
+- [drivers/virt/vmgenid.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/virt/vmgenid.c) — VM fork detection via the VMGENID ACPI/DT device
+- [arch/x86/kernel/cpu/rdrand.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/cpu/rdrand.c) — `x86_init_rdrand()`, the boot-time RDRAND self-test
+
+### Man pages
+
+- [`getrandom(2)`](https://man7.org/linux/man-pages/man2/getrandom.2.html) — syscall flags (`GRND_NONBLOCK`, `GRND_RANDOM`), signal behavior, and the 256-byte no-short-read guarantee
+- [`random(4)`](https://man7.org/linux/man-pages/man4/random.4.html) — `/dev/random` and `/dev/urandom` device semantics, including the Linux 5.6 non-blocking change
+
+### Related pages
+
+- [Kernel Crypto API](crypto-api.md) — `crypto_alloc_rng()` and the DRBG interface built on top of this page's entropy pool
+- [dm-crypt and fscrypt](encryption.md) — where `get_random_bytes()`/`/dev/urandom` output is consumed for volume keys and IVs
+- [Kernel Keyring](keyring.md) — where generated key material is stored once created
+- [Crypto War Stories](war-stories.md) — incident 3, "`getrandom()` blocking at boot," a real entropy-starvation case built on the material in this page
+
+### LWN articles
+
+- [The search for truly random numbers in the kernel](https://lwn.net/Articles/567055/) — Jonathan Corbet, September 18, 2013 — why the kernel mixes RDRAND into the pool instead of trusting it alone
+- [A system call for random numbers: getrandom()](https://lwn.net/Articles/606141/) — Jake Edge, July 23, 2014 — the original design discussion for the syscall this page documents
+- [Uniting the Linux random-number devices](https://lwn.net/Articles/884875/) — Jake Edge, February 16, 2022 — Jason Donenfeld's push, from the era of the pool rewrite, to make `/dev/random` and `/dev/urandom` behave identically
+
+### External
+
+- [NIST SP 800-90A Rev. 1](https://csrc.nist.gov/pubs/sp/800/90/a/r1/final) — "Recommendation for Random Number Generation Using Deterministic Random Bit Generators," the standard implemented by `crypto/drbg.c`
