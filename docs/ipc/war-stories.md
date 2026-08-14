@@ -12,7 +12,7 @@ Real-world IPC bugs share a common theme: the happy path works perfectly, but th
 
 A C++ application used SysV semaphores for inter-process locking. Each worker process called `semget(IPC_CREAT, ...)` on startup and `semctl(IPC_RMID)` on clean shutdown. In the error path — triggered when the backing database was unreachable — the code returned early before calling `IPC_RMID`.
 
-After 48 hours of operation with periodic connection failures, `ipcs -s` showed 128 semaphore sets. The system `SEMMNI` limit had been reached. Subsequent worker startups received `ENOSPC` from `semget()`. The service was down.
+After 48 hours of operation with periodic connection failures, `ipcs -s` showed 128 semaphore sets — the deployment's `kernel.sem` `SEMMNI` setting had been tuned down from the kernel's 32000 default to 128 as a defensive resource cap, and that limit had been reached. Subsequent worker startups received `ENOSPC` from `semget()`. The service was down.
 
 ```bash
 # Diagnosis: count orphaned sets
