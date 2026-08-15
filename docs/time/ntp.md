@@ -199,3 +199,35 @@ int state = adjtimex(&tx);
 ```
 
 The `STA_UNSYNC` bit being clear (zero) indicates the kernel considers the clock synchronized. `timedatectl` displays this as "NTP synchronized: yes".
+
+## Further reading
+
+### Kernel source
+
+- [kernel/time/ntp.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/ntp.c) — the PLL/FLL time discipline control loop, leap-second state machine, `ntp_tick_length()`, and `sync_hw_clock()`
+- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — `timekeeping_advance()` and `timekeeping_adjust()`, applying NTP tick corrections to `struct timekeeper`
+- [include/uapi/linux/timex.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/timex.h) — user-space definitions for `struct timex`, `ADJ_*` modes, `STA_*` status flags, and `TIME_*` return codes
+- [include/linux/timex.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timex.h) — internal kernel timex operations, scaled ppm conversions, and PPS interface hooks
+
+### Man pages
+
+- [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — system call interface for reading and tuning kernel timekeeping parameters
+- [`clock_adjtime(2)`](https://man7.org/linux/man-pages/man2/clock_adjtime.2.html) — POSIX clock-specific adjustment syscall supporting `CLOCK_REALTIME` and `CLOCK_TAI`
+- [`adjtime(3)`](https://man7.org/linux/man-pages/man3/adjtime.3.html) — legacy C library interface for gradual clock slewing
+- [`timedatectl(1)`](https://man7.org/linux/man-pages/man1/timedatectl.1.html) — systemd utility for querying NTP synchronization status and system clock settings
+
+### Related pages
+
+- [Timekeeping and Clocksources](timekeeping.md) — timekeeper architecture, `struct timekeeper`, and hardware counter integration
+- [Clocksource and Clockevent Drivers](clocksource.md) — hardware counter calibration and frequency multiplier math
+- [Time Subsystem War Stories](war-stories.md) — real-world leap second bugs and clocksource watchdog false positives
+
+### LWN articles
+
+- [A new NTP API](https://lwn.net/Articles/433722/) — Jonathan Corbet, March 2011: the addition of `clock_adjtime()` for per-clock adjustments
+- [The leap second bug](https://lwn.net/Articles/504658/) — Jonathan Corbet, July 2012: analysis of the 2012 kernel leap-second livelock and resolution
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — kernel documentation on timekeeping, NTP discipline, and hardware clock synchronization
+- [RFC 5905: Network Time Protocol Protocol and Algorithm Specification](https://datatracker.ietf.org/doc/html/rfc5905) — authoritative specification of the NTPv4 on-wire protocol and clock discipline algorithm

@@ -28,30 +28,30 @@ clockevent   →  tick device  →  scheduler tick, hrtimers, timers
 ```c
 /* include/linux/clocksource.h */
 struct clocksource {
-    /*
-     * read() returns a 64-bit cycle counter.
-     * The counter may wrap around — timekeeping handles this.
-     */
-    u64 (*read)(struct clocksource *cs);
-
-    u64             mask;       /* bitmask to handle counter wrap */
-    u32             mult;       /* cycles to ns: ns = cycles * mult >> shift */
+    u64             (*read)(struct clocksource *cs);
+    u64             mask;          /* bitmask to handle counter wrap */
+    u32             mult;          /* cycles to ns: ns = cycles * mult >> shift */
     u32             shift;
-    u64             max_idle_ns; /* max time between reads before losing accuracy */
+    u64             max_idle_ns;   /* max time between reads before losing accuracy */
     u32             maxadj;
-    u64             max_cycles; /* max cycles before ns calculation overflows */
+    u64             max_cycles;    /* max cycles before ns calculation overflows */
+    u64             max_raw_delta;
     const char      *name;
     struct list_head list;
-    int             rating;     /* quality: 500=perfect, 300=good, 100=basic */
-    enum clocksource_ids  id;
-    unsigned long   flags;
-    /* CLOCK_SOURCE_IS_CONTINUOUS: counter never jumps */
-    /* CLOCK_SOURCE_VALID_FOR_HRES: can be used for high-res timers */
-
-    /* Which VDSO clock mode to use for fast userspace reads: */
+    u32             freq_khz;
+    int             rating;        /* quality: 500=perfect, 300=good, 100=basic */
+    enum clocksource_ids id;
     enum vdso_clock_mode vdso_clock_mode;
-    void (*suspend)(struct clocksource *cs);
-    void (*resume)(struct clocksource *cs);
+    unsigned long   flags;
+    struct clocksource_base *base;
+
+    u64             (*read_snapshot)(struct clocksource *cs, struct clocksource_hw_snapshot *chs);
+    int             (*enable)(struct clocksource *cs);
+    void            (*disable)(struct clocksource *cs);
+    void            (*suspend)(struct clocksource *cs);
+    void            (*resume)(struct clocksource *cs);
+    void            (*mark_unstable)(struct clocksource *cs);
+    void            (*tick_stable)(struct clocksource *cs);
 };
 ```
 
@@ -67,7 +67,15 @@ static struct clocksource clocksource_tsc = {
     .read                   = read_tsc,
     .mask                   = CLOCKSOURCE_MASK(64),
     .flags                  = CLOCK_SOURCE_IS_CONTINUOUS |
-                              CLOCK_SOURCE_VALID_FOR_HRES,
+                              CLOCK_SOURCE_CAN_INLINE_READ |
+                              CLOCK_SOURCE_MUST_VERIFY |
+                              CLOCK_SOURCE_HAS_COUPLED_CLOCK_EVENT,
+    .id                     = CSID_X86_TSC,
+    .vdso_clock_mode        = VDSO_CLOCKMODE_TSC,
+    .enable                 = tsc_cs_enable,
+    .resume                 = tsc_resume,
+    .mark_unstable          = tsc_cs_mark_unstable,
+    .tick_stable            = tsc_cs_tick_stable,
 };
 
 static u64 read_tsc(struct clocksource *cs)
@@ -236,7 +244,7 @@ cat /proc/timer_list | grep "Tick Device" | head -5
 ## Timekeeping: clocksource → wall clock
 
 ```c
-/* kernel/time/timekeeping.c */
+/* include/linux/timekeeper_internal.h */
 struct timekeeper {
     struct tk_read_base     tkr_mono;   /* monotonic clock */
     struct tk_read_base     tkr_raw;    /* raw hardware clock */
@@ -248,13 +256,14 @@ struct timekeeper {
     ktime_t                 offs_boot;  /* boot time offset */
     ktime_t                 offs_tai;   /* TAI offset */
 
-    u32                     tai_offset; /* TAI - UTC in seconds */
-    u32                     clock_was_set_seq;
+    s32                     tai_offset; /* TAI - UTC in seconds */
+    unsigned int            clock_was_set_seq;
     u8                      cs_was_changed_seq;
     ktime_t                 next_leap_ktime;
 };
 
 /* Reading current time (seqcount protects against concurrent updates): */
+/* kernel/time/timekeeping.c */
 ktime_t ktime_get(void)
 {
     struct timekeeper *tk = &tk_core.timekeeper;
@@ -302,11 +311,35 @@ interval:s:1 {
 
 ## Further reading
 
-- [hrtimers](hrtimers.md) — high-resolution timers using clockevent
-- [POSIX Timers](posix-timers.md) — user-facing timer API
-- [cpuidle and C-states](../power/cpuidle.md) — CLOCK_EVT_FEAT_C3STOP
-- [vDSO](../mm/vdso.md) — fast clock_gettime using clocksource
-- [Real-Time Tuning](../sched/rt-tuning.md) — tick suppression for RT
-- `kernel/time/timekeeping.c` — timekeeping core
-- `arch/x86/kernel/tsc.c` — TSC clocksource
-- `arch/x86/kernel/apic/apic.c` — APIC clockevent
+### Kernel source
+
+- [include/linux/clocksource.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/clocksource.h) — definition of `struct clocksource`, the `CLOCK_SOURCE_*` flags, and frequency-to-mult/shift conversion helpers
+- [include/linux/clockchips.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/clockchips.h) — `struct clock_event_device`, `CLOCK_EVT_FEAT_*` feature flags, and clockevent state accessors
+- [kernel/time/clocksource.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/clocksource.c) — clocksource registration, rating-based selection, and the `clocksource_watchdog()` stability verification framework
+- [kernel/time/clockevents.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/clockevents.c) — clockevent programming, event handler dispatch, and clockevent device registration
+- [kernel/time/tick-common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/tick-common.c) — per-CPU `struct tick_device`, periodic tick setup, and the interface between clockevents and scheduler ticks
+- [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — `clocksource_tsc`, early boot calibration against PIT/HPET, and runtime instability detection
+- [arch/x86/kernel/apic/apic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/apic/apic.c) — `lapic_clockevent`, local APIC timer programming via `APIC_TMICT`, and broadcast handling
+
+### Man pages
+
+- [`clock_gettime(2)`](https://man7.org/linux/man-pages/man2/clock_gettime.2.html) — POSIX system call and vDSO fast-path for reading hardware clocksources
+- [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — kernel clock discipline interface for tuning frequency and phase offsets
+
+### Related pages
+
+- [High-Resolution Timers (hrtimers)](hrtimers.md) — high-resolution timers and scheduler tick emulation built on clockevents
+- [Timekeeping and Clocksources](timekeeping.md) — timekeeper architecture, `ktime_get()`, and wall-clock offsets
+- [POSIX Timers and timerfd](posix-timers.md) — user-facing timer interfaces backed by clockevents and hrtimers
+- [CPU Idle and C-States](../power/cpuidle.md) — dynamic tick suppression and `CLOCK_EVT_FEAT_C3STOP` broadcast timer management
+- [Real-Time Tuning](../sched/rt-tuning.md) — isolated CPUs and full tickless (`nohz_full`) operation for low-latency workloads
+
+### LWN articles
+
+- [High-resolution timers and dynamic ticks](https://lwn.net/Articles/209101/) — Jonathan Corbet, November 2006: the architectural introduction of the clocksource and clockevent abstractions
+- [Preventing clocksource watchdog false positives](https://lwn.net/Articles/858829/) — Jonathan Corbet, June 2021: improving clocksource watchdog reliability under high virtualization and bus load
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — upstream kernel documentation covering the clocksource, clockevent, and timekeeper subsystems
+- [The kernel's command-line parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) — boot-time clock options: `clocksource=`, `tsc=reliable`, `nohz=`, and `nohz_full=`

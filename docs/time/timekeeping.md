@@ -65,7 +65,7 @@ For a 3.6 GHz TSC: `mult ≈ 1175`, `shift = 22`. Each call to `clock_gettime` d
 The timekeeper holds the current time state and is updated on every tick and NTP adjustment:
 
 ```c
-/* kernel/time/timekeeping.c */
+/* include/linux/timekeeper_internal.h */
 struct timekeeper {
     struct tk_read_base  tkr_mono;   /* CLOCK_MONOTONIC */
     struct tk_read_base  tkr_raw;    /* CLOCK_MONOTONIC_RAW (no NTP) */
@@ -86,7 +86,7 @@ struct tk_read_base {
     struct clocksource  *clock;
     u64                  mask;
     u64                  cycle_last;   /* last read counter value */
-    u64                  mult;         /* adjusted mult (NTP modifies this) */
+    u32                  mult;         /* adjusted mult (NTP modifies this) */
     u32                  shift;
     u64                  xtime_nsec;   /* accumulated nanoseconds (fractional) */
     ktime_t              base;         /* nanoseconds base */
@@ -254,9 +254,34 @@ cat /proc/timer_list | head -50
 
 ## Further reading
 
-- [hrtimers](hrtimers.md) — high-resolution timer implementation
-- [POSIX timers](posix-timers.md) — timer_create, timerfd
-- [System Calls: entry path](../syscalls/syscall-entry.md) — vDSO seqlock implementation
-- [Scheduler: CFS](../sched/cfs.md) — scheduler tick drives timekeeping
-- `kernel/time/timekeeping.c` — timekeeper implementation
-- `arch/x86/kernel/tsc.c` — TSC clocksource
+### Kernel source
+
+- [include/linux/timekeeper_internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timekeeper_internal.h) — definitions of `struct timekeeper` and `struct tk_read_base` with cacheline alignment comments
+- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — timekeeping core: `ktime_get()`, `timekeeping_advance()`, `timekeeping_update()`, and leap-second processing
+- [kernel/time/timekeeping_internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping_internal.h) — internal timekeeping definitions, fast time getters, and vDSO updater prototypes
+- [lib/vdso/gettimeofday.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/vdso/gettimeofday.c) — architecture-generic vDSO clock reading loop (`do_hres()`, `do_coarse()`) using lockless seqlock reads
+- [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — x86 TSC calibration (`pit_calibrate_tsc()`, `native_calibrate_tsc()`) and stability testing
+
+### Man pages
+
+- [`clock_gettime(2)`](https://man7.org/linux/man-pages/man2/clock_gettime.2.html) — retrieving clock timestamps across supported clock domains
+- [`clock_settime(2)`](https://man7.org/linux/man-pages/man2/clock_settime.2.html) — setting `CLOCK_REALTIME` and triggering `clock_was_set()` notifications
+- [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — adjusting kernel clock parameters and retrieving synchronization status
+- [`time(7)`](https://man7.org/linux/man-pages/man7/time.7.html) — overview of time and timer APIs in Linux
+
+### Related pages
+
+- [Clocksource and Clockevent Drivers](clocksource.md) — hardware clocksource registration, rating, and cycle-to-ns conversion
+- [NTP and Clock Discipline](ntp.md) — PLL/FLL frequency corrections, leap-second insertion, and 11-minute RTC sync
+- [High-Resolution Timers (hrtimers)](hrtimers.md) — nanosecond-precision timer queues driven by timekeeper bases
+- [Time Namespaces](time-namespaces.md) — container-isolated `CLOCK_MONOTONIC` and `CLOCK_BOOTTIME` offsets
+- [vDSO Fast System Calls](../mm/vdso.md) — shared data pages and architecture of userspace vDSO acceleration
+
+### LWN articles
+
+- [Converting jiffies to clocksources](https://lwn.net/Articles/347811/) — Jonathan Corbet, August 2009: the transition of timekeeping from jiffies ticks to generic clocksources
+- [A unified vDSO library](https://lwn.net/Articles/797818/) — Jonathan Corbet, September 2019: Vincenzo Frascino's unified cross-architecture vDSO implementation
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — official kernel guide to the timekeeping subsystem and clock interfaces

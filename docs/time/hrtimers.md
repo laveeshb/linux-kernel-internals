@@ -18,14 +18,15 @@ The classic wheel is O(1) but coarse. hrtimers use a sorted red-black tree; the 
 ```c
 /* include/linux/hrtimer.h */
 struct hrtimer {
-    struct timerqueue_node  node;     /* rb_node + expiry time */
-    ktime_t                 _softexpires; /* earliest expiry */
-    enum hrtimer_restart  (*function)(struct hrtimer *); /* callback */
-    struct hrtimer_clock_base *base;  /* clock base this timer belongs to */
-    u8                      state;    /* HRTIMER_STATE_INACTIVE/ENQUEUED */
-    u8                      is_rel;   /* relative timer? */
-    u8                      is_soft;  /* softirq delivery? */
-    u8                      is_hard;  /* hardirq delivery? */
+    struct timerqueue_linked_node node;
+    struct hrtimer_clock_base   *base;
+    bool                        is_queued;
+    bool                        is_rel;
+    bool                        is_soft;
+    bool                        is_hard;
+    bool                        is_lazy;
+    ktime_t                     _softexpires; /* earliest expiry */
+    enum hrtimer_restart      (*__private function)(struct hrtimer *); /* callback */
 };
 
 struct hrtimer_cpu_base {
@@ -90,9 +91,8 @@ static int mydev_probe(struct platform_device *pdev)
 {
     struct mydev *dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
 
-    /* Initialize timer (does not start it) */
-    hrtimer_init(&dev->poll_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    dev->poll_timer.function = mydev_timer_cb;
+    /* Initialize timer and set callback function */
+    hrtimer_setup(&dev->poll_timer, mydev_timer_cb, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 
     /* Start: fire 10ms from now */
     hrtimer_start(&dev->poll_timer, ms_to_ktime(10), HRTIMER_MODE_REL);
@@ -230,8 +230,33 @@ cat /sys/kernel/tracing/trace_pipe
 
 ## Further reading
 
-- [Timekeeping](timekeeping.md) — clocksources, NTP, vDSO
-- [POSIX timers](posix-timers.md) — user-facing timer APIs
-- [Interrupts: Timers](../interrupts/timers.md) — timer_list wheel and workqueue timers
-- [Scheduler: EEVDF](../sched/eevdf.md) — scheduler tick via hrtimer
-- `kernel/time/hrtimer.c` — hrtimer implementation
+### Kernel source
+
+- [include/linux/hrtimer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer.h) — public hrtimer API: `hrtimer_setup()`, `hrtimer_start()`, `hrtimer_cancel()`, and `hrtimer_forward_now()`
+- [include/linux/hrtimer_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer_types.h) — definitions of `struct hrtimer`, `struct hrtimer_cpu_base`, and the `HRTIMER_MODE_*` flags
+- [kernel/time/hrtimer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/hrtimer.c) — high-resolution timer queue management, `hrtimer_switch_to_hres()`, and red-black tree expiry processing
+- [kernel/time/tick-sched.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/tick-sched.c) — scheduler tick emulation via `sched_timer` hrtimer and NOHZ idle/full tick suppression
+- [kernel/time/timerqueue.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timerqueue.c) — augmented red-black tree operations (`timerqueue_add()`, `timerqueue_del()`) keeping the earliest timer cached
+
+### Man pages
+
+- [`nanosleep(2)`](https://man7.org/linux/man-pages/man2/nanosleep.2.html) — high-resolution sleep syscall implemented on top of kernel hrtimers
+- [`clock_nanosleep(2)`](https://man7.org/linux/man-pages/man2/clock_nanosleep.2.html) — clock-selectable sleep supporting `TIMER_ABSTIME` and timer slack coalescing
+- [`prctl(2)`](https://man7.org/linux/man-pages/man2/prctl.2.html) — `PR_SET_TIMERSLACK` and `PR_GET_TIMERSLACK` for configuring per-thread timer coalescing slack
+
+### Related pages
+
+- [Timekeeping and Clocksources](timekeeping.md) — timekeeping architecture, clock IDs, and time offset conversions
+- [POSIX Timers and timerfd](posix-timers.md) — user-space timer APIs (`timer_create()`, `timerfd`) backed by kernel hrtimers
+- [The Timer Wheel](timer-wheel.md) — low-resolution `timer_list` wheel comparison and selection guide
+- [EEVDF Scheduler](../sched/eevdf.md) — CPU scheduler tick driven by an hrtimer in high-resolution mode
+
+### LWN articles
+
+- [High-resolution timers](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the design and integration of Thomas Gleixner's hrtimer subsystem
+- [hrtimers and softirq context](https://lwn.net/Articles/681763/) — Jonathan Corbet, March 2016: splitting hardirq vs softirq timer expiry handling for low-latency RT safety
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — core API documentation for the kernel timekeeping and timer infrastructure
+- [High-resolution timers subsystem](https://docs.kernel.org/timers/hrtimers.html) — design documentation and architecture of high-resolution timer queues

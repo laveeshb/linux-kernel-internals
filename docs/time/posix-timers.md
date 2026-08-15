@@ -163,35 +163,45 @@ timerfd_settime(tfd, TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET, &its, NULL);
 ### POSIX timers in the kernel
 
 ```c
-/* kernel/time/posix-timers.c */
+/* include/linux/posix-timers.h */
 struct k_itimer {
-    struct list_head    list;       /* per-process list */
-    struct hlist_node   t_hash;     /* hash table node */
-    spinlock_t          it_lock;
-
-    const struct k_clock *kclock;   /* clock operations */
-    clockid_t            it_clock;
-    timer_t              it_id;
-
-    int                  it_overrun;     /* missed expirations */
-    int                  it_overrun_last;
-
-    int                  it_requeue_pending;
-    int                  it_sigev_notify;
-    ktime_t              it_interval;   /* reload interval */
+    /* 1st cacheline contains read-mostly fields */
+    struct hlist_node   t_hash;
+    struct hlist_node   list;
+    timer_t             it_id;
+    clockid_t           it_clock;
+    int                 it_sigev_notify;
+    enum pid_type       it_pid_type;
     struct signal_struct *it_signal;
+    const struct k_clock *kclock;
+
+    /* 2nd cacheline and above contain fields modified regularly */
+    spinlock_t          it_lock;
+    int                 it_status;
+    bool                it_sig_periodic;
+    s64                 it_overrun;     /* missed expirations */
+    s64                 it_overrun_last;
+    unsigned int        it_signal_seq;
+    unsigned int        it_sigqueue_seq;
+    ktime_t             it_interval;    /* reload interval */
+    struct hlist_node   ignored_list;
     union {
         struct pid         *it_pid;
         struct task_struct *it_process;
     };
-    struct sigqueue      *sigq;         /* pre-allocated signal */
+    struct sigqueue     sigq;           /* pre-allocated signal */
+    rcuref_t            rcuref;
 
     union {
         struct {
-            struct hrtimer  timer;   /* hrtimer backing this POSIX timer */
+            struct hrtimer  timer;      /* hrtimer backing this POSIX timer */
         } real;
-        struct cpu_timer_list   cpu;  /* CPU time timers */
+        struct cpu_timer    cpu;        /* CPU time timers */
+        struct {
+            struct alarm    alarmtimer;
+        } alarm;
     } it;
+    struct rcu_head     rcu;
 };
 ```
 
@@ -290,8 +300,34 @@ echo 1 > /sys/kernel/tracing/events/syscalls/sys_enter_timer_settime/enable
 
 ## Further reading
 
-- [hrtimers](hrtimers.md) — kernel timer implementation backing POSIX timers
-- [Timekeeping](timekeeping.md) — clock IDs and their semantics
-- [IPC: Signals](../ipc/signals.md) — signal delivery for `SIGEV_SIGNAL` timers
-- [io_uring: Operations](../io-uring/io-uring-ops.md) — `IORING_OP_TIMEOUT` for ring-based timers
-- `man 2 timerfd_create`, `man 2 clock_nanosleep`, `man 7 time`
+### Kernel source
+
+- [include/linux/posix-timers.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/posix-timers.h) — definition of `struct k_itimer`, `struct k_clock` operations table, and reference counting helpers
+- [kernel/time/posix-timers.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/posix-timers.c) — `timer_create()`, `timer_settime()`, `timer_delete()`, and overrun calculation
+- [kernel/time/posix-cpu-timers.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/posix-cpu-timers.c) — per-process and per-thread CPU time clock handlers (`CLOCK_PROCESS_CPUTIME_ID`, `CLOCK_THREAD_CPUTIME_ID`)
+- [fs/timerfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/timerfd.c) — file descriptor timer implementation (`timerfd_create()`, `timerfd_settime()`, `timerfd_read()`), epoll polling integration, and cancel-on-set logic
+
+### Man pages
+
+- [`timer_create(2)`](https://man7.org/linux/man-pages/man2/timer_create.2.html) — create a POSIX per-process timer with signal or thread notification
+- [`timer_settime(2)`](https://man7.org/linux/man-pages/man2/timer_settime.2.html) — arm, disarm, and inspect POSIX per-process timer intervals
+- [`timer_getoverrun(2)`](https://man7.org/linux/man-pages/man2/timer_getoverrun.2.html) — retrieve missed expiration counts for periodic POSIX timers
+- [`timer_delete(2)`](https://man7.org/linux/man-pages/man2/timer_delete.2.html) — delete a POSIX per-process timer and reclaim its ID
+- [`timerfd_create(2)`](https://man7.org/linux/man-pages/man2/timerfd_create.2.html) — timers that notify via file descriptor events selectable by epoll/poll/select
+- [`clock_nanosleep(2)`](https://man7.org/linux/man-pages/man2/clock_nanosleep.2.html) — high-resolution sleep with clock specification and absolute wake deadlines
+
+### Related pages
+
+- [High-Resolution Timers (hrtimers)](hrtimers.md) — the nanosecond-resolution timer subsystem underlying POSIX timers and timerfd
+- [Timekeeping and Clocksources](timekeeping.md) — POSIX clock IDs (`CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `CLOCK_BOOTTIME`, `CLOCK_TAI`)
+- [Signals and Signal Handling](../ipc/signals.md) — queueing and dispatching real-time signals via `struct sigqueue`
+- [io_uring Operations](../io-uring/io-uring-ops.md) — ring-based asynchronous timeouts via `IORING_OP_TIMEOUT`
+
+### LWN articles
+
+- [timerfd: system call for timers](https://lwn.net/Articles/242255/) — Jonathan Corbet, July 2007: the design and API of `timerfd_create()`
+- [Reworking POSIX CPU timers](https://lwn.net/Articles/971271/) — Jonathan Corbet, April 2024: locking refactors and performance improvements in `posix-cpu-timers.c`
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — kernel documentation covering POSIX clocks and timers

@@ -202,3 +202,37 @@ The full family of macros in `include/linux/jiffies.h`:
 | `time_in_range(a, b, c)` | `a` is within `[b, c]` |
 
 On 64-bit kernels, `jiffies` is a 64-bit value and `jiffies_64` provides the full 64-bit counter directly. Overflow takes hundreds of millions of years, making it a non-issue — but the wraparound-safe macros remain correct and should be used regardless for clarity and portability.
+
+## Further reading
+
+### Kernel source
+
+- [kernel/time/clocksource.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/clocksource.c) — `clocksource_watchdog()` stability verification, `CLOCK_SOURCE_UNSTABLE` marking, and retry threshold logic
+- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — `second_overflow()` and leap-second state transitions, preventing timer rearm loops
+- [kernel/time/timer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer.c) — `del_timer_sync()` and `timer_shutdown_sync()` implementation preventing concurrent execution and re-arming races
+- [include/linux/jiffies.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/jiffies.h) — `time_after()`, `time_before()`, and wraparound-safe arithmetic
+- [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — `tsc_init()`, invariant TSC CPUID validation, and `mark_tsc_unstable()`
+- [arch/x86/kernel/kvmclock.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/kvmclock.c) — paravirtualized `kvm-clock` clocksource integration for guest timekeeping
+
+### Man pages
+
+- [`clock_gettime(2)`](https://man7.org/linux/man-pages/man2/clock_gettime.2.html) — monotonic and realtime clock querying semantics
+- [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — leap second insertion flags (`STA_INS`, `STA_DEL`) and status reporting
+
+### Related pages
+
+- [Clocksource and Clockevent Drivers](clocksource.md) — hardware clocksources, watchdog verification, and rating hierarchy
+- [Timekeeping and Clocksources](timekeeping.md) — timekeeping architecture, leap seconds, and vDSO fast paths
+- [The Timer Wheel](timer-wheel.md) — timer lifecycle, `del_timer_sync()`, and jiffies arithmetic
+- [NTP and Clock Discipline](ntp.md) — PLL synchronization, leap seconds, and chrony/ntpd smearing
+
+### LWN articles
+
+- [The leap second bug](https://lwn.net/Articles/504658/) — Jonathan Corbet, July 2012: in-depth postmortem of the 2012 leap second hrtimer livelock
+- [Preventing clocksource watchdog false positives](https://lwn.net/Articles/858829/) — Jonathan Corbet, June 2021: fixing watchdog false alarms under high virtualization load
+- [A new timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: redesigning the timer wheel and improving timer cancellation guarantees
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — core kernel documentation for timekeeping and timer subsystems
+- [The kernel's command-line parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) — `tsc=reliable`, `clocksource=`, and `no_hpet` parameter reference

@@ -136,17 +136,22 @@ Linux 4.8 replaced the old five-level cascade wheel with a hierarchical wheel de
 struct timer_base {
     raw_spinlock_t      lock;
     struct timer_list  *running_timer;   /* callback executing now */
+#ifdef CONFIG_PREEMPT_RT
+    spinlock_t          expiry_lock;
+    atomic_t            timer_waiters;
+#endif
     unsigned long       clk;            /* last processed jiffies value */
     unsigned long       next_expiry;    /* earliest pending expiry */
     unsigned int        cpu;
+    bool                next_expiry_recalc;
     bool                is_idle;
     bool                timers_pending;
     DECLARE_BITMAP(pending_map, WHEEL_SIZE);
     struct hlist_head   vectors[WHEEL_SIZE]; /* the buckets */
-};
+} ____cacheline_aligned;
 ```
 
-Each CPU has two `timer_base` instances: one for standard timers and one for deferrable timers (`TIMER_DEFERRABLE`).
+On SMP systems with `CONFIG_NO_HZ_COMMON`, each CPU has three `timer_base` instances (`NR_BASES = 3`): `BASE_LOCAL` (for pinned timers), `BASE_GLOBAL` (for non-pinned / migratable timers), and `BASE_DEF` (for deferrable timers).
 
 ### Wheel geometry
 
@@ -179,7 +184,7 @@ Total wheel capacity: 576 buckets (9 × 64) for HZ=250. The `pending_map` bitmap
 static void __run_timers(struct timer_base *base);
 ```
 
-Called indirectly from `run_timer_softirq()` (the TIMER_SOFTIRQ handler) via the call chain `run_timer_softirq()` → `run_timer_base()` → `__run_timer_base()` → `__run_timers()` on each tick. It advances `base->clk` to the current jiffies value, identifies all buckets that have become due, and executes their callbacks. Expired timers in higher-level buckets are redistributed into lower-level buckets as the wheel advances — this is the "cascade" step, but it is amortized across ticks rather than happening all at once.
+Called indirectly from `run_timer_softirq()` (the TIMER_SOFTIRQ handler) via the call chain `run_timer_softirq()` → `run_timer_base()` → `__run_timer_base()` → `__run_timers()` on each tick. It advances `base->clk` to the current jiffies value, identifies all buckets that have become due, and executes their callbacks. On SMP systems with `CONFIG_NO_HZ_COMMON`, `run_timer_softirq()` runs `BASE_LOCAL`, `BASE_GLOBAL`, and `BASE_DEF`, and invokes `tmigr_handle_remote()` when the timer migration hierarchy is active.
 
 The softirq is raised by the tick interrupt handler. On a NOHZ (tickless) system, the tick may be skipped entirely when the CPU is idle, and `__run_timers()` catches up when the CPU wakes.
 
@@ -189,7 +194,7 @@ The softirq is raised by the tick interrupt handler. On a NOHZ (tickless) system
 timer_setup(&my_timer, my_callback, TIMER_DEFERRABLE);
 ```
 
-A deferrable timer is stored in the second `timer_base` (the deferrable base). These timers expire only when the CPU is already running — they do not wake an idle CPU. If the CPU remains idle past the expiry time, the timer fires when the CPU next wakes for any reason.
+A deferrable timer is stored in `BASE_DEF` (the deferrable base). These timers expire only when the CPU is already running — they do not wake an idle CPU. If the CPU remains idle past the expiry time, the timer fires when the CPU next wakes for any reason.
 
 Use deferrable timers for periodic maintenance work that is not time-critical (e.g., statistics gathering, buffer flushing). Using them reduces unnecessary wakeups and improves power efficiency on NOHZ systems.
 
@@ -267,3 +272,34 @@ This handles unsigned wraparound correctly by interpreting the result of the uns
 ### Sleeping in a timer callback
 
 Timer callbacks run in softirq context. They must not sleep, call `schedule()`, or acquire any lock that could sleep (e.g., a mutex). Use `schedule_delayed_work()` if the deferred action needs to sleep.
+
+## Further reading
+
+### Kernel source
+
+- [include/linux/timer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timer.h) — public `struct timer_list` API: `timer_setup()`, `add_timer()`, `mod_timer()`, `timer_reduce()`, `del_timer_sync()`, and `timer_shutdown_sync()`
+- [include/linux/jiffies.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/jiffies.h) — `jiffies` counter, time conversion helpers (`msecs_to_jiffies()`), and wraparound-safe comparison macros (`time_after()`, `time_before()`)
+- [kernel/time/timer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer.c) — hierarchical timer wheel implementation, `__run_timers()`, level and bucket calculation, and softirq execution
+- [kernel/time/timer_migration.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer_migration.c) — hierarchical timer pull migration (`tmigr_handle_remote()`) managing global timers across idle CPU clusters
+
+### Man pages
+
+- [`time(7)`](https://man7.org/linux/man-pages/man7/time.7.html) — overview of time concepts, jiffies, and kernel timer granularities
+
+### Related pages
+
+- [High-Resolution Timers (hrtimers)](hrtimers.md) — nanosecond-precision rbtree timers vs coarse timer wheel comparison
+- [Clocksource and Clockevent Drivers](clocksource.md) — hardware tick generation and clockevent interrupt handling
+- [Time Subsystem War Stories](war-stories.md) — real-world teardown use-after-free races and 32-bit jiffies overflow bugs
+- [Workqueues: Concurrency-Managed Workqueues](../interrupts/workqueues.md) — `delayed_work` mechanisms combining timer wheels with process-context workqueues
+
+### LWN articles
+
+- [A new timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: Thomas Gleixner's redesign replacing the cascade wheel with the hierarchical non-cascading wheel
+- [Hierarchical timer pull migration](https://lwn.net/Articles/918705/) — Jonathan Corbet, January 2023: Anna-Maria Behnsen's pull-based timer migration hierarchy across idle CPUs
+- [Timer migration rework](https://lwn.net/Articles/935515/) — Jonathan Corbet, June 2023: splitting pinned (`BASE_LOCAL`) and migratable (`BASE_GLOBAL`) timer bases for power and latency optimization
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — official kernel guide to timer systems and timekeeping
+- [Timers and Dynamic Ticks](https://docs.kernel.org/timers/timers-howto.html) — guidelines on choosing between hrtimers, delayed work, and standard timer wheels
