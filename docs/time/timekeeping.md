@@ -26,7 +26,7 @@ struct clocksource {
     u32             maxadj;        /* max adjustment to mult */
     u64             max_cycles;    /* max counter delta before overflow */
     const char     *name;
-    int             rating;        /* quality: 1=bad, 100=good, 300=desired (TSC) */
+    int             rating;        /* quality: 400-499 perfect, 300-399 desired, 200-299 good, 100-199 base, 1-99 unfit */
     /* ... */
 };
 
@@ -240,27 +240,24 @@ static void ntp_update_frequency(struct ntp_data *ntpdata)
 static __always_inline int
 do_hres(const struct vdso_time_data *vd, const struct vdso_clock *vc, clockid_t clk, struct __kernel_timespec *ts)
 {
-    const struct vdso_timestamp *vdso_ts = &vd->basetime[clk];
-    u64 cycles, last, sec, ns;
+    u64 sec, ns;
     u32 seq;
 
+    /* Allows to compile the high resolution parts out */
+    if (!__arch_vdso_hres_capable())
+        return false;
+
     do {
-        /* Seqlock: read until consistent (no concurrent writer) */
-        seq = vdso_read_begin(vd);
+        if (vdso_read_begin_timens(vc, &seq))
+            return do_hres_timens(vd, vc, clk, ts);
 
-        /* Read hardware counter (userspace RDTSC or CNTVCT_EL0 on ARM) */
-        cycles = vdso_read_counter(vd);
+        if (!vdso_get_timestamp(vd, vc, clk, &sec, &ns))
+            return false;
+    } while (vdso_read_retry(vc, seq));
 
-        /* cycles_since_last * mult >> shift = nanoseconds delta */
-        ns  = vdso_ts->nsec;
-        last = vd->cycle_last;
-        ns += clocksource_delta(cycles, last, vd->mask) * vd->mult >> vd->shift;
-        sec = vdso_ts->sec;
-    } while (vdso_read_retry(vd, seq));
+    vdso_set_timespec(ts, sec, ns);
 
-    ts->tv_sec  = sec;
-    ts->tv_nsec = ns;
-    return 0;
+    return true;
 }
 ```
 

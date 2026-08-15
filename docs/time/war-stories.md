@@ -15,7 +15,7 @@ Modern Intel and AMD CPUs expose the **Invariant TSC** feature: `CPUID` leaf `0x
 - Is synchronized across all cores in the package.
 - Is synchronized across all sockets on Intel platforms using RESET synchronization.
 
-The kernel checks for this flag during boot (`tsc_init()`) and sets `X86_FEATURE_TSC_RELIABLE` when present, allowing the TSC to be used safely as the primary clocksource even on multi-socket systems.
+Even when the invariant TSC feature is detected, the kernel still requires a watchdog and keeps `CLOCK_SOURCE_MUST_VERIFY` set on the TSC. The `X86_FEATURE_TSC_RELIABLE` flag is only set on specific platforms (like Intel Goldmont SoCs) to completely bypass verification.
 
 ```bash
 # Check for invariant TSC
@@ -61,7 +61,7 @@ This incident led to widespread adoption of `CLOCK_TAI` for applications that ne
 A production Kubernetes cluster on KVM hypervisors started showing erratic `clock_gettime()` behavior. Processes observed `CLOCK_MONOTONIC` advancing far too slowly — with a resolution of 1 millisecond instead of the expected 1 nanosecond. `dmesg` on affected guest VMs showed:
 
 ```
-clocksource: timekeeping watchdog on CPU 0: Marking clocksource hpet unstable due to frequency skew
+clocksource: timekeeping watchdog on CPU 0: Marking clocksource tsc unstable due to frequency skew
 clocksource: Switched to clocksource jiffies
 ```
 
@@ -228,8 +228,8 @@ On 64-bit kernels, `jiffies` is a 64-bit value and `jiffies_64` provides the ful
 
 ### LWN articles
 
-- [The leap second bug](https://lwn.net/Articles/504658/) — Jonathan Corbet, July 2012: in-depth postmortem of the 2012 leap second hrtimer livelock
-- [The trouble with the TSC](https://lwn.net/Articles/388188/) — Jonathan Corbet, May 2010: invariant TSC guarantees, frequency scaling drift, and watchdog verification
+- [The leap second bug](https://lwn.net/Articles/504657/) — Jonathan Corbet, July 2012: in-depth postmortem of the 2012 leap second hrtimer livelock
+- [The trouble with the TSC](https://lwn.net/Articles/388188/) — Jake Edge, May 2010: invariant TSC guarantees, frequency scaling drift, and watchdog verification
 - [Reinventing the timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: redesigning the timer wheel and improving timer cancellation guarantees
 
 ### External

@@ -12,7 +12,7 @@ The Linux kernel implements this through a control loop in `kernel/time/ntp.c`, 
 
 The kernel supports two adjustment strategies:
 
-**Phase-locked loop (PLL)** — The daemon measures the offset between local time and the reference, then asks the kernel to make small, continuous frequency adjustments to steer the clock toward zero offset. The correction is proportional to the measured offset. PLL is used when the offset is small (typically less than 128 ms). This is the steady-state mode for a well-synchronized clock.
+**Phase-locked loop (PLL)** — The daemon measures the offset between local time and the reference, then asks the kernel to make small, continuous frequency adjustments to steer the clock toward zero offset. The correction is proportional to the measured offset. PLL is used when the offset is bounded by the `MAXPHASE` phase clamp of 500 ms. This is the steady-state mode for a well-synchronized clock.
 
 **Frequency-locked loop (FLL)** — Used when the offset is large or when the clock has not been synchronized for a long time. The kernel adjusts frequency more aggressively based on the rate at which the offset is changing rather than the offset itself. FLL mode is signaled by the `STA_FLL` status flag.
 
@@ -153,7 +153,7 @@ adjtimex(&txc);
 
 ## The 11-minute mode (RTC sync)
 
-When the clock is synchronized (`STA_UNSYNC` is clear and `STA_PLL` is set), the kernel periodically writes the current time to the hardware RTC every 11 minutes. This is implemented in `sync_hw_clock()` (called from a work queue) and ensures that the RTC — which has no NTP correction — stays close to UTC across reboots. The function was renamed from `sync_cmos_clock()` to `sync_hw_clock()` to reflect that it supports modern RTC class devices as well as legacy CMOS/RTC hardware.
+When the clock is synchronized (`STA_UNSYNC` is clear), the kernel periodically writes the current time to the hardware RTC every 11 minutes. This is implemented in `sync_hw_clock()` (called from a work queue) and ensures that the RTC — which has no NTP correction — stays close to UTC across reboots. The function was renamed from `sync_cmos_clock()` to `sync_hw_clock()` to reflect that it supports modern RTC class devices as well as legacy CMOS/RTC hardware.
 
 The 11-minute interval is hardcoded and not configurable. The write is skipped if the system is a virtual machine without a real CMOS clock.
 
@@ -224,7 +224,7 @@ The `STA_UNSYNC` bit being clear (zero) indicates the kernel considers the clock
 
 ### LWN articles
 
-- [A new NTP API](https://lwn.net/Articles/449302/) — Jonathan Corbet, March 2011: the addition of `clock_adjtime()` for per-clock adjustments
+- [A new NTP API](https://lwn.net/Articles/433722/) — John Stultz, March 2011: the addition of `clock_adjtime()` for per-clock adjustments
 - [The leap second bug](https://lwn.net/Articles/504657/) — Jonathan Corbet, July 2012: analysis of the 2012 kernel leap-second livelock and resolution
 
 ### External

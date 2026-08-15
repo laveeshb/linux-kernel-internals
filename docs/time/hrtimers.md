@@ -16,7 +16,7 @@ The classic wheel is O(1) but coarse. hrtimers use a sorted red-black tree; the 
 ## struct hrtimer
 
 ```c
-/* include/linux/hrtimer.h */
+/* include/linux/hrtimer_types.h */
 struct hrtimer {
     struct timerqueue_linked_node node;
     struct hrtimer_clock_base   *base;
@@ -121,14 +121,19 @@ On boot, the kernel operates in **low-resolution mode** where timer interrupts f
 /* kernel/time/hrtimer.c */
 static void hrtimer_switch_to_hres(void)
 {
+    struct hrtimer_cpu_base *base = this_cpu_ptr(&hrtimer_bases);
+
     if (tick_init_highres()) {
-        pr_warn("Could not switch to high resolution mode on CPU %d\n",
-                smp_processor_id());
+        pr_warn("Could not switch to high resolution mode on CPU %u\n", base->cpu);
         return;
     }
-    /* Reprogram clockevent to fire at exact timer expiry */
-    __hrtimer_run_queues(base, now, flags, HRTIMER_ACTIVE_HARD);
-    tick_setup_sched_timer(bool hrtimer);
+    base->hres_active = true;
+    hrtimer_resolution = HIGH_RES_NSEC;
+
+    tick_setup_sched_timer(true);
+    /* "Retrigger" the interrupt to get things going */
+    retrigger_next_event(NULL);
+    hrtimer_schedule_hres_work();
 }
 ```
 
@@ -179,7 +184,7 @@ prctl(PR_SET_TIMERSLACK, 50000 /* ns */);
 hrtimer_sleeper_start_expires(&t, HRTIMER_MODE_ABS | HRTIMER_MODE_SOFT);
 ```
 
-The default slack is `CONFIG_HZ`-dependent (typically ~50µs). Setting slack=0 disables coalescing — useful for real-time tasks that need precise wakeup.
+The default slack is a fixed constant (`.timer_slack_ns = 50000` in `init/init_task.c`), equating to 50µs. Setting slack=0 disables coalescing — useful for real-time tasks that need precise wakeup.
 
 ```bash
 # View timer slack for a process
@@ -244,7 +249,7 @@ cat /sys/kernel/tracing/trace_pipe
 ### LWN articles
 
 - [High-resolution timers](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the design and integration of Thomas Gleixner's hrtimer subsystem
-- [hrtimers and softirq context](https://lwn.net/Articles/732536/) — Anna-Maria Gleixner, Aug 31, 2017: splitting hardirq vs softirq timer expiry handling for low-latency RT safety
+- [hrtimer: Provide softirq context hrtimers](https://lwn.net/Articles/732536/) — Anna-Maria Gleixner, Aug 31, 2017: splitting hardirq vs softirq timer expiry handling for low-latency RT safety
 
 ### External
 

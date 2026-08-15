@@ -39,7 +39,7 @@ struct clocksource {
     const char      *name;
     struct list_head list;
     u32             freq_khz;
-    int             rating;        /* quality: 400-499 perfect, 200-299 good, 100=basic */
+    int             rating;        /* quality: 400-499 perfect, 300-399 desired, 200-299 good, 100-199 base, 1-99 unfit */
     enum clocksource_ids id;
     enum vdso_clock_mode vdso_clock_mode;
     unsigned long   flags;
@@ -336,8 +336,7 @@ interval:s:1 {
 
 ### LWN articles
 
-- [High-resolution timers and dynamic ticks](https://lwn.net/Articles/209101/) — Jonathan Corbet, November 2006: the architectural introduction of the clocksource and clockevent abstractions
-- [Preventing clocksource watchdog false positives](https://lwn.net/Articles/858829/) — Jonathan Corbet, June 2021: improving clocksource watchdog reliability under high virtualization and bus load
+- [Counting on the time stamp counter](https://lwn.net/Articles/209101/) — Jonathan Corbet, November 2006: the architectural introduction of the clocksource and clockevent abstractions
 
 ### External
 

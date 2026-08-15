@@ -176,7 +176,7 @@ nsenter --time=/proc/<pid>/ns/time -- \
 ### LWN articles
 
 - [Time namespaces](https://lwn.net/Articles/766089/) — Jonathan Corbet, September 2018: containerized clock offsets for CRIU checkpoint/restore and virtualization
-- [The 5.6 merge window begins](https://lwn.net/Articles/810780/) — Jonathan Corbet, February 2020: official merging of time namespaces (`CLONE_NEWTIME`) into mainline Linux
+- [The 5.6 merge window opens](https://lwn.net/Articles/810780/) — Jonathan Corbet, January 30, 2020: official merging of time namespaces (`CLONE_NEWTIME`) into mainline Linux
 
 ### External
 
