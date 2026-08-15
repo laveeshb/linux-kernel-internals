@@ -8,14 +8,14 @@ Early x86 NUMA systems (pre-Nehalem era) had a fundamental problem: each socket 
 
 The consequence: a task scheduled on socket 0 could read `CLOCK_MONOTONIC` via the vDSO (which reads the TSC), be migrated by the scheduler to socket 1, and then read a *smaller* TSC value. `clock_gettime(CLOCK_MONOTONIC)` would appear to go backwards. Applications that assumed monotonic time was actually monotonic — a reasonable assumption given the name — would misbehave.
 
-The kernel's fix is the **clocksource watchdog** (`kernel/time/clocksource.c`, `clocksource_watchdog()`). A periodic timer compares TSC readings against a reference clocksource (HPET or ACPI PM timer). If the TSC and the reference diverge by more than a threshold, the TSC is marked `CLOCK_SOURCE_UNSTABLE` and the kernel downgrades to the next-best clocksource (typically HPET, with a rating of 250 vs TSC's 300–400).
+The kernel's fix is the **clocksource watchdog** (`kernel/time/clocksource.c`, `clocksource_watchdog()`). A periodic timer compares TSC readings against a reference clocksource (HPET or ACPI PM timer). If the TSC and the reference diverge by more than a threshold, the TSC is marked `CLOCK_SOURCE_UNSTABLE` and the kernel downgrades to the next-best clocksource (typically HPET, with a rating of 250 vs TSC's fixed rating of 300).
 
 Modern Intel and AMD CPUs expose the **Invariant TSC** feature: `CPUID` leaf `0x80000007`, EDX bit 8 (`TSC_INVARIANT`). An invariant TSC:
 - Runs at a constant rate regardless of CPU frequency scaling (P-states) and power states (C-states up to C1).
 - Is synchronized across all cores in the package.
 - Is synchronized across all sockets on Intel platforms using RESET synchronization.
 
-The kernel checks for this flag during boot (`tsc_init()`) and sets `TSC_RELIABLE` when present, allowing the TSC to be used safely as the primary clocksource even on multi-socket systems.
+Even when the invariant TSC feature is detected, the kernel still requires a watchdog and keeps `CLOCK_SOURCE_MUST_VERIFY` set on the TSC. The `X86_FEATURE_TSC_RELIABLE` flag is only set on specific platforms (like Intel Goldmont SoCs) to completely bypass verification.
 
 ```bash
 # Check for invariant TSC
@@ -47,7 +47,7 @@ Here is what happened:
 
 The result: Reddit, Mozilla, LinkedIn, Qantas, and hundreds of other Linux-based services reported CPU spikes to 100% at exactly the same moment, worldwide.
 
-Root cause: the leap second handling corrupted the `HRTIMER_MODE_ABS` comparison logic, causing a spin condition. The kernel was subsequently patched with backports that corrected `hrtimer` behavior during leap second insertion.
+Root cause: the leap second handling hrtimers were never notified of the clock step via `clock_was_set()`, so `CLOCK_REALTIME`/`TIMER_ABSTIME` timers fired immediately in a continuous loop. The kernel was subsequently patched with backports that corrected `hrtimer` behavior during leap second insertion.
 
 **Workarounds used at the time:**
 - Set the system clock slightly ahead before midnight so the leap second was absorbed as a normal tick, avoiding the confused state entirely.
@@ -61,7 +61,7 @@ This incident led to widespread adoption of `CLOCK_TAI` for applications that ne
 A production Kubernetes cluster on KVM hypervisors started showing erratic `clock_gettime()` behavior. Processes observed `CLOCK_MONOTONIC` advancing far too slowly — with a resolution of 1 millisecond instead of the expected 1 nanosecond. `dmesg` on affected guest VMs showed:
 
 ```
-clocksource: timekeeping watchdog on CPU 0: hpet read-back delay of 187ns, attempt 4, marking unstable
+clocksource: timekeeping watchdog on CPU 0: Marking clocksource tsc unstable due to frequency skew
 clocksource: Switched to clocksource jiffies
 ```
 
@@ -93,28 +93,28 @@ echo kvm-clock > /sys/devices/system/clocksource/clocksource0/current_clocksourc
 
 `kvm-clock` is the correct clocksource for KVM guests. It uses a shared memory page (the `pvclock` page) written by the hypervisor, and accounts for steal time — time during which the guest vCPU was not scheduled. The kernel uses it by default when running under KVM if the hypervisor exposes it.
 
-## del_timer vs del_timer_sync race
+## timer_delete vs timer_delete_sync race
 
-A network driver registered a timer to retransmit a packet if an acknowledgment did not arrive within a timeout. The timer callback read fields from the driver's `struct device_state`. During driver teardown, the cleanup function called `del_timer()` and then `kfree(state)`:
+A network driver registered a timer to retransmit a packet if an acknowledgment did not arrive within a timeout. The timer callback read fields from the driver's `struct device_state`. During driver teardown, the cleanup function called `timer_delete()` and then `kfree(state)`:
 
 ```c
 /* BUGGY teardown */
 static void driver_remove(struct platform_device *pdev)
 {
     struct device_state *state = platform_get_drvdata(pdev);
-    del_timer(&state->retransmit_timer);  /* BUG: does not wait */
+    timer_delete(&state->retransmit_timer);  /* BUG: does not wait */
     kfree(state);                          /* freed while callback may run */
 }
 ```
 
 The race:
 
-1. CPU 0: `del_timer()` is called. The timer is pending in the wheel. `del_timer()` removes it and returns 1 (was pending).
-2. CPU 1: The timer had already been dequeued by `__run_timers()` before CPU 0's `del_timer()` ran — the callback is now executing.
-3. CPU 0: `del_timer()` returns. `kfree(state)` is called. `state` is freed.
+1. CPU 0: `timer_delete()` is called. The timer is pending in the wheel. `timer_delete()` removes it and returns 1 (was pending).
+2. CPU 1: The timer had already been dequeued by `__run_timers()` before CPU 0's `timer_delete()` ran — the callback is now executing.
+3. CPU 0: `timer_delete()` returns. `kfree(state)` is called. `state` is freed.
 4. CPU 1: The timer callback continues executing and reads fields from the now-freed `state` — use-after-free.
 
-`del_timer()` removes the timer from the wheel but provides no guarantee that a currently-executing callback has finished. `del_timer_sync()` spins until the callback is not running on any CPU before returning.
+`timer_delete()` removes the timer from the wheel but provides no guarantee that a currently-executing callback has finished. `timer_delete_sync()` spins until the callback is not running on any CPU before returning.
 
 **Fix:**
 
@@ -123,7 +123,7 @@ The race:
 static void driver_remove(struct platform_device *pdev)
 {
     struct device_state *state = platform_get_drvdata(pdev);
-    del_timer_sync(&state->retransmit_timer);  /* waits for callback */
+    timer_delete_sync(&state->retransmit_timer);  /* waits for callback */
     kfree(state);                               /* safe */
 }
 ```
@@ -136,9 +136,9 @@ timer_shutdown_sync(&state->retransmit_timer);
 kfree(state);
 ```
 
-This prevents a re-arm race where the callback arms the timer again before `del_timer_sync()` returns — `timer_shutdown_sync()` marks the timer permanently inactive.
+This prevents a re-arm race where the callback arms the timer again before `timer_delete_sync()` returns — `timer_shutdown_sync()` marks the timer permanently inactive.
 
-LOCKDEP will warn about `del_timer_sync()` called from softirq context (it cannot sleep to wait). In that case, use `del_timer()` and defer the `kfree()` to a work queue, or use RCU to protect the data structure.
+LOCKDEP will warn about `timer_delete_sync()` called from softirq context (it cannot sleep to wait). In that case, use `timer_delete()` and defer the `kfree()` to a work queue, or use RCU to protect the data structure.
 
 ## The 32-bit jiffies wraparound
 
@@ -202,3 +202,37 @@ The full family of macros in `include/linux/jiffies.h`:
 | `time_in_range(a, b, c)` | `a` is within `[b, c]` |
 
 On 64-bit kernels, `jiffies` is a 64-bit value and `jiffies_64` provides the full 64-bit counter directly. Overflow takes hundreds of millions of years, making it a non-issue — but the wraparound-safe macros remain correct and should be used regardless for clarity and portability.
+
+## Further reading
+
+### Kernel source
+
+- [kernel/time/clocksource.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/clocksource.c) — `clocksource_watchdog()` stability verification, `CLOCK_SOURCE_UNSTABLE` marking, and retry threshold logic
+- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — `second_overflow()` and leap-second state transitions, preventing timer rearm loops
+- [kernel/time/timer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer.c) — `timer_delete_sync()` and `timer_shutdown_sync()` implementation preventing concurrent execution and re-arming races
+- [include/linux/jiffies.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/jiffies.h) — `time_after()`, `time_before()`, and wraparound-safe arithmetic
+- [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — `tsc_init()`, invariant TSC CPUID validation, and `mark_tsc_unstable()`
+- [arch/x86/kernel/kvmclock.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/kvmclock.c) — paravirtualized `kvm-clock` clocksource integration for guest timekeeping
+
+### Man pages
+
+- [`clock_gettime(2)`](https://man7.org/linux/man-pages/man2/clock_gettime.2.html) — monotonic and realtime clock querying semantics
+- [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — leap second insertion flags (`STA_INS`, `STA_DEL`) and status reporting
+
+### Related pages
+
+- [Clocksource and Clockevent Drivers](clocksource.md) — hardware clocksources, watchdog verification, and rating hierarchy
+- [Timekeeping and Clocksources](timekeeping.md) — timekeeping architecture, leap seconds, and vDSO fast paths
+- [The Timer Wheel](timer-wheel.md) — timer lifecycle, `timer_delete_sync()`, and jiffies arithmetic
+- [NTP and Clock Discipline](ntp.md) — PLL synchronization, leap seconds, and chrony/ntpd smearing
+
+### LWN articles
+
+- [The leap second bug](https://lwn.net/Articles/504657/) — Jonathan Corbet, July 2012: in-depth postmortem of the 2012 leap second hrtimer livelock
+- [The trouble with the TSC](https://lwn.net/Articles/388188/) — Jake Edge, May 2010: invariant TSC guarantees, frequency scaling drift, and watchdog verification
+- [Reinventing the timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: redesigning the timer wheel and improving timer cancellation guarantees
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — core kernel documentation for timekeeping and timer subsystems
+- [The kernel's command-line parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) — `tsc=reliable`, `clocksource=`, and `no_hpet` parameter reference

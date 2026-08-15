@@ -26,7 +26,7 @@ struct clocksource {
     u32             maxadj;        /* max adjustment to mult */
     u64             max_cycles;    /* max counter delta before overflow */
     const char     *name;
-    int             rating;        /* quality: 1=bad, 100=good, 400=ideal (TSC) */
+    int             rating;        /* quality: 400-499 perfect, 300-399 desired, 200-299 good, 100-199 base, 1-99 unfit */
     /* ... */
 };
 
@@ -52,41 +52,74 @@ The `mult` and `shift` fields avoid division in the hot path:
  * mult is computed so that:
  *   (10^9 * 2^shift) / frequency = mult
  */
-static inline u64 clocksource_cyc2ns(u64 cycles, u32 mult, u32 shift)
+static inline s64 clocksource_cyc2ns(u64 cycles, u32 mult, u32 shift)
 {
     return ((u64) cycles * mult) >> shift;
 }
 ```
 
-For a 3.6 GHz TSC: `mult ≈ 1175`, `shift = 22`. Each call to `clock_gettime` does one `rdtsc` + one multiply + one shift — no division, no lock.
+For a 3.6 GHz TSC: `mult ≈ 1165084`, `shift = 22`. Each call to `clock_gettime` does one `rdtsc` + one multiply + one shift — no division, no lock.
 
 ## struct timekeeper
 
 The timekeeper holds the current time state and is updated on every tick and NTP adjustment:
 
 ```c
-/* kernel/time/timekeeping.c */
+/* include/linux/timekeeper_internal.h */
 struct timekeeper {
-    struct tk_read_base  tkr_mono;   /* CLOCK_MONOTONIC */
-    struct tk_read_base  tkr_raw;    /* CLOCK_MONOTONIC_RAW (no NTP) */
+    /* Cacheline 0 (together with prepended seqcount of timekeeper core): */
+    struct tk_read_base    tkr_mono;
 
-    u64                  xtime_sec;    /* seconds component of wall time */
-    unsigned long        ktime_sec;    /* CLOCK_MONOTONIC seconds */
+    /* Cacheline 1: */
+    u64                    xtime_sec;
+    unsigned long          ktime_sec;
+    struct timespec64      wall_to_monotonic;
+    ktime_t                offs_real;
+    ktime_t                offs_boot;
+    union {
+        ktime_t            offs_tai;
+        ktime_t            offs_aux;
+    };
+    u32                    coarse_nsec;
+    enum timekeeper_ids    id;
 
-    struct timespec64    wall_to_monotonic; /* offset between REALTIME and MONOTONIC */
-    ktime_t              offs_real;    /* offset: monotonic → realtime */
-    ktime_t              offs_boot;    /* offset: monotonic → boottime (adds suspend time) */
-    ktime_t              offs_tai;     /* offset: monotonic → TAI */
+    /* Cacheline 2: */
+    struct tk_read_base    tkr_raw;
+    u64                    raw_sec;
 
-    s32                  tai_offset;   /* TAI - UTC (leap seconds) */
-    unsigned int         clock_was_set_seq; /* incremented on settimeofday */
+    /* Cachline 3 and 4 (timekeeping internal variables): */
+    enum clocksource_ids   cs_id;
+    u32                    cs_ns_to_cyc_mult;
+    u32                    cs_ns_to_cyc_shift;
+    u64                    cs_ns_to_cyc_maxns;
+    unsigned int           clock_was_set_seq;
+    u8                     cs_was_changed_seq;
+    u8                     clock_valid;
+
+    union {
+        struct timespec64  monotonic_to_boot;
+        struct timespec64  monotonic_to_aux;
+    };
+
+    u64                    cycle_interval;
+    u64                    xtime_interval;
+    s64                    xtime_remainder;
+    u64                    raw_interval;
+
+    ktime_t                next_leap_ktime;
+    u64                    ntp_tick;
+    s64                    ntp_error;
+    u32                    ntp_error_shift;
+    u32                    ntp_err_mult;
+    u32                    skip_second_overflow;
+    s32                    tai_offset;
 };
 
 struct tk_read_base {
     struct clocksource  *clock;
     u64                  mask;
     u64                  cycle_last;   /* last read counter value */
-    u64                  mult;         /* adjusted mult (NTP modifies this) */
+    u32                  mult;         /* adjusted mult (NTP modifies this) */
     u32                  shift;
     u64                  xtime_nsec;   /* accumulated nanoseconds (fractional) */
     ktime_t              base;         /* nanoseconds base */
@@ -178,15 +211,23 @@ This makes the counter-to-nanosecond conversion run slightly faster or slower wi
 
 ```c
 /* kernel/time/ntp.c */
-static void ntp_update_frequency(void)
+static void ntp_update_frequency(struct ntp_data *ntpdata)
 {
-    u64 second_length = (u64)(tick_usec * NSEC_PER_USEC * USER_HZ)
-                        << NTP_SCALE_SHIFT;
+    u64 second_length, new_base, tick_usec = (u64)ntpdata->tick_usec;
 
-    second_length += time_freq;   /* accumulated frequency correction */
+    second_length        = (u64)(tick_usec * NSEC_PER_USEC * USER_HZ) << NTP_SCALE_SHIFT;
 
-    /* Adjust clocksource mult to correct rate */
-    tick_length_base = second_length;
+    second_length       += ntpdata->ntp_tick_adj;
+    second_length       += ntpdata->time_freq;
+
+    new_base             = div_u64(second_length, NTP_INTERVAL_FREQ);
+
+    /*
+     * Don't wait for the next second_overflow, apply the change to the
+     * tick length immediately:
+     */
+    ntpdata->tick_length        += new_base - ntpdata->tick_length_base;
+    ntpdata->tick_length_base    = new_base;
 }
 ```
 
@@ -197,29 +238,26 @@ static void ntp_update_frequency(void)
 ```c
 /* lib/vdso/gettimeofday.c — runs in userspace without syscall */
 static __always_inline int
-do_hres(const struct vdso_data *vd, clockid_t clk, struct __kernel_timespec *ts)
+do_hres(const struct vdso_time_data *vd, const struct vdso_clock *vc, clockid_t clk, struct __kernel_timespec *ts)
 {
-    const struct vdso_timestamp *vdso_ts = &vd->basetime[clk];
-    u64 cycles, last, sec, ns;
+    u64 sec, ns;
     u32 seq;
 
+    /* Allows to compile the high resolution parts out */
+    if (!__arch_vdso_hres_capable())
+        return false;
+
     do {
-        /* Seqlock: read until consistent (no concurrent writer) */
-        seq = vdso_read_begin(vd);
+        if (vdso_read_begin_timens(vc, &seq))
+            return do_hres_timens(vd, vc, clk, ts);
 
-        /* Read hardware counter (userspace RDTSC or CNTVCT_EL0 on ARM) */
-        cycles = vdso_read_counter(vd);
+        if (!vdso_get_timestamp(vd, vc, clk, &sec, &ns))
+            return false;
+    } while (vdso_read_retry(vc, seq));
 
-        /* cycles_since_last * mult >> shift = nanoseconds delta */
-        ns  = vdso_ts->nsec;
-        last = vd->cycle_last;
-        ns += clocksource_delta(cycles, last, vd->mask) * vd->mult >> vd->shift;
-        sec = vdso_ts->sec;
-    } while (vdso_read_retry(vd, seq));
+    vdso_set_timespec(ts, sec, ns);
 
-    ts->tv_sec  = sec;
-    ts->tv_nsec = ns;
-    return 0;
+    return true;
 }
 ```
 
@@ -254,9 +292,34 @@ cat /proc/timer_list | head -50
 
 ## Further reading
 
-- [hrtimers](hrtimers.md) — high-resolution timer implementation
-- [POSIX timers](posix-timers.md) — timer_create, timerfd
-- [System Calls: entry path](../syscalls/syscall-entry.md) — vDSO seqlock implementation
-- [Scheduler: CFS](../sched/cfs.md) — scheduler tick drives timekeeping
-- `kernel/time/timekeeping.c` — timekeeper implementation
-- `arch/x86/kernel/tsc.c` — TSC clocksource
+### Kernel source
+
+- [include/linux/timekeeper_internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timekeeper_internal.h) — definitions of `struct timekeeper` and `struct tk_read_base` with cacheline alignment comments
+- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — timekeeping core: `ktime_get()`, `timekeeping_advance()`, `timekeeping_update()`, and leap-second processing
+- [kernel/time/timekeeping_internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping_internal.h) — internal timekeeping definitions, fast time getters, and vDSO updater prototypes
+- [lib/vdso/gettimeofday.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/vdso/gettimeofday.c) — architecture-generic vDSO clock reading loop (`do_hres()`, `do_coarse()`) using lockless seqlock reads
+- [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — x86 TSC calibration (`pit_calibrate_tsc()`, `native_calibrate_tsc()`) and stability testing
+
+### Man pages
+
+- [`clock_gettime(2)`](https://man7.org/linux/man-pages/man2/clock_gettime.2.html) — retrieving clock timestamps across supported clock domains
+- [`clock_settime(2)`](https://man7.org/linux/man-pages/man2/clock_settime.2.html) — setting `CLOCK_REALTIME` and triggering `clock_was_set()` notifications
+- [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — adjusting kernel clock parameters and retrieving synchronization status
+- [`time(7)`](https://man7.org/linux/man-pages/man7/time.7.html) — overview of time and timer APIs in Linux
+
+### Related pages
+
+- [Clocksource and Clockevent Drivers](clocksource.md) — hardware clocksource registration, rating, and cycle-to-ns conversion
+- [NTP and Clock Discipline](ntp.md) — PLL/FLL frequency corrections, leap-second insertion, and 11-minute RTC sync
+- [High-Resolution Timers (hrtimers)](hrtimers.md) — nanosecond-precision timer queues driven by timekeeper bases
+- [Time Namespaces](time-namespaces.md) — container-isolated `CLOCK_MONOTONIC` and `CLOCK_BOOTTIME` offsets
+- [vDSO Fast System Calls](../mm/vdso.md) — shared data pages and architecture of userspace vDSO acceleration
+
+### LWN articles
+
+- [Introduce CLOCK_REALTIME_COARSE](https://lwn.net/Articles/347811/) — John Stultz, August 2009: the introduction of CLOCK_REALTIME_COARSE and CLOCK_MONOTONIC_COARSE vDSO clocks
+- [The trouble with the TSC](https://lwn.net/Articles/388188/) — Jake Edge, May 2010: invariant TSC guarantees, frequency scaling drift, and hardware clock calibration
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — official kernel guide to the timekeeping subsystem and clock interfaces

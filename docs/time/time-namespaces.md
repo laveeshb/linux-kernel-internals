@@ -18,7 +18,7 @@ unshare(CLONE_NEWTIME);
 clone(child_fn, stack, CLONE_NEWTIME | SIGCHLD, NULL);
 ```
 
-`CLONE_NEWTIME` was introduced in Linux 5.6. It is unique among namespace types in one important way: **the offsets in `/proc/<pid>/timens_offsets` must be written before the process calls `exec()` in the new time namespace**. The namespace is sealed when the vDSO is mapped into the new namespace's process on `exec()` — `timens_on_fork()` sets up the per-namespace vvar page at that point. A process can call `clock_gettime()` after `unshare(CLONE_NEWTIME)` but before `exec()`: it will use the slow syscall path and the namespace offsets are still mutable. The sealing trigger is `exec()`, not the first clock read.
+`CLONE_NEWTIME` was introduced in Linux 5.6. It is unique among namespace types in one important way: **the offsets in `/proc/<pid>/timens_offsets` must be written before any process enters the new time namespace**. Calling `unshare(CLONE_NEWTIME)` creates a new time namespace for *future child processes* (`time_ns_for_children`), while the calling process itself remains in its original time namespace. When the first child process is forked or spawned, `timens_on_fork()` commits the namespace, sets up the per-namespace vvar page, and permanently sets `frozen_offsets = true`. Any attempt to write to `timens_offsets` after a process has entered the namespace fails with `-EACCES`.
 
 ## What is and is not namespaced
 
@@ -36,15 +36,17 @@ clone(child_fn, stack, CLONE_NEWTIME | SIGCHLD, NULL);
 ## struct time_namespace
 
 ```c
-/* kernel/time/namespace.c */
+/* include/linux/time_namespace.h */
 struct time_namespace {
     struct user_namespace   *user_ns;
     struct ucounts          *ucounts;
     struct ns_common         ns;
     struct timens_offsets    offsets;   /* the clock adjustments */
+#ifdef CONFIG_TIME_NS_VDSO
     struct page             *vvar_page; /* per-namespace vDSO data page */
-    bool                     frozen_offsets; /* true after exec() in the namespace */
-};
+#endif
+    bool                     frozen_offsets; /* true after any process joins the namespace */
+} __randomize_layout;
 ```
 
 The `offsets` field holds the addends applied to `CLOCK_MONOTONIC` and `CLOCK_BOOTTIME` reads:
@@ -68,7 +70,7 @@ This means `clock_gettime(CLOCK_MONOTONIC)` inside a container with a time names
 
 ## Setting offsets
 
-Offsets are configured by writing to `/proc/<pid>/timens_offsets` from outside the namespace, before the process uses the clock:
+Offsets are configured by writing to `/proc/<pid>/timens_offsets` from outside the namespace, before any child process enters the new namespace:
 
 ```
 # Format: <clock_name> <seconds> <nanoseconds>
@@ -79,18 +81,19 @@ boottime  <sec> <nsec>
 Example — give a container the illusion that it started 1000 seconds ago:
 
 ```bash
-# Fork a child that will use the new namespace
-unshare --time --fork bash &
-CHILD_PID=$!
+# Unshare time namespace for future children
+unshare --time bash -c '
+    # Parent writes offsets for its future children into its own timens_offsets
+    echo "monotonic 1000 0" > /proc/self/timens_offsets
+    echo "boottime 1000 0"  > /proc/self/timens_offsets
 
-# Set the offset BEFORE the child calls exec()
-echo "monotonic 1000 0" > /proc/$CHILD_PID/timens_offsets
-echo "boottime 1000 0"  > /proc/$CHILD_PID/timens_offsets
-
-# Now let the child exec its program — it sees CLOCK_MONOTONIC + 1000s
+    # Now fork a child into the new namespace
+    # timens_on_fork() will freeze offsets on fork
+    python3 -c "import time; print(time.monotonic())"
+'
 ```
 
-Once the child calls `exec()`, the per-namespace vvar page is mapped and the offsets are frozen. Further writes to `timens_offsets` after `exec()` return `EACCES`. A process may call `clock_gettime()` before `exec()` — it will use the slow syscall path and the offsets remain writable until `exec()` is called.
+Once any process enters the namespace (e.g. on `fork()` after `unshare(CLONE_NEWTIME)`), `timens_on_fork()` commits the namespace and freezes the offsets. Further writes to `timens_offsets` return `EACCES`.
 
 The offsets can be negative (the container sees time as earlier than the host's monotonic clock — useful for CRIU restore when the container was created before the host's monotonic baseline).
 
@@ -98,9 +101,9 @@ The offsets can be negative (the container sees time as earlier than the host's 
 
 CRIU (Checkpoint/Restore In Userspace) is the primary consumer of time namespaces. When CRIU restores a checkpoint:
 
-1. It forks the container process with `CLONE_NEWTIME`.
-2. Before the process calls `exec()`, CRIU writes the appropriate offsets to `timens_offsets`. The offsets encode the difference between the container's monotonic time at checkpoint and the host's current monotonic time.
-3. When the process executes (`exec()`), the per-namespace vvar page is mapped with the adjusted offsets baked in. The restored process sees a continuous `CLOCK_MONOTONIC` — the jump in wall time that occurred during suspension is hidden.
+1. The CRIU restore process calls `unshare(CLONE_NEWTIME)`.
+2. Before forking the target container process, CRIU writes the appropriate offsets to `/proc/self/timens_offsets`. The offsets encode the difference between the container's monotonic time at checkpoint and the host's current monotonic time.
+3. CRIU forks the target process into the new namespace (`timens_on_fork()` commits the offsets and maps the per-namespace VVAR page). The restored process sees a continuous `CLOCK_MONOTONIC` — the jump in wall time that occurred during suspension is hidden.
 
 Without time namespaces, any timer, timeout, or deadline the container computed against `CLOCK_MONOTONIC` before checkpoint would expire immediately or have a wildly wrong remaining duration after restore.
 
@@ -148,3 +151,33 @@ cat /proc/<pid>/timens_offsets
 nsenter --time=/proc/<pid>/ns/time -- \
     python3 -c "import time; print(time.monotonic())"
 ```
+
+## Further reading
+
+### Kernel source
+
+- [include/linux/time_namespace.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/time_namespace.h) — definition of `struct time_namespace`, `struct timens_offsets`, and the `timens_on_fork()` hook
+- [kernel/time/namespace.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/namespace.c) — time namespace lifecycle, `/proc/[pid]/timens_offsets` parsing, permission checking, and clock offset translation (`do_timens_ktime_to_host()`)
+- [kernel/time/namespace_vdso.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/namespace_vdso.c) — per-namespace VVAR page setup (`timens_setup_vdso_clock_data()`), VVAR page fault handling, and `timens_commit()`
+
+### Man pages
+
+- [`time_namespaces(7)`](https://man7.org/linux/man-pages/man7/time_namespaces.7.html) — overview of Linux time namespaces, `/proc/[pid]/timens_offsets` syntax, and offset freezing rules
+- [`unshare(2)`](https://man7.org/linux/man-pages/man2/unshare.2.html) — disassociating execution context and creating a new time namespace with `CLONE_NEWTIME`
+- [`setns(2)`](https://man7.org/linux/man-pages/man2/setns.2.html) — joining an existing time namespace via file descriptor
+- [`clock_gettime(2)`](https://man7.org/linux/man-pages/man2/clock_gettime.2.html) — reading `CLOCK_MONOTONIC` and `CLOCK_BOOTTIME` inside time namespaces
+
+### Related pages
+
+- [Timekeeping and Clocksources](timekeeping.md) — the baseline `CLOCK_MONOTONIC` and `CLOCK_BOOTTIME` mechanisms and vDSO data layout
+- [POSIX Timers and timerfd](posix-timers.md) — timerfd expiry adjustment inside time namespaces
+- [vDSO Fast System Calls](../mm/vdso.md) — kernel-to-user shared data pages and architecture of VVAR mappings
+
+### LWN articles
+
+- [Time namespaces](https://lwn.net/Articles/766089/) — Jonathan Corbet, September 2018: containerized clock offsets for CRIU checkpoint/restore and virtualization
+- [The 5.6 merge window opens](https://lwn.net/Articles/810780/) — Jonathan Corbet, January 30, 2020: official merging of time namespaces (`CLONE_NEWTIME`) into mainline Linux
+
+### External
+
+- [Namespaces in the Linux Kernel](https://docs.kernel.org/admin-guide/namespaces/index.html) — official kernel documentation covering namespaces and virtualization

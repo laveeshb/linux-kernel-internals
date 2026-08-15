@@ -12,7 +12,7 @@ The Linux kernel implements this through a control loop in `kernel/time/ntp.c`, 
 
 The kernel supports two adjustment strategies:
 
-**Phase-locked loop (PLL)** — The daemon measures the offset between local time and the reference, then asks the kernel to make small, continuous frequency adjustments to steer the clock toward zero offset. The correction is proportional to the measured offset. PLL is used when the offset is small (typically less than 128 ms). This is the steady-state mode for a well-synchronized clock.
+**Phase-locked loop (PLL)** — The daemon measures the offset between local time and the reference, then asks the kernel to make small, continuous frequency adjustments to steer the clock toward zero offset. The correction is proportional to the measured offset. PLL is used when the offset is bounded by the `MAXPHASE` phase clamp of 500 ms. This is the steady-state mode for a well-synchronized clock.
 
 **Frequency-locked loop (FLL)** — Used when the offset is large or when the clock has not been synchronized for a long time. The kernel adjusts frequency more aggressively based on the rate at which the offset is changing rather than the offset itself. FLL mode is signaled by the `STA_FLL` status flag.
 
@@ -153,7 +153,7 @@ adjtimex(&txc);
 
 ## The 11-minute mode (RTC sync)
 
-When the clock is synchronized (`STA_UNSYNC` is clear and `STA_PLL` is set), the kernel periodically writes the current time to the hardware RTC every 11 minutes. This is implemented in `sync_hw_clock()` (called from a work queue) and ensures that the RTC — which has no NTP correction — stays close to UTC across reboots. The function was renamed from `sync_cmos_clock()` to `sync_hw_clock()` to reflect that it supports modern RTC class devices as well as legacy CMOS/RTC hardware.
+When the clock is synchronized (`STA_UNSYNC` is clear), the kernel periodically writes the current time to the hardware RTC every 11 minutes. This is implemented in `sync_hw_clock()` (called from a work queue) and ensures that the RTC — which has no NTP correction — stays close to UTC across reboots. The function was renamed from `sync_cmos_clock()` to `sync_hw_clock()` to reflect that it supports modern RTC class devices as well as legacy CMOS/RTC hardware.
 
 The 11-minute interval is hardcoded and not configurable. The write is skipped if the system is a virtual machine without a real CMOS clock.
 
@@ -199,3 +199,35 @@ int state = adjtimex(&tx);
 ```
 
 The `STA_UNSYNC` bit being clear (zero) indicates the kernel considers the clock synchronized. `timedatectl` displays this as "NTP synchronized: yes".
+
+## Further reading
+
+### Kernel source
+
+- [kernel/time/ntp.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/ntp.c) — the PLL/FLL time discipline control loop, leap-second state machine, `ntp_tick_length()`, and `sync_hw_clock()`
+- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — `timekeeping_advance()` and `timekeeping_adjust()`, applying NTP tick corrections to `struct timekeeper`
+- [include/uapi/linux/timex.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/timex.h) — user-space definitions for `struct timex`, `ADJ_*` modes, `STA_*` status flags, and `TIME_*` return codes
+- [include/linux/timex.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timex.h) — internal kernel timex operations, scaled ppm conversions, and PPS interface hooks
+
+### Man pages
+
+- [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — system call interface for reading and tuning kernel timekeeping parameters
+- [`clock_adjtime(2)`](https://man7.org/linux/man-pages/man2/clock_adjtime.2.html) — POSIX clock-specific adjustment syscall supporting `CLOCK_REALTIME` and `CLOCK_TAI`
+- [`adjtime(3)`](https://man7.org/linux/man-pages/man3/adjtime.3.html) — legacy C library interface for gradual clock slewing
+- [`timedatectl(1)`](https://man7.org/linux/man-pages/man1/timedatectl.1.html) — systemd utility for querying NTP synchronization status and system clock settings
+
+### Related pages
+
+- [Timekeeping and Clocksources](timekeeping.md) — timekeeper architecture, `struct timekeeper`, and hardware counter integration
+- [Clocksource and Clockevent Drivers](clocksource.md) — hardware counter calibration and frequency multiplier math
+- [Time Subsystem War Stories](war-stories.md) — real-world leap second bugs and clocksource watchdog false positives
+
+### LWN articles
+
+- [ptp: IEEE 1588 hardware clock support](https://lwn.net/Articles/421436/) — Richard Cochran's patch series, December 2010, covered in LWN's kernel patches digest: introduces the `clock_adjtime()` syscall and the `ADJ_SETOFFSET` mode bit alongside PTP hardware clock support
+- [The leap second bug](https://lwn.net/Articles/504657/) — Jonathan Corbet, July 2012: analysis of the 2012 kernel leap-second livelock and resolution
+
+### External
+
+- [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — kernel documentation on timekeeping, NTP discipline, and hardware clock synchronization
+- [RFC 5905: Network Time Protocol Protocol and Algorithm Specification](https://datatracker.ietf.org/doc/html/rfc5905) — authoritative specification of the NTPv4 on-wire protocol and clock discipline algorithm
