@@ -44,32 +44,35 @@ done
 ### Kernel structures
 
 ```c
-/* include/linux/thermal.h */
+/* drivers/thermal/thermal_core.h — struct thermal_zone_device is private to
+ * the thermal subsystem, not exposed via include/linux/thermal.h; drivers
+ * only ever see an opaque pointer returned by the registration functions. */
 
 struct thermal_zone_device {
     int                 id;
     char                type[THERMAL_NAME_LENGTH];
     struct device       device;
-    struct thermal_attr temp_attr;
-    struct thermal_attr mode_attr;
+    enum thermal_device_mode mode;
+    void                *devdata;
+    int                 num_trips;
 
     int                 temperature;        /* current temp in millidegrees */
     int                 last_temperature;
     int                 emul_temperature;   /* for testing */
     int                 passive;            /* passive cooling active? */
-    int                 forced_passive;
 
-    struct thermal_zone_device_ops  *ops;   /* .get_temp, .set_trips */
+    struct thermal_zone_device_ops  ops;    /* .get_temp, .set_trips */
     struct thermal_zone_params      *tzp;   /* governor params */
     struct thermal_governor         *governor;
 
-    struct list_head    thermal_instances;  /* connected cooling devices */
-    struct idr          idr;               /* trip point IDs */
-    int                 num_trips;
+    struct list_head    trips_high;         /* trips above current temp */
+    struct list_head    trips_reached;      /* trips currently crossed */
+    struct mutex        lock;
+    struct thermal_trip_desc trips[];       /* flexible array, one per trip */
     /* ... */
 };
 
-/* Trip point types: */
+/* Trip point types: include/uapi/linux/thermal.h */
 enum thermal_trip_type {
     THERMAL_TRIP_ACTIVE = 0,    /* activate cooling device (fan) */
     THERMAL_TRIP_PASSIVE,       /* reduce performance (cpufreq) */
@@ -99,10 +102,10 @@ struct thermal_trip trips[] = {
     { .temperature = 100000, .type = THERMAL_TRIP_CRITICAL },  /* 100°C */
 };
 
-struct thermal_zone_device *tzd = thermal_zone_device_register(
+struct thermal_zone_device *tzd = thermal_zone_device_register_with_trips(
     "my_sensor",           /* type string */
+    trips,                 /* array of trip points */
     ARRAY_SIZE(trips),     /* number of trip points */
-    0,                     /* mask of writable trips */
     sensor_data,           /* driver private data */
     &my_tz_ops,
     NULL,                  /* thermal zone params */
@@ -235,19 +238,21 @@ echo 2 > /sys/class/hwmon/hwmon0/pwm1_enable  # auto mode
 watch -n 1 'for z in /sys/class/thermal/thermal_zone*/; do
     echo -n "$(cat $z/type): $(cat $z/temp)m°C  "; done; echo'
 
-# Kernel thermal tracepoints:
+# Kernel thermal tracepoints (drivers/thermal/thermal_trace.h):
 echo 1 > /sys/kernel/debug/tracing/events/thermal/enable
 cat /sys/kernel/debug/tracing/trace_pipe
-# thermal_temperature: thermal_zone=x86_pkg_temp id=0 temp=45000 ...
-# thermal_zone_trip: thermal_zone=x86_pkg_temp trip=0 temp=80000 type=passive
+# thermal_temperature: thermal_zone=x86_pkg_temp id=0 temp_prev=44000 temp=45000
+# thermal_zone_trip: thermal_zone=x86_pkg_temp id=0 trip=0 trip_type=passive
+# (thermal_zone_trip carries the trip index and type, not a temperature —
+#  read the current temp from the paired thermal_temperature event or /sys)
 
 # BPF trace thermal throttling:
 bpftrace -e '
 tracepoint:thermal:thermal_zone_trip
 {
-    printf("TRIP: zone=%s, trip=%d, temp=%d°C\n",
-           str(args->thermal_zone), args->trip,
-           args->temp / 1000);
+    printf("TRIP: zone=%s, id=%d, trip=%d, type=%d\n",
+           str(args->thermal_zone), args->id, args->trip,
+           args->trip_type);
 }'
 
 # Check if CPU is thermally throttled (PROCHOT):
@@ -255,8 +260,11 @@ grep -r "throttle\|prochot" /sys/devices/system/cpu/cpu*/thermal_throttle/
 cat /sys/devices/system/cpu/cpu0/thermal_throttle/core_throttle_count
 
 # MSR-based throttling on Intel:
-rdmsr 0x1b1   # IA32_THERM_STATUS: bit 4 = prochot
-# bit 4 set → CPU is/was thermally throttled
+rdmsr -p0 0x19c   # IA32_THERM_STATUS (per-core): bit 0 = PROCHOT/thermal status
+# bit 0 set → this core is/was thermally throttled
+
+# Package-wide equivalent:
+rdmsr -p0 0x1b1   # IA32_PACKAGE_THERM_STATUS: bit 0 = PROCHOT for the package
 ```
 
 ## ARM thermal: SCMI and TF-A
@@ -265,8 +273,11 @@ On ARM SoCs, temperature management often involves the firmware:
 
 ```bash
 # SCMI thermal (System Control and Management Interface):
-cat /sys/class/thermal/thermal_zone*/type | grep scmi
-# arm-scmi
+# DT-described zones get their sysfs "type" from the thermal-zones node
+# name itself (thermal_zone_device_register_with_trips(np->name, ...) in
+# drivers/thermal/thermal_of.c) — an SCMI-backed zone's sensor comes from
+# a "thermal-sensors = <&scmi_sensors N>" reference, not a fixed type string.
+cat /sys/class/thermal/thermal_zone*/type
 
 # TF-A (Trusted Firmware-A) handles critical shutdown;
 # Linux gets temperature via SCMI protocol to secure world
@@ -274,9 +285,28 @@ cat /sys/class/thermal/thermal_zone*/type | grep scmi
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/thermal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/thermal.h) — `struct thermal_trip`, `struct thermal_zone_device_ops`, and `thermal_zone_device_register_with_trips()` — the actual registration API (the older `thermal_zone_device_register()` no longer exists)
+- [drivers/thermal/thermal_core.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/thermal_core.h) — the real, subsystem-private `struct thermal_zone_device` layout (it is not in `include/linux/thermal.h`; drivers only ever hold an opaque pointer)
+- [drivers/thermal/gov_step_wise.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/gov_step_wise.c) — `get_target_state()`, the `cur_state ± 1` throttling logic behind `step_wise`
+- [drivers/thermal/gov_power_allocator.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/gov_power_allocator.c) — the PID controller (`k_po`, `k_pu`, `k_d`, `sustainable_power`) behind `power_allocator`
+- [include/linux/cpu_cooling.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/cpu_cooling.h) — `cpufreq_cooling_register()`, the cpufreq cooling device constructor
+- [drivers/thermal/thermal_trace.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/thermal_trace.h) — the `thermal_temperature` and `thermal_zone_trip` tracepoint field definitions
+- [arch/x86/include/asm/msr-index.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/msr-index.h) — `MSR_IA32_THERM_STATUS` (0x19c, per-core) vs `MSR_IA32_PACKAGE_THERM_STATUS` (0x1b1), both with PROCHOT at bit 0
+
+### Related pages
+
 - [cpufreq and P-states](cpufreq.md) — CPU frequency scaling (thermal cooling device)
 - [cpuidle](cpuidle.md) — C-states reduce power to prevent thermal issues
 - [Runtime PM](runtime-pm.md) — device power management
 - [Device Tree](../drivers/device-tree.md) — thermal zones defined in DTS on ARM
-- `drivers/thermal/` — thermal framework
-- `Documentation/driver-api/thermal/` — thermal framework documentation
+
+### LWN articles
+
+- [The power allocator thermal governor](https://lwn.net/Articles/602517/) (June 17, 2014) — the PID-controller design and multi-actor power budgeting behind `power_allocator`/IPA
+
+### External
+
+- [Generic Thermal Sysfs driver How To](https://docs.kernel.org/driver-api/thermal/sysfs-api.html) — the thermal zone and cooling device registration API and full sysfs ABI (trip points, `policy`, `mode`)
+- [Power allocator governor tunables](https://docs.kernel.org/driver-api/thermal/power_allocator.html) — what `k_po`, `k_pu`, `k_d`, and `sustainable_power` actually control

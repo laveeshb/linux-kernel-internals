@@ -65,12 +65,14 @@ static int mynic_resume(struct device *dev)
     return 0;
 }
 
-/* SIMPLE_DEV_PM_OPS fills system sleep callbacks (suspend/resume/freeze/thaw/etc.)
-   with the same pair of functions. Runtime PM callbacks need SET_RUNTIME_PM_OPS. */
-static SIMPLE_DEV_PM_OPS(mynic_pm_ops, mynic_suspend, mynic_resume);
+/* DEFINE_SIMPLE_DEV_PM_OPS fills system sleep callbacks (suspend/resume/
+   freeze/thaw/poweroff/restore) with the same pair of functions. Runtime
+   PM callbacks need SET_RUNTIME_PM_OPS. (The older SIMPLE_DEV_PM_OPS macro
+   does the same thing but is deprecated in favor of this one.) */
+static DEFINE_SIMPLE_DEV_PM_OPS(mynic_pm_ops, mynic_suspend, mynic_resume);
 ```
 
-`SIMPLE_DEV_PM_OPS` (defined in `include/linux/pm.h`) is a convenience macro that fills the system sleep callbacks (`suspend`, `resume`, `freeze`, `thaw`, `poweroff`, `restore`) with the same pair of functions. Note: it does **not** wire up runtime PM callbacks (`runtime_suspend`, `runtime_resume`) — those require `SET_RUNTIME_PM_OPS` separately.
+`DEFINE_SIMPLE_DEV_PM_OPS` (defined in `include/linux/pm.h`) is a convenience macro that fills the system sleep callbacks (`suspend`, `resume`, `freeze`, `thaw`, `poweroff`, `restore`) with the same pair of functions. Note: it does **not** wire up runtime PM callbacks (`runtime_suspend`, `runtime_resume`) — those require `SET_RUNTIME_PM_OPS` separately.
 
 **Lesson**: an absent callback is not a safe default for devices with hardware state. Use `CONFIG_PM_DEBUG` during development; test with `echo mem > /sys/power/state` before submitting any driver.
 
@@ -238,7 +240,9 @@ A cloud operator deployed new servers and, to enforce per-server power budgets f
 ```bash
 # Set package 0 total power limit to 150 W
 echo 150000000 > /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw
-echo 1 > /sys/class/powercap/intel-rapl:0/constraint_0_enabled
+# "enabled" is a zone-level attribute (shared by all constraints in the
+# zone), not per-constraint — there is no constraint_0_enabled file.
+echo 1 > /sys/class/powercap/intel-rapl:0/enabled
 ```
 
 ### What happened
@@ -304,9 +308,12 @@ dmesg | grep -i "wakeup\|wake\|resume" | tail -20
 # (no device name in the message — firmware-level wakeup)
 
 # Check wakeup_sources for recent activity
-cat /sys/kernel/debug/wakeup_sources | sort -k10 -rn | head -10
-# name                active_count  ...  wakeup_count  ...
-# i2c-touchpad        47            ...  47            ...
+# Columns (drivers/base/power/wakeup.c, print_wakeup_source_stats()):
+# name  active_count  event_count  wakeup_count  expire_count  active_since
+# total_time  max_time  last_change  prevent_suspend_time
+cat /sys/kernel/debug/wakeup_sources | sort -k4 -rn | head -10
+# name                active_count  event_count  wakeup_count  ...
+# i2c-touchpad        47            47            47           ...
 # (wakeup_count matches the number of lid-close sleep attempts)
 ```
 
@@ -343,7 +350,7 @@ echo 'ACTION=="add", SUBSYSTEM=="i2c", ATTR{name}=="ELAN0001:00", \
   ATTR{power/wakeup}="disabled"' > /etc/udev/rules.d/99-touchpad-wakeup.rules
 ```
 
-**Upstream fix** — the platform driver for this touchpad family added a quirk to mask the spurious IRQ during S2idle. In `drivers/hid/i2c-hid/i2c-hid-core.c`, the `i2c_hid_set_power()` call during `suspend` now explicitly puts the device into `POWER_OFF` state before the system enters S2idle, preventing firmware-level interrupt assertion.
+**How the sysfs workaround actually silences it** — `drivers/hid/i2c-hid/i2c-hid-core.c`'s `i2c_hid_core_suspend()` always puts the device into the low-power `I2C_HID_PWR_SLEEP` state and calls `disable_irq()` on the client's IRQ line, but only calls `i2c_hid_core_power_down()` — a full, driver-specific power cutoff — when `device_may_wakeup()` returns false for the device. Disabling wakeup via `power/wakeup` in sysfs is exactly what makes `device_may_wakeup()` return false, so it routes the touchpad through the full power-down path on every suspend, which is what actually stops the spurious firmware-level IRQ assertions — not just a "do nothing" flag.
 
 **Lesson**: S2idle wakeup debugging always starts at `/sys/kernel/debug/wakeup_sources`. Sort by `wakeup_count` or `active_count` to find the culprit. The `wakeup_source_activate` ftrace event identifies the exact source. After finding the device, either disable its wakeup capability via sysfs or fix the driver to silence the hardware during idle.
 
@@ -351,9 +358,33 @@ echo 'ACTION=="add", SUBSYSTEM=="i2c", ATTR{name}=="ELAN0001:00", \
 
 ## Further reading
 
+### Kernel source
+
+- [drivers/base/power/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/main.c) — `dpm_run_callback()`'s `if (!cb) return 0;`, the exact mechanism that lets a NULL `suspend` hook silently do nothing, behind Case 1
+- [include/linux/pm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm.h) — `DEFINE_SIMPLE_DEV_PM_OPS()` (the current macro; `SIMPLE_DEV_PM_OPS()` is now deprecated but equivalent) and `SET_RUNTIME_PM_OPS()`, Case 1's fix
+- [drivers/pci/pci-driver.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pci/pci-driver.c) — `pci_pm_suspend()`, the bus-level `dev_pm_ops` that wraps a driver's own callbacks and still performs PCI config-space save and the D3 transition, Case 1
+- [include/linux/pm_runtime.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_runtime.h) and [drivers/base/power/runtime.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/runtime.c) — `pm_runtime_get_sync()` (may sleep) versus `pm_runtime_get_if_active()` (never sleeps, returns 1/0), Case 2
+- [drivers/thermal/gov_step_wise.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/gov_step_wise.c) and [drivers/thermal/gov_power_allocator.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/gov_power_allocator.c) — the single-step throttling logic versus the PID controller, Case 3
+- [drivers/powercap/intel_rapl_common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_common.c) — `rapl_domain_names[]` (`"package"`, `"core"`, `"uncore"`, `"dram"`), the independent sub-domains behind Case 4
+- [drivers/base/power/wakeup.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/wakeup.c) — `print_wakeup_source_stats()`, the column layout of `/sys/kernel/debug/wakeup_sources`, and the `wakeup_source_activate` tracepoint, Case 5
+- [drivers/hid/i2c-hid/i2c-hid-core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/hid/i2c-hid/i2c-hid-core.c) — `i2c_hid_core_suspend()`, which powers the device down via `i2c_hid_core_power_down()` only when `device_may_wakeup()` is false, Case 5
+
+### Related pages
+
 - [Runtime PM](runtime-pm.md) — usage counting, callbacks, atomic context restrictions
 - [System Suspend](suspend.md) — PM notifiers, freeze sequence, wakeup sources
 - [Thermal Management](thermal.md) — step_wise vs power_allocator governors
 - [Power Capping and RAPL](power-capping.md) — RAPL domain enumeration and limits
-- `Documentation/power/runtime_pm.rst` — canonical Runtime PM documentation
-- `Documentation/power/basic-pm-debugging.rst` — suspend/resume debugging guide
+
+### LWN articles
+
+- [Runtime power management](https://lwn.net/Articles/347573/) (August 19, 2009) — the original `runtime_suspend`/`runtime_resume`/`runtime_idle` additions to `dev_pm_ops`, behind Case 2
+- [The power allocator thermal governor](https://lwn.net/Articles/602517/) (June 17, 2014) — the PID-controller design that Case 3's fix switches to
+- [Power Capping Framework and RAPL Driver](https://lwn.net/Articles/567620/) (September 19, 2013) — the original powercap-framework and intel-rapl driver submission, the uniform sysfs interface behind Case 4
+
+### External
+
+- [Runtime Power Management Framework for I/O Devices](https://docs.kernel.org/power/runtime_pm.html) — canonical Runtime PM documentation, including `pm_runtime_get_if_active()`'s never-sleeps guarantee, Case 2
+- [Basic PM Debugging](https://docs.kernel.org/power/basic-pm-debugging.html) — `/sys/power/pm_test`, `CONFIG_PM_DEBUG`, and the driver-isolation technique from Case 1's diagnosis
+- [Power Capping Framework](https://docs.kernel.org/power/powercap/powercap.html) — the `constraint_N_power_limit_uw`/`enabled` sysfs ABI and the zone hierarchy behind Case 4
+- [System Sleep States](https://docs.kernel.org/admin-guide/pm/sleep-states.html) — suspend-to-idle (`s2idle`), `/sys/power/mem_sleep`, and wakeup-capable devices, Case 5

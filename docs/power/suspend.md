@@ -222,7 +222,7 @@ struct wakeup_source {
     unsigned long         expire_count;
     unsigned long         wakeup_count;
     struct device        *dev;
-    unsigned int          active:1;
+    bool                   active:1;
 };
 ```
 
@@ -260,9 +260,9 @@ echo disk | sudo tee /sys/power/state
 ─────────── powered off ──────────
 5. Boot (normal cold boot; bootloader has no special role)
 6. Kernel: check resume= parameter or /sys/power/resume device for hibernation image
-8. Read image from swap
-9. swsusp_restore: overwrite running kernel pages
-10. Resume execution at hibernation point
+7. swsusp_read(): read the image back from swap
+8. hibernation_restore(): overwrite running kernel pages with the saved image
+9. Resume execution at hibernation point
 ```
 
 ### Configuring hibernate destination
@@ -271,9 +271,15 @@ echo disk | sudo tee /sys/power/state
 # Use a specific swap partition
 echo /dev/sda2 | sudo tee /sys/power/resume
 
-# Or a swap file (requires offset)
-echo offset=$(swap-offset /swapfile) | sudo tee /sys/power/resume_offset
-echo /dev/sda1 | sudo tee /sys/power/resume  # device containing swapfile
+# Or a swap file: /sys/power/resume_offset takes the raw <PAGE_SIZE>-unit
+# offset of the swap file's header within its partition (found via the
+# FIBMAP ioctl — see Documentation/power/swsusp-and-swap-files.rst), then
+# /sys/power/resume names the partition holding the file
+echo 34816 | sudo tee /sys/power/resume_offset
+echo /dev/sda1 | sudo tee /sys/power/resume  # partition containing the swap file
+
+# Equivalently, on the kernel command line:
+# resume=/dev/sda1 resume_offset=34816
 
 # Check current hibernate device
 cat /sys/power/resume
@@ -330,9 +336,28 @@ echo mem | sudo tee /sys/power/state
 
 ## Further reading
 
+### Kernel source
+
+- [kernel/power/suspend.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/power/suspend.c) — `pm_suspend()`, `enter_state()`, `suspend_devices_and_enter()`: the S1-S3/s2idle entry path
+- [kernel/power/hibernate.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/power/hibernate.c) — `hibernate()`, `hibernation_restore()`, and the `/sys/power/resume`/`resume_offset` attributes
+- [kernel/power/snapshot.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/power/snapshot.c) — `swsusp_save()`: walks all pages to build the hibernation image
+- [include/linux/suspend.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/suspend.h) — `PM_SUSPEND_PREPARE`/`PM_POST_SUSPEND`/`PM_HIBERNATION_PREPARE` notifier constants, `register_pm_notifier()`
+- [include/linux/pm_wakeup.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_wakeup.h) — `struct wakeup_source`, `device_init_wakeup()`, `device_may_wakeup()`
+- [drivers/base/power/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/main.c) — `dpm_prepare()`/`dpm_suspend()`/`dpm_suspend_late()`/`dpm_suspend_noirq()` and their resume-side counterparts
+- [Documentation/driver-api/pm/devices.rst](https://docs.kernel.org/driver-api/pm/devices.html) — the full device suspend/resume phase model and the ordering guarantees across the device hierarchy
+- [Documentation/admin-guide/pm/sleep-states.rst](https://docs.kernel.org/admin-guide/pm/sleep-states.html) — the `freeze`/`standby`/`mem`/`disk` labels and their ACPI S-state mapping
+- [Documentation/admin-guide/pm/suspend-flows.rst](https://docs.kernel.org/admin-guide/pm/suspend-flows.html) — code-flow diagrams for suspend-to-idle vs. standby vs. suspend-to-RAM
+- [Documentation/power/swsusp-and-swap-files.rst](https://docs.kernel.org/power/swsusp-and-swap-files.html) — how to point hibernation at a swap file instead of a swap partition
+
+### Related pages
+
 - [cpufreq](cpufreq.md) — CPU frequency scaling
 - [Runtime PM](runtime-pm.md) — device-level power management
 - [Device Drivers: platform driver](../drivers/platform-driver.md) — dev_pm_ops integration
 - [Interrupts: Timers](../interrupts/timers.md) — RTC alarm as wakeup source
-- `kernel/power/` in the kernel tree — suspend/hibernate core
-- `Documentation/admin-guide/pm/` in the kernel tree
+
+### LWN articles
+
+- [A new suspend/hibernate infrastructure](https://lwn.net/Articles/274008/) — Jonathan Corbet, March 19, 2008; Rafael Wysocki's rework separating the suspend and hibernation device callback paths
+- [PM / Sleep: Introduce new phases of device suspend/resume](https://lwn.net/Articles/475730/) — Rafael Wysocki's patch series adding the `.suspend_late`/`.resume_early` and `_noirq` phases described above
+- [Waking systems from suspend](https://lwn.net/Articles/429925/) — John Stultz, March 2, 2011; how the RTC and other wakeup sources bring a system out of suspend

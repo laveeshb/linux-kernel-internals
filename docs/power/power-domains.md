@@ -46,8 +46,8 @@ struct generic_pm_domain {
     int (*power_on) (struct generic_pm_domain *domain);
 
     struct list_head       dev_list;      /* struct generic_pm_domain_data per dev */
-    struct list_head       parent_links;  /* domains this one depends on (parents) */
-    struct list_head       child_links;   /* domains that depend on this one */
+    struct list_head       parent_links;  /* links where this domain is the parent (i.e. its subdomains) */
+    struct list_head       child_links;   /* links where this domain is the child (i.e. its parent domains) */
 
     /* governor timing data lives in genpd->gd (struct genpd_governor_data) */
 };
@@ -80,7 +80,7 @@ static int soc_pm_init(void)
 }
 ```
 
-`pm_genpd_init()` links the domain into the global `gpd_list` and installs `genpd_dev_pm_ops` as the `dev_pm_ops` for every device later added to this domain.
+`pm_genpd_init()` links the domain into the global `gpd_list` and populates `genpd->domain.ops` (a `struct dev_pm_ops`) with genpd's own runtime-PM and system-sleep callbacks (`genpd_runtime_suspend()`, `genpd_runtime_resume()`, `genpd_suspend_noirq()`, and so on). Every device later added to this domain gets `dev->pm_domain` pointed at `&genpd->domain` via `dev_pm_domain_set()`, so those callbacks run instead of the device's bus-level ones.
 
 ## Adding devices to a domain
 
@@ -93,7 +93,7 @@ if (ret)
 
 After this call the Runtime PM lifecycle of `gpu_dev` is managed by the domain. When `gpu_dev` calls `pm_runtime_put()`, the genpd layer intercepts `runtime_suspend` and checks whether this was the last active device. If so, it invokes `gpu_domain.power_off()`.
 
-On ARM SoCs using Device Tree, the binding `power-domains = <&pd_gpu>` in the DTS node causes `of_genpd_add_device()` to perform the attachment automatically during `platform_device` instantiation. The `&pd_gpu` phandle refers to a power domain provider registered with `of_genpd_add_provider_simple()` or `of_genpd_add_provider_onecell()`.
+On ARM SoCs using Device Tree, the binding `power-domains = <&pd_gpu>` in the DTS node causes the driver core to call `dev_pm_domain_attach()` during probe, which in turn calls `genpd_dev_pm_attach()` to parse the phandle and perform the attachment automatically — no explicit driver call is needed. (`of_genpd_add_device()` is a separate, lower-level API for platform code that already has an `of_phandle_args` and wants to add a device manually.) The `&pd_gpu` phandle refers to a power domain provider registered with `of_genpd_add_provider_simple()` or `of_genpd_add_provider_onecell()`.
 
 ## Domain dependencies
 
@@ -107,7 +107,7 @@ Some rails have dependencies — a sub-rail cannot be on unless its parent rail 
 ret = pm_genpd_add_subdomain(&display_core_domain, &display_dsi_domain);
 ```
 
-Internally genpd tracks `parent_links` (what I depend on) and `child_links` (what depends on me). During power-on, the parent is powered first; during power-off, the child is powered off first.
+Internally each domain's `parent_links` list holds the links to its own subdomains (the domains it is parent of), while `child_links` holds the links to the domains it is itself a subdomain of. During power-on, the parent is powered first; during power-off, the child is powered off first.
 
 ```
 Dependency graph:
@@ -169,11 +169,13 @@ Drivers can supply per-state timing via the `domain-idle-state` Device Tree node
 
 ## genpd governors
 
-Two governors ship in-tree (`drivers/pmdomain/governor.c`):
+Three governors ship in-tree (`drivers/pmdomain/governor.c`):
 
 **`simple_qos_governor`** (the default): powers off the domain when all devices are suspended and the predicted idle duration exceeds the round-trip latency. It uses the `effective_constraint_ns` from QoS constraints attached to devices.
 
 **`pm_domain_always_on_gov`**: never powers off the domain; used for domains that must stay on (e.g., always-on power rails).
+
+**`pm_domain_cpu_gov`** (built only under `CONFIG_CPU_IDLE`): used for CPU/cluster power domains (`GENPD_FLAG_CPU_DOMAIN`); picks the deepest idle state whose residency and latency fit the predicted idle window and any CPU PM QoS constraints.
 
 The governor is selected as the second argument to `pm_genpd_init()`. Pass `NULL` for the default `simple_qos`.
 
@@ -198,25 +200,40 @@ cat /sys/kernel/debug/pm_genpd/pm_genpd_summary
 cat /sys/kernel/debug/pm_genpd/gpu-domain/current_state
 ```
 
-The global `pm_genpd_summary` file is synthesized by `genpd_summary_show()` in `drivers/pmdomain/core.c` and covers all domain statuses, attached devices, and timing in one pass.
+The global `pm_genpd_summary` file is synthesized by `summary_show()` in `drivers/pmdomain/core.c`, which walks the global `gpd_list` and calls `genpd_summary_one()` per domain, covering all domain statuses, attached devices, and performance state in one pass.
 
 ## Real-world implementations
 
 Several production genpd backends illustrate the framework:
 
-**Qualcomm GDSC (Global Distributed Switch Controller)** — `drivers/clk/qcom/gdsc.c`. Each GDSC controls one power domain. The `gdsc_enable()` / `gdsc_disable()` functions toggle a hardware register bit, then poll a ready bit before returning. Timing data comes from ACPM (Application Power Management) firmware on newer SoCs.
+**Qualcomm GDSC (Global Distributed Switch Controller)** — `drivers/clk/qcom/gdsc.c`. Each GDSC controls one power domain. The `gdsc_enable()` / `gdsc_disable()` functions register directly as a `generic_pm_domain`'s `power_on`/`power_off` callbacks; they toggle the GDSC's collapse bit (via `gdsc_toggle_logic()`) and poll the hardware for the domain to settle before returning.
 
-**Samsung Exynos power domains** — `drivers/soc/samsung/exynos-pm-domains.c`. Earlier Exynos SoCs gate power by writing to SFR (Special Function Register) blocks and waiting for an acknowledgement from the PMU.
+**Samsung Exynos power domains** — `drivers/pmdomain/samsung/exynos-pm-domains.c`. Gates power by writing to a `LOCAL_PWR_CFG` register and polling a status register at offset `+0x4` for the PMU's acknowledgement.
 
-**Rockchip power domains** — `drivers/soc/rockchip/pm_domains.c`. Uses a power domain controller peripheral accessed via `regmap`. Subdomain dependencies are declared in Device Tree; the driver calls `pm_genpd_add_subdomain()` based on DT topology.
+**Rockchip power domains** — `drivers/pmdomain/rockchip/pm-domains.c`. Uses a power domain controller peripheral accessed via `regmap`. Subdomain dependencies are declared in Device Tree; the driver calls `pm_genpd_add_subdomain()` based on DT topology.
 
 All three follow the same pattern: allocate `struct generic_pm_domain`, fill `power_on`/`power_off` callbacks, call `pm_genpd_init()`, and register as a DT provider.
 
 ## Further reading
 
-- [Runtime PM](runtime-pm.md) — usage counting, autosuspend, dev_pm_ops
+### Kernel source
+
+- [include/linux/pm_domain.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_domain.h) — `struct generic_pm_domain`, `struct gpd_timing_data`, and the `pm_genpd_*`/`of_genpd_*` API
+- [drivers/pmdomain/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pmdomain/core.c) — genpd core: `pm_genpd_init()`, `genpd_add_subdomain()`, `genpd_dev_pm_attach()`, debugfs summary
+- [drivers/pmdomain/governor.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pmdomain/governor.c) — `simple_qos_governor` and `pm_domain_always_on_gov`
+- [drivers/clk/qcom/gdsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/qcom/gdsc.c) — Qualcomm GDSC genpd backend: `gdsc_enable()`/`gdsc_disable()`
+
+### Related pages
+
+- [Runtime PM](runtime-pm.md) — usage counting, autosuspend, dev_pm_ops; genpd's runtime_suspend/resume hooks build on this
 - [System Suspend](suspend.md) — system-wide sleep; genpd participates in the freeze/suspend sequence
-- [Device Tree](../drivers/device-tree.md) — `power-domains` binding
-- `drivers/pmdomain/core.c` — genpd core
-- `include/linux/pm_domain.h` — data structures
-- `Documentation/devicetree/bindings/power/power-domain.yaml` — DT binding spec
+- [Device Tree](../drivers/device-tree.md) — `power-domains` binding and phandle parsing
+
+### LWN articles
+
+- [PM / Domains: Support for generic I/O PM domains](https://lwn.net/Articles/449302/) — Rafael J. Wysocki's original genpd patchset (2011) explaining the shared-power-resource and parent/child domain model this page describes
+
+### External
+
+- [Documentation/driver-api/pm/devices.rst — Device Power Management Domains](https://docs.kernel.org/driver-api/pm/devices.html#device-power-management-domains) — upstream explanation of `dev->pm_domain`, `struct dev_pm_domain`, and why power domain callbacks take precedence over subsystem callbacks
+- [Documentation/devicetree/bindings/power/power-domain.yaml](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/devicetree/bindings/power/power-domain.yaml) — DT binding spec for `power-domains` and `#power-domain-cells`

@@ -56,8 +56,8 @@ The Linux cpuidle framework selects which C-state to enter when the CPU is idle:
 struct cpuidle_state {
     char        name[CPUIDLE_NAME_LEN];
     char        desc[CPUIDLE_DESC_LEN];
-    u64         exit_latency_ns;  /* worst-case wake-up latency */
-    u64         target_residency_ns; /* min time to justify entering */
+    s64         exit_latency_ns;  /* worst-case wake-up latency */
+    s64         target_residency_ns; /* min time to justify entering */
     unsigned int flags;           /* CPUIDLE_FLAG_TIMER_STOP etc. */
     int (*enter)(struct cpuidle_device *dev,
                  struct cpuidle_driver *drv, int index);
@@ -79,8 +79,8 @@ struct cpuidle_device {
 struct cpuidle_driver {
     const char          *name;
     struct module       *owner;
-    unsigned int         state_count;
     struct cpuidle_state states[CPUIDLE_STATE_MAX];
+    int                  state_count;
     int                  safe_state_index; /* fallback if deadline missed */
 };
 ```
@@ -126,14 +126,24 @@ static struct cpuidle_state skl_cstates[] = {
 };
 
 /* Entering a C-state via MWAIT instruction: */
-static int intel_idle(struct cpuidle_device *dev,
-                       struct cpuidle_driver *drv, int index)
+#define flg2MWAIT(flags) (((flags) >> 24) & 0xFF)  /* hint packed in top byte of .flags */
+
+static __always_inline int __intel_idle(struct cpuidle_device *dev,
+                                        struct cpuidle_driver *drv,
+                                        int index, bool irqoff)
 {
-    unsigned long ecx = 1; /* break on interrupt */
-    unsigned long eax = drv->states[index].flags & MWAIT_SUBSTATE_MASK;
+    struct cpuidle_state *state = &drv->states[index];
+    unsigned int eax = flg2MWAIT(state->flags);
+    unsigned int ecx = 1 * irqoff; /* break on interrupt */
 
     mwait_idle_with_hints(eax, ecx);  /* issues MONITOR/MWAIT */
     return index;
+}
+
+static __cpuidle int intel_idle(struct cpuidle_device *dev,
+                                struct cpuidle_driver *drv, int index)
+{
+    return __intel_idle(dev, drv, index, true);
 }
 ```
 
@@ -269,10 +279,25 @@ turbostat --show PkgWatt,PkgTmp --interval 1
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/cpuidle.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/cpuidle.h) — `struct cpuidle_state`, `struct cpuidle_device`, `struct cpuidle_driver`
+- [drivers/idle/intel_idle.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/idle/intel_idle.c) — Intel C-state driver: `skl_cstates[]` table and the `intel_idle()`/MWAIT entry path
+- [drivers/cpuidle/governors/menu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/cpuidle/governors/menu.c) — the `menu` governor's idle-duration prediction
+- [drivers/cpuidle/governors/teo.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/cpuidle/governors/teo.c) — the Timer Events Oriented governor
+- [kernel/sched/idle.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/sched/idle.c) — `cpuidle_idle_call()`, the idle loop that invokes the governor and driver
+
+### Related pages
+
 - [cpufreq and P-states](cpufreq.md) — frequency scaling (orthogonal to C-states)
 - [Real-Time Tuning](../sched/rt-tuning.md) — disabling C-states for RT
 - [The Scheduling Tick](../sched/sched-tick.md) — NOHZ interaction with cpuidle
 - [hrtimers](../time/hrtimers.md) — timers that interrupt idle
-- `drivers/cpuidle/` — cpuidle framework and governors
-- `drivers/idle/intel_idle.c` — Intel C-state driver
-- `Documentation/admin-guide/pm/cpuidle.rst`
+
+### LWN articles
+
+- [LWN: cpuidle: New timer events oriented governor for tickless systems](https://lwn.net/Articles/769571/) — Rafael Wysocki's original patch and rationale for the TEO governor, merged in Linux 5.1
+
+### External
+
+- [Documentation/admin-guide/pm/cpuidle.rst](https://docs.kernel.org/admin-guide/pm/cpuidle.html) — upstream CPUIdle subsystem admin guide: governors, drivers, the `disable` and `pm_qos_resume_latency_us` sysfs knobs

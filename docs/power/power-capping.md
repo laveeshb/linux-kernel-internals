@@ -59,8 +59,8 @@ struct powercap_zone {
     char                           *name;
     void                           *control_type_inst;
     const struct powercap_zone_ops *ops;
-    struct powercap_control_type   *control_type;
     struct device                   dev;
+    int                             const_id_cnt;
     struct idr                      idr;
     struct idr                     *parent_idr;
     /* ... */
@@ -70,7 +70,8 @@ struct powercap_zone_ops {
     int (*get_max_energy_range_uj)(struct powercap_zone *, u64 *);
     int (*get_energy_uj)(struct powercap_zone *, u64 *);
     int (*reset_energy_uj)(struct powercap_zone *);
-    int (*get_power_uw)(struct powercap_zone *, u64 *);   /* u64, not u32 */
+    int (*get_max_power_range_uw)(struct powercap_zone *, u64 *);
+    int (*get_power_uw)(struct powercap_zone *, u64 *);
     int (*set_enable)(struct powercap_zone *, bool);
     int (*get_enable)(struct powercap_zone *, bool *);
     int (*release)(struct powercap_zone *);
@@ -88,12 +89,12 @@ A control type (e.g., `intel-rapl`) is registered first with `powercap_register_
 3. Registers each domain as a `powercap_zone`
 4. Implements `get_energy_uj` by reading the appropriate energy MSR and scaling
 
-Two thin wrappers load on top:
+Two interface drivers load on top of the common code:
 
-- `intel_rapl_msr.c` — accesses RAPL via MSRs directly (bare metal, most common)
-- `intel_rapl_mmio.c` — accesses RAPL via MMIO registers (used on some Atom SoCs)
+- `intel_rapl_msr.c` — accesses RAPL via MSRs directly (bare metal, the traditional path since Sandy Bridge)
+- `intel_rapl_tpmi.c` — accesses RAPL via TPMI (Topology Aware Register and PM Capsule Interface), a PCIe-VSEC-exposed MMIO region that avoids the per-CPU scheduling MSR access requires; used on newer Xeon platforms with PMT/TPMI hardware
 
-On systems with the driver loaded, `lsmod | grep rapl` should show `intel_rapl_common`, `intel_rapl_msr`, and (on some platforms) `rapl` for the perf event backend.
+On systems with the driver loaded, `lsmod | grep rapl` should show `intel_rapl_common` plus either `intel_rapl_msr` or `intel_rapl_tpmi` depending on the interface, and (on some platforms) `rapl` for the perf event backend.
 
 ## sysfs interface
 
@@ -124,8 +125,9 @@ cat /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw
 # Set a 35 W long-term power limit on package 0
 echo 35000000 > /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw
 
-# Enable constraint 0 (may already be enabled)
-echo 1 > /sys/class/powercap/intel-rapl:0/constraint_0_enabled
+# Enable the zone (may already be enabled) -- enabled is a zone-level
+# attribute, not per-constraint; there is no constraint_0_enabled file
+echo 1 > /sys/class/powercap/intel-rapl:0/enabled
 
 # Read the time window over which the limit is averaged
 cat /sys/class/powercap/intel-rapl:0/constraint_0_time_window_us
@@ -221,9 +223,29 @@ perf stat -e cpu-cycles,ref-cycles -- sleep 1
 
 ## Further reading
 
-- [cpufreq and P-states](cpufreq.md) — frequency scaling; RAPL throttling reduces frequency via the same HWP mechanism
-- [Thermal Management](thermal.md) — temperature-based throttling; complements RAPL power limits
-- [Power Management War Stories](war-stories.md) — real RAPL misconfiguration incident
-- `drivers/powercap/intel_rapl_common.c` — RAPL driver implementation
-- `arch/x86/events/rapl.c` — perf RAPL PMU backend
-- Intel Software Developer's Manual, Volume 3B, Chapter 15 — RAPL MSR definitions
+### Kernel source
+
+- [include/linux/powercap.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/powercap.h) — `struct powercap_zone`, `struct powercap_zone_ops`, and the control-type/zone registration API
+- [drivers/powercap/intel_rapl_common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_common.c) — shared RAPL domain/constraint logic used by both interface drivers
+- [drivers/powercap/intel_rapl_msr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_msr.c) — MSR-based RAPL interface driver; defines the MSR offsets used on this page
+- [drivers/powercap/arm_scmi_powercap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/arm_scmi_powercap.c) — ARM SCMI powercap driver, registering SCMI power domains as powercap zones
+- [arch/x86/events/rapl.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/events/rapl.c) — the `power` PMU backend that exposes RAPL counters to `perf stat -e power/energy-*/`
+
+### Man pages
+
+- [perf-stat(1)](https://man7.org/linux/man-pages/man1/perf-stat.1.html) — `-e` event-selection syntax used to read RAPL energy counters through the `power` PMU
+
+### Related pages
+
+- [cpufreq and P-states](cpufreq.md) — frequency scaling; a separate control path from RAPL's own hardware throttling
+- [Thermal Management](thermal.md) — temperature-based throttling; complements RAPL's power-based limits
+- [Power Management War Stories](war-stories.md) — a RAPL DRAM-domain power-limit incident (composite of real failure patterns)
+
+### LWN articles
+
+- [Power Capping Framework](https://lwn.net/Articles/562015/) — Srinivas Pandruvada's original RFC patch series (2013) that introduced the generic `drivers/powercap/` sysfs framework RAPL registers against
+
+### External
+
+- [Documentation/power/powercap/powercap.rst](https://docs.kernel.org/power/powercap/powercap.html) — upstream powercap framework documentation: terminology, sysfs tree layout, control types and zones
+- Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3B, Chapter 15 (Power and Thermal Management) — RAPL MSR definitions

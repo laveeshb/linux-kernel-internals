@@ -172,16 +172,16 @@ static int mydriver_runtime_idle(struct device *dev)
 ## struct device power fields
 
 ```c
-/* include/linux/pm.h */
+/* include/linux/pm.h — abridged; the real struct has ~35 fields */
 struct dev_pm_info {
     pm_message_t        power_state;    /* current power state */
-    unsigned int        can_wakeup:1;   /* device can generate wakeup events */
-    unsigned int        async_suspend:1;
+    bool                can_wakeup:1;   /* device can generate wakeup events */
+    bool                async_suspend:1;
     bool                in_dpm_list:1;
 
-    /* Runtime PM fields */
+    /* Runtime PM fields (under #ifdef CONFIG_PM) */
     struct hrtimer      suspend_timer;  /* autosuspend timer */
-    unsigned long       timer_expires;
+    u64                 timer_expires;
     struct work_struct  work;
 
     wait_queue_head_t   wait_queue;
@@ -189,7 +189,7 @@ struct dev_pm_info {
     atomic_t            usage_count;    /* get/put counter */
     atomic_t            child_count;    /* children that are active */
 
-    unsigned int        disable_depth;  /* depth of pm_runtime_disable() calls */
+    unsigned int        disable_depth:3; /* depth of pm_runtime_disable() calls */
     int                 runtime_error;
 
     enum rpm_status     runtime_status; /* current runtime PM state */
@@ -201,14 +201,14 @@ struct dev_pm_info {
 A power domain is a hardware block that can be independently powered off. Multiple devices may share a domain — the domain stays on until all devices in it are suspended.
 
 ```c
-/* drivers/base/power/domain.c */
+/* include/linux/pm_domain.h */
 struct generic_pm_domain {
     struct dev_pm_domain domain;    /* embedded — has dev_pm_ops */
     struct list_head      gpd_list_node;
 
     const char           *name;
-    atomic_t              sd_count;  /* number of active subdomains */
-    enum gpd_status       status;    /* GPD_STATE_ACTIVE/POWER_OFF */
+    atomic_t              sd_count;  /* number of subdomains with power "on" */
+    enum gpd_status       status;    /* GENPD_STATE_ON / GENPD_STATE_OFF */
 
     unsigned int          device_count;
     unsigned int          suspended_count;
@@ -246,7 +246,7 @@ pm_genpd_add_device(&gpu_pd, &gpu_dev);
 
 ```c
 /* In interrupt handler: try to get, but don't sleep */
-ret = pm_runtime_get_if_active(dev, true);
+ret = pm_runtime_get_if_active(dev);
 if (!ret) {
     /* Device is suspended, can't use it now — schedule work */
     schedule_work(&priv->deferred_work);
@@ -335,8 +335,22 @@ pm_runtime_get_sync(dev);  /* may sleep! BUG */
 
 ## Further reading
 
+### Kernel source
+
+- [include/linux/pm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm.h) — `struct dev_pm_ops`, `struct dev_pm_info`, and the `SET_RUNTIME_PM_OPS()`/`SET_SYSTEM_SLEEP_PM_OPS()` macros
+- [include/linux/pm_runtime.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_runtime.h) — the `pm_runtime_get*()`/`pm_runtime_put*()` inline wrappers and autosuspend helpers
+- [drivers/base/power/runtime.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/runtime.c) — the runtime PM core: `__pm_runtime_suspend()`, `__pm_runtime_resume()`, `pm_runtime_get_if_active()`, and the `RPM_*` state machine
+- [include/linux/pm_domain.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_domain.h) — `struct generic_pm_domain` and `enum gpd_status`
+- [drivers/pmdomain/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pmdomain/core.c) — `pm_genpd_add_device()` and the genpd core (moved here from `drivers/base/power/domain.c` during the driver-core reorganization)
+- [Documentation/power/runtime_pm.rst](https://docs.kernel.org/power/runtime_pm.html) — upstream reference for the runtime PM API, usage-count rules, and locking
+
+### Related pages
+
+- [Power Domains and genpd](power-domains.md) — full treatment of `struct generic_pm_domain`, governors, and the devicetree binding
 - [cpufreq](cpufreq.md) — CPU-level frequency/voltage scaling
 - [System Suspend](suspend.md) — system-wide sleep states
 - [Device Drivers: platform driver](../drivers/platform-driver.md) — devm_ and probe flow
-- `drivers/base/power/` in the kernel tree — runtime PM core
-- `Documentation/power/runtime_pm.rst` in the kernel tree
+
+### LWN articles
+
+- [Runtime power management](https://lwn.net/Articles/347573/) — Jonathan Corbet, August 19, 2009; Rafael Wysocki's original runtime PM patch set and the `runtime_suspend`/`runtime_resume`/`runtime_idle` callbacks described above
