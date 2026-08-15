@@ -195,6 +195,7 @@ static struct clock_event_device lapic_clockevent = {
     .set_state_shutdown     = lapic_timer_shutdown,
     .set_state_periodic     = lapic_timer_set_periodic,
     .set_state_oneshot      = lapic_timer_set_oneshot,
+    .set_state_oneshot_stopped = lapic_timer_shutdown,
     .set_next_event         = lapic_next_event,
     .broadcast              = lapic_timer_broadcast,
     .rating                 = 100,

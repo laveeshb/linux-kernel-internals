@@ -8,7 +8,7 @@ Early x86 NUMA systems (pre-Nehalem era) had a fundamental problem: each socket 
 
 The consequence: a task scheduled on socket 0 could read `CLOCK_MONOTONIC` via the vDSO (which reads the TSC), be migrated by the scheduler to socket 1, and then read a *smaller* TSC value. `clock_gettime(CLOCK_MONOTONIC)` would appear to go backwards. Applications that assumed monotonic time was actually monotonic — a reasonable assumption given the name — would misbehave.
 
-The kernel's fix is the **clocksource watchdog** (`kernel/time/clocksource.c`, `clocksource_watchdog()`). A periodic timer compares TSC readings against a reference clocksource (HPET or ACPI PM timer). If the TSC and the reference diverge by more than a threshold, the TSC is marked `CLOCK_SOURCE_UNSTABLE` and the kernel downgrades to the next-best clocksource (typically HPET, with a rating of 250 vs TSC's 300–400).
+The kernel's fix is the **clocksource watchdog** (`kernel/time/clocksource.c`, `clocksource_watchdog()`). A periodic timer compares TSC readings against a reference clocksource (HPET or ACPI PM timer). If the TSC and the reference diverge by more than a threshold, the TSC is marked `CLOCK_SOURCE_UNSTABLE` and the kernel downgrades to the next-best clocksource (typically HPET, with a rating of 250 vs TSC's fixed rating of 300).
 
 Modern Intel and AMD CPUs expose the **Invariant TSC** feature: `CPUID` leaf `0x80000007`, EDX bit 8 (`TSC_INVARIANT`). An invariant TSC:
 - Runs at a constant rate regardless of CPU frequency scaling (P-states) and power states (C-states up to C1).

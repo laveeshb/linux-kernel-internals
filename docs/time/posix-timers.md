@@ -301,7 +301,7 @@ echo 1 > /sys/kernel/tracing/events/syscalls/sys_enter_timer_settime/enable
 - [include/linux/posix-timers.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/posix-timers.h) — definition of `struct k_itimer`, `struct k_clock` operations table, and reference counting helpers
 - [kernel/time/posix-timers.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/posix-timers.c) — `timer_create()`, `timer_settime()`, `timer_delete()`, and overrun calculation
 - [kernel/time/posix-cpu-timers.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/posix-cpu-timers.c) — per-process and per-thread CPU time clock handlers (`CLOCK_PROCESS_CPUTIME_ID`, `CLOCK_THREAD_CPUTIME_ID`)
-- [fs/timerfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/timerfd.c) — file descriptor timer implementation (`timerfd_create()`, `timerfd_settime()`, `timerfd_read()`), epoll polling integration, and cancel-on-set logic
+- [fs/timerfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/timerfd.c) — file descriptor timer implementation (`timerfd_create()`, `timerfd_settime()`, `timerfd_read_iter()`), epoll polling integration, and cancel-on-set logic
 
 ### Man pages
 
@@ -322,7 +322,7 @@ echo 1 > /sys/kernel/tracing/events/syscalls/sys_enter_timer_settime/enable
 ### LWN articles
 
 - [The new timerfd() API](https://lwn.net/Articles/251413/) — Jonathan Corbet, Sept 25, 2007: the design and API of `timerfd_create()`
-- [posix-timers: Cure inconsistencies and the SIG_IGN mess](https://lwn.net/Articles/977822/) — Thomas Gleixner, April 2024: locking refactors and performance improvements in `posix-cpu-timers.c`
+- [posix-timers: Cure inconsistencies and the SIG_IGN mess](https://lwn.net/Articles/977822/) — Thomas Gleixner, June 2024: a correctness fix removing the SIG_IGN self-rearm/throttle workaround, spanning `posix-timers.c`, `posix-cpu-timers.c`, and `kernel/signal.c`
 
 ### External
 

@@ -40,7 +40,7 @@ User space
 | [The Timer Wheel](timer-wheel.md) | jiffies, struct timer_list, hierarchical wheel, deferrable timers |
 | [NTP and Clock Discipline](ntp.md) | adjtimex, PLL/FLL, leap seconds, TAI offset, chrony/ntpd |
 | [Time Namespaces](time-namespaces.md) | CLONE_NEWTIME, CLOCK_MONOTONIC isolation, CRIU use case |
-| [War Stories](war-stories.md) | TSC drift, leap second thundering herd, del_timer_sync race, jiffies wraparound |
+| [War Stories](war-stories.md) | TSC drift, leap second thundering herd, timer_delete vs timer_delete_sync race, jiffies wraparound |
 
 ## Quick reference
 

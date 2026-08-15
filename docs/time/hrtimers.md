@@ -228,7 +228,7 @@ cat /sys/kernel/tracing/trace_pipe
 ### Kernel source
 
 - [include/linux/hrtimer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer.h) — public hrtimer API: `hrtimer_setup()`, `hrtimer_start()`, `hrtimer_cancel()`, and `hrtimer_forward_now()`
-- [include/linux/hrtimer_defs.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer_defs.h) — definitions of `struct hrtimer`, `struct hrtimer_cpu_base`, and the `HRTIMER_MODE_*` flags
+- [include/linux/hrtimer_defs.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer_defs.h) — `struct hrtimer_cpu_base` (see [include/linux/hrtimer_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer_types.h) for `struct hrtimer` and [include/linux/hrtimer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer.h) for the `HRTIMER_MODE_*` flags)
 - [kernel/time/hrtimer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/hrtimer.c) — high-resolution timer queue management, `hrtimer_switch_to_hres()`, and red-black tree expiry processing
 - [kernel/time/tick-sched.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/tick-sched.c) — scheduler tick emulation via `sched_timer` hrtimer and NOHZ idle/full tick suppression
 - [lib/timerqueue.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/timerqueue.c) — augmented red-black tree operations (`timerqueue_add()`, `timerqueue_del()`) keeping the earliest timer cached
@@ -248,7 +248,7 @@ cat /sys/kernel/tracing/trace_pipe
 
 ### LWN articles
 
-- [High-resolution timers](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the design and integration of Thomas Gleixner's hrtimer subsystem
+- [The high-resolution timer API](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the design and integration of Thomas Gleixner's hrtimer subsystem
 - [hrtimer: Provide softirq context hrtimers](https://lwn.net/Articles/732536/) — Anna-Maria Gleixner, Aug 31, 2017: splitting hardirq vs softirq timer expiry handling for low-latency RT safety
 
 ### External

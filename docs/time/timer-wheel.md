@@ -172,7 +172,7 @@ The table below shows the geometry for HZ=250 (`LVL_DEPTH = 9`), each with 64 bu
 | 5 | 32,768 jiffies | 262,144 – 2,097,151 jiffies |
 | 6 | 262,144 jiffies | 2,097,152 – 16,777,215 jiffies |
 | 7 | 2,097,152 jiffies | 16,777,216 – 134,217,727 jiffies |
-| 8 | 16,777,216 jiffies | up to ~4,294,967 seconds at HZ=250 |
+| 8 | 16,777,216 jiffies | up to ~4,294,967,295 jiffies (~17,179,869 seconds, ~198.8 days) at HZ=250 |
 
 Each level is 8× coarser than the previous. When a timer is inserted, the kernel computes which level and bucket it belongs to based on the delta between now and `expires`. This is a pure bitmask operation — O(1) insert at any range.
 
@@ -296,7 +296,7 @@ Timer callbacks run in softirq context. They must not sleep, call `schedule()`, 
 ### LWN articles
 
 - [Reinventing the timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: Thomas Gleixner's redesign replacing the cascade wheel with the non-cascading hierarchy
-- [High-resolution timers and dynamic ticks](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the interaction between the timer wheel and dyntick/NOHZ idle states
+- [The high-resolution timer API](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the design and integration of the hrtimer subsystem alongside the classic timer wheel
 
 ### External
 
