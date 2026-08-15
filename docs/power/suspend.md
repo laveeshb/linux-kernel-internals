@@ -206,6 +206,7 @@ static int mydriver_resume(struct device *dev)
 /* The kernel tracks active wakeup sources */
 struct wakeup_source {
     const char           *name;
+    int                    id;
     struct list_head      entry;
     spinlock_t            lock;
     struct wake_irq      *wakeirq;
@@ -223,6 +224,7 @@ struct wakeup_source {
     unsigned long         wakeup_count;
     struct device        *dev;
     bool                   active:1;
+    bool                   autosleep_enabled:1;
 };
 ```
 
@@ -344,10 +346,6 @@ echo mem | sudo tee /sys/power/state
 - [include/linux/suspend.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/suspend.h) — `PM_SUSPEND_PREPARE`/`PM_POST_SUSPEND`/`PM_HIBERNATION_PREPARE` notifier constants, `register_pm_notifier()`
 - [include/linux/pm_wakeup.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_wakeup.h) — `struct wakeup_source`, `device_init_wakeup()`, `device_may_wakeup()`
 - [drivers/base/power/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/main.c) — `dpm_prepare()`/`dpm_suspend()`/`dpm_suspend_late()`/`dpm_suspend_noirq()` and their resume-side counterparts
-- [Documentation/driver-api/pm/devices.rst](https://docs.kernel.org/driver-api/pm/devices.html) — the full device suspend/resume phase model and the ordering guarantees across the device hierarchy
-- [Documentation/admin-guide/pm/sleep-states.rst](https://docs.kernel.org/admin-guide/pm/sleep-states.html) — the `freeze`/`standby`/`mem`/`disk` labels and their ACPI S-state mapping
-- [Documentation/admin-guide/pm/suspend-flows.rst](https://docs.kernel.org/admin-guide/pm/suspend-flows.html) — code-flow diagrams for suspend-to-idle vs. standby vs. suspend-to-RAM
-- [Documentation/power/swsusp-and-swap-files.rst](https://docs.kernel.org/power/swsusp-and-swap-files.html) — how to point hibernation at a swap file instead of a swap partition
 
 ### Related pages
 
@@ -361,3 +359,10 @@ echo mem | sudo tee /sys/power/state
 - [A new suspend/hibernate infrastructure](https://lwn.net/Articles/274008/) — Jonathan Corbet, March 19, 2008; Rafael Wysocki's rework separating the suspend and hibernation device callback paths
 - [PM / Sleep: Introduce new phases of device suspend/resume](https://lwn.net/Articles/475730/) — Rafael Wysocki's patch series adding the `.suspend_late`/`.resume_early` and `_noirq` phases described above
 - [Waking systems from suspend](https://lwn.net/Articles/429925/) — John Stultz, March 2, 2011; how the RTC and other wakeup sources bring a system out of suspend
+
+### External
+
+- [Documentation/driver-api/pm/devices.rst](https://docs.kernel.org/driver-api/pm/devices.html) — the full device suspend/resume phase model and the ordering guarantees across the device hierarchy
+- [Documentation/admin-guide/pm/sleep-states.rst](https://docs.kernel.org/admin-guide/pm/sleep-states.html) — the `freeze`/`standby`/`mem`/`disk` labels and their ACPI S-state mapping
+- [Documentation/admin-guide/pm/suspend-flows.rst](https://docs.kernel.org/admin-guide/pm/suspend-flows.html) — code-flow diagrams for suspend-to-idle vs. standby vs. suspend-to-RAM
+- [Documentation/power/swsusp-and-swap-files.rst](https://docs.kernel.org/power/swsusp-and-swap-files.html) — how to point hibernation at a swap file instead of a swap partition

@@ -203,6 +203,7 @@ A power domain is a hardware block that can be independently powered off. Multip
 ```c
 /* include/linux/pm_domain.h */
 struct generic_pm_domain {
+    struct device          dev;
     struct dev_pm_domain domain;    /* embedded — has dev_pm_ops */
     struct list_head      gpd_list_node;
 
@@ -211,8 +212,12 @@ struct generic_pm_domain {
     enum gpd_status       status;    /* GENPD_STATE_ON / GENPD_STATE_OFF */
 
     unsigned int          device_count;
+    unsigned int          device_id;       /* unique device id */
     unsigned int          suspended_count;
     unsigned int          prepared_count;
+    unsigned int          performance_state; /* aggregated max performance state */
+
+    struct dev_power_governor *gov;
 
     struct list_head      parent_links; /* parent domains */
     struct list_head      child_links;  /* child domains */
