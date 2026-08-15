@@ -355,7 +355,7 @@ err = blocking_notifier_call_chain_robust(&module_notify_list,
 err = notifier_to_errno(err);
 ```
 
-The `_robust` variant is the important detail: if any callback in the chain fails, it automatically replays the chain with `MODULE_STATE_GOING` for the callbacks that already succeeded, so a subsystem that patched the module can undo its work. Subsystems such as ftrace, kprobes and the live-patching infrastructure use this hook to instrument the new module's code — `ftrace_module_enable()` and `klp_module_coming()` run just before the chain, for the same reason.
+The `_robust` variant is the important detail: if any callback in the chain fails, it automatically replays the chain with `MODULE_STATE_GOING` for the callbacks that already succeeded, so a subsystem that patched the module can undo its work. Subsystems such as kprobes register on this chain (`kprobe_register_module_notifier()`) to instrument the new module's code; ftrace and live-patching are wired in directly instead — `ftrace_module_enable()` and `klp_module_coming()` run just before the chain, for the same reason.
 
 ### 11. Call mod->init()
 
@@ -498,14 +498,14 @@ insmod / modprobe
                                   free_module() → execmem_free() per mem[] class
 ```
 
-The `UNFORMED` and `GOING` states are both visible to other CPUs through the global modules list, and both are special-cased there: `find_symbol()` skips `UNFORMED` modules outright, `m_show()` omits them from `/proc/modules`, and `strong_try_module_get()` refuses a `COMING` module with `-EBUSY` so a dependent load waits rather than binding to a half-built provider. What guarantees no thread is still executing *inside* a module by the time it reaches `GOING` is the reference count, not RCU: `try_module_get()`/`module_put()` (and `strong_try_module_get()` behind `__symbol_get()`) hold the count up, and `delete_module()` will not set `GOING` with a live count remaining unless the caller forces it (`try_stop_module()` sets `GOING` regardless of count when `try_force_unload()` succeeds, gated on `CONFIG_MODULE_FORCE_UNLOAD` and the `O_TRUNC` flag to `delete_module(2)`) — otherwise it waits until `try_release_module_ref()` has confirmed the count drained. The `synchronize_rcu()` calls on the teardown paths do a different job: `free_module()` unlinks the module from the modules list, the mod tree and the bug list with the `_rcu` variants — "Unlink carefully: kallsyms could be walking list" — and then waits a grace period so those RCU readers cannot touch the memory as it is freed.
+The `UNFORMED` and `COMING` states are both visible to other CPUs through the global modules list, and both are special-cased there: `find_symbol()` skips `UNFORMED` modules outright, `m_show()` omits them from `/proc/modules`, and `strong_try_module_get()` refuses a `COMING` module with `-EBUSY` so a dependent load waits rather than binding to a half-built provider. (`GOING` gets no such special-casing in `find_symbol()` — a module can still export symbols while unloading — but `m_show()` does print it, as `Unloading`.) What guarantees no thread is still executing *inside* a module by the time it reaches `GOING` is the reference count, not RCU: `try_module_get()`/`module_put()` (and `strong_try_module_get()` behind `__symbol_get()`) hold the count up, and `delete_module()` will not set `GOING` with a live count remaining unless the caller forces it (`try_stop_module()` sets `GOING` regardless of count when `try_force_unload()` succeeds, gated on `CONFIG_MODULE_FORCE_UNLOAD` and the `O_TRUNC` flag to `delete_module(2)`) — otherwise `try_release_module_ref()` puts the base reference back and `try_stop_module()` returns `-EWOULDBLOCK`, failing `rmmod` immediately. (The kernel has not blocked and waited for a refcount to drain since v3.13, commit `3f2b9c9cdf38` "module: remove rmmod --wait option.") The `synchronize_rcu()` calls on the teardown paths do a different job: `free_module()` unlinks the module from the modules list, the mod tree and the bug list with the `_rcu` variants — "Unlink carefully: kallsyms could be walking list" — and then waits a grace period so those RCU readers cannot touch the memory as it is freed.
 
 ## /proc/modules format
 
 ```bash
 cat /proc/modules
 # e1000e 262144 0 - Live 0xffffffffc0400000
-# ^^^^^^ ^^^^^^ ^ ^ ^^^^ ^^^^^^^^^^^^^^^^^
+# ^^^^^^ ^^^^^^ ^ ^ ^^^^ ^^^^^^^^^^^^^^^^^^
 # name   size   | | |    load address
 #               | | state (Live/Loading/Unloading)
 #               | dependents ("Used by" in lsmod)
@@ -576,7 +576,7 @@ When building an out-of-tree module, `make` reads `Module.symvers` from `$(KDIR)
 
 - [Module Parameters, Symbols, and Kconfig](module-params.md) — `EXPORT_SYMBOL`/`EXPORT_SYMBOL_GPL`, the `has no CRC!` and `disagrees about version` symptoms, and `/proc/kallsyms`, from the module author's side
 - [Kernel Module Signing](module-signing.md) — `module_sig_check()`, which `load_module()` runs before it looks at a single ELF section
-- [Kbuild: The Kernel Build System](kbuild.md) — out-of-tree builds and cross-compilation, the build side of getting a module's `Module.symvers` right in the first place
+- [Kbuild: The Kernel Build System](kbuild.md) — out-of-tree builds and cross-compilation, the build side that produces the `.ko` this walkthrough loads
 - [Writing and Loading Kernel Modules](module-basics.md) — the source-level view: `module_init`/`module_exit`, `__init` sections, and the `.ko` this page takes apart
 - [Module War Stories](war-stories.md) — CRC mismatches, taint cascades, and versioning surprises seen in production
 
@@ -586,7 +586,7 @@ When building an out-of-tree module, `make` reads `Module.symvers` from `$(KDIR)
 - [The return of modversions](https://lwn.net/Articles/21393/) — January 2003; describes the mechanism step 8 above implements: one structure per imported symbol holding "the symbol name and its checksum", linked into a special section and discarded once the load succeeds
 - [A new version of modversions](https://lwn.net/Articles/986892/) — August 2024; why `genksyms`' C parser cannot version Rust code, and the `gendwarfksyms` replacement that derives CRCs from DWARF instead of source
 - [Yet another memory allocator for executable code](https://lwn.net/Articles/933867/) — June 2023; Mike Rapoport's case for taking executable-memory allocation away from the module loader, and the direct-map fragmentation that motivated it
-- [Two approaches to tightening restrictions on loadable modules](https://lwn.net/Articles/998221/) — November 2024; how the loader's GPL-only enforcement works today and the proposal to restrict an export to a named set of modules
+- [Two approaches to tightening restrictions on loadable modules](https://lwn.net/Articles/998221/) — November 2024; how the loader's GPL-only enforcement worked as of the article's two-table `__ksymtab`/`__ksymtab_gpl` model (replaced by the single-table `__kflagstab` scheme described above in v7.1) and the proposal to restrict an export to a named set of modules
 
 ### External
 
