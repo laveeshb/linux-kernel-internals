@@ -128,7 +128,7 @@ static void hrtimer_switch_to_hres(void)
     }
     /* Reprogram clockevent to fire at exact timer expiry */
     __hrtimer_run_queues(base, now, flags, HRTIMER_ACTIVE_HARD);
-    tick_setup_sched_timer();
+    tick_setup_sched_timer(bool hrtimer);
 }
 ```
 
@@ -244,7 +244,7 @@ cat /sys/kernel/tracing/trace_pipe
 ### LWN articles
 
 - [High-resolution timers](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the design and integration of Thomas Gleixner's hrtimer subsystem
-- [hrtimers and softirq context](https://lwn.net/Articles/732536/) — Jonathan Corbet, March 2016: splitting hardirq vs softirq timer expiry handling for low-latency RT safety
+- [hrtimers and softirq context](https://lwn.net/Articles/732536/) — Anna-Maria Gleixner, Aug 31, 2017: splitting hardirq vs softirq timer expiry handling for low-latency RT safety
 
 ### External
 

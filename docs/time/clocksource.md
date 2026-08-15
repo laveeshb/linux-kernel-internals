@@ -39,7 +39,7 @@ struct clocksource {
     const char      *name;
     struct list_head list;
     u32             freq_khz;
-    int             rating;        /* quality: 500=perfect, 300=good, 100=basic */
+    int             rating;        /* quality: 400-499 perfect, 200-299 good, 100=basic */
     enum clocksource_ids id;
     enum vdso_clock_mode vdso_clock_mode;
     unsigned long   flags;
@@ -215,7 +215,7 @@ static int lapic_next_event(unsigned long delta,
 Each CPU has a **tick device** — the clockevent used for the scheduling tick:
 
 ```c
-/* kernel/time/tick-common.c */
+/* kernel/time/tick-sched.h */
 struct tick_device {
     struct clock_event_device *evtdev;
     enum tick_device_mode      mode;  /* TICKDEV_MODE_PERIODIC or ONESHOT */
@@ -317,7 +317,7 @@ interval:s:1 {
 - [include/linux/clockchips.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/clockchips.h) — `struct clock_event_device`, `CLOCK_EVT_FEAT_*` feature flags, and clockevent state accessors
 - [kernel/time/clocksource.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/clocksource.c) — clocksource registration, rating-based selection, and the `clocksource_watchdog()` stability verification framework
 - [kernel/time/clockevents.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/clockevents.c) — clockevent programming, event handler dispatch, and clockevent device registration
-- [kernel/time/tick-common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/tick-common.c) — per-CPU `struct tick_device`, periodic tick setup, and the interface between clockevents and scheduler ticks
+- [kernel/time/tick-sched.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/tick-sched.h) — per-CPU `struct tick_device`, periodic tick setup, and the interface between clockevents and scheduler ticks
 - [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — `clocksource_tsc`, early boot calibration against PIT/HPET, and runtime instability detection
 - [arch/x86/kernel/apic/apic.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/apic/apic.c) — `lapic_clockevent`, local APIC timer programming via `APIC_TMICT`, and broadcast handling
 

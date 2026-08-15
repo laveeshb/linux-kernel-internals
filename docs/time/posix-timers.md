@@ -325,7 +325,7 @@ echo 1 > /sys/kernel/tracing/events/syscalls/sys_enter_timer_settime/enable
 
 ### LWN articles
 
-- [timerfd: system call for timers](https://lwn.net/Articles/251413/) — Jonathan Corbet, July 2007: the design and API of `timerfd_create()`
+- [timerfd: system call for timers](https://lwn.net/Articles/251413/) — Jonathan Corbet, Sept 25, 2007: the design and API of `timerfd_create()`
 - [Reworking POSIX CPU timers](https://lwn.net/Articles/977822/) — Jonathan Corbet, April 2024: locking refactors and performance improvements in `posix-cpu-timers.c`
 
 ### External

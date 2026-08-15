@@ -15,7 +15,7 @@ Modern Intel and AMD CPUs expose the **Invariant TSC** feature: `CPUID` leaf `0x
 - Is synchronized across all cores in the package.
 - Is synchronized across all sockets on Intel platforms using RESET synchronization.
 
-The kernel checks for this flag during boot (`tsc_init()`) and sets `TSC_RELIABLE` when present, allowing the TSC to be used safely as the primary clocksource even on multi-socket systems.
+The kernel checks for this flag during boot (`tsc_init()`) and sets `X86_FEATURE_TSC_RELIABLE` when present, allowing the TSC to be used safely as the primary clocksource even on multi-socket systems.
 
 ```bash
 # Check for invariant TSC
@@ -47,7 +47,7 @@ Here is what happened:
 
 The result: Reddit, Mozilla, LinkedIn, Qantas, and hundreds of other Linux-based services reported CPU spikes to 100% at exactly the same moment, worldwide.
 
-Root cause: the leap second handling corrupted the `HRTIMER_MODE_ABS` comparison logic, causing a spin condition. The kernel was subsequently patched with backports that corrected `hrtimer` behavior during leap second insertion.
+Root cause: the leap second handling hrtimers were never notified of the clock step via `clock_was_set()`, so `CLOCK_REALTIME`/`TIMER_ABSTIME` timers fired immediately in a continuous loop. The kernel was subsequently patched with backports that corrected `hrtimer` behavior during leap second insertion.
 
 **Workarounds used at the time:**
 - Set the system clock slightly ahead before midnight so the leap second was absorbed as a normal tick, avoiding the confused state entirely.
@@ -61,7 +61,7 @@ This incident led to widespread adoption of `CLOCK_TAI` for applications that ne
 A production Kubernetes cluster on KVM hypervisors started showing erratic `clock_gettime()` behavior. Processes observed `CLOCK_MONOTONIC` advancing far too slowly — with a resolution of 1 millisecond instead of the expected 1 nanosecond. `dmesg` on affected guest VMs showed:
 
 ```
-clocksource: timekeeping watchdog on CPU 0: hpet read-back delay of 187ns, attempt 4, marking unstable
+clocksource: timekeeping watchdog on CPU 0: Marking clocksource hpet unstable due to frequency skew
 clocksource: Switched to clocksource jiffies
 ```
 

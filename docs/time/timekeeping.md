@@ -26,7 +26,7 @@ struct clocksource {
     u32             maxadj;        /* max adjustment to mult */
     u64             max_cycles;    /* max counter delta before overflow */
     const char     *name;
-    int             rating;        /* quality: 1=bad, 100=good, 400=ideal (TSC) */
+    int             rating;        /* quality: 1=bad, 100=good, 300=desired (TSC) */
     /* ... */
 };
 
@@ -52,13 +52,13 @@ The `mult` and `shift` fields avoid division in the hot path:
  * mult is computed so that:
  *   (10^9 * 2^shift) / frequency = mult
  */
-static inline u64 clocksource_cyc2ns(u64 cycles, u32 mult, u32 shift)
+static inline s64 clocksource_cyc2ns(u64 cycles, u32 mult, u32 shift)
 {
     return ((u64) cycles * mult) >> shift;
 }
 ```
 
-For a 3.6 GHz TSC: `mult ≈ 1175`, `shift = 22`. Each call to `clock_gettime` does one `rdtsc` + one multiply + one shift — no division, no lock.
+For a 3.6 GHz TSC: `mult ≈ 1165084`, `shift = 22`. Each call to `clock_gettime` does one `rdtsc` + one multiply + one shift — no division, no lock.
 
 ## struct timekeeper
 
@@ -67,19 +67,52 @@ The timekeeper holds the current time state and is updated on every tick and NTP
 ```c
 /* include/linux/timekeeper_internal.h */
 struct timekeeper {
-    struct tk_read_base  tkr_mono;   /* CLOCK_MONOTONIC */
-    struct tk_read_base  tkr_raw;    /* CLOCK_MONOTONIC_RAW (no NTP) */
+    /* Cacheline 0 (together with prepended seqcount of timekeeper core): */
+    struct tk_read_base    tkr_mono;
 
-    u64                  xtime_sec;    /* seconds component of wall time */
-    unsigned long        ktime_sec;    /* CLOCK_MONOTONIC seconds */
+    /* Cacheline 1: */
+    u64                    xtime_sec;
+    unsigned long          ktime_sec;
+    struct timespec64      wall_to_monotonic;
+    ktime_t                offs_real;
+    ktime_t                offs_boot;
+    union {
+        ktime_t            offs_tai;
+        ktime_t            offs_aux;
+    };
+    u32                    coarse_nsec;
+    enum timekeeper_ids    id;
 
-    struct timespec64    wall_to_monotonic; /* offset between REALTIME and MONOTONIC */
-    ktime_t              offs_real;    /* offset: monotonic → realtime */
-    ktime_t              offs_boot;    /* offset: monotonic → boottime (adds suspend time) */
-    ktime_t              offs_tai;     /* offset: monotonic → TAI */
+    /* Cacheline 2: */
+    struct tk_read_base    tkr_raw;
+    u64                    raw_sec;
 
-    s32                  tai_offset;   /* TAI - UTC (leap seconds) */
-    unsigned int         clock_was_set_seq; /* incremented on settimeofday */
+    /* Cachline 3 and 4 (timekeeping internal variables): */
+    enum clocksource_ids   cs_id;
+    u32                    cs_ns_to_cyc_mult;
+    u32                    cs_ns_to_cyc_shift;
+    u64                    cs_ns_to_cyc_maxns;
+    unsigned int           clock_was_set_seq;
+    u8                     cs_was_changed_seq;
+    u8                     clock_valid;
+
+    union {
+        struct timespec64  monotonic_to_boot;
+        struct timespec64  monotonic_to_aux;
+    };
+
+    u64                    cycle_interval;
+    u64                    xtime_interval;
+    s64                    xtime_remainder;
+    u64                    raw_interval;
+
+    ktime_t                next_leap_ktime;
+    u64                    ntp_tick;
+    s64                    ntp_error;
+    u32                    ntp_error_shift;
+    u32                    ntp_err_mult;
+    u32                    skip_second_overflow;
+    s32                    tai_offset;
 };
 
 struct tk_read_base {
@@ -178,15 +211,23 @@ This makes the counter-to-nanosecond conversion run slightly faster or slower wi
 
 ```c
 /* kernel/time/ntp.c */
-static void ntp_update_frequency(void)
+static void ntp_update_frequency(struct ntp_data *ntpdata)
 {
-    u64 second_length = (u64)(tick_usec * NSEC_PER_USEC * USER_HZ)
-                        << NTP_SCALE_SHIFT;
+    u64 second_length, new_base, tick_usec = (u64)ntpdata->tick_usec;
 
-    second_length += time_freq;   /* accumulated frequency correction */
+    second_length        = (u64)(tick_usec * NSEC_PER_USEC * USER_HZ) << NTP_SCALE_SHIFT;
 
-    /* Adjust clocksource mult to correct rate */
-    tick_length_base = second_length;
+    second_length       += ntpdata->ntp_tick_adj;
+    second_length       += ntpdata->time_freq;
+
+    new_base             = div_u64(second_length, NTP_INTERVAL_FREQ);
+
+    /*
+     * Don't wait for the next second_overflow, apply the change to the
+     * tick length immediately:
+     */
+    ntpdata->tick_length        += new_base - ntpdata->tick_length_base;
+    ntpdata->tick_length_base    = new_base;
 }
 ```
 
@@ -197,7 +238,7 @@ static void ntp_update_frequency(void)
 ```c
 /* lib/vdso/gettimeofday.c — runs in userspace without syscall */
 static __always_inline int
-do_hres(const struct vdso_data *vd, clockid_t clk, struct __kernel_timespec *ts)
+do_hres(const struct vdso_time_data *vd, const struct vdso_clock *vc, clockid_t clk, struct __kernel_timespec *ts)
 {
     const struct vdso_timestamp *vdso_ts = &vd->basetime[clk];
     u64 cycles, last, sec, ns;
@@ -279,8 +320,8 @@ cat /proc/timer_list | head -50
 
 ### LWN articles
 
-- [Introduce CLOCK_REALTIME_COARSE](https://lwn.net/Articles/347811/) — Jonathan Corbet, August 2009: the transition of timekeeping from jiffies ticks to generic clocksources
-- [The trouble with the TSC](https://lwn.net/Articles/388188/) — Jonathan Corbet, May 2010: invariant TSC guarantees, frequency scaling drift, and hardware clock calibration
+- [Introduce CLOCK_REALTIME_COARSE](https://lwn.net/Articles/347811/) — John Stultz, August 2009: the introduction of CLOCK_REALTIME_COARSE and CLOCK_MONOTONIC_COARSE vDSO clocks
+- [The trouble with the TSC](https://lwn.net/Articles/388188/) — Jake Edge, May 2010: invariant TSC guarantees, frequency scaling drift, and hardware clock calibration
 
 ### External
 

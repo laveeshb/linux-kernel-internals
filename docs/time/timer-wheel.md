@@ -45,7 +45,7 @@ Always use these helpers rather than computing `HZ * seconds` directly — the h
 ## struct timer_list
 
 ```c
-/* include/linux/timer.h */
+/* include/linux/timer_types.h */
 struct timer_list {
     struct hlist_node   entry;    /* linkage in the wheel bucket */
     unsigned long       expires;  /* absolute expiry in jiffies */
@@ -72,7 +72,7 @@ DEFINE_TIMER(my_timer, my_callback);
 timer_setup(&my_timer, my_callback, 0);
 ```
 
-`timer_setup()` replaced the older `init_timer()` + `setup_timer()` pattern (changed in Linux 4.15) — the callback now receives the `struct timer_list *` directly rather than an opaque `unsigned long` data argument.
+`timer_setup()` replaced the older `init_timer()` + `setup_timer()` pattern (changed in Linux 4.14) — the callback now receives the `struct timer_list *` directly rather than an opaque `unsigned long` data argument.
 
 ## The public API
 
@@ -104,7 +104,7 @@ Changes the expiry of a pending timer atomically. If the timer is not pending, i
 int timer_reduce(struct timer_list *timer, unsigned long expires);
 ```
 
-Like `mod_timer()` but only moves the expiry *earlier*. If the timer is already set to expire at or before `expires`, the call is a no-op. Added in Linux 4.20. This prevents a driver from accidentally delaying a timer that was already scheduled to fire sooner — useful when multiple code paths may arm the same timer.
+Like `mod_timer()` but only moves the expiry *earlier*. If the timer is already set to expire at or before `expires`, the call is a no-op. Added in Linux 4.15. This prevents a driver from accidentally delaying a timer that was already scheduled to fire sooner — useful when multiple code paths may arm the same timer.
 
 ### timer_delete() vs timer_delete_sync()
 
@@ -172,7 +172,7 @@ The table below shows the geometry for HZ=250 (`LVL_DEPTH = 9`), each with 64 bu
 | 5 | 32,768 jiffies | 262,144 – 2,097,151 jiffies |
 | 6 | 262,144 jiffies | 2,097,152 – 16,777,215 jiffies |
 | 7 | 2,097,152 jiffies | 16,777,216 – 134,217,727 jiffies |
-| 8 | 16,777,216 jiffies | up to ~67,108 seconds at HZ=250 |
+| 8 | 16,777,216 jiffies | up to ~4,294,967 seconds at HZ=250 |
 
 Each level is 8× coarser than the previous. When a timer is inserted, the kernel computes which level and bucket it belongs to based on the delta between now and `expires`. This is a pure bitmask operation — O(1) insert at any range.
 
@@ -277,7 +277,7 @@ Timer callbacks run in softirq context. They must not sleep, call `schedule()`, 
 
 ### Kernel source
 
-- [include/linux/timer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timer.h) — public `struct timer_list` API: `timer_setup()`, `add_timer()`, `mod_timer()`, `timer_reduce()`, `timer_delete_sync()`, and `timer_shutdown_sync()`
+- [include/linux/timer_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timer_types.h) — public `struct timer_list` API: `timer_setup()`, `add_timer()`, `mod_timer()`, `timer_reduce()`, `timer_delete_sync()`, and `timer_shutdown_sync()`
 - [include/linux/jiffies.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/jiffies.h) — `jiffies` counter, time conversion helpers (`msecs_to_jiffies()`), and wraparound-safe comparison macros (`time_after()`, `time_before()`)
 - [kernel/time/timer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer.c) — hierarchical timer wheel implementation, `__run_timers()`, level and bucket calculation, and softirq execution
 - [kernel/time/timer_migration.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer_migration.c) — hierarchical timer pull migration (`tmigr_handle_remote()`) managing global timers across idle CPU clusters
