@@ -7,18 +7,21 @@
 When a CPU has no work to do, it enters a **C-state** (idle state). Each state trades deeper power savings for higher wake-up latency:
 
 ```
-C-state hierarchy (x86):
-  C0 - Active (running instructions)
-  C1 - HALT (stops pipeline, keeps power on)       ~1µs wake, ~15W saved
-  C1E - C1 + Enhanced (lower voltage)              ~5µs wake, ~20W saved
-  C2 - STOP-GRANT (cache coherent)                 ~10µs wake
-  C3 - SLEEP (LLC may flush, snoop disabled)       ~50µs wake, large savings
-  C6 - DEEP POWER DOWN (core voltage off)          ~100µs wake, max savings
-  C7 - ENHANCED C6 (LLC flushed)                   ~150µs wake
-  C8, C9, C10 - Platform C-states (package + RAM)  ~300µs+ wake
+C-state hierarchy (x86, representative intel_idle/skl_cstates[] values --
+exact numbers vary by CPU generation, see drivers/idle/intel_idle.c):
+  C0  - Active (running instructions)
+  C1  - HALT (stops pipeline, keeps power on)      ~2µs wake
+  C1E - C1 + Enhanced (lower voltage)               ~10µs wake
+  C3  - SLEEP (LLC may flush, snoop disabled)       ~70µs wake, large savings
+  C6  - DEEP POWER DOWN (core voltage off)          ~85µs wake, max savings
+  C7s - ENHANCED C6 (LLC flushed)                   ~124µs wake
+  C8  - Platform C-state (package + RAM)            ~200µs wake
+  C9  - Platform C-state                            ~480µs wake
+  C10 - Deepest per-core idle state                 ~890µs (~0.9ms) wake
 
-Package C-states (PC-states): the entire socket enters when all cores idle:
-  PC2: ~5µs, PC3: ~50µs, PC6: ~100µs (DRAM power down), PC8: ~300µs
+C10 here is still a per-core ACPI C-state -- not to be confused with
+"Modern Standby" (S0ix), a separate platform-wide low-power mode entered
+instead of S3 suspend, with its own coarser latency budget.
 ```
 
 ```bash
@@ -40,9 +43,9 @@ for state in /sys/devices/system/cpu/cpu0/cpuidle/state*; do
     echo -n "latency=$(cat $state/latency)µs "
     echo "power=$(cat $state/power)mW"
 done
-# C1: latency=1µs power=0mW
-# C3: latency=59µs power=0mW
-# C6: latency=124µs power=0mW
+# C1: latency=2µs power=0mW
+# C3: latency=70µs power=0mW
+# C6: latency=85µs power=0mW
 ```
 
 ## cpuidle framework
@@ -56,11 +59,20 @@ The Linux cpuidle framework selects which C-state to enter when the CPU is idle:
 struct cpuidle_state {
     char        name[CPUIDLE_NAME_LEN];
     char        desc[CPUIDLE_DESC_LEN];
-    s64         exit_latency_ns;  /* worst-case wake-up latency */
-    s64         target_residency_ns; /* min time to justify entering */
-    unsigned int flags;           /* CPUIDLE_FLAG_TIMER_STOP etc. */
+
+    s64         exit_latency_ns;      /* worst-case wake-up latency */
+    s64         target_residency_ns;  /* min time to justify entering */
+    unsigned int flags;               /* CPUIDLE_FLAG_TIMER_STOP etc. */
+
+    /* legacy µs-granularity fields -- most drivers (e.g. intel_idle) still
+     * populate these; the core derives the _ns fields above from them */
+    unsigned int exit_latency;        /* in US */
+    int          power_usage;         /* in mW */
+    unsigned int target_residency;    /* in US */
+
     int (*enter)(struct cpuidle_device *dev,
                  struct cpuidle_driver *drv, int index);
+    /* ... enter_dead(), enter_s2idle() also omitted here ... */
 };
 
 /* Per-CPU idle device: */
@@ -81,7 +93,10 @@ struct cpuidle_driver {
     struct module       *owner;
     struct cpuidle_state states[CPUIDLE_STATE_MAX];
     int                  state_count;
-    int                  safe_state_index; /* fallback if deadline missed */
+    int                  safe_state_index; /* shallow state used while a CPU
+                                             * waits for coupled CPUs during
+                                             * synchronized (COUPLED) idle
+                                             * entry, see drivers/cpuidle/coupled.c */
 };
 ```
 
@@ -103,6 +118,7 @@ static struct cpuidle_state skl_cstates[] = {
     {
         .name = "C1E",
         .desc = "MWAIT 0x01",
+        .flags = MWAIT2flg(0x01) | CPUIDLE_FLAG_ALWAYS_ENABLE,
         .exit_latency = 10,
         .target_residency = 20,
         .enter = intel_idle,
@@ -110,6 +126,7 @@ static struct cpuidle_state skl_cstates[] = {
     {
         .name = "C3",
         .desc = "MWAIT 0x10",
+        .flags = MWAIT2flg(0x10) | CPUIDLE_FLAG_TLB_FLUSHED,
         .exit_latency = 70,
         .target_residency = 100,
         .enter = intel_idle,
@@ -120,7 +137,7 @@ static struct cpuidle_state skl_cstates[] = {
         .exit_latency = 85,
         .target_residency = 200,
         .enter = intel_idle,
-        .flags = CPUIDLE_FLAG_TLB_FLUSHED,
+        .flags = MWAIT2flg(0x20) | CPUIDLE_FLAG_TLB_FLUSHED,
     },
     /* ... more states ... */
 };
@@ -153,30 +170,41 @@ The governor decides which C-state to enter based on expected idle duration:
 
 ### ladder governor
 
-Simple: tries to stay at or near the current state; moves up/down based on actual vs predicted duration:
+Simple: tries to stay at or near the current state; moves up/down by comparing the *actual* residency in the last state entered against the neighboring states' exit latencies (`drivers/cpuidle/governors/ladder.c`):
 
 ```
-idle duration < target_residency[current-1] → demote to lower state
-idle duration > target_residency[current]   → promote to deeper state
+last_residency = actual_time_in_last_state - exit_latency[last_state]
+
+# promote (go deeper), after PROMOTION_COUNT consecutive qualifying idles:
+if last_residency > exit_latency[last_state + 1]:
+    → promote to last_state + 1
+
+# demote (go shallower):
+if exit_latency[last_state] > latency_req:
+    → demote immediately to the deepest state still within latency_req
+elif last_residency < exit_latency[last_state]:
+    → demote to last_state - 1  (DEMOTION_COUNT == 1, so this is immediate)
 ```
 
 ### menu governor (default for tickless systems)
 
-Predicts idle duration using the next timer event and historical data:
+Predicts idle duration using the next timer event and historical data. As of current mainline, `menu_select()` no longer has an iowait-based correction input (an older iowaiters-aware `which_bucket()` variant was removed) -- the prediction is now purely timer- and history-driven:
 
 ```c
-/* kernel/sched/idle.c + drivers/cpuidle/governors/menu.c */
+/* drivers/cpuidle/governors/menu.c */
 
 /* Inputs to prediction: */
-/* 1. Time to next timer (hrtimer, jiffies timer) */
-/* 2. Historical data: exponentially weighted moving average */
-/* 3. iowait correction: lower C-state if I/O is pending */
+/* 1. Time to next timer event (tick_nohz_get_sleep_length()) */
+/* 2. Per-magnitude correction factor: an EWMA, bucketed by which_bucket()
+ *    on the predicted duration alone (6 buckets, by order of magnitude) --
+ *    corrects for wakeups (e.g. interrupts) that beat the next timer */
+/* 3. Repeatable-interval detector: get_typical_interval() looks at the
+ *    last 8 idle intervals; if their stddev is low, their average is used
+ *    as the prediction instead of the next-timer estimate */
+/* 4. pm_qos latency constraint (cpuidle_governor_latency_req()): caps how
+ *    deep a state may be selected regardless of the duration prediction */
 
 /* Output: selected C-state index */
-
-/* Correction factors: */
-/* - If many short idles: don't go deep (I/O about to arrive) */
-/* - If long idles predicted: go deep */
 ```
 
 ### TEO governor (Timer Events Oriented, Linux 5.1+)
@@ -196,8 +224,10 @@ echo teo > /sys/devices/system/cpu/cpuidle/current_governor
 For latency-sensitive workloads, disable deep C-states:
 
 ```bash
-# Disable C6 and deeper (state 3+):
-for cpu in /sys/devices/system/cpu/cpu*/cpuidle/state3/; do
+# Disable C6 and deeper. With the state ordering used above
+# (state0=POLL, state1=C1, state2=C1E, state3=C3, state4=C6, ...),
+# C6 is state4:
+for cpu in /sys/devices/system/cpu/cpu*/cpuidle/state[4-9]*/; do
     echo 1 > $cpu/disable 2>/dev/null
 done
 
@@ -213,9 +243,23 @@ done
 cat /sys/devices/system/cpu/cpu0/power/pm_qos_resume_latency_us
 # 0 = no constraint, other value = max acceptable wakeup latency
 
-# Application: prevent deep C-states (e.g., audio daemon):
-echo 100 > /dev/cpu_dma_latency  # max 100µs wakeup latency
-# (keep fd open; closing reverts the constraint)
+# Application: prevent deep C-states (e.g., audio daemon).
+#
+# /dev/cpu_dma_latency requires a *binary* 4-byte s32, not a decimal string:
+# cpu_latency_qos_write() (kernel/power/qos.c) only string-parses a write
+# when its length is NOT exactly sizeof(s32) == 4 bytes. "100\n" from
+# `echo 100` is exactly 4 bytes, so it's reinterpreted as a raw binary value
+# instead of the string "100" -- producing a garbage latency, not 100us.
+# A shell redirect (or `tee`) also closes the fd right after writing, which
+# drops the constraint immediately -- it only lasts as long as the fd stays
+# open, so a real daemon holds it open for its own lifetime:
+python3 -c "
+import os, struct, time
+fd = os.open('/dev/cpu_dma_latency', os.O_WRONLY)
+os.write(fd, struct.pack('i', 100))  # binary s32: max 100us wakeup latency
+time.sleep(3600)                     # keep the fd open -- closing it reverts the constraint
+os.close(fd)
+"
 ```
 
 ## Statistics and observability
@@ -228,11 +272,25 @@ cat /sys/devices/system/cpu/cpu0/cpuidle/state*/name
 
 # cpupower tool:
 cpupower idle-info
-# CPUs which run at the same hardware frequency:  0-7
-# CPUs which need to have their frequency coordinated: 0-7
-# maximum transition latency: 0.00 ms
-# Available idle states:
-# POLL  C1  C1E  C3  C6  C7s  C8  C9  C10
+# CPUidle driver: intel_idle
+# CPUidle governor: menu
+#
+# analyzing CPU 0:
+#
+# Number of idle states: 9
+# Available idle states: POLL C1 C1E C3 C6 C7s C8 C9 C10
+# C1:
+# Flags/Description: MWAIT 0x00
+# Latency: 2
+# Residency: 2
+# Usage: 8214532
+# Duration: 431029841203
+# C6:
+# Flags/Description: MWAIT 0x20
+# Latency: 85
+# Residency: 200
+# Usage: 5127004
+# Duration: 981234501122
 
 cpupower monitor -i 5  # 5-second sample
 # Mperf | C0   Cx   Freq | POLL C1   C1E  C3   C6   C7s  C8   C9   C10

@@ -9,7 +9,7 @@
 1. **Measures** energy consumption of major hardware domains using on-die counters
 2. **Limits** sustained power draw by throttling clock frequencies when a domain's rolling average exceeds a configured cap
 
-RAPL is not a software power meter — the counters are built into the package's power management unit and are accurate to roughly 61 µJ per tick. It is the basis for `perf stat -e power/energy-pkg/`, powertop's package power display, and many data-center power management tools.
+RAPL is not a software power meter — the counters are built into the package's power management unit and are accurate to roughly 15.3 µJ per tick (the default energy unit, 2⁻¹⁶ J, from `MSR_RAPL_POWER_UNIT`). It is the basis for `perf stat -e power/energy-pkg/`, powertop's package power display, and many data-center power management tools.
 
 ## RAPL domains
 
@@ -30,7 +30,7 @@ On a dual-socket server you will see `intel-rapl:0` and `intel-rapl:1` for the t
 At the hardware level RAPL is exposed through Model-Specific Registers:
 
 ```
-MSR_PKG_ENERGY_STATUS   (0x611)  — rolling energy counter, ~61 µJ units
+MSR_PKG_ENERGY_STATUS   (0x611)  — rolling energy counter, ~15.3 µJ units
 MSR_PKG_POWER_LIMIT     (0x610)  — configures limit 1 (sustained) and limit 2 (burst)
 MSR_PKG_POWER_INFO      (0x614)  — TDP, min power, max power (read-only)
 
@@ -143,7 +143,7 @@ RAPL supports two independent power constraints per zone:
 | `constraint_0` | Long-term (PL1) | 1 s – 28 s | Sustained cap; hardware throttles if rolling average exceeds this |
 | `constraint_1` | Short-term (PL2) | 1 ms – 7 ms | Burst cap; allows exceeding PL1 briefly for responsiveness |
 
-PL2 is always ≥ PL1. A typical OEM configuration: PL1 = 15 W (thermal envelope), PL2 = 25 W (burst for up to ~28 s). After the burst window expires, the processor clamps to PL1.
+PL2 is always ≥ PL1. A typical OEM configuration: PL1 = 15 W (thermal envelope), PL2 = 25 W (burst for a few milliseconds, per the `constraint_1` time window above). After the burst window expires, the processor clamps to PL1.
 
 ```bash
 # Short-term (burst) limit
@@ -178,7 +178,7 @@ The perf backend is in `arch/x86/events/rapl.c` and registers a PMU named `power
 
 ## ARM equivalent: SCMI power capping
 
-On ARM platforms, SCMI (System Control and Management Interface) provides a comparable capability via the platform firmware. The driver `drivers/powercap/arm_scmi_powercap.c` registers SCMI power domains as powercap zones, so the same `/sys/class/powercap/` interface works on ARM servers (e.g., Ampere Altra).
+On ARM platforms, SCMI (System Control and Management Interface) provides a comparable capability via the platform firmware. The driver `drivers/powercap/arm_scmi_powercap.c` registers zones from the dedicated SCMI **Powercap** protocol (`SCMI_PROTOCOL_POWERCAP`, protocol ID `0x18`) as powercap zones, so the same `/sys/class/powercap/` interface works on ARM servers (e.g., Ampere Altra). This is a distinct SCMI protocol from **Power domain management** (`SCMI_PROTOCOL_POWER`, protocol ID `0x11`), which is what backs Linux's generic power-domain (genpd) framework, not powercap.
 
 ```bash
 # On an ARM server with SCMI powercap
@@ -227,7 +227,8 @@ perf stat -e cpu-cycles,ref-cycles -- sleep 1
 
 - [include/linux/powercap.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/powercap.h) — `struct powercap_zone`, `struct powercap_zone_ops`, and the control-type/zone registration API
 - [drivers/powercap/intel_rapl_common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_common.c) — shared RAPL domain/constraint logic used by both interface drivers
-- [drivers/powercap/intel_rapl_msr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_msr.c) — MSR-based RAPL interface driver; defines the MSR offsets used on this page
+- [drivers/powercap/intel_rapl_msr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_msr.c) — MSR-based RAPL interface driver
+- [arch/x86/include/asm/msr-index.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/msr-index.h) — `MSR_RAPL_POWER_UNIT`, `MSR_PKG_ENERGY_STATUS`, and the other MSR offsets used on this page
 - [drivers/powercap/arm_scmi_powercap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/arm_scmi_powercap.c) — ARM SCMI powercap driver, registering SCMI power domains as powercap zones
 - [arch/x86/events/rapl.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/events/rapl.c) — the `power` PMU backend that exposes RAPL counters to `perf stat -e power/energy-*/`
 

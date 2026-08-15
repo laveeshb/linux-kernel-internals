@@ -87,7 +87,10 @@ enum thermal_trip_type {
 /* Driver: register a temperature sensor as a thermal zone */
 static int my_get_temp(struct thermal_zone_device *tzd, int *temp)
 {
-    struct my_sensor *sensor = tzd->devdata;
+    /* struct thermal_zone_device is private to the thermal core (see
+     * above), so drivers can't dereference tzd->devdata directly —
+     * use the accessor exported by include/linux/thermal.h instead. */
+    struct my_sensor *sensor = thermal_zone_device_priv(tzd);
     *temp = read_sensor_millidegrees(sensor);
     return 0;
 }
@@ -120,10 +123,10 @@ thermal_zone_device_enable(tzd);
 ```c
 /* A cooling device can reduce power: e.g., CPU frequency */
 struct thermal_cooling_device {
-    int     id;
-    char    type[THERMAL_NAME_LENGTH];
-    struct  device device;
-    struct  thermal_cooling_device_ops *ops;
+    int         id;
+    const char  *type;
+    struct      device device;
+    struct      thermal_cooling_device_ops *ops;
     /* ... */
 };
 
@@ -143,7 +146,7 @@ struct thermal_cooling_device *cdev =
 ```bash
 # View cooling devices:
 ls /sys/class/thermal/cooling_device*/
-cat /sys/class/thermal/cooling_device0/type    # "Processor" or "cpufreq"
+cat /sys/class/thermal/cooling_device0/type    # "Processor" or "cpufreq-cpu0"
 cat /sys/class/thermal/cooling_device0/max_state  # e.g., 3 (4 levels)
 cat /sys/class/thermal/cooling_device0/cur_state  # current level (0=off)
 ```
@@ -170,7 +173,11 @@ A PID controller that distributes a power budget across cooling devices:
 /* Parameters (tunable via /sys/class/thermal/thermal_zone*/
 /*                             /sustainable_power etc.):  */
 /* sustainable_power: maximum sustainable power (mW)      */
-/* k_po, k_pu, k_d: PID controller gains                  */
+/* k_po, k_pu, k_i, k_d: PID controller gains — proportional */
+/* (overshoot/undershoot), integral, and derivative terms.   */
+/* Stored as fixed-point (mul_frac()/int_to_frac() in the    */
+/* driver), not plain integers, even though the sysfs files  */
+/* below show/accept decimal integers.                       */
 /* Estimate: (current_temp - control_temp) → power_budget */
 /* → allocate proportionally to each cooling device       */
 ```
@@ -179,8 +186,9 @@ A PID controller that distributes a power budget across cooling devices:
 # Tune power_allocator governor:
 echo power_allocator > /sys/class/thermal/thermal_zone0/policy
 echo 3000 > /sys/class/thermal/thermal_zone0/sustainable_power  # 3W budget
-echo 100  > /sys/class/thermal/thermal_zone0/k_po  # proportional gain
-echo 100  > /sys/class/thermal/thermal_zone0/k_pu
+echo 100  > /sys/class/thermal/thermal_zone0/k_po  # proportional gain (overshoot)
+echo 100  > /sys/class/thermal/thermal_zone0/k_pu  # proportional gain (undershoot)
+echo 10   > /sys/class/thermal/thermal_zone0/k_i   # integral gain
 echo 0    > /sys/class/thermal/thermal_zone0/k_d   # derivative gain
 ```
 
@@ -203,8 +211,12 @@ On x86, ACPI defines thermal zones in DSDT/SSDT:
 cat /sys/class/thermal/thermal_zone*/type | grep -i acpi
 # acpitz
 
-# ACPI trip points come from ACPI _PSV (passive), _CRT (critical), _HOT:
-acpidump -n DSDT | grep -A 20 "ThermalZone"
+# ACPI trip points come from ACPI _PSV (passive), _CRT (critical), _HOT.
+# ThermalZone is an ASL keyword, not present in the raw AML binary, so it
+# won't show up in a raw dump — disassemble first:
+acpidump -n DSDT -o dsdt.dat
+iasl -d dsdt.dat            # produces dsdt.dsl (ASL source)
+grep -A 20 "ThermalZone" dsdt.dsl
 ```
 
 ## Fan control
@@ -217,8 +229,10 @@ cat /sys/class/thermal/cooling_device*/type | grep -i fan
 # Manual fan control (bypass thermal framework):
 # (varies by platform; common methods:)
 
-# Dell laptops (i8k):
-echo 2 > /proc/i8k  # set fan level
+# Dell laptops (i8k): /proc/i8k is read-only status output (drivers/hwmon/dell-smm-hwmon.c
+# registers a .proc_ioctl handler, but no .proc_write); setting the fan level
+# requires the I8K_SET_FAN ioctl (e.g. via the `i8kutils`/`i8kfan` userspace tools),
+# not a plain sysfs-style write.
 
 # ACPI fans via hwmon:
 cat /sys/class/hwmon/hwmon*/name
@@ -255,16 +269,23 @@ tracepoint:thermal:thermal_zone_trip
            args->trip_type);
 }'
 
-# Check if CPU is thermally throttled (PROCHOT):
-grep -r "throttle\|prochot" /sys/devices/system/cpu/cpu*/thermal_throttle/
+# Check if CPU is thermally throttled (PROCHOT): the info lives in the
+# *names* of numeric counter files under thermal_throttle/, not in their
+# contents, so grepping for a string won't match — cat the counters instead:
 cat /sys/devices/system/cpu/cpu0/thermal_throttle/core_throttle_count
+cat /sys/devices/system/cpu/cpu0/thermal_throttle/core_power_limit_count
+cat /sys/devices/system/cpu/cpu0/thermal_throttle/package_throttle_count
 
-# MSR-based throttling on Intel:
-rdmsr -p0 0x19c   # IA32_THERM_STATUS (per-core): bit 0 = PROCHOT/thermal status
-# bit 0 set → this core is/was thermally throttled
+# MSR-based throttling on Intel (IA32_THERM_STATUS bits, per SDM Vol 3B §15.7):
+rdmsr -p0 0x19c   # IA32_THERM_STATUS (per-core)
+# bit 0: Thermal Status — currently being throttled due to temperature
+# bit 1: Thermal Status Log — sticky "has this happened since last clear" flag
+# bit 2: PROCHOT#/FORCEPR Event — currently throttled by an external PROCHOT# assertion
+# bit 3: PROCHOT#/FORCEPR Log — sticky version of bit 2
+# (bit 0 = current thermal-status throttling; bit 2 = current PROCHOT# throttling — distinct events)
 
 # Package-wide equivalent:
-rdmsr -p0 0x1b1   # IA32_PACKAGE_THERM_STATUS: bit 0 = PROCHOT for the package
+rdmsr -p0 0x1b1   # IA32_PACKAGE_THERM_STATUS: same bit layout, package-wide
 ```
 
 ## ARM thermal: SCMI and TF-A

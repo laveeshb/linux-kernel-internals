@@ -125,7 +125,7 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 
 ### ondemand
 
-Polls CPU idle time periodically (default 10ms), scales frequency proportionally to non-idle fraction:
+Polls CPU idle time periodically, scales frequency proportionally to non-idle fraction. The sampling interval is not a fixed 10ms: it defaults to `max(2 * tick_period, 1.5 * transition_latency)` (falling back to 1ms if the driver reports no transition latency) — see `cpufreq_policy_transition_delay_us()` in `drivers/cpufreq/cpufreq.c` and the default computed in `drivers/cpufreq/cpufreq_governor.c`. It's tunable at runtime via the governor's `sampling_rate` sysfs file:
 
 ```
 target_freq = max_freq * (non_idle_time / sample_time)
@@ -149,7 +149,7 @@ echo powersave | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 
 ### acpi-cpufreq
 
-Uses ACPI _PCT (performance control) and _PSS (P-state supported) objects to enumerate and switch P-states. The OS writes to MSR_IA32_PERF_CTL:
+Uses ACPI _PCT (Performance Control) and _PSS (Performance Supported States) objects to enumerate and switch P-states. The OS writes to MSR_IA32_PERF_CTL:
 
 ```c
 /* drivers/cpufreq/acpi-cpufreq.c */
@@ -256,11 +256,15 @@ Separate from P-states, C-states are CPU idle states (when there's no work):
 | C-state | Name | Wake latency | Power saved |
 |---------|------|-------------|-------------|
 | C0 | Active | 0 | none |
-| C1 | Halt | ~1µs | low |
-| C1E | Enhanced halt | ~1µs | moderate |
-| C3 | Sleep | ~100µs | high |
-| C6 | Deep power down | ~200µs | highest |
-| C10 | Modern standby | ~10ms | maximum |
+| C1 | Halt | ~2µs | low |
+| C1E | Enhanced halt | ~10µs | moderate |
+| C3 | Sleep | ~70µs | high |
+| C6 | Deep power down | ~85µs | highest |
+| C10 | Deepest core idle | ~0.9ms | maximum |
+
+(Figures are representative `intel_idle` values for a Skylake-class core, from `skl_cstates[]` in `drivers/idle/intel_idle.c`; exact numbers vary by CPU generation.)
+
+Note that C10 here is a per-core ACPI C-state, distinct from **Modern Standby** (also called S0ix / Low Power Idle), which is a *platform-wide* low-power mode entered instead of S3 suspend when every core, and the chipset, agree conditions are met. Modern Standby is not part of the per-core C-state ladder and has its own, much coarser-grained latency budget — don't conflate the two.
 
 The cpuidle subsystem selects C-states. The governor (`menu` or `teo`) predicts next wakeup time and picks the deepest C-state with acceptable latency.
 
@@ -272,7 +276,21 @@ grep . /sys/devices/system/cpu/cpu0/cpuidle/state*/time  # microseconds
 
 # Prevent deep C-states (latency-sensitive workloads)
 # Set latency QoS: max allowed exit latency in µs
-echo 100 | sudo tee /dev/cpu_dma_latency  # hold fd open
+#
+# /dev/cpu_dma_latency requires a *binary* 4-byte s32, not a decimal string:
+# cpu_latency_qos_write() (kernel/power/qos.c) only string-parses a write
+# when its length is NOT exactly sizeof(s32) == 4 bytes. "100\n" from
+# `echo 100` is exactly 4 bytes, so it's reinterpreted as a raw binary value
+# instead of the string "100" -- producing a garbage latency, not 100us.
+# `sudo tee` also closes the fd right after writing, which drops the
+# constraint immediately (it only lasts as long as the fd stays open).
+sudo python3 -c "
+import os, struct, time
+fd = os.open('/dev/cpu_dma_latency', os.O_WRONLY)
+os.write(fd, struct.pack('i', 100))  # binary s32: max 100us wakeup latency
+time.sleep(3600)                     # keep the fd open -- closing it reverts the constraint
+os.close(fd)
+"
 ```
 
 ## Observing cpufreq

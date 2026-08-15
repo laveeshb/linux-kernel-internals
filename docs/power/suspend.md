@@ -33,8 +33,14 @@ kernel/power/suspend.c: pm_suspend()
         ├─ 1. Sync filesystems
         │
         ├─ 2. Freeze userspace processes
-        │      freeze_processes() — set TIF_SIGPENDING, tasks reach
-        │      try_to_freeze() and enter the refrigerator (freezable points)
+        │      freeze_processes() → freeze_task() per task (kernel/freezer.c):
+        │      tasks blocked in an interruptible sleep are switched directly
+        │      to the TASK_FROZEN scheduler state via __freeze_task(); tasks
+        │      that can't be switched in place are sent a fake signal wakeup
+        │      (or woken, for kthreads) so they run until they hit a
+        │      try_to_freeze() checkpoint and enter the refrigerator
+        │      (__refrigerator()), which also lands them in TASK_FROZEN
+        │      [replaces the older pre-6.1 TIF_SIGPENDING-only refrigerator loop]
         │
         ├─ 3. Suspend devices (reverse probe order)
         │      dpm_suspend_start() → each driver's .suspend callback
@@ -238,8 +244,9 @@ cat /sys/kernel/debug/wakeup_sources
 # Which IRQs can wake the system?
 cat /proc/interrupts | grep -i wake
 
-# Last wakeup reason (after resume)
-cat /sys/kernel/debug/suspend_stats
+# Last wakeup reason (after resume): the IRQ number that woke the system,
+# 0 if none is recorded
+cat /sys/power/pm_wakeup_irq
 ```
 
 ## Hibernate (suspend-to-disk)
@@ -319,14 +326,26 @@ dmesg | grep -E "PM:|suspend|freeze" | tail -50
 # Which device failed to suspend?
 dmesg | grep "error during suspend"
 
-# Time each driver's suspend callback takes
-cat /sys/kernel/debug/suspend_stats
-# success: 42
-# fail: 2
-# failed_freeze: 0
-# failed_prepare: 0
-# failed_suspend: 1       ← driver failed here
-# failed_suspend_noirq: 0
+# Suspend/resume success and failure counters: a sysfs directory with one
+# file per stat (kernel/power/main.c), not a single debugfs file
+cat /sys/power/suspend_stats/success
+# 42
+cat /sys/power/suspend_stats/fail
+# 2
+cat /sys/power/suspend_stats/failed_suspend       # ← driver failed here
+# 1
+cat /sys/power/suspend_stats/last_failed_dev      # name of last device to fail
+cat /sys/power/suspend_stats/last_failed_step     # which phase it failed in
+ls /sys/power/suspend_stats/
+# success  fail  failed_freeze  failed_prepare  failed_suspend
+# failed_suspend_late  failed_suspend_noirq  failed_resume
+# failed_resume_early  failed_resume_noirq  last_failed_dev
+# last_failed_errno  last_failed_step  last_hw_sleep
+# total_hw_sleep  max_hw_sleep
+
+# Time each driver's suspend/resume callback takes: pm_print_times (enabled
+# above) makes this appear in dmesg — it is not itself a stats file
+dmesg | grep "PM: .* took"
 
 # Enable PM tracepoints for detailed timeline
 echo 1 > /sys/kernel/tracing/events/power/device_pm_callback_start/enable
@@ -357,7 +376,7 @@ echo mem | sudo tee /sys/power/state
 ### LWN articles
 
 - [A new suspend/hibernate infrastructure](https://lwn.net/Articles/274008/) — Jonathan Corbet, March 19, 2008; Rafael Wysocki's rework separating the suspend and hibernation device callback paths
-- [PM / Sleep: Introduce new phases of device suspend/resume](https://lwn.net/Articles/475730/) — Rafael Wysocki's patch series adding the `.suspend_late`/`.resume_early` and `_noirq` phases described above
+- [PM / Sleep: Introduce new phases of device suspend/resume](https://lwn.net/Articles/475730/) — Rafael Wysocki's linux-pm patch series (posted January 16, 2012; archived by LWN as a mailing-list thread, not a staff-written article) that added the `.suspend_late`/`.resume_early` phases described above. The `_noirq` phases already existed by the time of the 2008 rework above; this series did not introduce them.
 - [Waking systems from suspend](https://lwn.net/Articles/429925/) — John Stultz, March 2, 2011; how the RTC and other wakeup sources bring a system out of suspend
 
 ### External

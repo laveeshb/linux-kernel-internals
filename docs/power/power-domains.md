@@ -29,7 +29,9 @@ Before genpd, each SoC vendor duplicated logic to track device idleness and sequ
 The central structure (`include/linux/pm_domain.h`):
 
 ```c
+/* include/linux/pm_domain.h — abridged; the real struct has ~30 fields */
 struct generic_pm_domain {
+    struct device          dev;          /* domain's own struct device */
     struct dev_pm_domain   domain;       /* embedded; exposes dev_pm_ops */
     struct list_head       gpd_list_node;/* link in global gpd_list */
 
@@ -38,8 +40,12 @@ struct generic_pm_domain {
     enum gpd_status        status;       /* GENPD_STATE_ON or GENPD_STATE_OFF */
 
     unsigned int           device_count;
-    unsigned int           suspended_count;
+    unsigned int           device_id;        /* unique device id */
+    unsigned int           suspended_count;  /* system-suspend device counter, NOT runtime PM */
     unsigned int           prepared_count;
+    unsigned int           performance_state; /* aggregated max performance state */
+
+    struct dev_power_governor *gov;      /* NULL if no governor was registered */
 
     /* callbacks */
     int (*power_off)(struct generic_pm_domain *domain);
@@ -74,8 +80,12 @@ static struct generic_pm_domain gpu_domain = {
 
 static int soc_pm_init(void)
 {
-    /* Register with genpd core; third argument: is the domain initially off? */
-    pm_genpd_init(&gpu_domain, NULL /* use default governor */, false);
+    /* Register with genpd core; third argument: is the domain initially off?
+     * NULL for the governor argument means NO governor at all, not "use
+     * the default governor" — genpd_power_off() then skips power_down_ok()
+     * entirely and always falls back to the shallowest power state. Pass
+     * &simple_qos_governor explicitly to get the QoS-aware governor. */
+    pm_genpd_init(&gpu_domain, &simple_qos_governor, false);
     return 0;
 }
 ```
@@ -122,16 +132,30 @@ Power-off order: mipi_phy → display_dsi → display_core
 
 ## Runtime PM integration
 
-genpd integrates transparently with Runtime PM:
+genpd integrates transparently with Runtime PM. Note that `suspended_count`
+is a **system-suspend** counter (see its comment in `struct
+generic_pm_domain` above) — it plays no part in this runtime-PM decision.
+The real check, in `genpd_power_off()`, walks `dev_list` and asks Runtime
+PM's own per-device status:
 
 ```
-pm_runtime_put(dev)           [device driver]
+pm_runtime_put(dev)                [device driver]
         │
         ▼
-genpd runtime_suspend hook    [genpd framework]
-   dev->suspended_count++
-   if (domain->suspended_count == domain->device_count)
-        domain->power_off()   [platform callback → cuts rail]
+genpd_runtime_suspend()            [genpd framework, registered as the
+        │                           device's dev_pm_ops.runtime_suspend]
+        ▼
+genpd_power_off(domain)
+   for each dev in domain->dev_list:
+        if (!pm_runtime_suspended(dev))
+                not_suspended++
+   if (not_suspended > 1 || (not_suspended == 1 && !one_dev_on))
+        return                      /* still devices active — stay on */
+   if (genpd->gov && genpd->gov->power_down_ok)
+        if (!power_down_ok())  return   /* governor vetoes the power-off */
+   if (!genpd->gov)
+        genpd->state_idx = 0       /* no governor: hardcode shallowest state */
+   domain->power_off()             [platform callback → cuts rail]
 ```
 
 On resume the direction reverses:
@@ -163,7 +187,7 @@ struct gpd_timing_data {
 };
 ```
 
-If the governor predicts the idle window is shorter than `suspend_latency_ns + resume_latency_ns`, it skips the power-off because the cost of cycling the rail exceeds the benefit.
+The `simple_qos_governor`'s actual comparison (in `__default_power_down_ok()`, `drivers/pmdomain/governor.c`) is not this per-device timing sum against a predicted idle time. Instead, for the domain *power state* being considered it computes `off_on_time_ns = state.power_off_latency_ns + state.power_on_latency_ns` (from `struct genpd_power_state`, the domain's own timing table) and compares that against each device's `effective_constraint_ns` — the QoS-derived maximum time that device may be left unavailable. If any device's constraint is less than or equal to `off_on_time_ns`, the power-off is rejected (the round trip would violate that device's latency budget); otherwise the smallest surviving constraint becomes the domain's `max_off_time_ns` budget for staying off.
 
 Drivers can supply per-state timing via the `domain-idle-state` Device Tree node using `entry-latency-us` and `exit-latency-us` properties (in microseconds; the kernel scales to nanoseconds internally).
 
@@ -171,13 +195,13 @@ Drivers can supply per-state timing via the `domain-idle-state` Device Tree node
 
 Three governors ship in-tree (`drivers/pmdomain/governor.c`):
 
-**`simple_qos_governor`** (the default): powers off the domain when all devices are suspended and the predicted idle duration exceeds the round-trip latency. It uses the `effective_constraint_ns` from QoS constraints attached to devices.
+**`simple_qos_governor`**: the general-purpose governor most genpd backends register explicitly. It powers off the domain when all devices are suspended and the shortest QoS-constrained off-time across those devices (and subdomains) still exceeds the domain's power-off + power-on latency. It uses `effective_constraint_ns`, computed from the resume-latency QoS constraints attached to devices. It is *not* selected automatically — a domain registered with a `NULL` governor gets no governor at all.
 
 **`pm_domain_always_on_gov`**: never powers off the domain; used for domains that must stay on (e.g., always-on power rails).
 
 **`pm_domain_cpu_gov`** (built only under `CONFIG_CPU_IDLE`): used for CPU/cluster power domains (`GENPD_FLAG_CPU_DOMAIN`); picks the deepest idle state whose residency and latency fit the predicted idle window and any CPU PM QoS constraints.
 
-The governor is selected as the second argument to `pm_genpd_init()`. Pass `NULL` for the default `simple_qos`.
+The governor is selected as the second argument to `pm_genpd_init()`, which simply stores it in `genpd->gov` — there is no fallback to a default. Passing `NULL` means the domain has **no** governor at all: `genpd_power_off()` then skips `power_down_ok()` entirely and hardcodes `genpd->state_idx = 0` (the shallowest state) whenever it decides to power off. If the domain has more than one power state and no governor was given, `pm_genpd_init()` even logs `pr_warn("%s: no governor for states\n", ...)`. To get the QoS-aware behavior described above, pass `&simple_qos_governor` explicitly.
 
 ## Debugging with debugfs
 
@@ -190,17 +214,20 @@ ls /sys/kernel/debug/pm_genpd/
 
 # Global summary of all domains and their devices:
 cat /sys/kernel/debug/pm_genpd/pm_genpd_summary
-# domain                          status          children
-# gpu-domain                      on
-#   /devices/platform/gpu         active  resume-latency: 0 ns
-#     constraint: 0 ns
+# domain                          status          children        performance
+#     /device                         runtime status                  managed by
+# ------------------------------------------------------------------------------
+# gpu-domain                      on                              0
+#     /devices/platform/soc/gpu       active                      0           SW
+# display_core                    off-0                           0
+#     /devices/platform/soc/display   suspended                   0           SW
 
 # Per-domain directories contain: current_state, sub_domains,
 # idle_states, active_time, total_idle_time, devices
 cat /sys/kernel/debug/pm_genpd/gpu-domain/current_state
 ```
 
-The global `pm_genpd_summary` file is synthesized by `summary_show()` in `drivers/pmdomain/core.c`, which walks the global `gpd_list` and calls `genpd_summary_one()` per domain, covering all domain statuses, attached devices, and performance state in one pass.
+The global `pm_genpd_summary` file is synthesized by `summary_show()` in `drivers/pmdomain/core.c`, which walks the global `gpd_list` and calls `genpd_summary_one()` per domain. For each domain it prints the domain name, its `on`/`off-<state_idx>` status, and aggregated `performance_state`, followed by one line per attached device giving that device's runtime-PM status via `rtpm_status_str()` (`active`/`suspending`/`suspended`/`resuming`/`unsupported`/`error`), its own performance state, and an `SW`/`HW` indicator from `mode_status_str()` showing whether that device's power state is currently managed by software or left to hardware autonomy.
 
 ## Real-world implementations
 
@@ -222,6 +249,7 @@ All three follow the same pattern: allocate `struct generic_pm_domain`, fill `po
 - [drivers/pmdomain/core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pmdomain/core.c) — genpd core: `pm_genpd_init()`, `genpd_add_subdomain()`, `genpd_dev_pm_attach()`, debugfs summary
 - [drivers/pmdomain/governor.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pmdomain/governor.c) — `simple_qos_governor` and `pm_domain_always_on_gov`
 - [drivers/clk/qcom/gdsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/clk/qcom/gdsc.c) — Qualcomm GDSC genpd backend: `gdsc_enable()`/`gdsc_disable()`
+- [Documentation/devicetree/bindings/power/power-domain.yaml](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/devicetree/bindings/power/power-domain.yaml) — DT binding spec for `power-domains` and `#power-domain-cells`
 
 ### Related pages
 
@@ -236,4 +264,3 @@ All three follow the same pattern: allocate `struct generic_pm_domain`, fill `po
 ### External
 
 - [Documentation/driver-api/pm/devices.rst — Device Power Management Domains](https://docs.kernel.org/driver-api/pm/devices.html#device-power-management-domains) — upstream explanation of `dev->pm_domain`, `struct dev_pm_domain`, and why power domain callbacks take precedence over subsystem callbacks
-- [Documentation/devicetree/bindings/power/power-domain.yaml](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/devicetree/bindings/power/power-domain.yaml) — DT binding spec for `power-domains` and `#power-domain-cells`
