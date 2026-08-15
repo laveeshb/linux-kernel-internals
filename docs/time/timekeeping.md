@@ -279,8 +279,8 @@ cat /proc/timer_list | head -50
 
 ### LWN articles
 
-- [Converting jiffies to clocksources](https://lwn.net/Articles/347811/) — Jonathan Corbet, August 2009: the transition of timekeeping from jiffies ticks to generic clocksources
-- [The perils of TSC](https://lwn.net/Articles/388188/) — Jonathan Corbet, May 2010: invariant TSC guarantees, frequency scaling drift, and hardware clock calibration
+- [Introduce CLOCK_REALTIME_COARSE](https://lwn.net/Articles/347811/) — Jonathan Corbet, August 2009: the transition of timekeeping from jiffies ticks to generic clocksources
+- [The trouble with the TSC](https://lwn.net/Articles/388188/) — Jonathan Corbet, May 2010: invariant TSC guarantees, frequency scaling drift, and hardware clock calibration
 
 ### External
 

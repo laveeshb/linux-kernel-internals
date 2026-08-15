@@ -93,28 +93,28 @@ echo kvm-clock > /sys/devices/system/clocksource/clocksource0/current_clocksourc
 
 `kvm-clock` is the correct clocksource for KVM guests. It uses a shared memory page (the `pvclock` page) written by the hypervisor, and accounts for steal time — time during which the guest vCPU was not scheduled. The kernel uses it by default when running under KVM if the hypervisor exposes it.
 
-## del_timer vs del_timer_sync race
+## timer_delete vs timer_delete_sync race
 
-A network driver registered a timer to retransmit a packet if an acknowledgment did not arrive within a timeout. The timer callback read fields from the driver's `struct device_state`. During driver teardown, the cleanup function called `del_timer()` and then `kfree(state)`:
+A network driver registered a timer to retransmit a packet if an acknowledgment did not arrive within a timeout. The timer callback read fields from the driver's `struct device_state`. During driver teardown, the cleanup function called `timer_delete()` and then `kfree(state)`:
 
 ```c
 /* BUGGY teardown */
 static void driver_remove(struct platform_device *pdev)
 {
     struct device_state *state = platform_get_drvdata(pdev);
-    del_timer(&state->retransmit_timer);  /* BUG: does not wait */
+    timer_delete(&state->retransmit_timer);  /* BUG: does not wait */
     kfree(state);                          /* freed while callback may run */
 }
 ```
 
 The race:
 
-1. CPU 0: `del_timer()` is called. The timer is pending in the wheel. `del_timer()` removes it and returns 1 (was pending).
-2. CPU 1: The timer had already been dequeued by `__run_timers()` before CPU 0's `del_timer()` ran — the callback is now executing.
-3. CPU 0: `del_timer()` returns. `kfree(state)` is called. `state` is freed.
+1. CPU 0: `timer_delete()` is called. The timer is pending in the wheel. `timer_delete()` removes it and returns 1 (was pending).
+2. CPU 1: The timer had already been dequeued by `__run_timers()` before CPU 0's `timer_delete()` ran — the callback is now executing.
+3. CPU 0: `timer_delete()` returns. `kfree(state)` is called. `state` is freed.
 4. CPU 1: The timer callback continues executing and reads fields from the now-freed `state` — use-after-free.
 
-`del_timer()` removes the timer from the wheel but provides no guarantee that a currently-executing callback has finished. `del_timer_sync()` spins until the callback is not running on any CPU before returning.
+`timer_delete()` removes the timer from the wheel but provides no guarantee that a currently-executing callback has finished. `timer_delete_sync()` spins until the callback is not running on any CPU before returning.
 
 **Fix:**
 
@@ -123,7 +123,7 @@ The race:
 static void driver_remove(struct platform_device *pdev)
 {
     struct device_state *state = platform_get_drvdata(pdev);
-    del_timer_sync(&state->retransmit_timer);  /* waits for callback */
+    timer_delete_sync(&state->retransmit_timer);  /* waits for callback */
     kfree(state);                               /* safe */
 }
 ```
@@ -136,9 +136,9 @@ timer_shutdown_sync(&state->retransmit_timer);
 kfree(state);
 ```
 
-This prevents a re-arm race where the callback arms the timer again before `del_timer_sync()` returns — `timer_shutdown_sync()` marks the timer permanently inactive.
+This prevents a re-arm race where the callback arms the timer again before `timer_delete_sync()` returns — `timer_shutdown_sync()` marks the timer permanently inactive.
 
-LOCKDEP will warn about `del_timer_sync()` called from softirq context (it cannot sleep to wait). In that case, use `del_timer()` and defer the `kfree()` to a work queue, or use RCU to protect the data structure.
+LOCKDEP will warn about `timer_delete_sync()` called from softirq context (it cannot sleep to wait). In that case, use `timer_delete()` and defer the `kfree()` to a work queue, or use RCU to protect the data structure.
 
 ## The 32-bit jiffies wraparound
 
@@ -209,7 +209,7 @@ On 64-bit kernels, `jiffies` is a 64-bit value and `jiffies_64` provides the ful
 
 - [kernel/time/clocksource.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/clocksource.c) — `clocksource_watchdog()` stability verification, `CLOCK_SOURCE_UNSTABLE` marking, and retry threshold logic
 - [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — `second_overflow()` and leap-second state transitions, preventing timer rearm loops
-- [kernel/time/timer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer.c) — `del_timer_sync()` and `timer_shutdown_sync()` implementation preventing concurrent execution and re-arming races
+- [kernel/time/timer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer.c) — `timer_delete_sync()` and `timer_shutdown_sync()` implementation preventing concurrent execution and re-arming races
 - [include/linux/jiffies.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/jiffies.h) — `time_after()`, `time_before()`, and wraparound-safe arithmetic
 - [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — `tsc_init()`, invariant TSC CPUID validation, and `mark_tsc_unstable()`
 - [arch/x86/kernel/kvmclock.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/kvmclock.c) — paravirtualized `kvm-clock` clocksource integration for guest timekeeping
@@ -223,13 +223,13 @@ On 64-bit kernels, `jiffies` is a 64-bit value and `jiffies_64` provides the ful
 
 - [Clocksource and Clockevent Drivers](clocksource.md) — hardware clocksources, watchdog verification, and rating hierarchy
 - [Timekeeping and Clocksources](timekeeping.md) — timekeeping architecture, leap seconds, and vDSO fast paths
-- [The Timer Wheel](timer-wheel.md) — timer lifecycle, `del_timer_sync()`, and jiffies arithmetic
+- [The Timer Wheel](timer-wheel.md) — timer lifecycle, `timer_delete_sync()`, and jiffies arithmetic
 - [NTP and Clock Discipline](ntp.md) — PLL synchronization, leap seconds, and chrony/ntpd smearing
 
 ### LWN articles
 
 - [The leap second bug](https://lwn.net/Articles/504658/) — Jonathan Corbet, July 2012: in-depth postmortem of the 2012 leap second hrtimer livelock
-- [The perils of TSC](https://lwn.net/Articles/388188/) — Jonathan Corbet, May 2010: invariant TSC guarantees, frequency scaling drift, and watchdog verification
+- [The trouble with the TSC](https://lwn.net/Articles/388188/) — Jonathan Corbet, May 2010: invariant TSC guarantees, frequency scaling drift, and watchdog verification
 - [Reinventing the timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: redesigning the timer wheel and improving timer cancellation guarantees
 
 ### External

@@ -210,7 +210,7 @@ Each `timer_create()` allocates a `k_itimer` backed by an `hrtimer`. When the hr
 ### timerfd in the kernel
 
 ```c
-/* fs/timerfd.c */
+/* timerfd_read_iter */
 struct timerfd_ctx {
     union {
         struct hrtimer      tmr;   /* backing hrtimer */
@@ -305,7 +305,7 @@ echo 1 > /sys/kernel/tracing/events/syscalls/sys_enter_timer_settime/enable
 - [include/linux/posix-timers.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/posix-timers.h) — definition of `struct k_itimer`, `struct k_clock` operations table, and reference counting helpers
 - [kernel/time/posix-timers.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/posix-timers.c) — `timer_create()`, `timer_settime()`, `timer_delete()`, and overrun calculation
 - [kernel/time/posix-cpu-timers.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/posix-cpu-timers.c) — per-process and per-thread CPU time clock handlers (`CLOCK_PROCESS_CPUTIME_ID`, `CLOCK_THREAD_CPUTIME_ID`)
-- [fs/timerfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/timerfd.c) — file descriptor timer implementation (`timerfd_create()`, `timerfd_settime()`, `timerfd_read()`), epoll polling integration, and cancel-on-set logic
+- [timerfd_read_iter](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/timerfd_read_iter) — file descriptor timer implementation (`timerfd_create()`, `timerfd_settime()`, `timerfd_read()`), epoll polling integration, and cancel-on-set logic
 
 ### Man pages
 
@@ -325,8 +325,8 @@ echo 1 > /sys/kernel/tracing/events/syscalls/sys_enter_timer_settime/enable
 
 ### LWN articles
 
-- [timerfd: system call for timers](https://lwn.net/Articles/242255/) — Jonathan Corbet, July 2007: the design and API of `timerfd_create()`
-- [Reworking POSIX CPU timers](https://lwn.net/Articles/971271/) — Jonathan Corbet, April 2024: locking refactors and performance improvements in `posix-cpu-timers.c`
+- [timerfd: system call for timers](https://lwn.net/Articles/251413/) — Jonathan Corbet, July 2007: the design and API of `timerfd_create()`
+- [Reworking POSIX CPU timers](https://lwn.net/Articles/977822/) — Jonathan Corbet, April 2024: locking refactors and performance improvements in `posix-cpu-timers.c`
 
 ### External
 

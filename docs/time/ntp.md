@@ -224,8 +224,8 @@ The `STA_UNSYNC` bit being clear (zero) indicates the kernel considers the clock
 
 ### LWN articles
 
-- [A new NTP API](https://lwn.net/Articles/433722/) — Jonathan Corbet, March 2011: the addition of `clock_adjtime()` for per-clock adjustments
-- [The leap second bug](https://lwn.net/Articles/504658/) — Jonathan Corbet, July 2012: analysis of the 2012 kernel leap-second livelock and resolution
+- [A new NTP API](https://lwn.net/Articles/449302/) — Jonathan Corbet, March 2011: the addition of `clock_adjtime()` for per-clock adjustments
+- [The leap second bug](https://lwn.net/Articles/504657/) — Jonathan Corbet, July 2012: analysis of the 2012 kernel leap-second livelock and resolution
 
 ### External
 

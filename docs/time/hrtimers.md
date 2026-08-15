@@ -29,16 +29,6 @@ struct hrtimer {
     enum hrtimer_restart      (*__private function)(struct hrtimer *); /* callback */
 };
 
-struct hrtimer_cpu_base {
-    raw_spinlock_t           lock;
-    unsigned int             cpu;
-    unsigned int             active_bases;  /* bitmask of active clock bases */
-    unsigned int             clock_was_set_seq;
-    unsigned int             hres_active:1; /* high-res mode enabled */
-    ktime_t                  expires_next;  /* next clockevent expiry */
-    struct hrtimer          *running;       /* currently executing timer */
-    struct hrtimer_clock_base clock_base[HRTIMER_MAX_CLOCK_BASES];
-};
 ```
 
 ## Clock bases
@@ -233,10 +223,10 @@ cat /sys/kernel/tracing/trace_pipe
 ### Kernel source
 
 - [include/linux/hrtimer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer.h) — public hrtimer API: `hrtimer_setup()`, `hrtimer_start()`, `hrtimer_cancel()`, and `hrtimer_forward_now()`
-- [include/linux/hrtimer_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer_types.h) — definitions of `struct hrtimer`, `struct hrtimer_cpu_base`, and the `HRTIMER_MODE_*` flags
+- [include/linux/hrtimer_defs.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/hrtimer_defs.h) — definitions of `struct hrtimer`, `struct hrtimer_cpu_base`, and the `HRTIMER_MODE_*` flags
 - [kernel/time/hrtimer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/hrtimer.c) — high-resolution timer queue management, `hrtimer_switch_to_hres()`, and red-black tree expiry processing
 - [kernel/time/tick-sched.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/tick-sched.c) — scheduler tick emulation via `sched_timer` hrtimer and NOHZ idle/full tick suppression
-- [kernel/time/timerqueue.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timerqueue.c) — augmented red-black tree operations (`timerqueue_add()`, `timerqueue_del()`) keeping the earliest timer cached
+- [lib/timerqueue.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/timerqueue.c) — augmented red-black tree operations (`timerqueue_add()`, `timerqueue_del()`) keeping the earliest timer cached
 
 ### Man pages
 
@@ -254,7 +244,7 @@ cat /sys/kernel/tracing/trace_pipe
 ### LWN articles
 
 - [High-resolution timers](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the design and integration of Thomas Gleixner's hrtimer subsystem
-- [hrtimers and softirq context](https://lwn.net/Articles/681763/) — Jonathan Corbet, March 2016: splitting hardirq vs softirq timer expiry handling for low-latency RT safety
+- [hrtimers and softirq context](https://lwn.net/Articles/732536/) — Jonathan Corbet, March 2016: splitting hardirq vs softirq timer expiry handling for low-latency RT safety
 
 ### External
 

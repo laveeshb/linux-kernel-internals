@@ -106,20 +106,20 @@ int timer_reduce(struct timer_list *timer, unsigned long expires);
 
 Like `mod_timer()` but only moves the expiry *earlier*. If the timer is already set to expire at or before `expires`, the call is a no-op. Added in Linux 4.20. This prevents a driver from accidentally delaying a timer that was already scheduled to fire sooner — useful when multiple code paths may arm the same timer.
 
-### del_timer() vs del_timer_sync()
+### timer_delete() vs timer_delete_sync()
 
 ```c
-int del_timer(struct timer_list *timer);
-int del_timer_sync(struct timer_list *timer);
+int timer_delete(struct timer_list *timer);
+int timer_delete_sync(struct timer_list *timer);
 ```
 
-`del_timer()` removes the timer from the wheel. If the callback is currently running on another CPU, `del_timer()` returns immediately — the callback continues executing. This can cause use-after-free if you free data the callback touches immediately after `del_timer()`.
+`timer_delete()` removes the timer from the wheel. If the callback is currently running on another CPU, `timer_delete()` returns immediately — the callback continues executing. This can cause use-after-free if you free data the callback touches immediately after `timer_delete()`.
 
-`del_timer_sync()` waits until the callback has finished on all CPUs before returning. Always use `del_timer_sync()` before freeing resources a timer callback accesses.
+`timer_delete_sync()` waits until the callback has finished on all CPUs before returning. Always use `timer_delete_sync()` before freeing resources a timer callback accesses.
 
 ```c
 /* Safe teardown */
-del_timer_sync(&my_timer);
+timer_delete_sync(&my_timer);
 kfree(my_data);   /* safe: callback is done */
 ```
 
@@ -277,7 +277,7 @@ Timer callbacks run in softirq context. They must not sleep, call `schedule()`, 
 
 ### Kernel source
 
-- [include/linux/timer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timer.h) — public `struct timer_list` API: `timer_setup()`, `add_timer()`, `mod_timer()`, `timer_reduce()`, `del_timer_sync()`, and `timer_shutdown_sync()`
+- [include/linux/timer.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timer.h) — public `struct timer_list` API: `timer_setup()`, `add_timer()`, `mod_timer()`, `timer_reduce()`, `timer_delete_sync()`, and `timer_shutdown_sync()`
 - [include/linux/jiffies.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/jiffies.h) — `jiffies` counter, time conversion helpers (`msecs_to_jiffies()`), and wraparound-safe comparison macros (`time_after()`, `time_before()`)
 - [kernel/time/timer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer.c) — hierarchical timer wheel implementation, `__run_timers()`, level and bucket calculation, and softirq execution
 - [kernel/time/timer_migration.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timer_migration.c) — hierarchical timer pull migration (`tmigr_handle_remote()`) managing global timers across idle CPU clusters
