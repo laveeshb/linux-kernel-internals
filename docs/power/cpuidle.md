@@ -290,7 +290,7 @@ turbostat --show PkgWatt,PkgTmp --interval 1
 ### Related pages
 
 - [cpufreq and P-states](cpufreq.md) — frequency scaling (orthogonal to C-states)
-- [Real-Time Tuning](../sched/rt-tuning.md) — disabling C-states for RT
+- [Real-Time Tuning](../sched/rt-tuning.md) — CPU isolation and frequency-scaling tuning for RT tasks
 - [The Scheduling Tick](../sched/sched-tick.md) — NOHZ interaction with cpuidle
 - [hrtimers](../time/hrtimers.md) — timers that interrupt idle
 

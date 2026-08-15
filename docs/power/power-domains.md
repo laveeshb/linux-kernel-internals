@@ -227,7 +227,7 @@ All three follow the same pattern: allocate `struct generic_pm_domain`, fill `po
 
 - [Runtime PM](runtime-pm.md) — usage counting, autosuspend, dev_pm_ops; genpd's runtime_suspend/resume hooks build on this
 - [System Suspend](suspend.md) — system-wide sleep; genpd participates in the freeze/suspend sequence
-- [Device Tree](../drivers/device-tree.md) — `power-domains` binding and phandle parsing
+- [Device Tree](../drivers/device-tree.md) — phandle parsing, the mechanism the `power-domains` DT binding relies on
 
 ### LWN articles
 

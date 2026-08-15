@@ -354,7 +354,7 @@ echo mem | sudo tee /sys/power/state
 - [cpufreq](cpufreq.md) — CPU frequency scaling
 - [Runtime PM](runtime-pm.md) — device-level power management
 - [Device Drivers: platform driver](../drivers/platform-driver.md) — dev_pm_ops integration
-- [Interrupts: Timers](../interrupts/timers.md) — RTC alarm as wakeup source
+- [Interrupts: Timers](../interrupts/timers.md) — `timer_list`, `hrtimer`, and the clocksource machinery timekeeping across suspend/resume depends on
 
 ### LWN articles
 

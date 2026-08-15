@@ -172,7 +172,7 @@ static int mydriver_runtime_idle(struct device *dev)
 ## struct device power fields
 
 ```c
-/* include/linux/pm.h — abridged; the real struct has ~35 fields */
+/* include/linux/pm.h — abridged; the real struct has ~55 fields */
 struct dev_pm_info {
     pm_message_t        power_state;    /* current power state */
     bool                can_wakeup:1;   /* device can generate wakeup events */
