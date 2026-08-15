@@ -295,7 +295,7 @@ Timer callbacks run in softirq context. They must not sleep, call `schedule()`, 
 
 ### LWN articles
 
-- [Reinventing the timer wheel](https://lwn.net/Articles/646014/) — Jonathan Corbet, June 2015: Thomas Gleixner's redesign replacing the cascade wheel with the non-cascading hierarchy
+- [Reinventing the timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: Thomas Gleixner's redesign replacing the cascade wheel with the non-cascading hierarchy
 - [High-resolution timers and dynamic ticks](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the interaction between the timer wheel and dyntick/NOHZ idle states
 
 ### External
