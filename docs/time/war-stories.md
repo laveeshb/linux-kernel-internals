@@ -229,8 +229,8 @@ On 64-bit kernels, `jiffies` is a 64-bit value and `jiffies_64` provides the ful
 ### LWN articles
 
 - [The leap second bug](https://lwn.net/Articles/504658/) — Jonathan Corbet, July 2012: in-depth postmortem of the 2012 leap second hrtimer livelock
-- [Preventing clocksource watchdog false positives](https://lwn.net/Articles/858829/) — Jonathan Corbet, June 2021: fixing watchdog false alarms under high virtualization load
-- [A new timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: redesigning the timer wheel and improving timer cancellation guarantees
+- [The perils of TSC](https://lwn.net/Articles/388188/) — Jonathan Corbet, May 2010: invariant TSC guarantees, frequency scaling drift, and watchdog verification
+- [Reinventing the timer wheel](https://lwn.net/Articles/646014/) — Jonathan Corbet, June 2015: redesigning the timer wheel and improving timer cancellation guarantees
 
 ### External
 

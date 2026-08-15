@@ -295,11 +295,10 @@ Timer callbacks run in softirq context. They must not sleep, call `schedule()`, 
 
 ### LWN articles
 
-- [A new timer wheel](https://lwn.net/Articles/646950/) — Jonathan Corbet, June 2015: Thomas Gleixner's redesign replacing the cascade wheel with the hierarchical non-cascading wheel
-- [Hierarchical timer pull migration](https://lwn.net/Articles/918705/) — Jonathan Corbet, January 2023: Anna-Maria Behnsen's pull-based timer migration hierarchy across idle CPUs
-- [Timer migration rework](https://lwn.net/Articles/935515/) — Jonathan Corbet, June 2023: splitting pinned (`BASE_LOCAL`) and migratable (`BASE_GLOBAL`) timer bases for power and latency optimization
+- [Reinventing the timer wheel](https://lwn.net/Articles/646014/) — Jonathan Corbet, June 2015: Thomas Gleixner's redesign replacing the cascade wheel with the non-cascading hierarchy
+- [High-resolution timers and dynamic ticks](https://lwn.net/Articles/167897/) — Jonathan Corbet, January 2006: the interaction between the timer wheel and dyntick/NOHZ idle states
 
 ### External
 
 - [Timekeeping and Timers in Linux](https://docs.kernel.org/core-api/timekeeping.html) — official kernel guide to timer systems and timekeeping
-- [Timers and Dynamic Ticks](https://docs.kernel.org/timers/timers-howto.html) — guidelines on choosing between hrtimers, delayed work, and standard timer wheels
+- [Timers Subsystem Documentation](https://docs.kernel.org/timers/index.html) — kernel documentation covering timer wheel internals, high-resolution timers, and NO_HZ operation

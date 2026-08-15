@@ -280,7 +280,7 @@ cat /proc/timer_list | head -50
 ### LWN articles
 
 - [Converting jiffies to clocksources](https://lwn.net/Articles/347811/) — Jonathan Corbet, August 2009: the transition of timekeeping from jiffies ticks to generic clocksources
-- [A unified vDSO library](https://lwn.net/Articles/797818/) — Jonathan Corbet, September 2019: Vincenzo Frascino's unified cross-architecture vDSO implementation
+- [The perils of TSC](https://lwn.net/Articles/388188/) — Jonathan Corbet, May 2010: invariant TSC guarantees, frequency scaling drift, and hardware clock calibration
 
 ### External
 

@@ -175,8 +175,8 @@ nsenter --time=/proc/<pid>/ns/time -- \
 
 ### LWN articles
 
-- [Time namespaces](https://lwn.net/Articles/765098/) — Jonathan Corbet, September 2018: the initial design discussion for containerized clock offsets
-- [Time namespaces virtualize the clocks](https://lwn.net/Articles/803884/) — Jonathan Corbet, October 2019: the VVAR page fault architecture and merging into Linux 5.6
+- [Time namespaces](https://lwn.net/Articles/765796/) — Jonathan Corbet, September 2018: containerized clock offsets for CRIU checkpoint/restore and virtualization
+- [The 5.6 merge window begins](https://lwn.net/Articles/811191/) — Jonathan Corbet, February 2020: official merging of time namespaces (`CLONE_NEWTIME`) into mainline Linux
 
 ### External
 
