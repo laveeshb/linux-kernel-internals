@@ -71,6 +71,8 @@ extra_css:
 
 extra_javascript:
   - javascripts/external-links.js
+  - https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit
+  - javascripts/chat.js
 
 nav:
   - Home: index.md

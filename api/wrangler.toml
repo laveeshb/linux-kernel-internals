@@ -1,0 +1,39 @@
+name = "linux-kernel-ai-api"
+main = "src/index.js"
+compatibility_date = "2024-03-20"
+
+[ai]
+binding = "AI"
+
+# No custom domain route yet — kernel-internals.org isn't a Cloudflare
+# zone yet, so this deploys to the default *.workers.dev URL for now.
+# Once the domain is added to Cloudflare, add back:
+#   routes = [{ pattern = "api.kernel-internals.org", custom_domain = true }]
+# and update API_URL in docs/javascripts/chat.js and mcp/index.js to match.
+
+[[vectorize]]
+binding = "VECTORIZE_INDEX"
+index_name = "linux-kernel-docs-index"
+
+# Used for best-effort per-IP rate limiting (see src/index.js checkRateLimit).
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "69251dc2805d4145a2041aaceea8e142"
+
+# Secrets (not stored in this file — set via `wrangler secret put <NAME>`,
+# or as GitHub repo secrets consumed by .github/workflows/ai-deploy.yml):
+#
+#   TURNSTILE_SECRET_KEY  Cloudflare Turnstile secret key, paired with the
+#                         public site key in docs/javascripts/chat.js.
+#                         Until this is set, Turnstile verification fails
+#                         open (see verifyTurnstile() in src/index.js) so
+#                         the widget keeps working during initial setup,
+#                         just without bot protection.
+#
+#   MCP_SHARED_KEY        Must match the key the MCP server sends via
+#                         X-API-Key (see mcp/index.js). Not a strong secret
+#                         (it ships in a public package) — used to segment
+#                         MCP traffic into its own rate-limit bucket and as
+#                         a kill switch if it's abused. Set this to
+#                         whatever value mcp/index.js's API_KEY constant
+#                         (or its KERNEL_INTERNALS_API_KEY override) uses.
