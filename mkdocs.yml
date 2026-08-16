@@ -462,6 +462,13 @@ nav:
         - ALSA War Stories: alsa/war-stories.md
         - The 21-Year-Latent USB Mixer Teardown Use-After-Free: alsa/war-stories/mixer-teardown-use-after-free.md
         - The USB Audio Clock Descriptor Out-of-Bounds Reads: alsa/war-stories/usb-audio-clock-descriptor-oob.md
+    - Input / HID:
+      - Getting Started: input/README.md
+      - The HID Subsystem: input/hid.md
+      - War Stories:
+        - Input/HID War Stories: input/war-stories.md
+        - The Uninitialized HID Report Buffer Kernel Memory Leak: input/war-stories/uninitialized-report-buffer-leak.md
+        - "The hid_validate_values() Type Confusion, Nine Years in the Making": input/war-stories/hid-validate-values-type-confusion.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
