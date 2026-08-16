@@ -16,12 +16,9 @@ binding = "VECTORIZE_INDEX"
 index_name = "linux-kernel-docs-index"
 
 # Used for best-effort per-IP rate limiting (see src/index.js checkRateLimit).
-# Create with: npx wrangler kv namespace create RATE_LIMIT_KV
-# then replace the id below (currently a placeholder, valid-format but fake)
-# with the id that command prints.
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "00000000000000000000000000000000"
+id = "69251dc2805d4145a2041aaceea8e142"
 
 # Secrets (not stored in this file — set via `wrangler secret put <NAME>`,
 # or as GitHub repo secrets consumed by .github/workflows/ai-deploy.yml):
