@@ -1,6 +1,6 @@
 # The n_tty Echo Race: Nine Years From Fix to CISA's Exploited-in-the-Wild List
 
-> Writing to a pty while the line discipline echoed input back out let two writers corrupt the same tty buffer with no lock between them — fixed in 2014, and still showing up as a live Android root exploit technique nearly a decade later.
+> Writing to a pty while the line discipline echoed input back out let two writers corrupt the same tty buffer with no lock between them — fixed in 2014, and still showing up as a live Android root exploit technique nine years later.
 
 Landed
 :   Linux 3.15, May 2014 (CVE-2014-0196)

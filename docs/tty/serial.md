@@ -154,7 +154,7 @@ struct uart_port {
 A few fields worth calling out:
 
 - **`serial_in`/`serial_out`** — the register-access indirection that lets one driver support several bus widths/endiannesses (8/16/32-bit, big/little-endian MMIO, or legacy port I/O) by swapping these function pointers rather than `#ifdef`-ing every register access.
-- **`iotype`** (`enum uart_iotype`: `UPIO_PORT`, `UPIO_MEM`, `UPIO_MEM32`, `UPIO_MEM32BE`, `UPIO_MEM16`, plus a couple of chip-specific variants) — which access style `serial_in`/`serial_out` implement.
+- **`iotype`** (`enum uart_iotype`: `UPIO_PORT`, `UPIO_MEM`, `UPIO_MEM32`, `UPIO_MEM32BE`, `UPIO_MEM16`, plus several chip-specific variants — `UPIO_HUB6`, `UPIO_AU`, `UPIO_TSI`) — which access style `serial_in`/`serial_out` implement.
 - **`line`** — this port's index; it's what ties a `uart_port` back to a specific slot in its `uart_driver`'s state array (below).
 - **`state`** — the back-pointer to `struct uart_state`, the object that ties this hardware port to a live `tty_port`.
 - **`ops`** — the `uart_ops` vtable described above.
@@ -286,11 +286,11 @@ It associates the `uart_port` the driver just filled in with `drv->state[port->l
 Once registration is done, every `tty_operations` callback in the shared `uart_ops` table is generic serial-core logic that, at the point it needs to actually touch hardware, calls through `uport->ops`. A few concrete chains, taken directly from `serial_core.c`:
 
 - Opening a port ultimately calls `uart_port_startup()`, which calls `uport->ops->startup(uport)` — the driver's `.startup`.
-- `tcsetattr()`/`stty` reaches the shared `.set_termios = uart_set_termios`, which (holding the port's `termios_rwsem`) calls `uart_change_line_settings()`, which calls `uport->ops->set_termios(uport, termios, old_termios)` — the driver's `.set_termios`.
-- Writing data eventually calls `uart_start()` → `__uart_start()`, which calls `port->ops->start_tx(port)` — the driver's `.start_tx`, which is where an interrupt-driven driver typically just unmasks the transmit-empty interrupt and lets the ISR do the rest (below).
+- `tcsetattr()`/`stty` reaches the shared `.set_termios = uart_set_termios`, called while the tty core holds `tty->termios_rwsem` — `tty_set_termios()` in `tty_ioctl.c` takes it with `down_write()` before invoking any driver's `set_termios` hook, so it's the tty's lock, not something `uart_set_termios()` itself acquires (it takes its own `state->port.mutex` internally). `uart_set_termios()` then calls `uart_change_line_settings()`, which calls `uport->ops->set_termios(uport, termios, old_termios)` — the driver's `.set_termios`.
+- Writing data (`uart_write()`) calls `__uart_start()` directly, which calls `port->ops->start_tx(port)` — the driver's `.start_tx`, which is where an interrupt-driven driver typically just unmasks the transmit-empty interrupt and lets the ISR do the rest (below). (`uart_start()` is a separate entry point — the `.start` tty hook, also reached via `uart_flush_chars()` — that just calls the same `__uart_start()`.)
 - Setting RTS/DTR (`TIOCMSET`, or `CLOCAL`/`HUPCL` handling on open/close) calls `uart_update_mctrl()`, which calls `port->ops->set_mctrl(port, port->mctrl)`.
 
-None of that logic is chip-specific; it's identical for an 8250 and for `uartlite`. Only the four calls above ever leave `serial_core.c` and land in driver code.
+None of that logic is chip-specific; it's identical for an 8250 and for `uartlite`. These four are the most common hot-path calls, but they're far from the only ones: in practice `serial_core.c` invokes roughly two dozen distinct `uart_ops` members somewhere in its logic — `release_port`, `get_mctrl`, `tx_empty`, `stop_rx`, `start_rx`, `request_port`, `verify_port`, `type`, `shutdown`, `set_ldisc`, `send_xchar`, `pm`, `ioctl`, `flush_buffer`, `enable_ms`, `config_port`, `break_ctl`, `throttle`, `unthrottle`, and the poll hooks among them — each dispatched from the specific TTY-core or `ioctl` path that needs it.
 
 ## The 8250/16550 driver: the reference UART
 
@@ -360,7 +360,7 @@ struct uart_8250_port {
 };
 ```
 
-`ier`/`fcr`/`lcr`/`mcr` are shadow copies of the hardware registers — several of the 8250-family registers are write-only, so the driver keeps its own idea of what it last programmed rather than reading it back. `serial8250_init_port()` (`drivers/tty/serial/8250/8250_port.c`) is what plugs this into `serial_core`: it sets `port->ops = &serial8250_pops`, the driver's `struct uart_ops` implementation:
+`ier`/`fcr`/`lcr`/`mcr` are shadow copies of the hardware registers. Of the four, only `FCR` is genuinely write-only (the same offset reads back as `IIR`); `IER`/`LCR`/`MCR` are readable. The driver shadows all four anyway to avoid read-modify-write races and to sidestep registers where a read has side effects, rather than because they can't be read back. `serial8250_init_port()` (`drivers/tty/serial/8250/8250_port.c`) is what plugs this into `serial_core`: it sets `port->ops = &serial8250_pops`, the driver's `struct uart_ops` implementation:
 
 ```c
 // drivers/tty/serial/8250/8250_port.c
@@ -527,7 +527,7 @@ static inline unsigned int uart_fifo_get(struct uart_port *up,
 }
 ```
 
-Once the FIFO empties, `.stop_tx` masks `UART_IER_THRI` back off, and the port goes idle until the next `write()` calls `uart_start()` → `.start_tx` to unmask it again. This start/feed/stop cycle — not a byte-at-a-time round trip through the TTY core — is what lets a 16-byte-deep 16550 FIFO sustain high baud rates without an interrupt per byte.
+Once the FIFO empties, `.stop_tx` masks `UART_IER_THRI` back off, and the port goes idle until the next `write()` calls `__uart_start()` → `.start_tx` to unmask it again. This start/feed/stop cycle — not a byte-at-a-time round trip through the TTY core — is what lets a 16-byte-deep 16550 FIFO sustain high baud rates without an interrupt per byte.
 
 ## Enumeration: how a UART gets probed
 
@@ -559,7 +559,7 @@ static struct platform_driver ulite_platform_driver = {
 };
 ```
 
-When the kernel walks the device tree and finds a node whose `compatible` property matches one of these strings, the driver core calls `.probe()` with a `struct platform_device` carrying that node's resources — MMIO range, IRQ number, clock reference, and any vendor-specific properties (baud rate, parity, data bits, in `uartlite`'s case). ACPI-described UARTs follow the same shape with an `acpi_device_id` table instead of (or alongside) `of_device_id` — the DesignWare 8250 wrapper (`drivers/tty/serial/8250/8250_dw.c`) registers both `dw8250_of_match[]` and `dw8250_acpi_match[]` against the same `platform_driver`, so the identical driver binds whether firmware describes the port via devicetree or ACPI. There's also a separate, simpler 8250 platform driver for legacy ISA-style ports (`drivers/tty/serial/8250/8250_platform.c`, matched via its own `acpi_platform_serial_table[]`) and a devicetree-only one (`8250_of.c`) — several distinct platform drivers, all funneling into the same `serial8250_pops`/`uart_add_one_port()` core underneath. `.probe()`'s job is always the same regardless of firmware interface or which of these front-end drivers is involved: read the resources, fill in a `uart_port`, and call `uart_add_one_port()`.
+When the kernel walks the device tree and finds a node whose `compatible` property matches one of these strings, the driver core calls `.probe()` with a `struct platform_device` carrying that node's resources — MMIO range, IRQ number, clock reference, and any vendor-specific properties (baud rate, parity, data bits, in `uartlite`'s case). ACPI-described UARTs follow the same shape with an `acpi_device_id` table instead of (or alongside) `of_device_id` — the DesignWare 8250 wrapper (`drivers/tty/serial/8250/8250_dw.c`) registers both `dw8250_of_match[]` and `dw8250_acpi_match[]` against the same `platform_driver`, so the identical driver binds whether firmware describes the port via devicetree or ACPI. There's also a separate, simpler 8250 platform driver (`drivers/tty/serial/8250/8250_platform.c`) and a devicetree-only one (`8250_of.c`) — several distinct platform drivers, all funneling into the same `serial8250_pops`/`uart_add_one_port()` core underneath. `8250_platform.c` registers legacy ISA-style ports as a plain `"serial8250"` platform device matched by name, not by its `acpi_platform_serial_table[]`; that ACPI table has only one real entry, a RISC-V generic-16550A match (`"RSCV0003"`). `.probe()`'s job is always the same regardless of firmware interface or which of these front-end drivers is involved: read the resources, fill in a `uart_port`, and call `uart_add_one_port()`.
 
 ## Worked example: `drivers/tty/serial/uartlite.c`
 

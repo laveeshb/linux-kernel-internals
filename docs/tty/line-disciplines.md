@@ -111,7 +111,7 @@ Most of the rest of that list is the same trick applied to other framed protocol
 
 N_TTY's most visible job is deciding how much editing happens before a `read()` returns data, and that's governed by a single bit: `ICANON` in `c_lflag`.
 
-- **Canonical (cooked) mode** — `ICANON` set, the default. Input is buffered a line at a time. Before the line is handed to a reader, N_TTY performs editing in place: the erase character (default `Ctrl-H`/`Backspace`) deletes the last character, the kill character (default `Ctrl-U`) erases the whole line back to the start, and (with `IEXTEN`) word-erase (`Ctrl-W`) deletes the last word. A `read()` in canonical mode doesn't return anything until a full line is available — terminated by newline, `EOF`, or an `EOL` character.
+- **Canonical (cooked) mode** — `ICANON` set, the default. Input is buffered a line at a time. Before the line is handed to a reader, N_TTY performs editing in place: the erase character (default `DEL`/`Ctrl-?`) deletes the last character, the kill character (default `Ctrl-U`) erases the whole line back to the start, and (with `IEXTEN`) word-erase (`Ctrl-W`) deletes the last word. A `read()` in canonical mode doesn't return anything until a full line is available — terminated by newline, `EOF`, or an `EOL` character.
 - **Raw (non-canonical) mode** — `ICANON` clear. No line buffering, no editing at all: bytes become available to `read()` essentially as they arrive (subject to the `VMIN`/`VTIME` timing controls below), untouched by any erase/kill logic. This is what full-screen programs — editors, pagers, `ssh` itself — put the terminal into, because they need to see every keystroke (including what would otherwise be an erase character) as data.
 
 The editing logic for canonical mode lives in one function, `eraser()` in `drivers/tty/n_tty.c`, which switches on whether the triggering character is the erase, word-erase, or kill character:
@@ -211,11 +211,11 @@ The `c_cc[]` array (`NCCS` = 19 slots) is where the special characters live — 
 #define VEOL2		16
 ```
 
-`include/linux/tty.h` defines the macros the kernel itself uses to read these — `INTR_CHAR(tty)` expands to `tty->termios.c_cc[VINTR]`, and so on for every entry above. `VMIN`/`VTIME` double as `VEOF`/`VEOL` slots in canonical mode (the array is reused, not duplicated, between the two modes) — the kernel and glibc agree on this overlap, but it's why raw-mode code should never assume `VMIN`/`VTIME` are meaningful in canonical mode or vice versa.
+`include/linux/tty.h` defines the macros the kernel itself uses to read these — `INTR_CHAR(tty)` expands to `tty->termios.c_cc[VINTR]`, and so on for every entry above. On Linux, `VMIN`/`VTIME` and `VEOF`/`VEOL` are four distinct, non-overlapping indices (4, 5, 6, 11, per the table above) — they only take on `VMIN`/`VTIME` *meaning* in non-canonical mode, but the slots themselves are never reused. (SPARC's `termbits.h` is a historical outlier that literally `#define`s `VMIN VEOF` and `VTIME VEOL`, inherited from older Unix layouts — that's a SPARC peculiarity, not a general Linux/glibc rule.)
 
 ## Signal generation: how Ctrl-C becomes SIGINT
 
-When `ISIG` is set in `c_lflag` (the default), N_TTY watches every incoming byte for three special characters and turns each into a signal instead of passing it through as data. `n_tty_receive_char_special()` is where that dispatch happens, checked before any of the ordinary line-editing logic runs:
+When `ISIG` is set in `c_lflag` (the default), N_TTY watches every incoming byte for three special characters and turns each into a signal instead of passing it through as data. `n_tty_receive_char_special()` is where that dispatch happens, checked before any of the ordinary line-editing logic runs — though `n_tty_receive_char_special()` itself checks `I_IXON`-driven software flow control (`Ctrl-S`/`Ctrl-Q`) first, and only reaches the `ISIG` block below if that doesn't consume the byte:
 
 ```c
 // drivers/tty/n_tty.c
@@ -233,7 +233,7 @@ if (L_ISIG(tty)) {
 }
 ```
 
-Default bindings: `VINTR` is `Ctrl-C` → `SIGINT`, `VQUIT` is `Ctrl-\` → `SIGQUIT`, `VSUSP` is `Ctrl-Z` → `SIGTSTP`. Each of those goes through `isig()`, which resolves the process group to signal and, unless `NOFLSH` is set, flushes the ldisc's pending input/echo/output as part of delivering the signal (so a `SIGINT` doesn't leave stale typeahead sitting in the buffer for the next foreground program):
+Default bindings: `VINTR` is `Ctrl-C` → `SIGINT`, `VQUIT` is `Ctrl-\` → `SIGQUIT`, `VSUSP` is `Ctrl-Z` → `SIGTSTP`. Each of those goes through `isig()`, which resolves the process group to signal and, unless `NOFLSH` is set, flushes the ldisc's pending input/echo/output as part of delivering the signal (so a `SIGINT` doesn't leave stale typeahead sitting in the buffer for the next foreground program). The signal-delivery part — resolving `tty->ctrl.pgrp` and calling `kill_pgrp()` — is factored into an inner helper, `__isig()`, shown below; the `NOFLSH` check and the actual flush live in `isig()` itself, which calls `__isig()` first and then, unless `NOFLSH` is set, clears the echo/output/input buffers:
 
 ```c
 // drivers/tty/n_tty.c
@@ -268,7 +268,7 @@ struct {
 } ctrl;
 ```
 
-`ctrl.pgrp` is the terminal's current foreground process group; `ctrl.session` is the session this tty is the controlling terminal *for*. Both are `struct pid *`, not raw pids, and both are protected by `ctrl.lock` for writers (readers can get away with holding just one of `ctrl.lock` or the tty's broader `legacy_mutex`, per the struct's kernel-doc). `tty_get_pgrp()`/`tty_get_pgrp(tty)` is the accessor `isig()` used above; `tty_jobctrl.c` has the corresponding setter path, `tiocspgrp()`, reached through the `TIOCSPGRP` ioctl.
+`ctrl.pgrp` is the terminal's current foreground process group; `ctrl.session` is the session this tty is the controlling terminal *for*. Both are `struct pid *`, not raw pids, and both are protected by `ctrl.lock` for writers (readers can get away with holding just one of `ctrl.lock` or the tty's broader `legacy_mutex`, per the struct's kernel-doc). `tty_get_pgrp(tty)` is the accessor `isig()` used above; `tty_jobctrl.c` has the corresponding setter path, `tiocspgrp()`, reached through the `TIOCSPGRP` ioctl.
 
 ### Becoming a controlling terminal
 
@@ -348,6 +348,7 @@ static int job_control(struct tty_struct *tty, struct file *file)
 {
 	/* Job control check -- must be done at start and after
 	   every sleep (POSIX.1 7.1.1.4). */
+	...
 	/* don't stop on /dev/console */
 	if (file->f_op->write_iter == redirected_tty_write)
 		return 0;
@@ -433,7 +434,7 @@ From userspace, the canonical sequence is four calls, and glibc's `openpty()` is
 
 1. **`posix_openpt(O_RDWR | O_NOCTTY)`** — opens `/dev/ptmx`, returning a master file descriptor.
 2. **`grantpt(fd)`** — fixes up ownership/permissions on the corresponding slave device (traditionally by running a setuid helper; on Linux this is largely handled by `devpts` mount options like `ptmxmode`/`gid=tty` instead).
-3. **`unlockpt(fd)`** — clears the pty's lock flag (`TIOCSPTLCK`) so the slave can actually be opened; every new master starts locked (`ptmx_open()` sets `TTY_PTY_LOCK` on the slave unconditionally: `set_bit(TTY_PTY_LOCK, &tty->flags); /* LOCK THE SLAVE */`).
+3. **`unlockpt(fd)`** — clears the pty's lock flag (`TIOCSPTLCK`) so the slave can actually be opened; every new pty starts locked (`ptmx_open()` sets `TTY_PTY_LOCK` unconditionally on the *master*'s flags — `tty` in `ptmx_open()` is the master, from `tty = tty_init_dev(ptm_driver, index)` — via `set_bit(TTY_PTY_LOCK, &tty->flags); /* LOCK THE SLAVE */`; the comment describes the practical effect, since `pty_open()`, the slave-open path, checks the bit through `tty->link->flags`).
 4. **`ptsname(fd)`** (or the race-free in-kernel `TIOCGPTPEER`/`ptm_open_peer()` path) — resolves the `/dev/pts/N` path, or a direct fd, for the slave.
 
 Once unlocked, opening the returned slave path gives an ordinary tty file descriptor with N_TTY running on it. From there, the process that opened the slave typically `setsid()`s and issues `TIOCSCTTY` on it — which is exactly how every terminal emulator (`xterm`, a GUI terminal, `tmux`) and every `sshd` session sets up its child shell: the shell's controlling terminal is a pty *slave*, and the emulator or `sshd` process holds the *master* end, translating between "what the user's mouse/keyboard/network socket produces" and "what a real terminal would have sent."
@@ -503,10 +504,10 @@ Pty master/slave pair, terminal emulator + shell:
 
 ### Kernel source
 
-- [`include/linux/tty.h`](https://raw.githubusercontent.com/torvalds/linux/master/include/linux/tty.h) — `struct tty_struct` (including `ctrl.pgrp`/`ctrl.session`), the `c_cc[]` accessor macros (`INTR_CHAR()`, `ERASE_CHAR()`, ...), the `L_*`/`I_*`/`O_*`/`C_*` flag-test macros
-- [`include/linux/tty_ldisc.h`](https://raw.githubusercontent.com/torvalds/linux/master/include/linux/tty_ldisc.h) — `struct tty_ldisc_ops`, `struct tty_ldisc`
-- [`include/uapi/linux/tty.h`](https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/linux/tty.h) — the full `N_*` line discipline number list
-- [`include/uapi/asm-generic/termbits.h`](https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/asm-generic/termbits.h), [`termbits-common.h`](https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/asm-generic/termbits-common.h) — `struct termios`/`struct ktermios`, `c_cc[]` `V*` indices, the `c_iflag`/`c_oflag`/`c_cflag`/`c_lflag` bit definitions
+- [`include/linux/tty.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/tty.h) — `struct tty_struct` (including `ctrl.pgrp`/`ctrl.session`), the `c_cc[]` accessor macros (`INTR_CHAR()`, `ERASE_CHAR()`, ...), the `L_*`/`I_*`/`O_*`/`C_*` flag-test macros
+- [`include/linux/tty_ldisc.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/tty_ldisc.h) — `struct tty_ldisc_ops`, `struct tty_ldisc`
+- [`include/uapi/linux/tty.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/tty.h) — the full `N_*` line discipline number list
+- [`include/uapi/asm-generic/termbits.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/asm-generic/termbits.h), [`termbits-common.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/asm-generic/termbits-common.h) — `struct termios`/`struct ktermios`, `c_cc[]` `V*` indices, the `c_iflag`/`c_oflag`/`c_cflag`/`c_lflag` bit definitions
 - [`drivers/tty/n_tty.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/tty/n_tty.c) — the N_TTY line discipline: `eraser()`, `isig()`, `n_tty_receive_char_special()`, `job_control()`
 - [`drivers/tty/pty.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/tty/pty.c) — `pty_common_install()`, `pty_write()`, `pty_signal()`, `ptmx_open()`, the legacy-BSD vs. Unix98 driver setup
 - [`drivers/tty/tty_jobctrl.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/tty/tty_jobctrl.c) — `tiocsctty()`, `__tty_check_change()`, `tiocgpgrp()`/`tiocspgrp()`, `disassociate_ctty()`
