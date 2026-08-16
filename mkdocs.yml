@@ -454,6 +454,14 @@ nav:
         - The msm GPU Recovery/Shrinker Deadlock: drm/war-stories/msm-shrinker-deadlock.md
         - "The drm_sched_entity_kill_jobs_cb Lockdep Deadlock": drm/war-stories/entity-kill-jobs-deadlock.md
         - "The NO_HANG False Positive": drm/war-stories/no-hang-false-positive.md
+    - Audio / ALSA:
+      - Getting Started: alsa/README.md
+      - The PCM Data Path: alsa/pcm.md
+      - "ASoC: Audio for Embedded": alsa/asoc.md
+      - War Stories:
+        - ALSA War Stories: alsa/war-stories.md
+        - The 21-Year-Latent USB Mixer Teardown Use-After-Free: alsa/war-stories/mixer-teardown-use-after-free.md
+        - The USB Audio Clock Descriptor Out-of-Bounds Reads: alsa/war-stories/usb-audio-clock-descriptor-oob.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:
