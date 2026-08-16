@@ -319,18 +319,30 @@ export default {
         returnMetadata: true,
       });
 
+      // Only feed the model matches that are actually relevant. Forcing it
+      // to answer from the top-3 regardless of score leads to it treating
+      // barely-related chunks (or even a bare greeting's nearest neighbor)
+      // as ground truth and confidently answering off-topic.
+      const RELEVANCE_THRESHOLD = 0.55;
+      const relevantMatches = vectorizeResponse.matches.filter((m) => m.score >= RELEVANCE_THRESHOLD);
+
       let contextStr = "";
-      for (const match of vectorizeResponse.matches) {
+      for (const match of relevantMatches) {
         contextStr += `Source: ${match.metadata.source}\nText: ${match.metadata.text}\n\n`;
       }
 
-      const systemPrompt = `You are a helpful expert on Linux kernel internals.
-Answer the user's question using ONLY the provided documentation context below.
-If the answer is not in the context, say you do not know.
+      const systemPrompt = contextStr
+        ? `You are the documentation assistant for kernel-internals.org, a site about Linux kernel internals.
+Answer the user's question using ONLY the documentation context below — do not use outside knowledge.
+If the context doesn't actually answer the question, say so plainly instead of guessing.
 
 Context:
-${contextStr}
-`;
+${contextStr}`
+        : `You are the documentation assistant for kernel-internals.org, a site about Linux kernel internals.
+No documentation matched this question closely enough to answer from it.
+If this is a greeting or small talk, respond naturally and briefly, and mention you can
+answer questions about Linux kernel internals. Otherwise, say plainly that you don't have
+documentation covering this yet, and suggest the user try a more specific kernel topic.`;
 
       const chatResponse = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fp8-fast", {
         messages: [
