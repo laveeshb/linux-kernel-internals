@@ -94,6 +94,7 @@ The pages that follow go deeper on each piece summarized above:
 
 - **[PCM: playback and capture](pcm.md)** — hardware-parameter negotiation, the ring buffer, interrupt-driven period updates, and how a userspace `write()`/`mmap()` call turns into DMA.
 - **[ASoC](asoc.md)** — the codec/platform/machine driver split used by essentially all embedded and SoC audio, and how DAPM manages power domains inside the audio path.
+- **[War Stories](war-stories.md)** — six real ALSA incidents, from a USB mixer use-after-free latent for almost 21 years to a PCM buffer locking race.
 
 ### Prerequisites and neighbors
 
@@ -116,6 +117,7 @@ ALSA drivers are ordinary [Linux device-model](../drivers/device-model.md) citiz
 
 - [PCM: playback and capture](pcm.md) — the data path in depth
 - [ASoC](asoc.md) — codec/platform/machine drivers for embedded audio
+- [War Stories](war-stories.md) — real incidents in the subsystems above
 - [Linux Device Model](../drivers/device-model.md) · [PCI Drivers](../drivers/pci-driver.md) · [Platform Drivers](../drivers/platform-driver.md) · [Character Devices](../drivers/chardev.md) — the driver-core layers ALSA sits on
 
 ### LWN articles

@@ -56,7 +56,7 @@ struct snd_soc_dai_driver {
 };
 ```
 
-`capture` and `playback` are each a `struct snd_soc_pcm_stream` — supported rates, formats, and channel counts as bitmasks (`SNDRV_PCM_RATE_*`, `SNDRV_PCM_FMTBIT_*`), the same vocabulary a plain ALSA PCM driver uses. The actual operations live in `struct snd_soc_dai_ops`, and the ones a CPU DAI driver cares about are the clocking/format setters plus the standard PCM trigger sequence:
+`capture` and `playback` are each a `struct snd_soc_pcm_stream` — supported rates and formats as bitmasks (`SNDRV_PCM_RATE_*`, `SNDRV_PCM_FMTBIT_*`) plus plain integer `channels_min`/`channels_max` counts, the same vocabulary a plain ALSA PCM driver uses. The actual operations live in `struct snd_soc_dai_ops`, and the ones a CPU DAI driver cares about are the clocking/format setters plus the standard PCM trigger sequence:
 
 ```c
 // include/sound/soc-dai.h (selected fields)
@@ -352,7 +352,7 @@ static struct snd_soc_card rockchip_max98090_card = {
 };
 ```
 
-`struct snd_soc_card` is the top-level object the machine driver registers with `devm_snd_soc_register_card()`: an array of `dai_link`s plus the board-level DAPM widgets/routes/controls that the codec driver doesn't already know about (the external speaker, the mic jack — see below). `dai_fmt` here spells out the I2S wire format directly on the link: standard I2S justification, normal (non-inverted) bit clock and frame, and the codec as the clock *consumer* on both bit clock and frame sync — meaning the Rockchip I2S controller is the one driving BCLK/LRCK on this board. `aux_dev`/`num_aux_devs` is a separate, smaller mechanism for a component that isn't part of any `dai_link` at all — on this board it points at `rk_98090_headset_dev`, which just calls `ts3a227e_enable_jack_detect()` to wire up a headset-jack-detection IC's interrupt, not an audio data path.
+`struct snd_soc_card` is the top-level object the machine driver registers with `devm_snd_soc_register_card()`: an array of `dai_link`s plus the board-level DAPM widgets/routes/controls that the codec driver doesn't already know about (the external speaker, the mic jack — see below). `dai_fmt` here spells out the I2S wire format directly on the link: standard I2S justification, normal (non-inverted) bit clock and frame, and the codec as the clock *consumer* on both bit clock and frame sync — meaning the Rockchip I2S controller is the one driving BCLK/LRCK on this board. `aux_dev`/`num_aux_devs` is a separate, smaller mechanism for a component that isn't part of any `dai_link` at all — on this board it points at `rk_98090_headset_dev`, whose init callback creates a `snd_soc_card_jack` (with the button-key masks and DAPM pins the jack reports through) and then calls `ts3a227e_enable_jack_detect()` to register that jack with the ts3a227e headset-detection IC's driver; the IC's own I2C probe is what actually requests its interrupt line, independently of this call. `aux_dev` wires up the jack-reporting path, not an audio data path.
 
 ## DAPM: power-managing what a PC sound card doesn't have
 
@@ -383,8 +383,9 @@ struct snd_soc_dapm_widget {
 	unsigned char power:1;			/* block power status */
 	unsigned char connected:1;		/* connected codec pin */
 
-	int (*event)(struct snd_soc_dapm_widget*, struct snd_kcontrol *, int);
+	/* external events */
 	unsigned short event_flags;
+	int (*event)(struct snd_soc_dapm_widget*, struct snd_kcontrol *, int);
 
 	int num_kcontrols;
 	const struct snd_kcontrol_new *kcontrol_news;
@@ -518,7 +519,7 @@ sound {
 ```
 — [`Documentation/devicetree/bindings/sound/simple-card.yaml`](https://www.kernel.org/doc/Documentation/devicetree/bindings/sound/simple-card.yaml)
 
-For topologies simple-card's flat `cpu`/`codec` node pair can't express cleanly — several DAIs feeding a shared codec through TDM splits, or boards with more than two components chained together — there's **audio-graph-card** (`sound/soc/generic/audio-graph-card.c`), which reuses the generic devicetree [OF graph](https://www.kernel.org/doc/Documentation/devicetree/bindings/graph.txt) `port`/`endpoint`/`remote-endpoint` bindings instead of simple-card's flat property list:
+For topologies simple-card's flat `cpu`/`codec` node pair can't express cleanly — several DAIs feeding a shared codec through TDM splits, or boards with more than two components chained together — there's **audio-graph-card** (`sound/soc/generic/audio-graph-card.c`), which reuses the generic devicetree [OF graph](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/devicetree/bindings/sound/audio-graph.yaml) `port`/`endpoint`/`remote-endpoint` bindings instead of simple-card's flat property list:
 
 ```dts
 sound {
@@ -572,8 +573,9 @@ Both drivers are, structurally, just machine drivers themselves: they parse devi
   │ snd_soc_component_driver  │  /DATA     │ snd_soc_component_driver │
   │ snd_soc_dai_driver         │            │ snd_soc_dai_driver       │
   │  .ops: set_fmt, hw_params, │            │  .ops: set_fmt, set_sysclk│
-  │        trigger             │            │  .dapm_widgets: ADC/DAC, │
-  │ + DMA engine (component)   │            │    mixers, HP/SPK amps   │
+  │        trigger             │            │  probe(): registers      │
+  │ + DMA engine (component)   │            │    ADC/DAC/mixer/amp     │
+  │                           │            │    widgets at runtime    │
   │                           │            │  I2C/SPI regmap I/O      │
   └─────────────┬─────────────┘            └─────────────┬─────────────┘
                 │                                          │

@@ -10,7 +10,7 @@ Unlike [DRM's war stories](../drm/war-stories.md), which are entirely reliabilit
 
 ### [The 21-Year-Latent USB Mixer Teardown Use-After-Free](war-stories/mixer-teardown-use-after-free.md)
 **January 2026 · CVE-2026-23089**
-A 2005 commit gave every registered ALSA control a raw pointer into a USB mixer's notification-routing array. A failed probe could free that array while controls created earlier in the same probe still pointed into it — a bug the code path made possible for almost 21 years before a fix landed.
+A 2005 commit gave every registered ALSA control a back-pointer to its USB mixer object. A failed probe could free that entire object while controls created earlier in the same probe still pointed at it — a bug the code path made possible for almost 21 years before a fix landed.
 
 ### [The USB Audio Clock Descriptor Out-of-Bounds Reads](war-stories/usb-audio-clock-descriptor-oob.md)
 **November 2024 · CVE-2024-53150 · CISA Known Exploited Vulnerabilities catalog**

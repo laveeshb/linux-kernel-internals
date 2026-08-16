@@ -99,11 +99,6 @@ struct snd_pcm_runtime {
 	struct snd_pcm_mmap_status *status;
 	struct snd_pcm_mmap_control *control;
 
-	/* -- timer -- */
-	unsigned int timer_resolution;	/* timer resolution */
-	int tstamp_type;		/* timestamp type */
-	...
-
 	/* -- locking / scheduling -- */
 	snd_pcm_uframes_t twake;
 	wait_queue_head_t sleep;	/* poll sleep */
@@ -121,6 +116,10 @@ struct snd_pcm_runtime {
 	struct snd_pcm_hardware hw;
 	struct snd_pcm_hw_constraints hw_constraints;
 
+	/* -- timer -- */
+	unsigned int timer_resolution;	/* timer resolution */
+	int tstamp_type;		/* timestamp type */
+
 	/* -- DMA -- */
 	unsigned char *dma_area;	/* DMA area */
 	dma_addr_t dma_addr;		/* physical bus address (not accessible from main CPU) */
@@ -135,7 +134,7 @@ struct snd_pcm_runtime {
 
 ## The ring buffer model: periods and frames
 
-The DMA buffer (`runtime->dma_area`, sized `runtime->dma_bytes`) is a single, contiguous ring. Data is measured in **frames** — one sample per channel, so a frame for 16-bit stereo is 4 bytes; for 24-bit 6-channel it depends on the subformat — 18 bytes for the tightly-packed `S24_3LE` (3 bytes/sample), but 24 bytes for the far more common `S24_LE` (which stores the 24-bit value in the low three bytes of a 4-byte container). Frame count itself is independent of format and channel count, which is what lets the rest of the PCM core reason about buffer position without caring what's actually in the bytes.
+The DMA buffer (`runtime->dma_area`, sized `runtime->dma_bytes`) is a single, contiguous ring. Data is measured in **frames** — one sample per channel, so a frame for 16-bit stereo is 4 bytes; for 24-bit 6-channel it depends on which 24-bit *format* is in use — 18 bytes for the tightly-packed `S24_3LE` (3 bytes/sample), but 24 bytes for the far more common `S24_LE` (which stores the 24-bit value in the low three bytes of a 4-byte container). (`S24_LE`/`S24_3LE` are distinct entries in `SNDRV_PCM_FORMAT_*`, not variants of a single format's `subformat` field — `subformat` is a separate, mostly-unused hw_params dimension of its own, see `SNDRV_PCM_SUBFORMAT_*`.) Frame count itself is independent of format and channel count, which is what lets the rest of the PCM core reason about buffer position without caring what's actually in the bytes.
 
 The buffer is carved into `runtime->periods` equal-sized chunks of `runtime->period_size` frames each, so `buffer_size == period_size * periods`. A period is the **interrupt granularity**: the driver's hardware is expected to raise one interrupt every time it finishes consuming (playback) or producing (capture) one period's worth of frames, and that interrupt is what tells the PCM core "a period elapsed" — see [`snd_pcm_period_elapsed()`](#the-interrupt-driven-update-snd_pcm_period_elapsed) below. This is the same design OSS called a "fragment."
 
