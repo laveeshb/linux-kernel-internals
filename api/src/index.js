@@ -28,13 +28,13 @@ const RATE_LIMITS = {
 // "the AI features go dark for the rest of the day" from a single burst.
 //
 // Rough neuron cost per call, from Cloudflare's published per-model rates
-// (bge-base-en-v1.5: ~6,058 neurons/M input tokens; llama-3-8b-instruct:
-// ~25,608/M input tokens, ~75,147/M output tokens), assuming a generously
+// (bge-base-en-v1.5: ~6,058 neurons/M input tokens; llama-3.1-8b-instruct-fp8-fast:
+// ~4,119/M input tokens, ~34,868/M output tokens), assuming a generously
 // long query/context/answer so the estimate errs high, not low:
 //   search: ~1 embedding call, short query           ->  ~3 neurons
 //   chat:   ~1 embedding call + 1 LLM call w/ RAG
-//           context (~1,000 input tok, ~300 output)  -> ~50 neurons
-const NEURON_ESTIMATE = { search: 3, chat: 50 };
+//           context (~1,000 input tok, ~300 output)  -> ~20 neurons
+const NEURON_ESTIMATE = { search: 3, chat: 20 };
 
 // Deliberately well under the real 10,000/day ceiling: leaves headroom
 // for estimation error above, and for whatever the ingestion script
@@ -320,7 +320,7 @@ Context:
 ${contextStr}
 `;
 
-      const chatResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+      const chatResponse = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fp8-fast", {
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: query },
