@@ -20,7 +20,7 @@ CVE-2014-0196 — CISA Known Exploited Vulnerabilities catalog (added 2023-05-12
 
 ## Before state
 
-When a pty is in cooked (canonical) mode with echo enabled and output post-processing disabled (`LECHO` set, `OPOST` clear — a mode real terminal programs put ptys into), every character a process writes to the pty gets echoed straight back through the line discipline to whatever's reading the other end. That echo path and an ordinary `write()` to the same pty both ultimately call into the same tty-buffer insertion machinery (`tty_insert_flip_string()` and friends) to append bytes to the tty's flip buffer.
+When a pty is in raw (non-canonical) mode with echo enabled and output post-processing disabled (`LECHO` set, `OPOST` clear — a mode real terminal programs put ptys into), every character a process writes to the pty gets echoed straight back through the line discipline to whatever's reading the other end. That echo path and an ordinary `write()` to the same pty both ultimately call into the same tty-buffer insertion machinery (`tty_insert_flip_string()` and friends) to append bytes to the tty's flip buffer.
 
 ## The trigger
 

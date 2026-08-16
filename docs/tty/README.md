@@ -39,6 +39,8 @@ struct tty_struct {
 
 	struct tty_ldisc *ldisc;
 	struct ld_semaphore ldisc_sem;
+	/* ... locking: atomic_write_lock, legacy_mutex, throttle_mutex,
+	 *              termios_rwsem, winsize_mutex ... */
 
 	struct ktermios termios, termios_locked;
 	char name[64];
@@ -61,6 +63,7 @@ struct tty_struct {
 		bool packet;
 	} ctrl;
 
+	/* ... hw_stopped, closing, flow_change ... */
 	struct tty_struct *link;
 	void *disc_data;
 	void *driver_data;
@@ -87,6 +90,7 @@ struct tty_driver {
 	enum tty_driver_subtype subtype;
 	struct ktermios init_termios;
 	unsigned long flags;
+	/* ... proc_entry, other, flip_wq ... */
 
 	struct tty_struct **ttys;
 	struct tty_port **ports;
@@ -100,7 +104,7 @@ struct tty_driver {
 
 `name` is what's used to build the `/dev` node (`"ttyS"`, `"pty"`, `"pts"`); `type`/`subtype` (`enum tty_driver_type`: `TTY_DRIVER_TYPE_SYSTEM`, `_CONSOLE`, `_SERIAL`, `_PTY`, `_SCC`, `_SYSCONS`) tell the core roughly what kind of driver this is; and `ttys`/`ports`/`termios` are the per-line arrays the standard `tty_standard_install()` path uses to look up an existing tty by minor number. A driver is set up with `tty_alloc_driver()`, has `ops` attached via `tty_set_operations()`, and goes live with `tty_register_driver()`.
 
-**`struct tty_operations`** (also `tty_driver.h`) is the vtable connecting the tty core to a specific driver. `open()` is the only strictly required callback (the kernel doc comment: "if this routine is not filled in, the attempted open will fail with `ENODEV`"); the rest are optional but most drivers implement the load-bearing ones: `write()`/`write_room()`/`chars_in_buffer()` for output, `set_termios()` to react to changed terminal settings, `throttle()`/`unthrottle()` and `stop()`/`start()` for flow control, `hangup()`, `ioctl()`, `break_ctl()` for sending a BREAK, and `install()`/`lookup()`/`remove()` for drivers (like the pty and console drivers) that don't use the standard `ttys[]` array lookup.
+**`struct tty_operations`** (also `tty_driver.h`) is the vtable connecting the tty core to a specific driver. The kernel doc comment marks both `open()` and `close()` "Required method"; in practice only `open()`'s absence is enforced at runtime (the doc comment: "if this routine is not filled in, the attempted open will fail with `ENODEV`"). The rest are optional but most drivers implement the load-bearing ones: `write()`/`write_room()`/`chars_in_buffer()` for output, `set_termios()` to react to changed terminal settings, `throttle()`/`unthrottle()` and `stop()`/`start()` for flow control, `hangup()`, `ioctl()`, `break_ctl()` for sending a BREAK, and `install()`/`lookup()`/`remove()` for drivers (like the pty and console drivers) that don't use the standard `ttys[]` array lookup.
 
 **`struct tty_ldisc_ops`** (`include/linux/tty_ldisc.h`) is the line discipline's vtable, and the kernel doc comment splits its hooks into two directions: hooks marked `[TTY]` are called from the tty core downward — `open()`, `close()`, `read()`, `write()`, `ioctl()`, `set_termios()`, `poll()`, `hangup()` — and hooks marked `[DRV]` are called from the low-level driver upward, feeding received data in: `receive_buf()` and its newer variant `receive_buf2()` (preferred when present, since it can report back how many bytes it consumed for automatic flow control), `write_wakeup()` (the driver has room for more output), `dcd_change()` (used by the `N_PPS` Pulse-Per-Second discipline), and `lookahead_buf()` (a fast path for characters — like software flow-control bytes — that need handling before the regular `receive_buf()` call gets to them). N_TTY's implementation of `receive_buf()`/`receive_buf2()` is where canonical-mode line editing, echo, and `ISIG` signal generation actually happen: when the input flag `ISIG` is set and the incoming character matches `INTR_CHAR(tty)` (the terminal's configured interrupt character, normally Ctrl-C), `drivers/tty/n_tty.c` calls `n_tty_receive_signal_char(tty, SIGINT, c)` to raise `SIGINT` on the tty's foreground process group.
 
@@ -117,7 +121,7 @@ whose job is to say which `tty_driver` backs a given console. This is exactly th
 ### Device node naming
 
 - **`/dev/ttyS0`, `/dev/ttyS1`, ...** — real serial ports, one per UART line a driver enumerates (the 8250/16550-family driver under `drivers/tty/serial/8250/`, for the most common case). The `ttyS(4)` man page puts it simply: "ttyS[0-3] are character devices for the serial terminal lines."
-- **`/dev/pts/N`** — UNIX 98 pseudo-terminal slaves. Userspace opens `/dev/ptmx`, a clone device handled by `ptmx_open()` in `drivers/tty/pty.c`, to allocate a fresh pty master; the `devpts` filesystem then creates the matching `/dev/pts/N` slave node. Every terminal emulator, every `ssh` session, and every `tmux`/`screen` pane is one of these pairs. On the kernel side this is two separate `struct tty_driver`s — `pty_driver` (`name = "pty"`, master side) and `pts_driver` (`name = "pts"`, `driver_name = "pty_slave"`, slave side) — cross-linked through `tty_driver.other`.
+- **`/dev/pts/N`** — UNIX 98 pseudo-terminal slaves. Userspace opens `/dev/ptmx`, a clone device handled by `ptmx_open()` in `drivers/tty/pty.c`, to allocate a fresh pty master; the `devpts` filesystem then creates the matching `/dev/pts/N` slave node. Every terminal emulator, every `ssh` session, and every `tmux`/`screen` pane is one of these pairs. On the kernel side this is two separate `struct tty_driver`s — `ptm_driver` (`driver_name = "pty_master"`, `name = "ptm"`, master side) and `pts_driver` (`driver_name = "pty_slave"`, `name = "pts"`, slave side) — cross-linked through `tty_driver.other`; `ptmx_open()` allocates the master via `tty_init_dev(ptm_driver, index)`. This is distinct from the legacy BSD-style `pty_driver` (`name = "pty"`), set up separately by `legacy_pty_init()` under `CONFIG_LEGACY_PTYS`, which backs the old `/dev/ptyXX`/`/dev/ttyXX` pairs rather than `/dev/ptmx`.
 - **`/dev/tty`** — not a distinct device family but a fixed alias, minor `MKDEV(TTYAUX_MAJOR, 0)` (`TTYAUX_MAJOR` is `5`, per the `tty(4)` man page: "a character file with major number 5 and minor number 0... a synonym for the controlling terminal of a process, if any"). Opening it calls `tty_open_current_tty()`, which looks up the calling process's controlling tty via `get_current_tty()` and reopens that.
 - **`/dev/console`** — the system console alias, minor `MKDEV(TTYAUX_MAJOR, 1)`, resolved the same way via `console_device()` as described above — it can point at a serial port, a virtual console, or (less commonly) a pty, depending on how the system was booted (`console=` kernel parameter) and what's currently registered.
 
@@ -131,7 +135,7 @@ whose job is to say which `tty_driver` backs a given console. This is exactly th
           │                             │                            │
           ▼                             ▼                            ▼
   drivers/tty/serial/*          drivers/tty/pty.c            drivers/tty/vt/*
-  struct tty_driver "ttyS"      tty_driver "pty"/"pts"       console_driver
+  struct tty_driver "ttyS"      tty_driver "ptm"/"pts"       console_driver
   + struct tty_operations       + struct tty_operations      + struct tty_operations
           │                             │                            │
           └─────────────────────────────┼────────────────────────────┘
