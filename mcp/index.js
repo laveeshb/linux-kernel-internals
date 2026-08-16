@@ -5,7 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 // The live Cloudflare API endpoint
-const API_URL = "https://linux-kernel-ai-api.YOUR-USERNAME.workers.dev/api/search";
+const API_URL = "https://api.kernel-internals.org/api/search";
 
 const server = new Server({
   name: "linux-kernel-internals",

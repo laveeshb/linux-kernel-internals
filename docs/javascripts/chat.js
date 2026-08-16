@@ -87,7 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const messages = document.getElementById('ai-chat-messages');
 
     // Replace this with the actual deployed Cloudflare Worker URL
-    const API_URL = "https://linux-kernel-ai-api.YOUR-USERNAME.workers.dev/api/chat";
+    const API_URL = "https://api.kernel-internals.org/api/chat";
 
     header.addEventListener('click', () => {
         const isHidden = body.style.display === 'none';
