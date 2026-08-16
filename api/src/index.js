@@ -1,9 +1,17 @@
 const MAX_QUERY_LENGTH = 500;
 
-// The production docs origin. Requests from any other Origin are rejected
-// server-side (browsers already enforce this via CORS, but a non-browser
-// client can ignore CORS entirely, so we also check Origin ourselves).
-const ALLOWED_ORIGIN = "https://kernel-internals.org";
+// The production docs origin, plus common local dev-server origins.
+// Requests from any other Origin are rejected server-side (browsers already
+// enforce this via CORS, but a non-browser client can ignore CORS entirely,
+// so we also check Origin ourselves). This is a soft deterrent, not the
+// primary abuse gate — a scripted client can simply omit the Origin header
+// entirely to skip this check (see the `!mcp && origin &&` guard below);
+// Turnstile and the rate/budget limits are what actually gate cost.
+const ALLOWED_ORIGINS = [
+  "https://kernel-internals.org",
+  "http://localhost:8000",
+  "http://127.0.0.1:8000",
+];
 
 // Per-IP fixed-window limits. Chat is limited harder than search since it
 // triggers both an embedding call and an LLM completion.
@@ -41,25 +49,27 @@ const NEURON_ESTIMATE = { search: 3, chat: 20 };
 // consumes on days it's re-run (it uses the same shared daily pool).
 const DAILY_NEURON_BUDGET = 7000;
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-API-Key",
-  "Vary": "Origin",
-};
+function corsHeadersFor(origin) {
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-API-Key",
+    "Vary": "Origin",
+  };
+}
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, origin) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...CORS_HEADERS,
+      ...corsHeadersFor(origin),
     },
   });
 }
 
-function errorResponse(message, status) {
-  return jsonResponse({ error: message }, status);
+function errorResponse(message, status, origin) {
+  return jsonResponse({ error: message }, status, origin);
 }
 
 function getClientId(request) {
@@ -189,31 +199,31 @@ function validateQuery(body) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const origin = request.headers.get("Origin");
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: CORS_HEADERS });
+      return new Response(null, { headers: corsHeadersFor(origin) });
     }
 
     if (request.method !== "POST") {
-      return errorResponse("Method not allowed. Use POST /api/search or /api/chat", 405);
+      return errorResponse("Method not allowed. Use POST /api/search or /api/chat", 405, origin);
     }
 
     const mcp = isAuthenticatedMcp(request, env);
-    const origin = request.headers.get("Origin");
 
-    // Anonymous (non-MCP) callers must present the expected browser Origin.
-    // MCP traffic doesn't send an Origin header at all (it's not a browser
+    // Anonymous (non-MCP) callers must present an allowed Origin. MCP
+    // traffic doesn't send an Origin header at all (it's not a browser
     // request), so it's exempt from this check and relies on the API key
     // instead.
-    if (!mcp && origin && origin !== ALLOWED_ORIGIN) {
-      return errorResponse("Origin not allowed", 403);
+    if (!mcp && origin && !ALLOWED_ORIGINS.includes(origin)) {
+      return errorResponse("Origin not allowed", 403, origin);
     }
 
     let body;
     try {
       body = await request.json();
     } catch (e) {
-      return errorResponse("Invalid JSON body", 400);
+      return errorResponse("Invalid JSON body", 400, origin);
     }
 
     if (url.pathname === "/api/search") {
@@ -224,13 +234,14 @@ export default {
       return this.handleChat(body, env, request, mcp);
     }
 
-    return errorResponse("Not found", 404);
+    return errorResponse("Not found", 404, origin);
   },
 
   async handleSearch(body, env, request, mcp) {
+    const origin = request.headers.get("Origin");
     const { query, error } = validateQuery(body);
     if (error) {
-      return errorResponse(error, 400);
+      return errorResponse(error, 400, origin);
     }
 
     const clientId = getClientId(request);
@@ -241,13 +252,13 @@ export default {
     if (!mcp) {
       const turnstileOk = await verifyTurnstile(body.turnstileToken, clientId, env);
       if (!turnstileOk) {
-        return errorResponse("Bot verification failed. Please reload the page and try again.", 403);
+        return errorResponse("Bot verification failed. Please reload the page and try again.", 403, origin);
       }
     }
 
     const rl = await checkRateLimit(env, clientId, "search", mcp);
     if (!rl.ok) {
-      return errorResponse(rl.reason, 429);
+      return errorResponse(rl.reason, 429, origin);
     }
 
     try {
@@ -269,17 +280,18 @@ export default {
         source: match.metadata.source,
       }));
 
-      return jsonResponse({ results });
+      return jsonResponse({ results }, 200, origin);
     } catch (e) {
       console.error("handleSearch failed:", e);
-      return errorResponse("Search temporarily unavailable. Please try again.", 502);
+      return errorResponse("Search temporarily unavailable. Please try again.", 502, origin);
     }
   },
 
   async handleChat(body, env, request, mcp) {
+    const origin = request.headers.get("Origin");
     const { query, error } = validateQuery(body);
     if (error) {
-      return errorResponse(error, 400);
+      return errorResponse(error, 400, origin);
     }
 
     const clientId = getClientId(request);
@@ -287,13 +299,13 @@ export default {
     if (!mcp) {
       const turnstileOk = await verifyTurnstile(body.turnstileToken, clientId, env);
       if (!turnstileOk) {
-        return errorResponse("Bot verification failed. Please reload the page and try again.", 403);
+        return errorResponse("Bot verification failed. Please reload the page and try again.", 403, origin);
       }
     }
 
     const rl = await checkRateLimit(env, clientId, "chat", mcp);
     if (!rl.ok) {
-      return errorResponse(rl.reason, 429);
+      return errorResponse(rl.reason, 429, origin);
     }
 
     try {
@@ -327,10 +339,10 @@ ${contextStr}
         ],
       });
 
-      return jsonResponse({ answer: chatResponse.response });
+      return jsonResponse({ answer: chatResponse.response }, 200, origin);
     } catch (e) {
       console.error("handleChat failed:", e);
-      return errorResponse("Chat temporarily unavailable. Please try again.", 502);
+      return errorResponse("Chat temporarily unavailable. Please try again.", 502, origin);
     }
   },
 };

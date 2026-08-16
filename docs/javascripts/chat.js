@@ -86,7 +86,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const sendBtn = document.getElementById('ai-chat-send');
     const messages = document.getElementById('ai-chat-messages');
 
-    const API_URL = "https://api.kernel-internals.org/api/chat";
+    // TODO: point back at https://api.kernel-internals.org/api/chat once the
+    // custom domain route is restored (see api/wrangler.toml). Using the
+    // workers.dev URL directly for now, during local testing.
+    const API_URL = "https://linux-kernel-ai-api.laveeshbansal.workers.dev/api/chat";
 
     // Public Turnstile site key. Obtain from the Cloudflare dashboard
     // (Turnstile product) once you've signed up, then replace this
