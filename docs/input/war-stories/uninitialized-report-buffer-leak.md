@@ -3,7 +3,7 @@
 > A one-word fix — `kmalloc` should have been `kzalloc` — closed a heap-memory leak that a forensic device maker had already turned into part of a working phone-unlock chain.
 
 Landed
-:   Linux, November 2024 (CVE-2024-50302)
+:   Linux, October 2024 (fix commit authored 2024-10-29; CVE-2024-50302 published by NVD November 2024)
 
 Driver
 :   HID core (`drivers/hid/hid-core.c`)
@@ -28,7 +28,7 @@ A HID device — keyboard, gamepad, touchscreen, anything speaking the HID proto
 
 ## Observed behavior
 
-Reading an uninitialized report handed back stale kernel heap data to whatever consumed it — userspace via a HID raw-report interface, or a driver that then further processed the leaked bytes. NVD rates this CVSS 3.1 5.5 (CWE-908, use of uninitialized resource) — a straightforward information-disclosure primitive on its own. What makes this incident notable isn't the bug's mechanism, which is simple, but its use: CISA added CVE-2024-50302 to its Known Exploited Vulnerabilities catalog on March 4, 2025, and Amnesty International's Security Lab published a forensic report in February 2025 documenting that Cellebrite's Turbo Link hardware had chained this bug together with an unrelated UVC out-of-bounds write (CVE-2024-53104) and a separate USB-audio zero-day to unlock a Samsung Galaxy A32 belonging to a detained student activist in Belgrade in December 2024. A kernel information leak that reads as low-severity in isolation was one link in a real device-unlock chain used against a specific person.
+Reading an uninitialized report handed back stale kernel heap data to whatever consumed it — userspace via a HID raw-report interface, or a driver that then further processed the leaked bytes. NVD rates this CVSS 3.1 5.5 (CWE-908, use of uninitialized resource) — a straightforward information-disclosure primitive on its own. What makes this incident notable isn't the bug's mechanism, which is simple, but its use: CISA added CVE-2024-50302 to its Known Exploited Vulnerabilities catalog on March 4, 2025, and Amnesty International's Security Lab published a forensic report in February 2025 documenting Google Threat Analysis Group's identification of at least three zero-day vulnerabilities — including CVE-2024-50302 — likely exploited as part of a Cellebrite exploit chain used to unlock a Samsung Galaxy A32 belonging to a detained student activist in Belgrade in December 2024. Amnesty's report itself hedges both the chain and the hardware attribution: it states plainly that "it is unclear if each device listed... was part of the successful exploitation chain," and describes Cellebrite's Turbo Link adapter only as hardware that "may be used to facilitate such hardware-based attacks," not a confirmed match. A kernel information leak that reads as low-severity in isolation was, on Google's assessment, likely one link in a real device-unlock chain used against a specific person — even if the full chain and exact hardware aren't independently confirmed.
 
 ## Why it happened
 
@@ -40,7 +40,7 @@ Commit `177f25d1292c` changes the single allocation call in `hid_alloc_report_bu
 
 ## What it taught us
 
-**An uninitialized-memory bug doesn't need a clever trigger to be dangerous — it needs a real-world actor willing to use it as one piece of a larger chain.** Nothing about this bug's mechanism is exotic; it's the same "we assumed full-write-before-read and that assumption doesn't always hold" pattern that shows up across the kernel. What made it worth a forensic report wasn't novelty, it was that a commercial device-unlocking product had already found and weaponized it before the fix shipped.
+**An uninitialized-memory bug doesn't need a clever trigger to be dangerous — it needs a real-world actor willing to use it as one piece of a larger chain.** Nothing about this bug's mechanism is exotic; it's the same "we assumed full-write-before-read and that assumption doesn't always hold" pattern that shows up across the kernel. What made it worth a forensic report wasn't novelty, it was that Google assessed a commercial device-unlocking product had likely found and weaponized it before the fix shipped.
 
 **A one-line, low-risk fix (`kmalloc` → `kzalloc`) can close a bug most audits would rate as minor, right up until someone shows you the exploit chain it was part of.** The severity of an isolated primitive and the severity of what it enables once combined with other bugs are different questions, and a defender auditing HID core in isolation wouldn't necessarily see the second one from the first.
 

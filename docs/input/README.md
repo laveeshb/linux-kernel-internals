@@ -20,7 +20,7 @@ The result is that a driver author only has to learn one API to make a new devic
 
 A driver's job is to build one `struct input_dev`, describe what kinds of events it can produce, and register it. Three calls carry almost the whole life cycle:
 
-1. **`input_allocate_device()`** (or the devres-managed **`devm_input_allocate_device(dev)`**, which ties the input device's lifetime to the owning `struct device` and needs no explicit unregister) allocates and zeroes a `struct input_dev`, initializes its mutex and `event_lock` spinlock, and assigns it a provisional name (`input%lu`) that becomes its position in `/sys/devices/virtual/input/` until registration gives it a real one.
+1. **`input_allocate_device()`** (or the devres-managed **`devm_input_allocate_device(dev)`**, which ties the input device's lifetime to the owning `struct device` and needs no explicit unregister) allocates and zeroes a `struct input_dev`, initializes its mutex and `event_lock` spinlock, and calls `dev_set_name(&dev->dev, "input%lu", ...)` once to give it its permanent sysfs identity — this `inputN` number is never changed by `input_register_device()` and stays fixed for the device's whole life. A driver's human-readable label lives in a separate field, `dev->name` (the `N: Name=` line in `/proc/bus/input/devices`); registration does not use it to rename anything. Where that `inputN` entry shows up in sysfs also depends on whether the device has a parent: `devm_input_allocate_device(dev)` sets `input->dev.parent = dev`, so a hardware-backed device registered this way appears under its physical parent's sysfs path (with a symlink from `/sys/class/input/`); only parentless devices land directly under `/sys/devices/virtual/input/`.
 2. The driver declares **capabilities** — which event types and which codes within each type the device can produce — by setting bits in the device's capability bitmaps. This can be done directly:
 
    ```c
@@ -30,7 +30,7 @@ A driver's job is to build one `struct input_dev`, describe what kinds of events
    __set_bit(REL_X, input_dev->relbit);
    ```
 
-   or through the helper `input_set_capability(dev, type, code)`, which sets the per-type bit (`keybit`, `relbit`, `absbit`, `mscbit`, `swbit`, `ledbit`, `sndbit`, `ffbit`) *and* the corresponding bit in `dev->evbit` in one call. For absolute axes, `input_set_abs_params(dev, axis, min, max, fuzz, flat)` additionally allocates and fills in the axis's `struct input_absinfo` (current value, minimum, maximum, fuzz, flat, resolution) — every `EV_ABS` axis needs one, and `input_register_device()` refuses to register a device that declares `EV_ABS` capability without any `absinfo` array.
+   or through the helper `input_set_capability(dev, type, code)`, which sets the per-type bit (`keybit`, `relbit`, `absbit`, `mscbit`, `swbit`, `ledbit`, `sndbit`, `ffbit`) *and* the corresponding bit in `dev->evbit` in one call. For absolute axes, `input_set_abs_params(dev, axis, min, max, fuzz, flat)` additionally allocates the axis's `struct input_absinfo` and fills in `minimum`, `maximum`, `fuzz`, and `flat` — `value` is left at zero (the driver reports it later via ordinary `input_report_abs()` calls) and `resolution` needs a separate `input_abs_set_res(dev, axis, res)` call if the device provides one. Every `EV_ABS` axis needs an `absinfo` entry, and `input_register_device()` refuses to register a device that declares `EV_ABS` capability without any `absinfo` array.
 3. **`input_register_device()`** finalizes the device: it unconditionally sets the `EV_SYN` bit (every input device is required to emit synchronization events, whether or not the driver remembered to declare it), clamps out the reserved `KEY_RESERVED` keycode, calls `device_add()` to make the device visible in sysfs, and walks the list of registered input handlers, attaching any whose `match()`/`id_table` accepts this device — which is what causes an evdev node to appear.
 
 `struct input_dev` itself (defined in `include/linux/input.h`) is built almost entirely out of capability bitmaps sized by the corresponding `*_CNT` constant from `input-event-codes.h` — `evbit[BITS_TO_LONGS(EV_CNT)]`, `keybit[BITS_TO_LONGS(KEY_CNT)]`, `relbit`, `absbit`, `mscbit`, `ledbit`, `sndbit`, `ffbit`, `swbit` — plus identity fields (`name`, `phys`, `uniq`, `id`), the live-state mirrors (`key`, `led`, `snd`, `sw` — bitmaps of current pressed/lit/active state), an `open()`/`close()` pair the core calls when the first/last handler opens or closes the device (so a driver can defer starting a polling thread or requesting an IRQ until something actually wants events), and the embedded `struct device dev` that makes it a first-class citizen of the driver model.
@@ -41,39 +41,44 @@ Every event, in-kernel or over the wire to userspace, is one `struct input_event
 
 ```c
 struct input_event {
-	struct timeval time;   /* or a 64-bit-time_t equivalent, see below */
+	struct timeval time;
 	__u16 type;
 	__u16 code;
 	__s32 value;
 };
 ```
 
-`type` is one of a small, fixed set of event classes (`include/uapi/linux/input-event-codes.h`):
+The `time` field above is the userspace-facing shape (`!defined(__KERNEL__)`, on a 32-bit-`time_t` build); in-kernel code and 64-bit-`time_t` userspace instead see two plain `__kernel_ulong_t` fields, `__sec` and `__usec`, accessed through the `input_event_sec()`/`input_event_usec()` macros rather than `time.tv_sec`/`time.tv_usec` directly — the field layout is picked by preprocessor conditionals in `include/uapi/linux/input.h` so the struct's on-the-wire size matches what the reading process expects.
+
+`type` is one of a fixed, small-ish set of event classes (`include/uapi/linux/input-event-codes.h`):
 
 | Type | Meaning | Example codes |
 |---|---|---|
 | `EV_SYN` | Synchronization marker — separates one packet of simultaneous changes from the next | `SYN_REPORT`, `SYN_MT_REPORT`, `SYN_DROPPED` |
-| `EV_KEY` | Keys and buttons: value `0` = release, `1` = press, `2` = autorepeat | `KEY_A`, `BTN_LEFT`, `BTN_TOUCH` |
+| `EV_KEY` | Keys and buttons: value `0` = release, `1` = press, `2` = autorepeat. A driver reporting through `input_report_key()` can only ever send `0`/`1` — the `!!value` normalization in that wrapper makes `2` unreachable from driver code; autorepeat events are synthesized by the input core's own repeat timer instead | `KEY_A`, `BTN_LEFT`, `BTN_TOUCH` |
 | `EV_REL` | Relative axis motion — a *delta*, like a mouse moving | `REL_X`, `REL_Y`, `REL_WHEEL` |
 | `EV_ABS` | Absolute axis position — a new value within `[minimum, maximum]` | `ABS_X`, `ABS_Y`, the `ABS_MT_*` multitouch codes |
 | `EV_MSC` | Miscellaneous events that don't fit elsewhere, e.g. raw scancodes | `MSC_SCAN` |
 | `EV_SW` | Stateful binary switches (not momentary like keys) | `SW_LID`, `SW_TABLET_MODE` |
 | `EV_LED` | Set/query LED state — flows *into* the device | `LED_NUML`, `LED_CAPSL` |
 | `EV_SND` | Simple sound events — also flow into the device | `SND_CLICK`, `SND_BELL` |
+| `EV_REP` | Autorepeat settings (delay/period) — flows *into* the device via `EVIOCSREP` | `REP_DELAY`, `REP_PERIOD` |
 | `EV_FF` | Force-feedback effect control | upload/play/erase force-feedback effects |
+| `EV_PWR` | Power-management events, used by a handful of drivers | driver-specific |
+| `EV_FF_STATUS` | Force-feedback effect status reports, flowing *from* the device | effect playback state |
 
 `code` picks a specific member of that type (which key, which axis), and `value` is the payload — its meaning depends on `type`, as the table above shows.
 
 A driver reports events with a family of small inline wrappers around the core dispatcher `input_event()`, defined in `include/linux/input.h`:
 
 ```c
-input_report_key(input_dev, BTN_LEFT, 1);   /* -> input_event(dev, EV_KEY, BTN_LEFT, 1) */
+input_report_key(input_dev, BTN_LEFT, 1);   /* -> input_event(dev, EV_KEY, BTN_LEFT, !!1) */
 input_report_rel(input_dev, REL_X, -3);     /* -> input_event(dev, EV_REL, REL_X, -3)   */
 input_report_abs(input_dev, ABS_X, 512);    /* -> input_event(dev, EV_ABS, ABS_X, 512)  */
 input_sync(input_dev);                      /* -> input_event(dev, EV_SYN, SYN_REPORT, 0) */
 ```
 
-`input_event()` checks that the device actually declared the given type in `evbit` (an undeclared event is silently dropped — a driver that forgets to `set_bit` the capability will find its events go nowhere), then takes `dev->event_lock` and hands off to the internal dispatch path, which updates the device's live-state bitmap (`key`/`led`/`snd`/`sw`, or the current `absinfo[axis].value`) and queues the event for every attached handler.
+`input_event()` checks that the device actually declared the given type in `evbit` (an undeclared event is silently dropped — a driver that forgets to `set_bit` the capability will find its events go nowhere), then takes `dev->event_lock` and hands off to the internal dispatch path. For most types the dispatch path also deduplicates against the device's live-state bitmap: an `EV_KEY`, `EV_SW`, `EV_LED`, or `EV_SND` report whose value matches the state already recorded (`key`/`sw`/`led`/`snd`) is dropped rather than forwarded, so calling `input_report_key()` twice in a row with the same value only produces one event at the handler side (autorepeat, `value == 2`, is the deliberate exception — it always passes through). Events that do pass the check update the live-state bitmap (or the current `absinfo[axis].value` for `EV_ABS`) and are queued for every attached handler.
 
 **`input_sync()`** matters more than it looks: individual `input_report_*()` calls describe *changes*, and several changes can belong to the same physical instant — moving a mouse diagonally is a `REL_X` and a `REL_Y` event that happened together. `EV_SYN`/`SYN_REPORT` is the marker that tells a reader "everything since the last `SYN_REPORT` happened as one atomic update"; a driver is expected to call `input_sync()` once after each batch of related reports, not after every single one.
 
@@ -81,7 +86,7 @@ input_sync(input_dev);                      /* -> input_event(dev, EV_SYN, SYN_R
 
 **evdev** (`drivers/input/evdev.c`) is the input handler that hands the raw event stream to userspace essentially unfiltered. Each input device that evdev attaches to gets a character device node, `/dev/input/eventN`, allocated from minor numbers starting at `EVDEV_MINOR_BASE` (64) — the docs.kernel.org input overview documents this as the 64–95 legacy evdev minor range, with additional dynamic minors available beyond it for systems with more than 32 input devices.
 
-A userspace program opens the node and calls `read()`; each `read()` returns one or more whole `struct input_event` records (never a partial one — `evdev_read()` rejects a buffer smaller than `sizeof(struct input_event)` with `-EINVAL`) pulled from a per-open-file-descriptor ring buffer that the kernel fills as the underlying device generates events. Reads block by default and return `-EAGAIN` under `O_NONBLOCK` if the buffer is empty. Beyond `read()`, evdev supports a family of `ioctl()`s — `EVIOCGBIT` to query a device's capability bitmaps, `EVIOCGABS`/`EVIOCSABS` to read or set an absolute axis's `input_absinfo`, `EVIOCGRAB` to take exclusive ownership of the device's event stream (what a compositor uses so its own keypresses don't leak to whatever else might be listening), and more, all declared in `include/uapi/linux/input.h`.
+A userspace program opens the node and calls `read()`; each `read()` returns one or more whole `struct input_event` records (never a partial one — `evdev_read()` rejects a buffer smaller than one event's size with `-EINVAL`, except that a `count == 0` call is let through as a no-op probe rather than rejected) pulled from a per-open-file-descriptor ring buffer that the kernel fills as the underlying device generates events. The size checked against isn't a flat `sizeof(struct input_event)`: it's `input_event_size()`, which returns the size of the compat 32-bit-time `struct input_event_compat` instead when the caller is a compat-mode (e.g. 32-bit) process on a 64-bit kernel, so the bound matches whichever event layout that process actually reads. Reads block by default and return `-EAGAIN` under `O_NONBLOCK` if the buffer is empty. Beyond `read()`, evdev supports a family of `ioctl()`s — `EVIOCGBIT` to query a device's capability bitmaps, `EVIOCGABS`/`EVIOCSABS` to read or set an absolute axis's `input_absinfo`, `EVIOCGRAB` to take exclusive ownership of the device's event stream (what a compositor uses so its own keypresses don't leak to whatever else might be listening), and more, all declared in `include/uapi/linux/input.h`.
 
 Almost nothing talks to `/dev/input/eventN` directly except two userspace layers built for exactly that purpose: **libevdev**, a thin C wrapper that handles the `ioctl()` boilerplate and keeps a local mirror of device state, and **libinput**, built on top of libevdev, which turns raw events into higher-level semantics — pointer acceleration, tap-to-click, gesture recognition, device-quirk workarounds — for consumption by a Wayland compositor or X server. This page stops at evdev: libevdev/libinput internals are userspace, not kernel, and out of scope here.
 
@@ -89,7 +94,7 @@ Almost nothing talks to `/dev/input/eventN` directly except two userspace layers
 
 Three places let you inspect what input devices exist without reading any event data:
 
-- **`/proc/bus/input/devices`** — a plain-text dump, one stanza per registered `struct input_dev`, generated by `input_devices_seq_show()` in `drivers/input/input.c`. Each stanza has fixed prefix letters: `I:` bus/vendor/product/version, `N:` the device's `name`, `P:` its `phys` path, `S:` its sysfs path, `U:` its `uniq` string, `H:` the list of handlers attached to it (e.g. `sysrq kbd event3`), and a `B:` line per event type the device supports, each a hex bitmap of the codes within that type (`B: EV=...`, `B: KEY=...`, `B: ABS=...`, and so on for every type the device declared).
+- **`/proc/bus/input/devices`** — a plain-text dump, one stanza per registered `struct input_dev`, generated by `input_devices_seq_show()` in `drivers/input/input.c`. Each stanza has fixed prefix letters: `I:` bus/vendor/product/version, `N:` the device's `name`, `P:` its `phys` path, `S:` its sysfs path, `U:` its `uniq` string, `H:` the list of handlers attached to it (e.g. `sysrq kbd event3`), then a series of `B:` bitmap lines, each a hex bitmap of the codes it names. `B: PROP=...` (input properties, e.g. `INPUT_PROP_POINTER`) and `B: EV=...` (the `evbit` mask itself) are always printed; a further `B: KEY=...`/`REL=...`/`ABS=...`/`MSC=...`/`LED=...`/`SND=...`/`FF=...`/`SW=...` line is printed only for each event type the device actually declared in `evbit`.
 - **`/sys/class/input/`** — every registered input device and every handler-created node (`inputN`, `eventN`, `mouseN`, `jsN`) appears here as a symlink into the driver-model device tree, registered under the kernel's `input` device class (`const struct class input_class`, `.name = "input"`, in `drivers/input/input.c`). This is the same information `/proc/bus/input/devices` shows, but navigable as ordinary sysfs attribute files rather than a flat-text dump.
 - **udev naming** — udev consumes the sysfs tree above and creates the stable, human-readable symlinks under `/dev/input/by-id/` and `/dev/input/by-path/` that userspace tools actually use, since a bare `/dev/input/eventN` number is not guaranteed to stay attached to the same physical device across reboots or hot-plug events.
 
@@ -97,7 +102,7 @@ Three places let you inspect what input devices exist without reading any event 
 
 The `EV_REL`/`EV_ABS` split exists because "where is the pointer" genuinely means different things for different hardware. A mouse reports **relative** motion (`REL_X`, `REL_Y`): it has no idea where the cursor is on screen, only how far it moved since the last report, and the receiving side (input core, then a compositor) accumulates those deltas into a position. A touchscreen or graphics tablet reports **absolute** position (`ABS_X`, `ABS_Y`): the hardware knows exactly where the contact is within its own coordinate space, and every report is a new authoritative value, not a delta.
 
-A single touch point fits neatly into `ABS_X`/`ABS_Y`, but a touchscreen or trackpad that can sense several simultaneous fingers cannot: one pair of absolute axes can't represent more than one position at a time. The kernel's **multitouch (MT) protocol** solves this with a set of `ABS_MT_*` codes (`ABS_MT_POSITION_X`, `ABS_MT_POSITION_Y`, `ABS_MT_TOUCH_MAJOR`, `ABS_MT_PRESSURE`, `ABS_MT_TRACKING_ID`, and others, starting at `ABS_MT_SLOT`) and a **slot** model: `ABS_MT_SLOT` selects which contact (slot) the following `ABS_MT_*` events describe, and `ABS_MT_TRACKING_ID` gives that contact a persistent ID for as long as it stays down — a non-negative value means an active contact, `-1` means the slot is now empty. A driver walks its slots, calls `input_mt_slot(dev, slot)` to select one and then reports that contact's `ABS_MT_*` axes, exactly the way it would report any other absolute axis. This slot-based scheme is officially called **type B**; an older **type A** scheme that sent anonymous per-contact data separated by `SYN_MT_REPORT` markers still exists in the protocol's history but is now obsolete — every current in-tree driver uses type B. The full slot/tracking-ID mechanics (and how HID report descriptors map onto them) are covered in more depth in [HID: the Human Interface Device layer](hid.md).
+A single touch point fits neatly into `ABS_X`/`ABS_Y`, but a touchscreen or trackpad that can sense several simultaneous fingers cannot: one pair of absolute axes can't represent more than one position at a time. The kernel's **multitouch (MT) protocol** solves this with a set of `ABS_MT_*` codes (`ABS_MT_POSITION_X`, `ABS_MT_POSITION_Y`, `ABS_MT_TOUCH_MAJOR`, `ABS_MT_PRESSURE`, `ABS_MT_TRACKING_ID`, and others, starting at `ABS_MT_SLOT`) and a **slot** model: `ABS_MT_SLOT` selects which contact (slot) the following `ABS_MT_*` events describe, and `ABS_MT_TRACKING_ID` gives that contact a persistent ID for as long as it stays down — a non-negative value means an active contact, `-1` means the slot is now empty. A driver walks its slots, calls `input_mt_slot(dev, slot)` to select one and then reports that contact's `ABS_MT_*` axes, exactly the way it would report any other absolute axis. This slot-based scheme is officially called **type B**; an older **type A** scheme that sent anonymous per-contact data separated by `SYN_MT_REPORT` markers still exists in the protocol's history and is considered obsolete — the kernel's own documentation claims all in-tree drivers have been converted to type B, but that's not quite accurate: a handful of drivers, including `drivers/input/touchscreen/auo-pixcir-ts.c`, `drivers/input/touchscreen/usbtouchscreen.c`, and `drivers/hid/hid-ntrig.c`, still call `input_mt_sync()` and emit type-A reports. The large majority of drivers do use type B, and it's the scheme any new driver should target. See [Kernel docs: Multi-touch (MT) protocol](https://docs.kernel.org/input/multi-touch-protocol.html) for the full slot/tracking-ID mechanics; [HID: the Human Interface Device layer](hid.md) covers how a HID report descriptor is parsed and mapped onto `input_dev` capabilities in the first place, for devices — including multitouch touchscreens — that arrive over USB, Bluetooth, or I2C HID.
 
 ### Architecture: from hardware to userspace
 
@@ -137,7 +142,7 @@ A single touch point fits neatly into `ABS_X`/`ABS_Y`, but a touchscreen or trac
 
 ### The rest of this section
 
-- **[HID: the Human Interface Device layer](hid.md)** — how USB/Bluetooth HID report descriptors get parsed and mapped onto `input_dev` capabilities, and the full multitouch slot/tracking-ID protocol in depth.
+- **[HID: the Human Interface Device layer](hid.md)** — how USB/Bluetooth/I2C HID report descriptors get parsed and mapped onto `input_dev` capabilities, the HID driver model, and transport layering.
 - **[War Stories](war-stories.md)** — real incidents from the input/HID subsystems.
 
 ### Prerequisites and neighbors
@@ -158,7 +163,7 @@ Input drivers are ordinary [Linux device-model](../drivers/device-model.md) citi
 
 ### Related pages
 
-- [HID: the Human Interface Device layer](hid.md) — report descriptors, USB/Bluetooth HID, and the full multitouch protocol
+- [HID: the Human Interface Device layer](hid.md) — report descriptors, parsing, the HID driver model, and USB/Bluetooth/I2C transport layering
 - [War Stories](war-stories.md) — real incidents in the subsystems above
 - [Linux Device Model](../drivers/device-model.md) · [Character and Misc Devices](../drivers/chardev.md) · [Platform Drivers](../drivers/platform-driver.md) — the driver-core layers the input subsystem sits on
 - [USB](../usb/README.md) — the bus most HID input devices attach through

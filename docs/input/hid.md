@@ -8,7 +8,7 @@ A network card driver has to know its chip: which registers hold the DMA ring, h
 
 USB's Human Interface Device class, ratified in 1996, was designed specifically to avoid that. Rather than the host having to already know a device's data format, the *device* carries a compact, byte-coded description of its own report layout — the **report descriptor** — and hands it to the host during enumeration. A HID host stack reads that descriptor once, learns the exact bit layout of every report the device will ever send or accept, and from then on can decode traffic from a device the driver author never saw, built by a vendor the driver author has never heard of. The class was later carried over largely unchanged onto Bluetooth (the HID Profile, or HIDP) and onto I2C (for the embedded touchpads and touchscreens common on laptops and tablets), because the same self-describing-report idea is just as useful over those links as it is over USB.
 
-Linux's HID subsystem, rooted at `drivers/hid/`, is built around that same idea: one transport-agnostic core (`drivers/hid/hid-core.c`) that knows how to parse a report descriptor and turn raw report bytes into typed field values, one generic input-mapping layer (`drivers/hid/hid-input.c`) that turns those typed values into evdev events, and a thin per-transport shim — USB-HID, BT-HIDP, I2C-HID — that only has to know how to move bytes back and forth. A plain mouse or keyboard needs no vendor-specific driver at all: `hid-generic` matches any device the core can parse and lets the generic tables do all the work. Only devices with a broken or unusual report descriptor, or ones that want to expose something the generic mapping tables don't already know about, need one of the well over 150 small quirk drivers under `drivers/hid/`.
+Linux's HID subsystem, rooted at `drivers/hid/`, is built around that same idea: one transport-agnostic core (`drivers/hid/hid-core.c`) that knows how to parse a report descriptor and turn raw report bytes into typed field values, one generic input-mapping layer (`drivers/hid/hid-input.c`) that turns those typed values into evdev events, and a thin per-transport shim — USB-HID, BT-HIDP, I2C-HID — that only has to know how to move bytes back and forth. A plain mouse or keyboard needs no vendor-specific driver at all: `hid-generic` matches any device the core can parse and lets the generic tables do all the work. Only devices with a broken or unusual report descriptor, or ones that want to expose something the generic mapping tables don't already know about, need one of the just over 150 small quirk drivers under `drivers/hid/`.
 
 ## Report descriptors: the device's own datasheet
 
@@ -132,7 +132,15 @@ int hid_open_report(struct hid_device *device)
 			return -ENOMEM;
 
 		start = device->driver->report_fixup(device, buf, &size);
-		...
+
+		/*
+		 * The second kmemdup is required in case report_fixup() returns
+		 * a static read-only memory, but we have no idea if that memory
+		 * needs to be cleaned up or not at the end.
+		 */
+		start = kmemdup(start, size, GFP_KERNEL);
+		if (!start)
+			return -ENOMEM;
 	}
 
 	device->rdesc = start;
@@ -537,7 +545,7 @@ mapped:
 	...
 ```
 
-At runtime, once a device is open, every incoming report reaches `__hid_input_report()` (`drivers/hid/hid-core.c`), which — after finding the matching `struct hid_report` by ID — gives the driver's `.raw_event` first look at the untouched bytes, then always runs the generic path:
+At runtime, once a device is open, every incoming report reaches `__hid_input_report()` (`drivers/hid/hid-core.c`), which — after finding the matching `struct hid_report` by ID — gives the driver's `.raw_event` the report bytes before any HID-core field extraction, then always runs the generic path:
 
 ```c
 // drivers/hid/hid-core.c (__hid_input_report(), abridged)
@@ -550,7 +558,7 @@ if (hdrv && hdrv->raw_event && hid_match_report(hid, report)) {
 ret = hid_report_raw_event(hid, type, data, bufsize, size, interrupt);
 ```
 
-`hid_report_raw_event()` extracts each field's bit-packed value out of the raw report (`hid_process_report()`), then, for a device claimed by the input layer, `hidinput_report_event()` walks the changed fields and calls `hidinput_hid_event()` per usage, which is the actual `input_event(input, usage->type, usage->code, value)` call — the `type`/`code` pair `hid_map_usage()` set at connect time, now finally used.
+`hid_report_raw_event()` hands the whole report to `hid_process_report()`, which extracts each field's bit-packed value and, for every usage in the report, calls `hid_process_event()` — that's the function that actually calls `hidinput_hid_event()`, the `input_event(input, usage->type, usage->code, value)` call, using the `type`/`code` pair `hid_map_usage()` set at connect time, now finally used. Only after `hid_process_report()` has dispatched every field does `hid_report_raw_event()` call `hidinput_report_event()` — and that function does nothing more than walk `hid->inputs` and call `input_sync()` on each attached `input_dev`, the `EV_SYN`/`SYN_REPORT` fan-out that closes out the batch of events `hid_process_event()` just generated.
 
 ## Worked example: `hid-petalynx.c`
 
@@ -661,7 +669,7 @@ module_hid_driver(pl_driver);
 
 ## HID-BPF: fixups without a new driver
 
-`.report_fixup` and `.input_mapping` both require writing, building, and upstreaming a kernel module — a slow path for a one-device bug fix. HID-BPF (`Documentation/hid/hid-bpf.rst`, `CONFIG_HID_BPF`) is a newer, complementary mechanism: an eBPF program, loaded from userspace at runtime, can be attached to fix up a report descriptor or intercept report events for a specific device, without a new driver ever landing in-tree. `struct hid_device`'s `bpf_rdesc`/`bpf_rsize` fields (used by `hid_open_report()`, shown above, as the actual starting point for parsing) exist precisely so a BPF descriptor fixup runs *before* any `.report_fixup` in the normal driver-matching path even gets a chance. LWN's coverage of the original proposal frames the motivation directly: the traditional route of "simple fixup of report descriptor" through a kernel driver has real costs in "development time and testing" compared to a userspace-loadable program ([LWN: Introduce eBPF support for HID devices](https://lwn.net/Articles/886860/)). It doesn't replace `.input_mapping`/`.raw_event` for anything stateful or complex — those still need a real driver — but for the narrow, extremely common case of "this one descriptor has a wrong byte," it's now the lower-friction option upstream generally prefers over a brand-new quirk module.
+`.report_fixup` and `.input_mapping` both require writing, building, and upstreaming a kernel module — a slow path for a one-device bug fix. HID-BPF (`Documentation/hid/hid-bpf.rst`, `CONFIG_HID_BPF`) is a newer, complementary mechanism: an eBPF program, loaded from userspace at runtime, can be attached to fix up a report descriptor or intercept report events for a specific device, without a new driver ever landing in-tree. `struct hid_device`'s `bpf_rdesc`/`bpf_rsize` fields (used by `hid_open_report()`, shown above, as the actual starting point for parsing) exist precisely so a BPF descriptor fixup runs *before* any `.report_fixup` in the normal driver-matching path even gets a chance. The kernel's own HID-BPF documentation frames the motivation directly: for the common case of a driver that exists only to fix "one key or one byte" in a report descriptor, the traditional route "require[s] a kernel patch and the subsequent shepherding into a release, a long and painful process for users," where an eBPF program can instead be verified by the user and loaded directly, without waiting on a kernel release (`Documentation/hid/hid-bpf.rst`). Benjamin Tissoires proposed the mechanism upstream in 2022; the v2 cover letter of that patch series is archived on LWN ([Introduce eBPF support for HID devices](https://lwn.net/Articles/886860/)). It doesn't replace `.input_mapping`/`.raw_event` for anything stateful or complex — those still need a real driver — but for the narrow, extremely common case of "this one descriptor has a wrong byte," it's now the lower-friction option upstream generally prefers over a brand-new quirk module.
 
 ## The full path, device to userspace
 
@@ -676,7 +684,7 @@ module_hid_driver(pl_driver);
  │  OUT endpoints) │  L2CAP chans)  │  protocol)      │
  └───────┬───────┴───────┬───────┴───────┬───────┘
          ▼                ▼                ▼
-   usbhid_driver     hidp_hid_driver   i2c_hid_ll_driver
+   usb_hid_driver    hidp_hid_driver   i2c_hid_ll_driver
          │  each is a struct hid_ll_driver: .parse/.start/.open/
          │  .raw_request/.output_report/...
          └────────────────┬────────────────┘
@@ -745,7 +753,4 @@ module_hid_driver(pl_driver);
 - [Introduction to HID report descriptors](https://docs.kernel.org/hid/hidintro.html) — the kernel's own tour of usage pages, usages, reports, and collections, with a worked mouse descriptor
 - [HID I/O Transport Drivers](https://docs.kernel.org/hid/hid-transport.html) — the `hid_ll_driver` contract and the USB-HID/BT-HIDP/I2C-HID transports
 - [HID-BPF](https://docs.kernel.org/hid/hid-bpf.html) — the eBPF-based alternative to a full quirk driver for descriptor fixups and event filtering
-
-### LWN articles
-
-- [Introduce eBPF support for HID devices](https://lwn.net/Articles/886860/) — the original HID-BPF patch series and its motivation against writing a new kernel driver for every descriptor quirk
+- [Introduce eBPF support for HID devices](https://lwn.net/Articles/886860/) — Benjamin Tissoires's v2 cover letter proposing HID-BPF upstream, archived on LWN (a mailing-list post, not LWN editorial coverage)
