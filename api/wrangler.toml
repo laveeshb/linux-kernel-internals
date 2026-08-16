@@ -5,9 +5,11 @@ compatibility_date = "2024-03-20"
 [ai]
 binding = "AI"
 
-routes = [
-  { pattern = "api.kernel-internals.org", custom_domain = true }
-]
+# No custom domain route yet — kernel-internals.org isn't a Cloudflare
+# zone yet, so this deploys to the default *.workers.dev URL for now.
+# Once the domain is added to Cloudflare, add back:
+#   routes = [{ pattern = "api.kernel-internals.org", custom_domain = true }]
+# and update API_URL in docs/javascripts/chat.js and mcp/index.js to match.
 
 [[vectorize]]
 binding = "VECTORIZE_INDEX"
