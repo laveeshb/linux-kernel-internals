@@ -1,10 +1,10 @@
 # War Stories: ALSA Bugs and Regressions
 
-> Six incidents from the ALSA sound subsystem — five of them CVEs, spanning USB audio descriptor parsing, PCM buffer locking, rawmidi resize races, and a use-after-free that sat unexercised for nearly 21 years
+> Six incidents from the ALSA sound subsystem — all six CVEs, spanning USB audio descriptor parsing, PCM buffer locking, rawmidi resize races, and a use-after-free that sat unexercised for nearly 21 years
 
 [ALSA Overview](README.md), [The PCM Data Path](pcm.md), and [ASoC](asoc.md) document the subsystem as it works today. This page is the incident record behind parts of that architecture: the lifetime and locking bugs that real drivers shipped, and how they were found and fixed.
 
-Unlike [DRM's war stories](../drm/war-stories.md), which are almost entirely reliability bugs (a hung GPU, not a security boundary), every incident here but one is a CVE. That's a structural difference in what the two subsystems expose: `sound/usb/` parses data supplied by whatever USB device is plugged in, and PCM/rawmidi expose ioctls directly to any process that can open `/dev/snd/*` — both are attacker-influenced-input surfaces in a way a GPU scheduler's internal job queue mostly isn't.
+Unlike [DRM's war stories](../drm/war-stories.md), which are entirely reliability bugs (a hung GPU, not a security boundary) with zero CVEs among them, every incident here is a CVE — all six. That's a structural difference in what the two subsystems expose: `sound/usb/` parses data supplied by whatever USB device is plugged in, and PCM/rawmidi expose ioctls directly to any process that can open `/dev/snd/*` — both are attacker-influenced-input surfaces in a way a GPU scheduler's internal job queue mostly isn't.
 
 ## Deep dives
 
@@ -14,7 +14,7 @@ A 2005 commit gave every registered ALSA control a raw pointer into a USB mixer'
 
 ### [The USB Audio Clock Descriptor Out-of-Bounds Reads](war-stories/usb-audio-clock-descriptor-oob.md)
 **November 2024 · CVE-2024-53150 · CISA Known Exploited Vulnerabilities catalog**
-Three functions walked a USB audio device's clock-topology descriptors without validating any of them were long enough to hold the fields being read. One of the three variants was exploited in the wild.
+Three functions walked a USB audio device's clock-topology descriptors without validating any of them were long enough to hold the fields being read — and the CVE covering all three is listed in CISA's Known Exploited Vulnerabilities catalog.
 
 ## Quick cases
 
@@ -32,13 +32,13 @@ Takashi Iwai's fix ([`c1f6e3c818dd`](https://git.kernel.org/pub/scm/linux/kernel
 
 ### Case 3: The mixer-unit descriptor OOB, five years before the clock descriptors — CVE-2019-15117
 
-`parse_audio_mixer_unit()` in `sound/usb/mixer.c` reads a `uac_mixer_unit_descriptor` and walks its `baSourceID[]` array using the device-supplied `bNrInPins` count — without checking the descriptor was actually long enough to contain that many entries. Reported by USB-fuzzing researchers Hui Peng and Mathias Payer.
+`parse_audio_mixer_unit()` in `sound/usb/mixer.c` reads a `uac_mixer_unit_descriptor` and hands it to `uac_mixer_unit_get_channels()`, which walks its `baSourceID[]` array using the device-supplied `bNrInPins` count — without checking the descriptor was actually long enough to contain that many entries. Reported by USB-fuzzing researchers Hui Peng and Mathias Payer.
 
-The fix adds one bounds check: `if (desc->bLength < sizeof(*desc) + desc->bNrInPins) return -EINVAL;` before the array walk ([`daac07156b33`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=daac07156b330b18eb5071aec4b3ddca1c377f2c)). It's the same missing-length-validation pattern the [clock descriptor deep-dive](war-stories/usb-audio-clock-descriptor-oob.md) hit again, in a different `sound/usb/` parser, five years later. [NVD: CVE-2019-15117](https://nvd.nist.gov/vuln/detail/CVE-2019-15117), CVSS 7.8 HIGH.
+The fix adds one bounds check inside `uac_mixer_unit_get_channels()`: `if (desc->bLength < sizeof(*desc) + desc->bNrInPins) return -EINVAL;` before the array walk ([`daac07156b33`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=daac07156b330b18eb5071aec4b3ddca1c377f2c)). It's the same missing-length-validation pattern the [clock descriptor deep-dive](war-stories/usb-audio-clock-descriptor-oob.md) hit again, in a different `sound/usb/` parser, five years later. [NVD: CVE-2019-15117](https://nvd.nist.gov/vuln/detail/CVE-2019-15117), CVSS 7.8 HIGH.
 
 ### Case 4: The caiaq probe error-handling use-after-free — CVE-2026-46004
 
-The Native Instruments caiaq USB audio driver's `setup_card()` probe routine called `snd_card_free()` to tear down the card when `snd_card_register()` failed — and then kept executing, calling further init functions (audio, MIDI, input, control setup) against structures that had just been freed. `setup_card()` was `void`; there was no way for it to stop early on error, only to keep going.
+The Native Instruments caiaq USB audio driver's `setup_card()` probe routine called `snd_card_free()` to tear down the card when `snd_card_register()` failed — and then kept executing, calling `snd_usb_caiaq_control_init()` against structures that had just been freed. The audio, MIDI, and input init calls happen earlier in `setup_card()`, before `snd_card_register()` is even reached, so they had already completed successfully by the time the failure hit; only the control-setup call that runs *after* `snd_card_register()` touched freed memory. `setup_card()` was `void`; there was no way for it to stop early on error, only to keep going.
 
 Takashi Iwai's fix ([`28abd224db4a`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=28abd224db4a49560b452115bca3672a20e45b2f)) changes `setup_card()` to return `int`, adds an early `return` on every error path, drops the now-redundant `snd_card_free()` call (the caller handles cleanup once the error propagates), and makes `init_card()` check and propagate that return value. [NVD: CVE-2026-46004](https://nvd.nist.gov/vuln/detail/CVE-2026-46004), CVSS 3.1 7.8 HIGH.
 
@@ -50,13 +50,13 @@ Takashi Iwai's fix ([`28abd224db4a`](https://git.kernel.org/pub/scm/linux/kernel
 | Missing length/bounds validation | — | Yes | — | — | Yes | — |
 | Lock doesn't cover the full critical section | — | — | Yes | Yes | — | — |
 | Probe/init error path leaves a stale reference | Yes | — | — | — | — | Yes |
-| Fix required for years/decades before landing | Yes (~21y) | — | — | — | — | — |
+| Fix required for years/decades before landing | Yes (~21y) | — | — | — | — | Yes (~18.5y) |
 
-**Three of six are USB-descriptor parsing bugs, and two of those three are the same missing check, five years apart, in two different parsers.** The mixer-unit OOB (2019) and the clock-descriptor OOB (2024) both come from reading a device-supplied count field and indexing further into a buffer without re-validating the buffer is actually that long — `sound/usb/` has more than one descriptor walker built on that same unchecked pattern, and fixing one instance evidently didn't prompt an audit of the others at the time.
+**Two of six are USB-descriptor parsing bugs, and they're the same missing check, five years apart, in two different parsers.** The mixer-unit OOB (2019) and the clock-descriptor OOB (2024) both come from reading a device-supplied count field and indexing further into a buffer without re-validating the buffer is actually that long — `sound/usb/` has more than one descriptor walker built on that same unchecked pattern, and fixing one instance evidently didn't prompt an audit of the others at the time.
 
 **Two of six are the same underlying shape: a lock that can't span the full operation because part of the operation has to sleep.** PCM's `hw_params`/`hw_free` and rawmidi's read/write-vs-resize race both needed a mutex or reference count layered *around* a spinlock-protected fast path specifically because a user-space copy or an allocation can't happen while holding a spinlock — the fix in both cases is "add a second, sleep-safe layer of protection," not "make the existing lock work harder."
 
-**The mixer teardown UAF is the one open-ended lifetime bug on this page, and it's also the only one that took decades to surface.** The USB-descriptor and locking bugs above are all reachable on essentially every affected kernel, the moment the right device or the right race window shows up — which is why they were found relatively quickly by fuzzing or CVE-hunting. The mixer teardown bug required a specific, non-trivial sequencing (some controls already registered, then a *later* unit's parsing to fail) that well-formed devices essentially never produce — the same property that let it hide for 21 years is why it needed a targeted audit, not routine fuzzing, to surface at all.
+**Two bugs on this page sat latent for close to two decades, but for different reasons.** The USB-descriptor and locking bugs above are all reachable on essentially every affected kernel, the moment the right device or the right race window shows up — which is why they were found relatively quickly by fuzzing or CVE-hunting. The mixer teardown bug (~21 years) required a specific, non-trivial sequencing — some controls already registered, then a *later* unit's parsing to fail — that well-formed devices essentially never produce: a design flaw baked into how `id_elems` was shared between the mixer object and ALSA's own control registry, exposed only by an unlikely partial-failure ordering. The caiaq probe bug (~18.5 years, `setup_card()` dating to a 2007 commit) is a plainer error-handling gap: a `void` teardown function with no way to stop early, latent simply because a `snd_card_register()` failure is itself a rare event at probe time, not because the triggering sequence was intricate. Both needed a long run of ordinary, working hardware before the failure path that exposed them ever ran.
 
 ## See also
 

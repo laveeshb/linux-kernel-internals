@@ -45,7 +45,7 @@ The bug sat unexercised for close to 21 years because it requires the specific c
 
 ## Resolution
 
-The fix (`930e69757b74`) changes `snd_usb_mixer_free()`'s teardown order: before freeing `id_elems` itself, it walks the array and calls `snd_ctl_remove()` on every populated entry's control, un-registering each one from the card first. Because `snd_ctl_remove()` deallocates the `usb_mixer_elem_list` node it's called on as a side effect, the walk saves each entry's `next` pointer before making the call — using a value after the function that just freed it would just move the same bug one line down. Only once every control has been fully unregistered does the array itself get freed.
+The fix (`930e69757b74`) changes `snd_usb_mixer_free()`'s teardown order: before freeing `id_elems` itself, it walks the array and calls `snd_ctl_remove()` on every populated entry's control, un-registering each one from the card first. Because `snd_ctl_remove()` deallocates the `usb_mixer_elem_list` node it's called on as a side effect, the walk saves each entry's `next_id_elem` pointer before making the call — using a value after the function that just freed it would just move the same bug one line down. Only once every control has been fully unregistered does the array itself get freed.
 
 ## What it taught us
 

@@ -177,7 +177,7 @@ struct snd_soc_component_driver {
 and its runtime counterpart:
 
 ```c
-// include/sound/soc-component.h
+// include/sound/soc-component.h (selected fields)
 struct snd_soc_component {
 	const char *name;
 	const char *name_prefix;
@@ -190,7 +190,12 @@ struct snd_soc_component {
 
 	struct regmap *regmap;
 
-	/* DAPM context temporarily embedded here — see soc_dapm.h */
+	/*
+	 * DO NOT use any of the fields below in drivers, they are
+	 * temporary and are going to be removed again soon. If you
+	 * use them in driver code the driver will be marked as
+	 * BROKEN when these fields are removed.
+	 */
 	struct snd_soc_dapm_context *dapm;
 	int (*init)(struct snd_soc_component *component);
 };
@@ -224,6 +229,7 @@ static struct snd_soc_dai_driver max98090_dai = {
 static const struct snd_soc_component_driver soc_component_dev_max98090 = {
 	.probe			= max98090_probe,
 	.remove			= max98090_remove,
+	.seq_notifier		= max98090_seq_notifier,
 	.set_bias_level		= max98090_set_bias_level,
 	.set_jack		= max98090_set_jack,
 	.idle_bias_on		= 1,
@@ -261,6 +267,7 @@ struct snd_soc_dai_link_component {
 	unsigned int ext_fmt;
 };
 
+// struct snd_soc_dai_link (selected fields)
 struct snd_soc_dai_link {
 	const char *name;			/* Codec name */
 	const char *stream_name;		/* Stream name */
@@ -334,6 +341,8 @@ static struct snd_soc_card rockchip_max98090_card = {
 	.owner = THIS_MODULE,
 	.dai_link = rk_max98090_dailinks,
 	.num_links = ARRAY_SIZE(rk_max98090_dailinks),
+	.aux_dev = &rk_98090_headset_dev,
+	.num_aux_devs = 1,
 	.dapm_widgets = rk_max98090_dapm_widgets,
 	.num_dapm_widgets = ARRAY_SIZE(rk_max98090_dapm_widgets),
 	.dapm_routes = rk_max98090_audio_map,
@@ -343,7 +352,7 @@ static struct snd_soc_card rockchip_max98090_card = {
 };
 ```
 
-`struct snd_soc_card` is the top-level object the machine driver registers with `devm_snd_soc_register_card()`: an array of `dai_link`s plus the board-level DAPM widgets/routes/controls that the codec driver doesn't already know about (the external speaker, the mic jack — see below). `dai_fmt` here spells out the I2S wire format directly on the link: standard I2S justification, normal (non-inverted) bit clock and frame, and the codec as the clock *consumer* on both bit clock and frame sync — meaning the Rockchip I2S controller is the one driving BCLK/LRCK on this board.
+`struct snd_soc_card` is the top-level object the machine driver registers with `devm_snd_soc_register_card()`: an array of `dai_link`s plus the board-level DAPM widgets/routes/controls that the codec driver doesn't already know about (the external speaker, the mic jack — see below). `dai_fmt` here spells out the I2S wire format directly on the link: standard I2S justification, normal (non-inverted) bit clock and frame, and the codec as the clock *consumer* on both bit clock and frame sync — meaning the Rockchip I2S controller is the one driving BCLK/LRCK on this board. `aux_dev`/`num_aux_devs` is a separate, smaller mechanism for a component that isn't part of any `dai_link` at all — on this board it points at `rk_98090_headset_dev`, which just calls `ts3a227e_enable_jack_detect()` to wire up a headset-jack-detection IC's interrupt, not an audio data path.
 
 ## DAPM: power-managing what a PC sound card doesn't have
 
@@ -371,7 +380,7 @@ struct snd_soc_dapm_widget {
 	unsigned int mask;
 	unsigned int on_val;
 	unsigned int off_val;
-	unsigned char power:1;			/* current power state */
+	unsigned char power:1;			/* block power status */
 	unsigned char connected:1;		/* connected codec pin */
 
 	int (*event)(struct snd_soc_dapm_widget*, struct snd_kcontrol *, int);
@@ -380,7 +389,7 @@ struct snd_soc_dapm_widget {
 	int num_kcontrols;
 	const struct snd_kcontrol_new *kcontrol_news;
 
-	struct list_head edges[2];		/* graph edges: sinks/sources */
+	struct list_head edges[2];		/* widget input and output edges */
 };
 ```
 
@@ -417,7 +426,33 @@ Widgets are declared with per-type convenience macros — `SND_SOC_DAPM_SPK`, `S
 	{"Speaker", NULL, "SPKR"}
 ```
 
-`IN34`, `HPL`/`HPR`, `SPKL`/`SPKR`, and `MICBIAS` are widgets the max98090 codec driver already registered as part of its own `snd_soc_component_driver.dapm_widgets` — internal pins on the chip. The machine driver never needs to know how the codec powers its own headphone amp internally; it only has to say "the board's headphone jack is wired to the codec's HPL/HPR pins," and DAPM's graph walk takes care of the rest: opening a playback stream marks the DAC endpoint active, the core walks backward through the route graph powering every widget on the path to a connected, active endpoint, and idle branches (the mic path, if nothing's recording) stay off.
+`IN34`, `HPL`/`HPR`, `SPKL`/`SPKR`, and `MICBIAS` are internal pins the max98090 codec driver already registered — but not through the `snd_soc_component_driver` static initializer shown above. `soc_component_dev_max98090` sets no `.dapm_widgets`/`.dapm_routes` at all; the driver instead registers its widgets imperatively from its `probe()` callback, via a helper that calls `snd_soc_dapm_new_controls()`/`snd_soc_dapm_add_routes()`:
+
+```c
+// sound/soc/codecs/max98090.c
+static int max98090_add_widgets(struct snd_soc_component *component)
+{
+	struct max98090_priv *max98090 = snd_soc_component_get_drvdata(component);
+	struct snd_soc_dapm_context *dapm = snd_soc_component_to_dapm(component);
+
+	snd_soc_add_component_controls(component, max98090_snd_controls,
+		ARRAY_SIZE(max98090_snd_controls));
+
+	if (max98090->devtype == MAX98091) {
+		snd_soc_add_component_controls(component, max98091_snd_controls,
+			ARRAY_SIZE(max98091_snd_controls));
+	}
+
+	snd_soc_dapm_new_controls(dapm, max98090_dapm_widgets,
+		ARRAY_SIZE(max98090_dapm_widgets));
+
+	snd_soc_dapm_add_routes(dapm, max98090_dapm_routes,
+		ARRAY_SIZE(max98090_dapm_routes));
+	...
+}
+```
+
+Doing it this way rather than through the static `.dapm_widgets` field is what lets the driver pick a different widget set at runtime — the `if (max98090->devtype == MAX98091)` branch above adds a second array of controls for the max98091 variant, something a fixed compile-time array on the driver struct can't express. Either way, the machine driver never needs to know how the codec powers its own headphone amp internally; it only has to say "the board's headphone jack is wired to the codec's HPL/HPR pins," and DAPM's graph walk takes care of the rest: opening a playback stream marks the DAC endpoint active, the core walks backward through the route graph powering every widget on the path to a connected, active endpoint, and idle branches (the mic path, if nothing's recording) stay off.
 
 `dapm.rst` groups the power decisions into four domains, each triggered by a different kind of event — stream start/stop, a mixer switch, a jack insertion, or codec suspend/resume:
 
@@ -428,15 +463,26 @@ Widgets are declared with per-type convenience macros — `SND_SOC_DAPM_SPK`, `S
 | Path | mixer/mux signal paths | user changing a control (alsamixer) |
 | Stream | DACs and ADCs | stream start/stop (aplay/arecord) |
 
-The codec bias domain is itself a small state machine, `enum snd_soc_bias_level`, and its four states are the ones a codec's `set_bias_level` callback is expected to sequence through cleanly to avoid the pops and clicks a fast, uncontrolled power transition causes:
+The codec bias domain is itself a small state machine, `enum snd_soc_bias_level`, and its four states are the ones a codec's `set_bias_level` callback is expected to sequence through cleanly to avoid the pops and clicks a fast, uncontrolled power transition causes. The enum body itself is bare; the explanation of each value lives in the kernel-doc block immediately above it:
 
 ```c
 // include/sound/soc-dapm.h
+/*
+ * Bias levels
+ *
+ * @ON:      Bias is fully on for audio playback and capture operations.
+ * @PREPARE: Prepare for audio operations. Called before DAPM switching for
+ *           stream start and stop operations.
+ * @STANDBY: Low power standby state when no playback/capture operations are
+ *           in progress. NOTE: The transition time between STANDBY and ON
+ *           should be as fast as possible and no longer than 10ms.
+ * @OFF:     Power Off. No restrictions on transition times.
+ */
 enum snd_soc_bias_level {
-	SND_SOC_BIAS_OFF     = 0,	/* Power off. No restrictions on transition times. */
-	SND_SOC_BIAS_STANDBY = 1,	/* Low power standby; STANDBY<->ON transition <= 10ms */
-	SND_SOC_BIAS_PREPARE = 2,	/* Prepare for playback/capture; called before DAPM switching */
-	SND_SOC_BIAS_ON      = 3,	/* Fully on for playback and capture */
+	SND_SOC_BIAS_OFF = 0,
+	SND_SOC_BIAS_STANDBY = 1,
+	SND_SOC_BIAS_PREPARE = 2,
+	SND_SOC_BIAS_ON = 3,
 };
 ```
 
@@ -472,7 +518,7 @@ sound {
 ```
 — [`Documentation/devicetree/bindings/sound/simple-card.yaml`](https://www.kernel.org/doc/Documentation/devicetree/bindings/sound/simple-card.yaml)
 
-For topologies simple-card's flat `cpu`/`codec` node pair can't express cleanly — several DAIs feeding a shared codec through TDM splits, or boards with more than two components chained together — there's **audio-graph-card** (`sound/soc/generic/audio-graph-card.c`), which reuses the generic devicetree [OF graph](https://docs.kernel.org/driver-api/device-link.html) `port`/`endpoint`/`remote-endpoint` bindings instead of simple-card's flat property list:
+For topologies simple-card's flat `cpu`/`codec` node pair can't express cleanly — several DAIs feeding a shared codec through TDM splits, or boards with more than two components chained together — there's **audio-graph-card** (`sound/soc/generic/audio-graph-card.c`), which reuses the generic devicetree [OF graph](https://www.kernel.org/doc/Documentation/devicetree/bindings/graph.txt) `port`/`endpoint`/`remote-endpoint` bindings instead of simple-card's flat property list:
 
 ```dts
 sound {
@@ -550,17 +596,14 @@ The CPU DAI and codec boxes never reference each other by name in source; the ma
 - [`sound/soc/rockchip/rockchip_max98090.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/sound/soc/rockchip/rockchip_max98090.c) — a real machine driver, DAI links, board DAPM graph
 - [`sound/soc/generic/simple-card.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/sound/soc/generic/simple-card.c), [`sound/soc/generic/audio-graph-card.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/sound/soc/generic/audio-graph-card.c) — the generic devicetree-driven machine drivers
 
-### Man pages
-
-- [`asoundrc(5)`](https://man7.org/linux/man-pages/man5/asoundrc.5.html) — userspace ALSA configuration that ultimately opens the PCM device an ASoC `dai_link` creates
-
 ### Related pages
 
 - [Device Tree: ARM Hardware Description](../drivers/device-tree.md) — the `of_node`/phandle mechanism `snd_soc_dai_link_component` and simple-card/audio-graph-card build on
 - [I2C and SPI Bus Drivers](../drivers/i2c-spi.md) — the control bus most codec drivers register on
 - [Platform Drivers](../drivers/platform-driver.md) — the `platform_device`/`platform_driver` pattern CPU DAI and machine drivers both use
+- [ALSA War Stories](war-stories.md) — incident record for the PCM/rawmidi/USB-audio layers ASoC's `dai_link`s ultimately sit on top of
 
-### Kernel documentation
+### External
 
 - [ALSA SoC Layer Overview](https://docs.kernel.org/sound/soc/overview.html) — the problem statement and the codec/platform/machine split
 - [ASoC Machine Driver](https://docs.kernel.org/sound/soc/machine.html) — the machine driver's role (note: its inline code sample predates the current `cpus[]`/`codecs[]`/`platforms[]` array shape — the `SND_SOC_DAILINK_DEFS` form on this page reflects current mainline)

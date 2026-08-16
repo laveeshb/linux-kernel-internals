@@ -1,6 +1,6 @@
 # The USB Audio Clock Descriptor Out-of-Bounds Reads
 
-> Three functions walked a USB audio device's clock-topology descriptors without checking any of them were actually long enough to hold the fields being read — and one of the three variants sat in CISA's Known Exploited Vulnerabilities catalog with a federal patch deadline.
+> Three functions walked a USB audio device's clock-topology descriptors without checking any of them were actually long enough to hold the fields being read — and the CVE covering all three sat in CISA's Known Exploited Vulnerabilities catalog with a federal patch deadline.
 
 Landed
 :   Linux, November 2024 (CVE-2024-53150)
@@ -10,6 +10,9 @@ Driver
 
 Reporter
 :   Benoît Sevens (Google)
+
+Fix author
+:   Takashi Iwai
 
 Mechanism
 :   Missing descriptor length validation, out-of-bounds read
@@ -28,11 +31,11 @@ Each descriptor type carries a `bLength` field stating how many bytes it actuall
 
 ## Observed behavior
 
-An out-of-bounds read of kernel heap memory, triggered purely by what a USB device announces during enumeration — no user interaction beyond plugging in (or having the kernel probe) the device required. NVD rates this CVSS 3.1 7.1 (HIGH). The clock-topology parse runs early, during device probe, which is exactly why it landed on CISA's Known Exploited Vulnerabilities catalog: it's reachable the moment a malicious USB audio device is presented to a host, with a federal patch deadline (BOD 22-01) of April 30, 2025.
+An out-of-bounds read of kernel heap memory, triggered purely by what a USB device announces during enumeration — no user interaction beyond plugging in (or having the kernel probe) the device required. NVD rates this CVSS 3.1 7.1 (HIGH). The clock-topology parse runs early, during device probe, so the bug is reachable the moment a malicious USB audio device is presented to a host — but that ease of triggering isn't what put it on CISA's Known Exploited Vulnerabilities catalog. KEV listing requires confirmed evidence of *active* exploitation, not just theoretical reachability; this CVE's presence there means CISA had specific evidence it was actually being exploited, which is also what came with a federal patch deadline (BOD 22-01) of April 30, 2025.
 
 ## Why it happened
 
-The selector descriptor is the sharpest illustration of why this class of bug is easy to introduce and easy to miss: it isn't a fixed-size struct. `bNrInPins` is itself a field inside the descriptor, and the array of input-pin IDs it counts comes right after it, followed by more fields whose presence depends on which UAC revision (1, 2, or 3) the device claims. Validating "is this descriptor long enough" for a variable-length, revision-dependent structure means computing the expected length from fields you've already read out of the descriptor — you can't check the length before reading `bNrInPins`, only after, and only if you remember to gate everything that follows on that check. Three separate functions, three separate descriptor shapes, and the length check was missing from all three.
+The selector descriptor is the sharpest illustration of why this class of bug is easy to introduce and easy to miss: it isn't a fixed-size struct. `bNrInPins` is itself a field inside the descriptor, and the array of input-pin IDs it counts comes right after it, followed by more fields whose presence depends on which UAC revision — UAC2 or UAC3; clock source/selector/multiplier topology is a UAC2/UAC3-only concept, UAC1 devices don't carry these descriptors at all — the device claims. Validating "is this descriptor long enough" for a variable-length, revision-dependent structure means computing the expected length from fields you've already read out of the descriptor — you can't check the length before reading `bNrInPins`, only after, and only if you remember to gate everything that follows on that check. Three separate functions, three separate descriptor shapes, and the length check was missing from all three.
 
 ## Resolution
 
@@ -40,7 +43,7 @@ The fix (`a3dd4d63eeb4`) adds a `DESC_LENGTH_CHECK` macro and applies it — wit
 
 ## What it taught us
 
-**A bug class doesn't stay confined to one function once the same descriptor-walking pattern gets copy-adapted to a sibling descriptor type.** All three clock-descriptor parsers needed the same fix because all three had the same shape: read fields at fixed offsets (or offsets computed from an earlier field) without confirming the buffer is that long. This is the same underlying mistake as [the 2019 mixer-unit descriptor OOB](#see-also) five years earlier, in a different `sound/usb/` parser entirely — length-prefixed, variable-shape USB descriptors are a recurring source of this exact bug across the driver, not a one-off.
+**A bug class doesn't stay confined to one function once the same descriptor-walking pattern gets copy-adapted to a sibling descriptor type.** All three clock-descriptor parsers needed the same fix because all three had the same shape: read fields at fixed offsets (or offsets computed from an earlier field) without confirming the buffer is that long. This is the same underlying mistake as [the 2019 mixer-unit descriptor OOB](../war-stories.md#case-3-the-mixer-unit-descriptor-oob-five-years-before-the-clock-descriptors-cve-2019-15117) five years earlier, in a different `sound/usb/` parser entirely — length-prefixed, variable-shape USB descriptors are a recurring source of this exact bug across the driver, not a one-off.
 
 **"Do I have enough bytes for this fixed part" and "do I have enough bytes for the variable part whose size I just read" are two different checks, and a descriptor parser needs both, in that order.** Checking only the fixed header length and then trusting a count field you read from inside that header to index further into the buffer is the mistake that recurs across all three functions here.
 
