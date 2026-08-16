@@ -1,0 +1,49 @@
+name: Deploy AI Backend
+
+# trigger strictly on demand
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-api-and-vectors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          npm install -g wrangler
+          pip install requests
+
+      - name: Ingest Markdown to NDJSON
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          python scripts/ingest_to_vectorize.py
+          
+      - name: Upload Embeddings to Vectorize
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          wrangler vectorize insert linux-kernel-docs-index --file vectors.ndjson
+          
+      - name: Deploy Cloudflare Worker API
+        working-directory: ./api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          npm install
+          npx wrangler deploy

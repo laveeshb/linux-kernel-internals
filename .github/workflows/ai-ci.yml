@@ -1,0 +1,43 @@
+name: AI Backend CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest requests
+      - name: Run Python Tests
+        run: |
+          pytest scripts/test_ingest.py -v
+
+  node-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Check API Worker
+        working-directory: ./api
+        run: |
+          npm install
+          
+      - name: Check MCP Server
+        working-directory: ./mcp
+        run: |
+          npm install
