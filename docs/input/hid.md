@@ -412,7 +412,7 @@ struct hid_ll_driver {
 
 `.parse` is the transport reading the raw descriptor bytes off the device (USB: a `GET_DESCRIPTOR` control request; Bluetooth: bytes handed over at connection setup by userspace's SDP/HID-profile negotiation) and stashing them where `hid_open_report()` will find them — everything *after* that point (fixup, item parsing, field extraction) is identical regardless of transport. `.raw_request`/`.output_report` are how a driver or the input-event path sends a Feature or Output report back to the device (LED state, force-feedback, a vendor configuration blob) — again, one call shape, transport-specific bytes underneath.
 
-Two real, in-tree transports implement it. USB-HID (`drivers/hid/usbhid/hid-core.c`) is the original and most common:
+Three real, in-tree transports implement it. USB-HID (`drivers/hid/usbhid/hid-core.c`) is the original and most common:
 
 ```c
 // drivers/hid/usbhid/hid-core.c
@@ -562,7 +562,7 @@ ret = hid_report_raw_event(hid, type, data, bufsize, size, interrupt);
 
 ## Worked example: `hid-petalynx.c`
 
-`drivers/hid/hid-petalynx.c` is a small, real, in-tree quirk driver for the Petalynx Maxter remote control, and it happens to demonstrate both `.report_fixup` and `.input_mapping` in under 100 lines. First, the descriptor bug it works around — the device's Consumer-page maximum usage value is set too low, which would make the parser reject or truncate perfectly valid usages further down the descriptor:
+`drivers/hid/hid-petalynx.c` is a small, real, in-tree quirk driver for the Petalynx Maxter remote control, and it happens to demonstrate both `.report_fixup` and `.input_mapping` in a little over 100 lines total. First, the descriptor bug it works around — the device's Consumer-page maximum usage value is set too low, which would make the parser reject or truncate perfectly valid usages further down the descriptor:
 
 ```c
 // drivers/hid/hid-petalynx.c

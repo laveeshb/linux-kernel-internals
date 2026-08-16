@@ -48,7 +48,7 @@ struct input_event {
 };
 ```
 
-The `time` field above is the userspace-facing shape (`!defined(__KERNEL__)`, on a 32-bit-`time_t` build); in-kernel code and 64-bit-`time_t` userspace instead see two plain `__kernel_ulong_t` fields, `__sec` and `__usec`, accessed through the `input_event_sec()`/`input_event_usec()` macros rather than `time.tv_sec`/`time.tv_usec` directly — the field layout is picked by preprocessor conditionals in `include/uapi/linux/input.h` so the struct's on-the-wire size matches what the reading process expects.
+The `time` field above is the userspace-facing shape, and it's what almost every userspace program actually sees: any 64-bit build gets it unconditionally, and so does an ordinary 32-bit build. Only in-kernel code, or a 32-bit userspace build that has specifically opted into the Y2038-safe 64-bit `time_t` ABI (`__USE_TIME_BITS64`, a macro libc defines on the application's behalf), instead sees two plain `__kernel_ulong_t` fields, `__sec` and `__usec` — accessed as `ev.input_event_sec`/`ev.input_event_usec` (object-like macros aliasing those fields, not function calls) rather than `time.tv_sec`/`time.tv_usec`. The field layout is picked by preprocessor conditionals in `include/uapi/linux/input.h` so the struct's on-the-wire size matches what the reading process expects.
 
 `type` is one of a fixed, small-ish set of event classes (`include/uapi/linux/input-event-codes.h`):
 

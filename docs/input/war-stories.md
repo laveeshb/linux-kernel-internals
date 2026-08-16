@@ -7,12 +7,12 @@
 ## Deep dives
 
 ### [The Uninitialized HID Report Buffer Kernel Memory Leak](war-stories/uninitialized-report-buffer-leak.md)
-**November 2024 · CVE-2024-50302 · CISA Known Exploited Vulnerabilities catalog**
+**October 2024 (CVE published November 2024) · CVE-2024-50302 · CISA Known Exploited Vulnerabilities catalog**
 A one-word fix — `kmalloc` should have been `kzalloc` — closed a heap leak that Google assessed was likely one of several zero-days a forensic device maker's hardware used in a phone-unlock chain, documented by Amnesty International's Security Lab.
 
-### [The `hid_validate_values()` Type Confusion, Nine Years in the Making](war-stories/hid-validate-values-type-confusion.md)
-**January 2023 · CVE-2023-1073**
-A 2014 fix closed one report-lookup edge case and left a broader one standing: an empty report list, iterated as if it couldn't be, produced a fake report pointer overlapping the very structure it came from.
+### [The `hid_validate_values()` Type Confusion That a 2014 Bug Fix Introduced](war-stories/hid-validate-values-type-confusion.md)
+**January 2023 (CVE published March 2023) · CVE-2023-1073**
+A 2014 fix for a broken report-ID-0 lookup replaced a safe hash-table read with an unchecked list walk — introducing, as a side effect, a type confusion that sat unexploited for almost nine years purely by luck of memory layout.
 
 ## Quick cases
 
@@ -38,7 +38,7 @@ The fix ([`d9d4b1e46d95`](https://git.kernel.org/pub/scm/linux/kernel/git/torval
 
 `parse_hid_report_descriptor()` in the GTCO digitizer/tablet driver (`drivers/input/tablet/gtco.c`) walks a device-supplied HID report descriptor byte by byte, and had two separate, unrelated-in-mechanism bugs in the same function:
 
-- **2017**: the loop checked that at least one byte remained before each iteration, but each HID descriptor item can consume 1, 2, or 4 bytes depending on its prefix byte — so a one-byte-remaining check didn't guarantee a multi-byte read was safe, producing an out-of-bounds read past the descriptor buffer. Fixed by [`a508294...`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a50829479f58416a013a4ccca791336af3c584c7) (Dmitry Torokhov, October 2017), adding a single `if (i + size > length)` check, hoisted above the switch statement, that covers all three read widths (1, 2, and 4 bytes) at once. [NVD: CVE-2017-16643](https://nvd.nist.gov/vuln/detail/CVE-2017-16643).
+- **2017**: the loop checked that at least one byte remained before each iteration, but each HID descriptor item can consume 1, 2, or 4 bytes depending on its prefix byte — so a one-byte-remaining check didn't guarantee a multi-byte read was safe, producing an out-of-bounds read past the descriptor buffer. Fixed by [`a50829479f58`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a50829479f58416a013a4ccca791336af3c584c7) (Dmitry Torokhov, October 2017), adding a single `if (i + size > length)` check, hoisted above the switch statement, that covers all three read widths (1, 2, and 4 bytes) at once. [NVD: CVE-2017-16643](https://nvd.nist.gov/vuln/detail/CVE-2017-16643).
 - **2019**: a completely different bug in the same function — a debug-message indentation counter tracking HID Collection/End Collection nesting depth had no bound, so a descriptor with deeply nested or unbalanced collections could write past the end of a fixed 10-byte indent-string array. Found via code review after a prior syzkaller report against the same driver. Fixed by [`2a017fd82c54`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=2a017fd82c5402b3c8df5e3d6e5165d9e6147dc1) (Grant Hernandez, July 2019), which adds two different checks: a `MAX_COLLECTION_LEVELS` upper-bound check before incrementing the indent counter (rejecting collections nested too deep), and a separate zero-floor check (`indent == 0`) before decrementing it (rejecting an unbalanced End-Collection that would underflow the counter). [NVD: CVE-2019-13631](https://nvd.nist.gov/vuln/detail/CVE-2019-13631).
 
 ## Common threads
@@ -64,4 +64,5 @@ The fix ([`d9d4b1e46d95`](https://git.kernel.org/pub/scm/linux/kernel/git/torval
 - [The Input Subsystem](README.md) — `struct input_dev`, the event model, and evdev
 - [The HID Subsystem](hid.md) — report descriptors, parsing, and the driver model every incident above lives inside
 - [ALSA War Stories](../alsa/war-stories.md) — a sibling device-subsystem incident page with a similar shape: mostly CVEs, mostly descriptor-parsing and teardown-locking bugs
-- [Locking](../locking/README.md) — general background on timer-teardown races and lock-scope bugs, the pattern behind Cases 1 and 2
+- [Timers and Timer Wheels](../interrupts/timers.md) — `del_timer()` vs `del_timer_sync()` and the async-vs-synchronous teardown distinction behind Cases 1 and 2
+- [Locking](../locking/README.md) — general background on lock-scope and critical-section bugs
