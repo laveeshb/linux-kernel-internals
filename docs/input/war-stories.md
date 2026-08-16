@@ -34,7 +34,7 @@ A batch bug found by syzbot: 14 separate HID force-feedback quirk drivers (`hid-
 
 The fix ([`d9d4b1e46d95`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d9d4b1e46d9543a82c23f6df03f4ad697dab361b), Alan Stern, October 2019) adds an explicit `if (list_empty(&hid->inputs)) { hid_err(...); return -ENODEV; }` guard to all 14 drivers before the `list_first_entry()` call. [NVD: CVE-2019-19532](https://nvd.nist.gov/vuln/detail/CVE-2019-19532).
 
-### Case 4: The GTCO tablet driver, the same function, two bugs two years apart — CVE-2017-16643 and CVE-2019-13631
+### Case 4: The GTCO tablet driver, the same function, two bugs under two years apart — CVE-2017-16643 and CVE-2019-13631
 
 `parse_hid_report_descriptor()` in the GTCO digitizer/tablet driver (`drivers/input/tablet/gtco.c`) walks a device-supplied HID report descriptor byte by byte, and had two separate, unrelated-in-mechanism bugs in the same function:
 
@@ -55,7 +55,7 @@ The fix ([`d9d4b1e46d95`](https://git.kernel.org/pub/scm/linux/kernel/git/torval
 
 **Two of six are a timer stopped the wrong way on teardown, in two unrelated subsystems — the same bug shape recurring, not just a shared category.** The BT HIDP session teardown (Case 1) and `ff-memless`'s device teardown (Case 2) both called an asynchronous or missing timer-stop before freeing the memory the timer's callback would touch — `del_timer()` instead of `del_timer_sync()`, or no stop call at all. Both fixes are one line: swap in the synchronous variant, or add the missing call.
 
-**The GTCO driver is the one incident that's internally a pair, not a pairing with another case.** Two structurally unrelated bugs — a missing multi-byte-read bound check, and an unbounded indentation counter — both lived in the same function, surfaced two years apart. Fixing the first didn't prompt a close-enough read of the rest of the function to catch the second.
+**The GTCO driver is the one incident that's internally a pair, not a pairing with another case.** Two structurally unrelated bugs — a missing multi-byte-read bound check, and an unbounded indentation counter — both lived in the same function, surfaced under two years apart. Fixing the first didn't prompt a close-enough read of the rest of the function to catch the second.
 
 **Only the report-buffer leak has documented real-world exploitation, and that's not because it's the most severe bug on this page in isolation** — CVE-2023-54120 (CVSS 8.8) and CVE-2023-1073 (type confusion) are both plausibly more dangerous as standalone primitives. What made the leak notable is that Google's Threat Analysis Group assessed it as likely one of at least three zero-days used by a commercial forensic-device maker's hardware in a working phone-unlock exploit before the fix shipped — documented by Amnesty International's Security Lab, whose report itself notes it's unclear which specific devices were part of the successful chain — a reminder that "most severe in isolation" and "most likely to actually get used" are different rankings.
 
