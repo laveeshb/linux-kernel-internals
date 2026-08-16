@@ -71,6 +71,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/external-links.js
+  - javascripts/chat.js
 
 nav:
   - Home: index.md

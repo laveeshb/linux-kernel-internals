@@ -1,0 +1,10 @@
+name = "linux-kernel-ai-api"
+main = "src/index.js"
+compatibility_date = "2024-03-20"
+
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "VECTORIZE_INDEX"
+index_name = "linux-kernel-docs-index"
