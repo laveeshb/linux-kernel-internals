@@ -31,13 +31,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
-      - name: Check API Worker
+
+      - name: Check API Worker builds and is syntactically valid
         working-directory: ./api
         run: |
           npm install
-          
-      - name: Check MCP Server
+          node --check src/index.js
+          # --dry-run validates bindings/config and bundles the Worker
+          # without deploying or requiring Cloudflare credentials.
+          npx wrangler deploy --dry-run --outdir=dist
+
+      - name: Check MCP Server is syntactically valid
         working-directory: ./mcp
         run: |
           npm install
+          node --check index.js

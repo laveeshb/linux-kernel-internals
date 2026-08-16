@@ -1,22 +1,36 @@
 import os
 import glob
+import hashlib
 import json
 import re
+import time
 import requests
 import uuid
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 CF_ACCOUNT_ID = os.environ.get('CF_ACCOUNT_ID')
 CF_API_TOKEN = os.environ.get('CF_API_TOKEN')
 INDEX_NAME = "linux-kernel-docs-index"
 
+_session = requests.Session()
+_retry = Retry(
+    total=5,
+    backoff_factor=1.5,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["POST"],
+)
+_session.mount("https://", HTTPAdapter(max_retries=_retry))
+
+
 def get_embedding(text):
     if not CF_ACCOUNT_ID or not CF_API_TOKEN:
         print("Warning: Missing CF_ACCOUNT_ID or CF_API_TOKEN. Skipping real embedding.")
         return [0.0] * 768  # bge-base-en-v1.5 has 768 dimensions
-        
+
     url = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/baai/bge-base-en-v1.5"
     headers = {"Authorization": f"Bearer {CF_API_TOKEN}"}
-    response = requests.post(url, headers=headers, json={"text": [text]})
+    response = _session.post(url, headers=headers, json={"text": [text]}, timeout=30)
     response.raise_for_status()
     return response.json()['result']['data'][0]
 
@@ -66,7 +80,10 @@ def main():
                 continue
                 
             embedding = get_embedding(chunk['text'])
-            vector_id = str(uuid.uuid5(uuid.NAMESPACE_URL, chunk['source'] + str(len(chunk['text']))))
+            # Hash the full chunk text (not just its length) so two
+            # different chunks under the same heading can never collide.
+            content_hash = hashlib.sha256(chunk['text'].encode('utf-8')).hexdigest()
+            vector_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{chunk['source']}:{content_hash}"))
             
             vectors.append({
                 "id": vector_id,

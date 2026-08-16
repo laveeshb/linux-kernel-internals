@@ -7,6 +7,18 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 // The live Cloudflare API endpoint
 const API_URL = "https://api.kernel-internals.org/api/search";
 
+// Identifies this traffic to the Worker as coming from the official MCP
+// server rather than an anonymous script, so it gets its own rate-limit
+// bucket instead of the anonymous-browser one and skips the Turnstile
+// bot-check (which a stdio process can't complete).
+//
+// This is NOT a cryptographic secret — it ships in this published package,
+// so anyone can read it. Its purpose is traffic segmentation and a kill
+// switch (the server owner can rotate MCP_SHARED_KEY to invalidate every
+// copy in the wild), not access control. Override via env var if you're
+// running your own private deployment with your own key.
+const API_KEY = process.env.KERNEL_INTERNALS_API_KEY || "mcp-public-client-v1";
+
 const server = new Server({
   name: "linux-kernel-internals",
   version: "1.0.0",
@@ -47,7 +59,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const res = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": API_KEY,
+      },
       body: JSON.stringify({ query })
     });
     

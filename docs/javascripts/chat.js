@@ -86,8 +86,72 @@ document.addEventListener("DOMContentLoaded", () => {
     const sendBtn = document.getElementById('ai-chat-send');
     const messages = document.getElementById('ai-chat-messages');
 
-    // Replace this with the actual deployed Cloudflare Worker URL
     const API_URL = "https://api.kernel-internals.org/api/chat";
+
+    // Public Turnstile site key. Obtain from the Cloudflare dashboard
+    // (Turnstile product) once you've signed up, then replace this
+    // placeholder. Until it's replaced, initTurnstile() below no-ops and
+    // requests are sent without a token — the Worker fails open on that
+    // (see TURNSTILE_SECRET_KEY in api/src/index.js) so the widget keeps
+    // working during initial setup, just without bot protection yet.
+    const TURNSTILE_SITE_KEY = "REPLACE_WITH_TURNSTILE_SITE_KEY";
+
+    let turnstileWidgetId = null;
+    let resolveTurnstileToken = null;
+
+    function waitForTurnstile(attemptsLeft) {
+        if (typeof turnstile !== "undefined") {
+            initTurnstile();
+            return;
+        }
+        if (attemptsLeft > 0) {
+            setTimeout(() => waitForTurnstile(attemptsLeft - 1), 100);
+        }
+        // else: give up silently; getTurnstileToken() resolves null and
+        // the server-side fail-open/fail-closed logic takes over.
+    }
+
+    function initTurnstile() {
+        if (!TURNSTILE_SITE_KEY || TURNSTILE_SITE_KEY.indexOf("REPLACE_") === 0) {
+            return;
+        }
+        const container = document.createElement('div');
+        container.id = 'ai-chat-turnstile';
+        container.style.display = 'none';
+        document.body.appendChild(container);
+
+        turnstileWidgetId = turnstile.render('#ai-chat-turnstile', {
+            sitekey: TURNSTILE_SITE_KEY,
+            size: 'invisible',
+            callback: (token) => {
+                if (resolveTurnstileToken) resolveTurnstileToken(token);
+            },
+            'error-callback': () => {
+                if (resolveTurnstileToken) resolveTurnstileToken(null);
+            },
+        });
+    }
+
+    // Kick off Turnstile loading; harmless no-op if not yet configured.
+    waitForTurnstile(50);
+
+    function getTurnstileToken() {
+        if (turnstileWidgetId === null) {
+            return Promise.resolve(null);
+        }
+        return new Promise((resolve) => {
+            let settled = false;
+            const finish = (token) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeoutId);
+                resolve(token);
+            };
+            const timeoutId = setTimeout(() => finish(null), 10000);
+            resolveTurnstileToken = finish;
+            turnstile.execute(turnstileWidgetId);
+        });
+    }
 
     header.addEventListener('click', () => {
         const isHidden = body.style.display === 'none';
@@ -95,11 +159,26 @@ document.addEventListener("DOMContentLoaded", () => {
         toggleBtn.innerText = isHidden ? '-' : '_';
     });
 
+    const MAX_QUERY_LENGTH = 500;
+
     async function sendMessage() {
         const text = input.value.trim();
         if (!text) return;
+        if (text.length > MAX_QUERY_LENGTH) {
+            const warn = document.createElement('div');
+            warn.className = 'ai-msg';
+            warn.innerText = `Please keep questions under ${MAX_QUERY_LENGTH} characters.`;
+            messages.appendChild(warn);
+            messages.scrollTop = messages.scrollHeight;
+            return;
+        }
 
-        messages.insertAdjacentHTML('beforeend', `<div class="user-msg">${text}</div>`);
+        // Build the user message via textContent, never innerHTML/insertAdjacentHTML,
+        // so arbitrary user input can never be interpreted as markup.
+        const userMsg = document.createElement('div');
+        userMsg.className = 'user-msg';
+        userMsg.textContent = text;
+        messages.appendChild(userMsg);
         input.value = '';
         messages.scrollTop = messages.scrollHeight;
 
@@ -110,13 +189,24 @@ document.addEventListener("DOMContentLoaded", () => {
         messages.scrollTop = messages.scrollHeight;
 
         try {
+            const turnstileToken = await getTurnstileToken();
             const res = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query: text })
+                body: JSON.stringify({ query: text, turnstileToken })
             });
+            if (!res.ok) {
+                typingIndicator.innerText = res.status === 429
+                    ? "You're asking too fast — please wait a moment and try again."
+                    : res.status === 403
+                    ? "Verification failed — please reload the page and try again."
+                    : "The AI service returned an error. Please try again.";
+                messages.scrollTop = messages.scrollHeight;
+                return;
+            }
             const data = await res.json();
-            
+
+            // .innerText, not innerHTML: the model's answer is untrusted text, not markup.
             typingIndicator.innerText = data.answer || "Sorry, I couldn't process that.";
         } catch (e) {
             typingIndicator.innerText = "Error connecting to AI service.";
