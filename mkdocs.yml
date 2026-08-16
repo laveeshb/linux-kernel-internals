@@ -468,7 +468,15 @@ nav:
       - War Stories:
         - Input/HID War Stories: input/war-stories.md
         - The Uninitialized HID Report Buffer Kernel Memory Leak: input/war-stories/uninitialized-report-buffer-leak.md
-        - "The hid_validate_values() Type Confusion, Nine Years in the Making": input/war-stories/hid-validate-values-type-confusion.md
+        - "The hid_validate_values() Type Confusion That a 2014 Bug Fix Introduced": input/war-stories/hid-validate-values-type-confusion.md
+    - TTY / Serial:
+      - Getting Started: tty/README.md
+      - Serial Core and UART Drivers: tty/serial.md
+      - "Line Disciplines, termios, and Pseudo-Terminals": tty/line-disciplines.md
+      - War Stories:
+        - TTY/Serial War Stories: tty/war-stories.md
+        - "The n_tty Echo Race: Nine Years From Fix to CISA's Exploited-in-the-Wild List": tty/war-stories/n-tty-echo-race.md
+        - The pty_write() Lock That Was Fixed, Un-Fixed, and Fixed Again: tty/war-stories/pty-write-lock-saga.md
   - Networking & BPF:
     - categories/networking-bpf.md
     - Networking:

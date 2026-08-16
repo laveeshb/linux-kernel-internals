@@ -7,3 +7,4 @@ How the kernel discovers hardware, binds drivers to it, and exposes the big devi
 - [GPU / DRM (drm/)](../drm/README.md) — the graphics and display stack: KMS modesetting, GEM buffers, and command submission
 - [Audio / ALSA (alsa/)](../alsa/README.md) — the sound subsystem: the card/PCM/control object model, the ring-buffer data path, and ASoC for embedded audio
 - [Input / HID (input/)](../input/README.md) — the input core, evdev, and the self-describing HID report-descriptor protocol
+- [TTY / Serial (tty/)](../tty/README.md) — the teletypewriter-derived terminal model: line disciplines, serial core/UART drivers, and pseudo-terminals
