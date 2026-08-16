@@ -16,21 +16,30 @@ const RATE_LIMITS = {
   "search:mcp": { max: 60, windowSeconds: 60 },
 };
 
-// Aggregate limits across ALL callers combined, independent of source IP.
-// This is the backstop against distributed abuse (many IPs, or a botnet)
-// that would otherwise slip under the per-IP limits above.
-const GLOBAL_RATE_LIMITS = {
-  search: { max: 300, windowSeconds: 60 },
-  chat: { max: 60, windowSeconds: 60 },
-};
+// --- Free-tier budget guardrails -------------------------------------
+//
+// Workers AI's free allocation is 10,000 "neurons"/day, SHARED across
+// every model call on the account — search's embedding call, chat's
+// embedding + LLM completion, AND the ingestion script's embedding calls
+// when it runs. On the Workers Free plan (not Paid), exceeding this just
+// fails the call with an error; it does not bill you. This budget exists
+// to keep the site itself well clear of that wall, not to protect against
+// a bill (there isn't one, on Free) — the failure mode we're avoiding is
+// "the AI features go dark for the rest of the day" from a single burst.
+//
+// Rough neuron cost per call, from Cloudflare's published per-model rates
+// (bge-base-en-v1.5: ~6,058 neurons/M input tokens; llama-3-8b-instruct:
+// ~25,608/M input tokens, ~75,147/M output tokens), assuming a generously
+// long query/context/answer so the estimate errs high, not low:
+//   search: ~1 embedding call, short query           ->  ~3 neurons
+//   chat:   ~1 embedding call + 1 LLM call w/ RAG
+//           context (~1,000 input tok, ~300 output)  -> ~50 neurons
+const NEURON_ESTIMATE = { search: 3, chat: 50 };
 
-// Hard daily ceiling on AI invocations, regardless of how requests are
-// distributed across IPs or time. This bounds worst-case Workers AI spend
-// even if every other layer of defense is somehow evaded.
-const DAILY_BUDGET = {
-  search: 20000,
-  chat: 3000,
-};
+// Deliberately well under the real 10,000/day ceiling: leaves headroom
+// for estimation error above, and for whatever the ingestion script
+// consumes on days it's re-run (it uses the same shared daily pool).
+const DAILY_NEURON_BUDGET = 7000;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
@@ -71,48 +80,62 @@ function isAuthenticatedMcp(request, env) {
   return !!key && !!env.MCP_SHARED_KEY && key === env.MCP_SHARED_KEY;
 }
 
-// Best-effort fixed-window counters backed by KV. KV writes aren't strongly
-// consistent across edge locations, so these deter casual/scripted/
-// distributed abuse rather than providing an exact global limit — an
-// acceptable tradeoff for protecting a free-tier AI/Vectorize budget.
-async function incrementCounter(env, key, windowSeconds) {
-  if (!env.RATE_LIMIT_KV) {
-    // KV binding not configured (e.g. local dev) — fail open rather than
-    // block all traffic, but this should never happen in production.
-    return 0;
-  }
-  const current = parseInt((await env.RATE_LIMIT_KV.get(key)) || "0", 10);
-  // expirationTtl must be >= 60s per KV constraints.
-  await env.RATE_LIMIT_KV.put(key, String(current + 1), {
-    expirationTtl: Math.max(windowSeconds, 60),
-  });
-  return current;
+// Best-effort fixed-window counters backed by KV. Two important caveats
+// this design is built around:
+//
+// 1. KV writes aren't strongly consistent across edge locations, so these
+//    counters deter casual/scripted/distributed abuse rather than
+//    providing an exact global limit — acceptable for a soft budget gate,
+//    not something to rely on for hard billing-critical accounting.
+// 2. Workers KV's own FREE plan caps WRITES at 1,000/day (reads are far
+//    more generous at 100,000/day). Every counter increment here is a
+//    write, so the counter design itself has to stay well under that —
+//    this is why there are exactly TWO KV writes per request that reaches
+//    this function (one per-IP, one shared daily budget), not one per
+//    logical thing we might want to track. Requests rejected earlier by
+//    the Origin or Turnstile checks never reach here, so blind/scripted
+//    floods don't consume any KV write quota at all.
+async function readCounter(env, key) {
+  if (!env.RATE_LIMIT_KV) return 0; // No KV binding (e.g. local dev) — fail open.
+  return parseInt((await env.RATE_LIMIT_KV.get(key)) || "0", 10);
+}
+
+async function incrementCounter(env, key, amount, expirationTtl) {
+  if (!env.RATE_LIMIT_KV) return;
+  const current = await readCounter(env, key);
+  await env.RATE_LIMIT_KV.put(key, String(current + amount), { expirationTtl });
 }
 
 async function checkRateLimit(env, clientId, bucket, mcp) {
   const limitKey = mcp ? `${bucket}:mcp` : bucket;
   const perIpLimit = RATE_LIMITS[limitKey] || RATE_LIMITS[bucket];
-  const globalLimit = GLOBAL_RATE_LIMITS[bucket];
-  const dailyLimit = DAILY_BUDGET[bucket];
+  const neuronCost = NEURON_ESTIMATE[bucket];
 
   const minuteWindow = Math.floor(Date.now() / 60000);
   const dayWindow = Math.floor(Date.now() / 86400000);
+  const perIpKey = `rl:${limitKey}:${clientId}:${minuteWindow}`;
+  const budgetKey = `budget:neurons:${dayWindow}`;
 
-  const [perIpCount, globalCount, dailyCount] = await Promise.all([
-    incrementCounter(env, `rl:${limitKey}:${clientId}:${minuteWindow}`, 60),
-    incrementCounter(env, `rl:global:${bucket}:${minuteWindow}`, 60),
-    incrementCounter(env, `budget:${bucket}:${dayWindow}`, 86400),
+  // Reads are cheap (100,000/day free) — check both before deciding
+  // whether either write is even worth making.
+  const [perIpCount, neuronsSpent] = await Promise.all([
+    readCounter(env, perIpKey),
+    readCounter(env, budgetKey),
   ]);
 
-  if (dailyCount >= dailyLimit) {
-    return { ok: false, reason: "Daily usage budget reached. Please try again tomorrow." };
-  }
-  if (globalCount >= globalLimit.max) {
-    return { ok: false, reason: "Service is under heavy load. Please try again shortly." };
+  if (neuronsSpent + neuronCost > DAILY_NEURON_BUDGET) {
+    return { ok: false, reason: "Daily AI usage budget reached. Please try again tomorrow." };
   }
   if (perIpCount >= perIpLimit.max) {
     return { ok: false, reason: "Rate limit exceeded. Please slow down." };
   }
+
+  // Only now, having decided to allow the request, spend the two writes.
+  await Promise.all([
+    incrementCounter(env, perIpKey, 1, Math.max(perIpLimit.windowSeconds, 60)),
+    incrementCounter(env, budgetKey, neuronCost, 86400),
+  ]);
+
   return { ok: true };
 }
 
