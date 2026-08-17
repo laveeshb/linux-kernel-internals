@@ -7,6 +7,9 @@ hide:
 
 A community hub for understanding the Linux kernel — documentation and discussions about design decisions, internals, and the journey of contributing.
 
+!!! tip "Ever had a browser tab just vanish when memory ran low?"
+    [Find out who decided it had to die &rarr;](playground/oom-killer.md)
+
 ## What This Is
 
 **Documentation**: Deep dives into kernel subsystems, explaining *why* things work the way they do, not just the APIs.
