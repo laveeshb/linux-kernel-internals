@@ -94,10 +94,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const explanation = justKilledVictim
       ? `<div class="oom-explain">
-           <strong>Killed: ${justKilledVictim.name}</strong> — it was using the most memory
-           (${justKilledVictim.used} units) of anything running. That's a simplified version
-           of the real kernel's <code>oom_score</code>: memory footprint is the dominant factor
-           in deciding who goes.
+           <p><strong>${justKilledVictim.name}</strong> was killed — at ${justKilledVictim.used} memory
+           units, it was using more than anything else still running out of the ${used} total.
+           That's <a href="../../mm/oom/#how-oom-selects-a-victim">how the real OOM killer picks a victim</a>
+           too: memory footprint is the single biggest factor in the actual
+           <a href="../../mm/oom/#oom-score-components">scoring</a>, not chance.</p>
+           <p>On a real machine, this process would have had a fighting chance — you can
+           <a href="../../mm/oom/#controlling-oom-behavior">protect a specific process</a> with
+           <code>oom_score_adj</code> so it's (almost) never picked, or check
+           <code>/proc/$PID/oom_score</code> right now to see where your own processes rank.</p>
          </div>`
       : "";
 
