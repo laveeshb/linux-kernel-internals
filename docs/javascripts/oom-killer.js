@@ -45,6 +45,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const template = SPAWNABLE[Math.floor(Math.random() * SPAWNABLE.length)];
     processes.push({ ...template, id: idCounter++, alive: true });
     render();
+    // Keep the newest process visible inside the scrollable list, without
+    // moving the page itself.
+    const list = container.querySelector(".oom-procs");
+    if (list) list.scrollTop = list.scrollHeight;
     if (totalUsed() > TOTAL_MEMORY) {
       setTimeout(runOomKiller, 400);
     }
@@ -62,6 +66,8 @@ document.addEventListener("DOMContentLoaded", () => {
       victim.justKilled = true;
       killing = false;
       render(victim);
+      const row = container.querySelector(`[data-proc-id="${victim.id}"]`);
+      if (row) row.scrollIntoView({ block: "nearest" });
     }, 900);
   }
 
@@ -83,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .map((p) => {
         const dead = !p.alive;
         return `
-          <div class="oom-proc ${dead ? "oom-proc-dead" : ""} ${killing && p.alive ? "oom-proc-scanning" : ""}">
+          <div class="oom-proc ${dead ? "oom-proc-dead" : ""} ${killing && p.alive ? "oom-proc-scanning" : ""}" data-proc-id="${p.id}">
             <span class="oom-proc-name">${dead ? "\u{1F480} " : ""}${p.name}</span>
             <div class="oom-proc-bar-track">
               <div class="oom-proc-bar-fill" style="width:${pct(p.used)}%"></div>
@@ -111,14 +117,14 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="oom-gauge-track">
         <div class="${gaugeClass(used)}" style="width:${pct(used)}%"></div>
       </div>
-      <div class="oom-procs">${processRows}</div>
-      ${explanation}
       <div class="oom-controls">
         <button id="oom-spawn-btn" class="oom-btn oom-btn-primary" ${killing ? "disabled" : ""}>
           Open another tab
         </button>
         <button id="oom-reset-btn" class="oom-btn">Reset</button>
       </div>
+      <div class="oom-procs">${processRows}</div>
+      ${explanation}
       <style>
         #oom-game { max-width: 640px; margin: 2rem auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .oom-gauge-label { font-weight: 600; margin-bottom: 0.4rem; }
@@ -127,7 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .oom-gauge-green { background: #2ecc71; }
         .oom-gauge-yellow { background: #f1c40f; }
         .oom-gauge-red { background: #e74c3c; }
-        .oom-procs { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+        .oom-procs { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; max-height: 340px; overflow-y: auto; padding-right: 0.25rem; }
         .oom-proc { display: flex; align-items: center; gap: 0.75rem; padding: 0.4rem 0.6rem; border-radius: 6px; background: #f8f9fa; transition: opacity 0.6s ease, transform 0.6s ease; }
         .oom-proc-name { flex: 0 0 220px; font-size: 0.9rem; }
         .oom-proc-bar-track { flex: 1; height: 10px; border-radius: 5px; background: #dee2e6; overflow: hidden; }
