@@ -21,7 +21,7 @@ kvm_arch_vcpu_ioctl_run()          arch/x86/kvm/x86.c
               └── kvm_x86_call(handle_exit)(vcpu, exit_fastpath)
                     └── kvm_vmx_exit_handlers[exit_reason](vcpu)
                           returns 1 → resume guest
-                          returns 0 → exit to userspace (QEMU)
+                          returns 0 → exit to userspace VMM
 ```
 
 The key contract: a handler returning `1` means KVM can re-enter the guest immediately. Returning `0` or a negative error means `KVM_RUN` ioctl returns to userspace, which inspects `struct kvm_run` to learn what happened.
@@ -34,6 +34,10 @@ Before entering the guest on each iteration, `vcpu_enter_guest()` processes any 
 /* arch/x86/kvm/x86.c (simplified) */
 static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
+    fastpath_t exit_fastpath;
+    u32 run_flags = 0;   /* built up earlier from pending debug-register /
+                           * debugctl state; omitted here */
+
     /* Process pending requests: TLB flushes, MMU reloads, etc. */
     if (kvm_check_request(KVM_REQ_MMU_SYNC, vcpu))
         kvm_mmu_sync_roots(vcpu);
@@ -87,6 +91,7 @@ static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
 static int __vmx_handle_exit(struct kvm_vcpu *vcpu,
                               fastpath_t exit_fastpath)
 {
+    struct vcpu_vmx *vmx = to_vmx(vcpu);
     union vmx_exit_reason exit_reason = vmx_get_exit_reason(vcpu);
 
     /* If guest state is invalid (e.g. after a bad VM entry), emulate
@@ -108,7 +113,7 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu,
 }
 ```
 
-`__vmx_handle_exit()` does the actual dispatch; the `kvm_x86_ops.handle_exit` entry point is a thin `vmx_handle_exit()` wrapper around it that also checks for a detected bus lock (`KVM_EXIT_X86_BUS_LOCK`).
+`__vmx_handle_exit()` does the actual dispatch; the entry point reached via `kvm_x86_call(handle_exit)` is a thin `vmx_handle_exit()` wrapper around it that also checks for a detected bus lock (`KVM_EXIT_X86_BUS_LOCK`).
 
 AMD SVM follows the same pattern with `svm_exit_handlers[]` in `arch/x86/kvm/svm/svm.c`, indexed by the `EXITCODE` field in the VMCB.
 
@@ -116,7 +121,7 @@ AMD SVM follows the same pattern with `svm_exit_handlers[]` in `arch/x86/kvm/svm
 
 ### EXIT_REASON_IO_INSTRUCTION — port I/O
 
-Port I/O instructions (`in`/`out`) exit unconditionally on VMX (unless the I/O bitmap says otherwise). The fast path handles simple cases in-kernel; the slow path exits to userspace.
+Port I/O instructions (`in`/`out`) exit by default; the per-VMCS I/O bitmap can be configured to let specific ports run without exiting at all. Of the ports that do exit, the fast path handles simple cases in-kernel; the slow path (string I/O) falls back to full instruction emulation.
 
 ```c
 /* arch/x86/kvm/vmx/vmx.c */
@@ -135,7 +140,7 @@ static int handle_io(struct kvm_vcpu *vcpu)
 }
 ```
 
-`kvm_fast_pio()` (in `arch/x86/kvm/x86.c`) first tries in-kernel device emulation via the `kvm_io_bus` dispatch table. If no in-kernel device owns the port, it fills `kvm_run` and returns `0`:
+`kvm_fast_pio()` (in `arch/x86/kvm/x86.c`) hands off to `kvm_fast_pio_in()`/`kvm_fast_pio_out()`, which go through the emulator's `emulator_pio_in()`/`emulator_pio_out()` path. That path tries in-kernel device emulation via the `kvm_io_bus` dispatch table first; if no in-kernel device owns the port, it fills `kvm_run` and returns `0`:
 
 ```c
 /* struct kvm_run — userspace sees this on KVM_EXIT_IO */
@@ -218,7 +223,7 @@ The vCPU thread sleeps until `kvm_vcpu_kick()` wakes it — typically because a 
 
 ### EXIT_REASON_MSR_READ / MSR_WRITE
 
-MSR accesses can be made cheap with the **MSR bitmap**: a 4KB bitmap in the VMCS where each bit controls whether a specific MSR causes a VM exit. Frequently-read MSRs like `IA32_TSC` or `IA32_SYSENTER_EIP` can be pass-through (no exit). For intercepted MSRs, KVM dispatches to `kvm_emulate_rdmsr()` or `kvm_emulate_wrmsr()` (in `arch/x86/kvm/x86.c`), which uses switch-based per-MSR dispatch inside `__kvm_get_msr()` / `__kvm_set_msr()`.
+MSR accesses can be made cheap with the **MSR bitmap**: a 4KB page (pointed to by the VMCS's `MSR_BITMAP` field, not embedded in the VMCS itself) where each bit controls whether a specific MSR causes a VM exit. Frequently-read MSRs like `IA32_TSC` or `IA32_SYSENTER_EIP` can be pass-through (no exit). For intercepted MSRs, KVM dispatches to `kvm_emulate_rdmsr()` or `kvm_emulate_wrmsr()` (in `arch/x86/kvm/x86.c`), which uses switch-based per-MSR dispatch inside `__kvm_get_msr()` / `__kvm_set_msr()`.
 
 ### EXIT_REASON_EXCEPTION_NMI
 
@@ -268,13 +273,13 @@ struct kvm_run {
 };
 ```
 
-For a guest **read**: QEMU fills `kvm_run.mmio.data` with the device register value, then re-enters KVM via `KVM_RUN`. KVM completes the emulated instruction by writing the data into the guest register.
+For a guest **read**: userspace (e.g. QEMU) fills `kvm_run.mmio.data` with the device register value, then re-enters KVM via `KVM_RUN`. KVM completes the emulated instruction by writing the data into the guest register.
 
-For a guest **write**: QEMU reads `kvm_run.mmio.data` and forwards it to the device model.
+For a guest **write**: userspace reads `kvm_run.mmio.data` and forwards it to its device model.
 
 ### KVM in-kernel devices
 
-Several devices are emulated entirely in-kernel to avoid the QEMU round-trip:
+Several devices are emulated entirely in-kernel to avoid the round-trip to userspace:
 
 | Device | In-kernel emulation | Registration |
 |--------|---------------------|---------------|
@@ -302,8 +307,10 @@ void __kvm_vcpu_kick(struct kvm_vcpu *vcpu, bool wait)
      * to force a VM exit so it notices pending work (unless we're already
      * running on the target's own pCPU, in which case a flag write suffices). */
     if (kvm_arch_vcpu_should_kick(vcpu)) {
-        int cpu = READ_ONCE(vcpu->cpu);
-        if (cpu != smp_processor_id() && cpu_online(cpu))
+        int cpu = READ_ONCE(vcpu->cpu);   /* -1 if not currently loaded */
+
+        if (cpu != smp_processor_id() &&
+            (unsigned int)cpu < nr_cpu_ids && cpu_online(cpu))
             smp_send_reschedule(cpu);
     }
 }
@@ -325,7 +332,7 @@ The routing table (`struct kvm_irq_routing_table`, allocated in `virt/kvm/irqchi
 Advanced interrupt features that reduce exits:
 
 - **APICv / AVIC**: virtualizes the local APIC in hardware (Intel APICv / AMD AVIC), eliminating most APIC MMIO exits and enabling posted interrupt delivery without a VM exit.
-- **Posted interrupts**: the CPU delivers virtual interrupts directly to the guest without a VM exit using the Posted Interrupt Descriptor (PID).
+- **Posted interrupts**: the CPU delivers virtual interrupts directly to the guest without a VM exit, tracked via a per-vCPU posted-interrupt descriptor (`struct pi_desc`).
 
 ## Performance: measuring exits
 
