@@ -35,8 +35,9 @@ Before entering the guest on each iteration, `vcpu_enter_guest()` processes any 
 static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
     fastpath_t exit_fastpath;
-    u32 run_flags = 0;   /* built up earlier from pending debug-register /
-                           * debugctl state; omitted here */
+    u64 run_flags = 0;   /* KVM_RUN_FORCE_IMMEDIATE_EXIT, KVM_RUN_LOAD_GUEST_DR6,
+                           * KVM_RUN_LOAD_DEBUGCTL — built up from pending-exit,
+                           * debug-register, and debugctl state; omitted here */
 
     /* Process pending requests: TLB flushes, MMU reloads, etc. */
     if (kvm_check_request(KVM_REQ_MMU_SYNC, vcpu))
@@ -298,21 +299,32 @@ Interrupts to guest vCPUs do not arrive via normal hardware interrupt lines. KVM
  * kvm_vcpu_kick(vcpu) is a thin inline wrapper: __kvm_vcpu_kick(vcpu, false). */
 void __kvm_vcpu_kick(struct kvm_vcpu *vcpu, bool wait)
 {
+    int me, cpu;
+
     /* Wake it first: if it was blocking (e.g. in HLT), waking it is enough —
      * no IPI needed since it wasn't running on a pCPU. */
     if (kvm_vcpu_wake_up(vcpu))
         return;
 
-    /* Otherwise it's actually running: if that's still true, send an IPI
-     * to force a VM exit so it notices pending work (unless we're already
-     * running on the target's own pCPU, in which case a flag write suffices). */
-    if (kvm_arch_vcpu_should_kick(vcpu)) {
-        int cpu = READ_ONCE(vcpu->cpu);   /* -1 if not currently loaded */
+    me = get_cpu();
 
-        if (cpu != smp_processor_id() &&
-            (unsigned int)cpu < nr_cpu_ids && cpu_online(cpu))
+    /* Kicking your own vCPU from its own thread (e.g. a self-IPI-style
+     * event): just flip the mode flag it polls, no actual IPI needed. */
+    if (vcpu == __this_cpu_read(kvm_running_vcpu)) {
+        if (vcpu->mode == IN_GUEST_MODE)
+            WRITE_ONCE(vcpu->mode, EXITING_GUEST_MODE);
+        goto out;
+    }
+
+    /* Otherwise it's running on some other pCPU: send an IPI to force a
+     * VM exit so it notices pending work. */
+    if (kvm_arch_vcpu_should_kick(vcpu)) {
+        cpu = READ_ONCE(vcpu->cpu);   /* -1 if not currently loaded */
+        if (cpu != me && (unsigned int)cpu < nr_cpu_ids && cpu_online(cpu))
             smp_send_reschedule(cpu);
     }
+out:
+    put_cpu();
 }
 ```
 
