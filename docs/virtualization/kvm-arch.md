@@ -229,16 +229,16 @@ KVM_HC_MAP_GPA_RANGE      /* memory attribute notification */
 ## Observing KVM
 
 ```bash
-# KVM stats per VM (requires debugfs)
+# One directory per VM, named <creator-pid>-<vm-fd-name> (requires debugfs):
 ls /sys/kernel/debug/kvm/
-# 42-0/  42-1/  ...  (vm_id-vcpu_id directories)
+# 1234-3/   ...
 
-# Each stat gets its own file (see kvm_vcpu_stats_desc[] in arch/x86/kvm/x86.c) —
-# there's no single aggregate "exits" file, just a raw counter per file:
-ls /sys/kernel/debug/kvm/42-0/
+# Each vCPU gets its own subdirectory; each stat gets its own file inside it
+# (see kvm_vcpu_stats_desc[] in arch/x86/kvm/x86.c) — no aggregate "exits" file:
+ls /sys/kernel/debug/kvm/1234-3/vcpu0/
 # exits  io_exits  mmio_exits  halt_exits  irq_window_exits  nmi_window_exits  ...
 
-cat /sys/kernel/debug/kvm/42-0/exits
+cat /sys/kernel/debug/kvm/1234-3/vcpu0/exits
 # 12345678
 
 # perf KVM stats
