@@ -140,9 +140,11 @@ struct kvm_mmu_page {
     atomic_t            write_flooding_count;
 
     /* Separate list (kvm->arch.possible_nx_huge_pages), independent of
-     * active_mmu_pages above: pages that, if zapped, would let KVM use a
-     * huge page here instead. Periodically zapped by a recovery thread
-     * (kvm_recover_nx_huge_pages()) to claw back the lost TLB coverage. */
+     * active_mmu_pages above: pages KVM split to 4K solely to mitigate the
+     * iTLB multihit erratum (an executable huge PTE would otherwise be
+     * split by hardware in a way that can hang certain CPUs). Periodically
+     * re-zapped by a recovery thread (kvm_recover_nx_huge_pages()) so KVM
+     * can retry the huge mapping and recoup the mitigation's TLB cost. */
     struct list_head    possible_nx_huge_page_link;
 };
 ```
@@ -357,7 +359,8 @@ void kvm_mmu_hugepage_adjust(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault
     if (is_error_noslot_pfn(fault->pfn))
         return;
     if (kvm_slot_dirty_track_enabled(slot))
-        return;   /* dirty tracking needs 4K-granularity writes */
+        return;   /* KVM dirty-logs at 4KiB granularity, so huge pages
+                     get split to 4K on first write when a slot is dirty-tracked */
 
     /* Largest level both the GPA alignment and the host page support: */
     fault->req_level = kvm_mmu_max_mapping_level(vcpu->kvm, fault,
@@ -374,8 +377,10 @@ void kvm_mmu_hugepage_adjust(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault
 ## Observing guest memory
 
 ```bash
-# Page faults handled per vCPU (there's no dedicated "ept_violations" file;
-# pf_taken is the closest real counter — see kvm_vcpu_stats_desc[] in x86.c)
+# There's no dedicated "ept_violations" file (see kvm_vcpu_stats_desc[] in
+# x86.c for the full real list). pf_taken is the nearest available proxy —
+# it counts every fault handled by kvm_mmu_page_fault(), which includes
+# EPT violations but isn't scoped to them exclusively:
 cat /sys/kernel/debug/kvm/*/vcpu0/pf_taken
 
 # Guest TLB flush requests (also per-vCPU, same directory level)
