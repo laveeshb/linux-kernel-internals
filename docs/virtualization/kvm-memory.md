@@ -34,9 +34,10 @@ For a 4-level guest walking a 4-level EPT, the hardware may touch up to 24 page 
 
 ```c
 /* Simplified — arch/x86/include/asm/kvm_host.h; several callback and
- * shadow-root fields (get_guest_pgd, inject_page_fault, gva_to_gpa,
- * sync_spte, mirror_root_hpa, cpu_role, pkru_mask, permissions[],
- * pml4_root, pml5_root, shadow/guest reserved-bits validators) omitted */
+ * shadow-root fields (get_guest_pgd, get_pdptr, inject_page_fault,
+ * gva_to_gpa, sync_spte, mirror_root_hpa, cpu_role, pkru_mask,
+ * permissions[], pml4_root, pml5_root, shadow/guest reserved-bits
+ * validators) omitted */
 struct kvm_mmu {
     /* Page fault handler: invoked on GPA fault */
     int (*page_fault)(struct kvm_vcpu *vcpu,
