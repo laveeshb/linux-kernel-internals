@@ -112,7 +112,7 @@ Each round sends fewer pages — the guest's working set converges. QEMU tracks:
 - **Dirty rate**: pages dirtied per second by the guest.
 - **Bandwidth**: pages transferred per second to the destination.
 
-Pre-copy ends when the estimated remaining transfer time drops below the target downtime (default 300 ms in QEMU's `migrate_set_parameter max-bandwidth`).
+Pre-copy ends when the estimated remaining transfer time drops below the target downtime, set via the `downtime-limit` migration parameter (default 300 ms) — a separate knob from `max-bandwidth`, which caps transfer speed rather than target downtime.
 
 **Auto-converge**: if the dirty rate stays high and convergence is not happening, `mig_throttle_guest_down()` (in `migration/ram.c`) calls `cpu_throttle_set()` to periodically stall the vCPU threads, ramping the throttle percentage up by `cpu-throttle-increment` each time the `throttle-trigger-threshold` ratio is exceeded, up to `max-cpu-throttle`. This ensures migration completes at the cost of temporary guest performance degradation.
 
