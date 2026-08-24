@@ -33,25 +33,25 @@ For a 4-level guest walking a 4-level EPT, the hardware may touch up to 24 page 
 ### struct kvm_mmu
 
 ```c
-/* arch/x86/include/asm/kvm_host.h */
+/* Simplified — arch/x86/include/asm/kvm_host.h; several callback and
+ * shadow-root fields (get_guest_pgd, get_pdptr, inject_page_fault,
+ * gva_to_gpa, sync_spte, mirror_root_hpa, cpu_role, pkru_mask,
+ * permissions[], pml4_root, pml5_root, shadow/guest reserved-bits
+ * validators) omitted */
 struct kvm_mmu {
     /* Page fault handler: invoked on GPA fault */
     int (*page_fault)(struct kvm_vcpu *vcpu,
                       struct kvm_page_fault *fault);
 
-    /* TLB flush */
-    void (*invlpg)(struct kvm_vcpu *vcpu, gva_t gva, hpa_t root_hpa);
-
     /* Root (top-level EPT/shadow PT physical address) */
     struct kvm_mmu_root_info root;   /* root.hpa, root.pgd */
     union kvm_mmu_page_role root_role;
 
-    /* GPA fault address from VMCS exit qualification */
-    gpa_t                gpa_available;
-
-    /* Shadow page table state */
-    struct kvm_mmu_page *pae_root;
     struct kvm_mmu_root_info prev_roots[KVM_MMU_NUM_PREV_ROOTS];
+
+    /* PAE root page table(s) — needed when shadowing a 32-bit/PAE guest
+     * paging mode (e.g. under NPT) with a 64-bit host MMU */
+    u64                  *pae_root;
 };
 ```
 
@@ -60,11 +60,12 @@ struct kvm_mmu {
 When a guest accesses memory with no EPT entry, the CPU triggers an EPT violation VM exit:
 
 ```c
-/* arch/x86/kvm/vmx/vmx.c */
+/* arch/x86/kvm/vmx/vmx.c — handle_ept_violation(), simplified */
 static int handle_ept_violation(struct kvm_vcpu *vcpu)
 {
     gpa_t gpa    = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
     u64   exit_qual = vmcs_readl(EXIT_QUALIFICATION);
+    u64   error_code = 0;
 
     /*
      * exit_qual bits:
@@ -73,22 +74,43 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
      *   bit 2: fetch fault
      *   bit 7: GPA in addr translation of GVA (not a direct access)
      */
+    if (exit_qual & EPT_VIOLATION_ACC_WRITE)
+        error_code |= PFERR_WRITE_MASK;
+    if (exit_qual & EPT_VIOLATION_ACC_INSTR)
+        error_code |= PFERR_FETCH_MASK;
+    /* (present/MBEC/GVA-translation/TDX-private bits omitted here) */
 
     /* Look up or create the HPA mapping */
     return kvm_mmu_page_fault(vcpu, gpa, error_code, NULL, 0);
 }
 
-/* arch/x86/kvm/mmu/mmu.c */
-static int kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gpa_t cr2_or_gpa,
-                               u64 error_code, ...)
+/* arch/x86/kvm/mmu/mmu.c — kvm_mmu_page_fault(), simplified (real signature
+ * takes 5 concrete params, not variadic; not static; also handles
+ * software-protected-VM attributes and write-protect faults, omitted here) */
+int noinline kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gpa_t cr2_or_gpa,
+                                 u64 error_code, void *insn, int insn_len)
 {
-    /* Try to resolve the fault by building EPT entries */
-    r = kvm_mmu_do_page_fault(vcpu, cr2_or_gpa, error_code, false, &emulation_type);
-    if (r == RET_PF_INVALID) {
-        /* Emulate the access (e.g., MMIO to a device region) */
-        r = handle_mmio_page_fault(vcpu, cr2_or_gpa, is_present_gpte(error_code));
+    bool direct = vcpu->arch.mmu->root_role.direct;
+    int r, emulation_type = EMULTYPE_PF;
+
+    /* A reserved bit set in error_code is KVM's own MMIO hint */
+    if (error_code & PFERR_RSVD_MASK) {
+        r = handle_mmio_page_fault(vcpu, cr2_or_gpa, direct);
+        if (r == RET_PF_EMULATE)
+            goto emulate;
+    } else {
+        /* Try to resolve the fault by building EPT entries */
+        r = kvm_mmu_do_page_fault(vcpu, cr2_or_gpa, error_code, false,
+                                  &emulation_type, NULL);
     }
-    return r;
+
+    if (r != RET_PF_EMULATE)
+        return r;
+
+emulate:
+    /* Emulate the access (e.g., MMIO to a device region) */
+    return x86_emulate_instruction(vcpu, cr2_or_gpa, emulation_type,
+                                   insn, insn_len);
 }
 ```
 
@@ -100,19 +122,30 @@ KVM tracks EPT/shadow pages via `struct kvm_mmu_page`. One struct per page table
 struct kvm_mmu_page {
     struct list_head    link;          /* in kvm->arch.active_mmu_pages */
     struct hlist_node   hash_link;     /* hash table by gfn */
-    struct list_head    lpage_disallowed_link;
 
     bool                unsync;        /* sptes may be out of date */
     u8                  mmu_valid_gen; /* generation counter */
+    bool                nx_huge_page_disallowed; /* can't use a huge page here
+                                                     due to the NX huge page
+                                                     mitigation */
 
     gfn_t               gfn;          /* guest frame number this page maps */
     union kvm_mmu_page_role role;      /* level, cr4_pae, access bits, ... */
 
     u64                *spt;          /* the actual page table page (4096 bytes) */
-    gfn_t              *shadowed_translation; /* gfn for each spte */
+    u64                *shadowed_translation; /* per-spte: shadowed GPA (upper
+                                                  bits) + access perms (lower) */
     struct kvm_rmap_head parent_ptes;  /* reverse map: who points here */
 
     atomic_t            write_flooding_count;
+
+    /* Separate list (kvm->arch.possible_nx_huge_pages), independent of
+     * active_mmu_pages above: pages KVM split to 4K solely to mitigate the
+     * iTLB multihit erratum (an executable huge PTE would otherwise be
+     * split by hardware in a way that can hang certain CPUs). Periodically
+     * re-zapped by a recovery thread (kvm_recover_nx_huge_pages()) so KVM
+     * can retry the huge mapping and recoup the mitigation's TLB cost. */
+    struct list_head    possible_nx_huge_page_link;
 };
 ```
 
@@ -162,7 +195,7 @@ struct kvm_memory_slot {
 ```
 
 A slot can be:
-- **Normal RAM**: backed by `mmap(MAP_ANONYMOUS)` memory in QEMU
+- **Normal RAM**: backed by `mmap(MAP_ANONYMOUS)` memory in the VMM (e.g. QEMU)
 - **ROM**: read-only (bios, option ROM)
 - **MMIO**: no backing — triggers `KVM_EXIT_MMIO` on access
 
@@ -237,27 +270,35 @@ Host (KVM)              Guest (virtio-balloon driver)
 The guest can also report memory statistics to the host:
 
 ```c
-/* drivers/virtio/virtio_balloon.c */
-static void update_balloon_stats(struct virtio_balloon *vb)
+/* drivers/virtio/virtio_balloon.c, simplified.
+ * update_stat() takes a running index, not just a tag — real callers do
+ * update_stat(vb, idx++, TAG, val). Real code splits this in two:
+ * update_balloon_vm_stats() first fills in vm-event-derived stats (swap
+ * in/out, major/minor faults, OOM kills, reclaim/scan counts, hugetlb
+ * stats — omitted here), returning the count; update_balloon_stats()
+ * below picks up from there and appends the sysinfo-derived stats. Both
+ * return the total entries filled, not void. */
+static unsigned int update_balloon_stats(struct virtio_balloon *vb)
 {
-    unsigned long events[NR_VM_EVENT_ITEMS];
     struct sysinfo i;
+    unsigned int idx;
+    unsigned long caches;
 
-    all_vm_events(events);
+    idx = update_balloon_vm_stats(vb);  /* SWAP_IN/OUT, MAJFLT, MINFLT, ... */
+
     si_meminfo(&i);
+    caches = global_node_page_state(NR_FILE_PAGES);
 
-    update_stat(vb, VIRTIO_BALLOON_S_SWAP_IN,
-                pages_to_bytes(events[PSWPIN]));
-    update_stat(vb, VIRTIO_BALLOON_S_SWAP_OUT,
-                pages_to_bytes(events[PSWPOUT]));
-    update_stat(vb, VIRTIO_BALLOON_S_MAJFLT, events[PGMAJFAULT]);
-    update_stat(vb, VIRTIO_BALLOON_S_MINFLT, events[PGFAULT]);
-    update_stat(vb, VIRTIO_BALLOON_S_MEMFREE,
-                pages_to_bytes(i.freeram));
-    update_stat(vb, VIRTIO_BALLOON_S_MEMTOT,
-                pages_to_bytes(i.totalram));
-    update_stat(vb, VIRTIO_BALLOON_S_AVAIL,
-                pages_to_bytes(si_mem_available()));
+    update_stat(vb, idx++, VIRTIO_BALLOON_S_MEMFREE,
+               pages_to_bytes(i.freeram));
+    update_stat(vb, idx++, VIRTIO_BALLOON_S_MEMTOT,
+               pages_to_bytes(i.totalram));
+    update_stat(vb, idx++, VIRTIO_BALLOON_S_AVAIL,
+               pages_to_bytes(si_mem_available()));
+    update_stat(vb, idx++, VIRTIO_BALLOON_S_CACHES,
+               pages_to_bytes(caches));
+
+    return idx;
 }
 ```
 
@@ -301,51 +342,60 @@ When EPT maps these, every 2MB of guest physical memory uses one EPT leaf entry 
 ### KVM large page handling
 
 ```c
-/* arch/x86/kvm/mmu/mmu.c */
-static int kvm_mmu_hugepage_adjust(struct kvm_vcpu *vcpu,
-                                    struct kvm_page_fault *fault)
+/* arch/x86/kvm/mmu/mmu.c — kvm_mmu_hugepage_adjust(), simplified.
+ * Not static, and returns void, not int. The actual alignment / host-page-size
+ * check is a separate helper, kvm_mmu_max_mapping_level() (walks each memslot's
+ * per-gfn lpage_info plus the real host page size) — not reproduced here. */
+void kvm_mmu_hugepage_adjust(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault)
 {
     struct kvm_memory_slot *slot = fault->slot;
     kvm_pfn_t mask;
-    int level;
 
-    /*
-     * Walk from the maximum possible level (1GB) down to 4KB.
-     * Use the largest level where:
-     *   1. The GPA range is aligned
-     *   2. The HPA range is backed by a huge page
-     */
-    for (level = KVM_MAX_HUGEPAGE_LEVEL; level > PG_LEVEL_4K; level--) {
-        mask = KVM_PAGES_PER_HPAGE(level) - 1;
-        if (fault->addr & (mask << PAGE_SHIFT))
-            continue;  /* not aligned for this level */
-        if (!kvm_is_transparent_hugepage(fault->pfn & ~mask))
-            continue;  /* host page not huge */
-        fault->goal_level = level;
-        return 0;
-    }
-    return 0;
+    fault->huge_page_disallowed = fault->exec &&
+                                  fault->nx_huge_page_workaround_enabled;
+
+    if (fault->max_level == PG_LEVEL_4K)
+        return;
+    if (is_error_noslot_pfn(fault->pfn))
+        return;
+    if (kvm_slot_dirty_track_enabled(slot))
+        return;   /* KVM dirty-logs at 4KiB granularity, so huge pages
+                     get split to 4K on first write when a slot is dirty-tracked */
+
+    /* Largest level both the GPA alignment and the host page support: */
+    fault->req_level = kvm_mmu_max_mapping_level(vcpu->kvm, fault,
+                                                 fault->slot, fault->gfn);
+    if (fault->req_level == PG_LEVEL_4K || fault->huge_page_disallowed)
+        return;
+
+    fault->goal_level = fault->req_level;
+    mask = KVM_PAGES_PER_HPAGE(fault->goal_level) - 1;
+    fault->pfn &= ~mask;
 }
 ```
 
 ## Observing guest memory
 
 ```bash
-# EPT violations per vCPU (VM exits due to missing EPT entries)
-cat /sys/kernel/debug/kvm/*/ept_violations
+# There's no dedicated "ept_violations" file (see kvm_vcpu_stats_desc[] in
+# x86.c for the full real list). pf_taken is the nearest available proxy —
+# it counts every fault handled by kvm_mmu_page_fault(), which includes
+# EPT violations but isn't scoped to them exclusively:
+cat /sys/kernel/debug/kvm/*/vcpu0/pf_taken
 
-# Guest TLB flush requests
-cat /sys/kernel/debug/kvm/*/tlb_flush
+# Guest TLB flush requests (also per-vCPU, same directory level)
+cat /sys/kernel/debug/kvm/*/vcpu0/tlb_flush
 
-# Guest huge pages
+# Shadow pages KVM couldn't make huge, due to the NX-huge-page mitigation
+# (this one's a per-VM stat, directly under the VM directory)
 cat /sys/kernel/debug/kvm/*/nx_lpage_splits
 
 # Host sees guest RSS as the QEMU process
 cat /proc/$(pgrep qemu)/status | grep VmRSS
 
 # Check EPT is active
-grep ept /sys/module/kvm_intel/parameters/
-# ept:Y   (or N if disabled)
+cat /sys/module/kvm_intel/parameters/ept
+# Y   (or N if disabled)
 
 # Force EPT off for testing (requires shadow paging fallback)
 modprobe kvm_intel ept=0
@@ -359,10 +409,10 @@ Live migration must transfer guest memory to the destination. KVM's dirty loggin
 /* Enable dirty logging on a memory slot: */
 struct kvm_dirty_log {
     __u32 slot;
-    __u32 padding;
+    __u32 padding1;
     union {
         void __user *dirty_bitmap; /* userspace buffer for dirty bits */
-        __u64 padding;
+        __u64 padding2;
     };
 };
 
@@ -389,7 +439,7 @@ ioctl(vm_fd, KVM_GET_DIRTY_LOG, &dirty);
 
 The EPT hardware's dirty bit (EPT PTE bit 9) is cleared when KVM resets the bitmap. Next write access causes an EPT violation → KVM marks page dirty and re-enables the dirty bit.
 
-### KVM_DIRTY_LOG_PROTECT_2
+### KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2
 
 A two-phase protocol for very large VMs that avoids races:
 
@@ -439,7 +489,7 @@ cat /sys/kernel/mm/ksm/pages_unshared   # not mergeable
 ### Related pages
 
 - [KVM Architecture](kvm-arch.md) — /dev/kvm API, vCPU run loop
-- [virtio](virtio.md) — paravirtual I/O, balloon transport
+- [virtio](virtio.md) — paravirtual I/O: virtqueues, virtio-net, virtio-blk
 - [VFIO](vfio.md) — direct device passthrough to VMs
 - [KVM Live Migration](live-migration.md) — how dirty-bitmap and dirty-ring tracking drive the pre-copy migration loop
 - [Memory Management: page tables](../mm/page-tables.md) — host-side page tables
