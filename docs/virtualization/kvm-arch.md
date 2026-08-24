@@ -175,6 +175,11 @@ struct kvm_vcpu {
 /* arch/x86/kvm/x86.c: vcpu_enter_guest(), simplified */
 static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
+    fastpath_t exit_fastpath;
+    u64 run_flags = 0;   /* built up earlier from pending-exit, debug-register,
+                          * and debugctl state; omitted here */
+    int r;
+
     /* Process any pending work before entering guest */
     if (kvm_check_request(KVM_REQ_TLB_FLUSH, vcpu))
         kvm_vcpu_flush_tlb_all(vcpu);
