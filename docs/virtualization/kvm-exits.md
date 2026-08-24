@@ -95,8 +95,10 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu,
     struct vcpu_vmx *vmx = to_vmx(vcpu);
     union vmx_exit_reason exit_reason = vmx_get_exit_reason(vcpu);
 
-    /* If guest state is invalid (e.g. after a bad VM entry), emulate
-     * instead of dispatching through the table below: */
+    /* If guest state can't run natively in VMX non-root mode (the
+     * common case: real-mode/16-bit code, e.g. BIOS, on hardware
+     * without "unrestricted guest" support), fully emulate instead of
+     * dispatching through the table below: */
     if (vmx->vt.emulation_required)
         return handle_invalid_guest_state(vcpu);
 
