@@ -132,7 +132,7 @@ ioctl(vcpu_fd, KVM_SET_REGS, &regs);
 
 /* Segment registers, control registers, descriptor tables */
 struct kvm_sregs sregs;
-ioctl(vcpu_fd, KVM_GET_SREGS, &sregs);   /* cr0, cr3, cr4, cs, ss, gdtr, ... */
+ioctl(vcpu_fd, KVM_GET_SREGS, &sregs);   /* cr0, cr3, cr4, cs, ss, gdt, ... */
 ioctl(vcpu_fd, KVM_SET_SREGS, &sregs);
 
 /* Model-specific registers (MSRs) */
