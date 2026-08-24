@@ -144,7 +144,8 @@ struct kvm {
 
 struct kvm_vcpu {
     struct kvm          *kvm;
-    int                  cpu;         /* physical CPU this vCPU ran on last */
+    int                  cpu;         /* physical CPU currently loaded on;
+                                          -1 if not loaded (see vcpu_load()/vcpu_put()) */
     int                  vcpu_id;     /* id given by userspace at creation */
     int                  vcpu_idx;    /* index into kvm->vcpu_array */
 
