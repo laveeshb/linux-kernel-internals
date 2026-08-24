@@ -193,7 +193,7 @@ struct kvm_memory_slot {
 ```
 
 A slot can be:
-- **Normal RAM**: backed by `mmap(MAP_ANONYMOUS)` memory in QEMU
+- **Normal RAM**: backed by `mmap(MAP_ANONYMOUS)` memory in the VMM (e.g. QEMU)
 - **ROM**: read-only (bios, option ROM)
 - **MMIO**: no backing — triggers `KVM_EXIT_MMIO` on access
 
