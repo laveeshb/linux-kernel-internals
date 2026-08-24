@@ -60,7 +60,7 @@ ioctl(vm_fd, KVM_GET_DIRTY_LOG, &dirty_log);
    KVM also clears all dirty bits and re-write-protects the pages. */
 ```
 
-`KVM_CLEAR_DIRTY_LOG` (added in kernel 5.4) clears dirty bits for a specific range of pages rather than the entire slot, reducing the number of EPT write-protection flushes during iterative pre-copy:
+`KVM_CLEAR_DIRTY_LOG` (added in kernel 5.0) clears dirty bits for a specific range of pages rather than the entire slot, reducing the number of EPT write-protection flushes during iterative pre-copy:
 
 ```c
 struct kvm_clear_dirty_log clear = {
@@ -114,7 +114,7 @@ Each round sends fewer pages — the guest's working set converges. QEMU tracks:
 
 Pre-copy ends when the estimated remaining transfer time drops below the target downtime (default 300 ms in QEMU's `migrate_set_parameter max-bandwidth`).
 
-**Auto-converge**: if the dirty rate stays high and convergence is not happening, QEMU throttles the vCPUs by injecting `usleep()` calls in the vCPU threads (controlled by the `throttle-trigger-threshold` and `cpu-throttle-increment` migration parameters, implemented in QEMU userspace) to slow the guest's write rate. This ensures migration completes at the cost of temporary guest performance degradation.
+**Auto-converge**: if the dirty rate stays high and convergence is not happening, `mig_throttle_guest_down()` (in `migration/ram.c`) calls `cpu_throttle_set()` to periodically stall the vCPU threads, ramping the throttle percentage up by `cpu-throttle-increment` each time the `throttle-trigger-threshold` ratio is exceeded, up to `max-cpu-throttle`. This ensures migration completes at the cost of temporary guest performance degradation.
 
 ### Phase 2: Stop-and-copy
 
@@ -166,14 +166,19 @@ ioctl(vcpu_fd, KVM_SET_LAPIC, &lapic);
 QEMU serializes device state using its VMState framework. Each device registers a `VMStateDescription`:
 
 ```c
-/* Example: hw/net/e1000.c (simplified) */
+/* hw/net/e1000.c, simplified — the real list has ~50 individual mac_reg[REG]
+ * entries (not one array macro) plus several .subsections; no RX-buffer
+ * content is migrated at all, only registers/config: */
 static const VMStateDescription vmstate_e1000 = {
     .name    = "e1000",
     .version_id = 2,
-    .fields  = (VMStateField[]) {
-        VMSTATE_UINT32_ARRAY(mac_reg, E1000State, MAC_REG_NUM),
+    .minimum_version_id = 1,
+    .fields  = (const VMStateField[]) {
+        VMSTATE_PCI_DEVICE(parent_obj, E1000State),
+        VMSTATE_UINT32(mac_reg[CTRL], E1000State),
+        VMSTATE_UINT32(mac_reg[STATUS], E1000State),
+        /* ... one VMSTATE_UINT32(mac_reg[REG], ...) per register ... */
         VMSTATE_UINT16_ARRAY(eeprom_data, E1000State, 64),
-        VMSTATE_BUFFER(rx_buf, E1000State),
         VMSTATE_END_OF_LIST()
     },
 };
@@ -195,7 +200,7 @@ ioctl(vhost_fd, VHOST_GET_VRING_BASE, &state);
 ioctl(vhost_fd, VHOST_SET_VRING_BASE, &state);
 ```
 
-For virtio devices backed by QEMU (not vhost), the virtqueue state is captured through the `struct virtio_device` VMState chain, which includes the last seen `avail_idx` and `used_idx`.
+For virtio devices backed by QEMU (not vhost), the virtqueue state is captured through QEMU's own `struct VirtQueue` (not the Linux kernel's `struct virtio_device`, which is a driver-side type in an entirely different codebase) via `vmstate_virtqueue` in `hw/virtio/virtio.c`, which includes `last_avail_idx` and `used_idx`.
 
 ## Post-copy migration
 
@@ -247,7 +252,7 @@ QEMU supports several transport channels:
 | multifd | Parallel TCP streams (`migrate_set_parameter multifd-channels N`); saturates high-bandwidth links |
 | Unix socket | Same-host testing |
 
-**multifd** (multiple file descriptors, added in QEMU 3.0) opens N parallel channels and assigns pages to channels in round-robin. With 8 channels on a 25 Gbps link, it can saturate bandwidth that a single TCP stream cannot due to per-stream throughput limits.
+**multifd** (multiple file descriptors) opens N parallel channels and assigns pages to channels in round-robin. Added as an experimental feature (`x-multifd-channels`) in QEMU 2.11, it stabilized — dropping the `x-` prefix, renamed to `multifd-channels` — in QEMU 4.0. With 8 channels on a 25 Gbps link, it can saturate bandwidth that a single TCP stream cannot due to per-stream throughput limits.
 
 ## Observing migration
 
@@ -267,8 +272,12 @@ QEMU supports several transport channels:
 echo 1 > /sys/kernel/tracing/events/kvm/kvm_dirty_ring_push/enable
 echo 1 > /sys/kernel/tracing/events/kvm/kvm_dirty_ring_reset/enable
 
-# Monitor EPT violation rate during migration (should spike then drop)
-watch -n1 'cat /sys/kernel/debug/kvm/*/exits | grep -A1 "EPT"'
+# Monitor per-vCPU page-fault rate during migration (should spike then
+# drop as dirty-tracking write-protection faults fire, then converge) —
+# no dedicated per-exit-type breakdown exists in a single debugfs file,
+# so watch the raw counter and use the perf command below for the
+# EPT_VIOLATION-specific view:
+watch -n1 'cat /sys/kernel/debug/kvm/*/vcpu0/pf_taken'
 
 # perf: watch for extra EPT violations from write-protection faults
 perf kvm stat report --event EPT_VIOLATION
