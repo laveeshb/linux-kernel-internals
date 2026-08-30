@@ -260,13 +260,23 @@ QEMU supports several transport channels:
 # QEMU monitor: start migration
 (qemu) migrate tcp:192.168.1.2:4444
 
-# Check migration status
+# Check migration status (real hmp_info_migrate output format)
 (qemu) info migrate
-# Migration status: active
-# total time: 4321 ms
-# ram: transferred 1234 MB, remaining 56 MB, total 4096 MB
-# dirty pages rate: 12300 pages/s
-# downtime limit: 300 ms
+# Status: 		active
+# Time (ms): 		total=4321
+# Remaining: 		56 MiB
+# RAM info:
+#   Throughput (Mbps): 	120.50
+#   Sizes: 		pagesize=4 KiB, total=4096 MiB
+#   Transfers: 		transferred=1234 MiB, remain=56 MiB
+#     Channels: 		precopy=1234 MiB, multifd=0 MiB, postcopy=0 MiB
+#     Page Types: 	normal=316000, zero=1500
+#   Page Rates (pps): 	transfer=45000, dirty=12300
+#   Others: 		dirty_syncs=8
+
+# The configured downtime target is a separate query:
+(qemu) info migrate_parameters
+# downtime-limit: 300 ms
 
 # On the source kernel: dirty log tracepoints
 echo 1 > /sys/kernel/tracing/events/kvm/kvm_dirty_ring_push/enable
