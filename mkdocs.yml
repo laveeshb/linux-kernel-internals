@@ -78,6 +78,7 @@ nav:
     - categories/foundations.md
     - Background:
       - Linux Evolution: linux-evolution.md
+      - Hardware Evolution: hardware-evolution.md
     - Kernel Internals:
       - Getting Started: kernel/README.md
       - printk and Kernel Logging: kernel/printk.md

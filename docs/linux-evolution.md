@@ -277,6 +277,8 @@ Starting with drivers, expanding gradually.
 | `RISC-V` | 2017 (v4.15) | Open ISA, clean slate |
 | Apple Silicon | 2021 | Reverse-engineered drivers |
 
+CPU architectures are only part of the story — buses, network hardware, and board designs each forced their own kernel rework as they changed shape. See [Hardware Evolution](hardware-evolution.md) for that history: PCI's shift to hotplug, Ethernet's NAPI, WiFi's mac80211, and the 2011 push to Device Tree.
+
 ---
 
 ## Governance Evolution
