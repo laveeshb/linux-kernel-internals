@@ -321,9 +321,9 @@ QEMU migration is userspace code; per site policy these link to QEMU's own canon
 ### Related pages
 
 - [KVM Architecture](kvm-arch.md) — KVM ioctls, `struct kvm_run`, vCPU lifecycle
-- [KVM Exit Handling](kvm-exits.md) — EPT violations, dirty page tracking mechanics
+- [KVM Exit Handling](kvm-exits.md) — EPT violations and exit-reason dispatch
 - [Nested Virtualization](nested-virt.md) — `KVM_GET_NESTED_STATE` for migrating L1 hypervisors
-- [Memory Virtualization](kvm-memory.md) — EPT/NPT, MMU notifiers
+- [Memory Virtualization](kvm-memory.md) — EPT/NPT, dirty page tracking, the balloon driver
 
 ### LWN articles
 
