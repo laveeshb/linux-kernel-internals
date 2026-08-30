@@ -14,7 +14,7 @@ Documentation spanning every major subsystem, with sourced citations (kernel com
 | Memory | [Memory management](docs/mm/) (allocators, reclaim, MGLRU, DAMON, CXL tiering, folios, THP…) · [IOMMU](docs/iommu/) |
 | Scheduling & concurrency | [Scheduler](docs/sched/) (EEVDF, deadline, EAS…) · [Locking & RCU](docs/locking/) · [Interrupts](docs/interrupts/) · [IPC](docs/ipc/) |
 | Storage & I/O | [VFS](docs/vfs/) · [Filesystems](docs/filesystems/) · [Block layer](docs/block/) · [I/O paths](docs/io/) · [io_uring](docs/io-uring/) |
-| Devices & drivers | [Device drivers](docs/drivers/) · [USB](docs/usb/) · [GPU/DRM](docs/drm/) |
+| Devices & drivers | [Device drivers](docs/drivers/) · [USB](docs/usb/) · [GPU/DRM](docs/drm/) · [Sound/ALSA](docs/alsa/) · [Input/HID](docs/input/) · [TTY/serial](docs/tty/) |
 | Networking & BPF | [Network stack](docs/net/) (XDP, AF_XDP, kTLS, netfilter, namespaces…) · [BPF/eBPF](docs/bpf/) |
 | Isolation & security | [Security](docs/security/) (SELinux, Landlock, seccomp…) · [Cgroups & namespaces](docs/cgroups/) · [Virtualization/KVM](docs/virtualization/) · [Crypto](docs/crypto/) · [Livepatch](docs/livepatch/) |
 | Observability | [Tracing](docs/tracing/) · [Debugging](docs/debugging/) · [Power management](docs/power/) |
