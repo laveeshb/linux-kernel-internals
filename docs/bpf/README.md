@@ -67,6 +67,7 @@ Scheduler          → sched_ext (BPF-defined schedulers, 6.12+)
 ```
 
 **Key kernel files:**
+
 - `kernel/bpf/verifier.c` — safety checker
 - `kernel/bpf/core.c` — interpreter and JIT glue
 - `kernel/bpf/syscall.c` — bpf() syscall implementation

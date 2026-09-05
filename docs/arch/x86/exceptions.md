@@ -109,6 +109,7 @@ Hardware actions (automatic, before any software):
 ```
 
 For ring-0 → ring-0 exceptions (kernel taking a fault):
+
 - No stack switch (stays on current kernel stack)
 - On x86-64, SS/RSP are **always** pushed even for same-privilege exceptions (unlike 32-bit x86)
 - Still pushes SS/RSP/RFLAGS/CS/RIP and error code (if applicable)
@@ -435,6 +436,7 @@ DEFINE_IDTENTRY_NMI(exc_nmi)
 ```
 
 NMIs are used for:
+
 - Hardware errors (MCE, watchdog)
 - Perf PMU overflow interrupts (PEBS/LBR)
 - kdump NMI shootdown (crash on one CPU, NMI all others)

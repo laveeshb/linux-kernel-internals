@@ -126,6 +126,7 @@ struct dentry {
 ```
 
 Key distinction:
+
 - **Positive dentry**: `d_inode != NULL` — the name exists in the filesystem
 - **Negative dentry**: `d_inode == NULL` — the name was looked up but doesn't exist (cached to avoid repeated failed lookups)
 

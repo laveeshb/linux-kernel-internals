@@ -62,7 +62,6 @@ Why have both? Because `memory.high` creates back-pressure. Instead of running a
 These knobs work in the opposite direction. Instead of limiting how much memory a cgroup can use, they guarantee how much it gets to keep during system-wide memory pressure.
 
 - **`memory.low`**: Best-effort protection. Memory below this threshold won't be reclaimed unless there is no other reclaimable memory anywhere in the system. Think of it as "please don't take this memory unless you absolutely have to."
-
 - **`memory.min`**: Hard protection. Memory below this threshold is never reclaimed, period. Even under extreme pressure, the kernel will OOM-kill other things rather than reclaim this cgroup's protected memory.
 
 ```bash

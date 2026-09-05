@@ -5,6 +5,7 @@
 ## The problem with synchronous I/O
 
 Synchronous `read()`/`write()` block the calling thread until data is transferred. For high-throughput servers this means either:
+
 - Many threads (each blocking on I/O) — high memory cost, context switch overhead
 - Non-blocking I/O with `epoll` — works for sockets, but **epoll does not work for regular files** (they are always "ready")
 
@@ -46,6 +47,7 @@ aio_suspend(list, 1, NULL);
 ```
 
 **The problem**: glibc implements POSIX AIO using a thread pool. Each `aio_read()` submits work to a worker thread that calls `pread()` synchronously. This adds:
+
 - Thread creation/teardown overhead
 - Memory per thread (stack)
 - Context switches to the worker thread and back

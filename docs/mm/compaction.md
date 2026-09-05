@@ -38,6 +38,7 @@ After running for days/weeks, a system may have plenty of free memory but no con
 ### Before Compaction
 
 Prior to compaction, high-order allocation failures were common:
+
 - THP couldn't allocate 2MB pages
 - DMA buffers failed
 - Network jumbo frames unavailable
@@ -112,6 +113,7 @@ ps aux | grep kcompactd
 ```
 
 Woken when:
+
 - Watermarks indicate fragmentation
 - High-order allocations are failing
 - Explicitly triggered
@@ -237,6 +239,7 @@ Processes blocked waiting for compaction.
 **Symptoms**: Latency spikes, high `compact_stall` count
 
 **Solutions**:
+
 - Enable proactive compaction
 - Tune `compaction_proactiveness`
 - Reduce high-order allocations
@@ -248,10 +251,12 @@ Can't create contiguous regions.
 **Symptoms**: High `compact_fail`, THP allocation failures
 
 **Causes**:
+
 - Too many unmovable pages
 - Severe fragmentation
 
 **Solutions**:
+
 - Reduce kernel memory usage
 - Increase movable zone size
 - Consider memory hotplug for isolation
@@ -263,6 +268,7 @@ Background compaction consuming CPU.
 **Debug**: `top`, `perf top`
 
 **Solutions**:
+
 - Reduce `compaction_proactiveness`
 - Accept more direct compaction instead
 

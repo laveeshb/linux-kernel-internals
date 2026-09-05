@@ -209,6 +209,7 @@ BPF program is too large. Processed 1000001 insn
 ```
 
 Strategies to reduce complexity:
+
 - Use `__always_inline` to inline helper functions (reduces call sites)
 - Split into tail calls (each program has its own limit)
 - Use `bpf_loop()` instead of unrolled loops
@@ -247,12 +248,14 @@ Sample verifier output for a type error:
 ## Privileged vs unprivileged BPF
 
 Unprivileged BPF (`CAP_BPF` not set) is heavily restricted:
+
 - Only `BPF_PROG_TYPE_SOCKET_FILTER` and `BPF_PROG_TYPE_CGROUP_SKB`
 - No pointer arithmetic beyond map value access
 - JIT hardening: constant blinding (prevents JIT spraying attacks)
 - Verifier enforces stricter rules
 
 Privileged BPF requires:
+
 - `CAP_BPF` (since 5.8, split from `CAP_SYS_ADMIN`)
 - `CAP_PERFMON` for tracing programs
 - `CAP_NET_ADMIN` for XDP and TC programs

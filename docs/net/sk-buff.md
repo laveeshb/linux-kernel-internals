@@ -226,6 +226,7 @@ Early sk_buff implementations stored packet data in a single contiguous `kmalloc
 A NIC with scatter-gather can DMA-write a received packet into non-contiguous physical pages — the payload goes into page cache pages, the header goes into a small slab allocation. Copying everything into one contiguous buffer would waste memory and CPU cycles. The kernel needed a representation that could hold both.
 
 The solution was the linear + fragment model:
+
 - The **linear portion** (`head`…`tail`) holds packet headers — small, always contiguous, fast to access.
 - The **paged fragments** (`skb_shinfo(skb)->frags[]`) hold payload — large, may be non-contiguous pages that came directly from DMA.
 

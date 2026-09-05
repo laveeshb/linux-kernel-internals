@@ -14,6 +14,7 @@ write(pipefd[1], data)  →  pipe buffer  →  read(pipefd[0], buf)
 ```
 
 Properties:
+
 - **Unidirectional**: data flows write→read only
 - **Byte stream**: no message boundaries
 - **Blocking**: write blocks if full, read blocks if empty
@@ -218,6 +219,7 @@ int fd = open("/tmp/myfifo", O_RDONLY);
 ```
 
 Opening rules:
+
 - Read-only open blocks until a writer opens (unless `O_NONBLOCK`)
 - Write-only open blocks until a reader opens (unless `O_NONBLOCK`, returns `ENXIO`)
 - Read-write open never blocks

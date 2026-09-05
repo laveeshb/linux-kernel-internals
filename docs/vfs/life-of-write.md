@@ -177,6 +177,7 @@ void wb_workfn(struct bdi_writeback *wb)
 ```
 
 Writeback is triggered by:
+
 - **Time**: after `dirty_expire_centisecs` (default 3000 = 30 seconds)
 - **Memory pressure**: when dirty pages exceed `dirty_ratio` (default 20% of RAM)
 - **fsync()**: explicit flush by the application

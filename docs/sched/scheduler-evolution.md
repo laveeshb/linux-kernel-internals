@@ -7,6 +7,7 @@
 The kernel must answer one question thousands of times per second: **which task should run next?**
 
 The answer must be:
+
 - **Fair** — no task should starve
 - **Fast** — picking a task must be cheap
 - **Responsive** — interactive tasks need low latency
@@ -200,6 +201,7 @@ This distinction matters for latency. A task that wakes up after sleeping has a 
 ### Eligibility and virtual deadlines
 
 Each task has:
+
 - `vruntime` — virtual time consumed (same as CFS)
 - `deadline` — virtual time by which it must run
 - `slice` — requested time slice

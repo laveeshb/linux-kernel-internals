@@ -147,6 +147,7 @@ static enum hrtimer_restart dl_task_timer(struct hrtimer *timer)
 ```
 
 `replenish_dl_entity()` sets:
+
 - `dl_se->runtime = dl_se->dl_runtime` (full budget restored)
 - `dl_se->deadline += dl_se->dl_period` (absolute deadline advanced)
 

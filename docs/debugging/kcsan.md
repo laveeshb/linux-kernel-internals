@@ -70,6 +70,7 @@ CPU: 1 PID: 5678 Comm: worker Tainted: G    B W
 ```
 
 Key fields:
+
 - **read/write**: which operation triggered the watchpoint
 - **address**: the racing memory location
 - **value changed**: shows the write that caused the race

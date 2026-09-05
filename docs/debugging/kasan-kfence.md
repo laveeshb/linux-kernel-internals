@@ -284,6 +284,7 @@ CPU: 0 PID: 1 Comm: swapper Not tainted 6.8.0 #1
 ```
 
 Key fields:
+
 - **kfence-#42** — the KFENCE slot number
 - **0xffff888080a3c000-0xffff888080a3c006** — the object address range (7 bytes)
 - **1B left of kfence-#42** — the overrun distance

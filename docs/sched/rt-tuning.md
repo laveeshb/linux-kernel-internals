@@ -5,6 +5,7 @@
 ## What "real-time" means on Linux
 
 A real-time system guarantees a **worst-case response time** — not just average latency. Linux with PREEMPT_RT can achieve:
+
 - `cyclictest` worst-case latency: **10-100µs** (vs 1-100ms without RT) — see [PREEMPT_RT latency benchmarks](https://wiki.linuxfoundation.org/realtime/documentation/howto/tools/cyclictest/start)
 - Suitable for: audio processing, industrial control, motor drives, trading systems
 

@@ -5,6 +5,7 @@
 ## Why ARM64?
 
 ARM64 (AArch64) is the dominant architecture for:
+
 - Mobile (Android, iOS)
 - Embedded and IoT (Raspberry Pi, NXP, TI)
 - Servers (AWS Graviton, Ampere Altra)

@@ -5,6 +5,7 @@
 ## eventfd: a counter you can poll
 
 `eventfd` creates a file descriptor backed by a kernel counter. It's used for:
+
 - Event notification between threads or processes
 - Waking up `epoll`/`select`/`poll` from another context
 - Counting occurrences (semaphore-like, but pollable)

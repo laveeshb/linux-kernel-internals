@@ -7,6 +7,7 @@
 `AF_PACKET` sockets give userspace direct access to the network device's frame layer (Layer 2). Applications receive raw Ethernet frames (including headers) before the kernel's network stack processes them.
 
 Used by:
+
 - `tcpdump` and `Wireshark` — packet capture
 - `arping`, `arpwatch` — ARP utilities
 - Network boot agents (DHCP, PXE)

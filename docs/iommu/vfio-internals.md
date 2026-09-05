@@ -7,6 +7,7 @@
 VFIO (Virtual Function I/O) is the kernel framework for safely exposing physical devices to userspace processes or virtual machines. It uses the IOMMU to enforce memory access isolation while giving the userspace driver (or hypervisor) direct access to device MMIO, interrupts, and DMA.
 
 The three primary use cases are:
+
 - **VM device passthrough**: QEMU/KVM passes a physical NIC, GPU, or NVMe to a guest.
 - **Userspace drivers**: DPDK binds NICs to VFIO for kernel-bypass packet processing.
 - **Mediated devices**: A physical GPU or NIC is split into virtual instances assigned to separate VMs.
@@ -110,6 +111,7 @@ The `pin_user_pages_remote()` call (introduced in kernel 5.6 to replace `get_use
 ### The DMA map rb-tree
 
 All active DMA mappings are tracked in a red-black tree, keyed and searched for overlap by IOVA (`vfio_find_dma()`) — not a radix tree or the kernel's interval-tree API. This allows the kernel to:
+
 - Detect and reject overlapping `MAP_DMA` requests.
 - Enumerate all mappings for cleanup when a group is removed.
 - Implement `VFIO_IOMMU_UNMAP_DMA` by looking up and removing entries.

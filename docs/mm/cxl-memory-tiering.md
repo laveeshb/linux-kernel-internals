@@ -98,6 +98,7 @@ memory_tier2 (slowest) → node 2  (CXL/PMEM)
 ```
 
 The demotion paths would be:
+
 - node 1 (HBM) → node 0 (DRAM)
 - node 0 (DRAM) → node 2 (CXL)
 - node 2 (CXL) → nowhere (terminal)

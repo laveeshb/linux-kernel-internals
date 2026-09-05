@@ -5,6 +5,7 @@
 ## Overview
 
 fscrypt provides **per-directory** transparent encryption at the VFS layer. Unlike dm-crypt (full disk), fscrypt encrypts individual files and directories, allowing:
+
 - Multiple users to have separate encrypted directories with different keys
 - Selective encryption (not all files need to be encrypted)
 - Fast key revocation (remove key → files become inaccessible)
@@ -36,6 +37,7 @@ Master key (256-bit, type: ext4/logon)
 ```
 
 Each encrypted directory has a **policy** that records:
+
 - Which master key to use (by key descriptor or key identifier)
 - Which encryption mode (AES-256-XTS for contents, AES-256-CTS for filenames)
 - Key derivation version (v1 trusted keyring, v2 HKDF)

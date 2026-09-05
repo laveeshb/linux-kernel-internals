@@ -210,7 +210,6 @@ The kernel's early DT scanning code (`early_init_dt_scan_memory()` in [`drivers/
 On ACPI systems, the firmware provides memory maps through different mechanisms:
 
 - **x86**: The BIOS/UEFI provides an **e820 memory map** -- a table of address ranges with types (usable, reserved, ACPI reclaimable, etc.). The function `e820__memblock_setup()` in [`arch/x86/kernel/e820.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/e820.c) translates e820 entries into `memblock_add()` and `memblock_reserve()` calls.
-
 - **ARM64 with ACPI**: Uses EFI memory map entries, processed by `efi_init()`.
 
 ### The Pattern

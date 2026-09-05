@@ -197,6 +197,7 @@ On **AMD** processors the `#GP` is delivered before the CPU reaches that exploit
 ### Discovery and impact
 
 Here is the twist that makes this a good war story: **Linux had already fixed this exact bug in 2006.** Linux hit the non-canonical-`SYSRET` hole on early Intel EM64T CPUs and closed it in **2.6.16.5** (CVE-2006-0744) — the fault-on-the-user-stack-with-wrong-GS problem, described there in almost the same words. Six years later, Rafal Wojtczuk found that everyone who *hadn't* copied Linux's fix was still exposed, and disclosed it as CVE-2012-0217 (June 2012). Because `SYSRET` is subtle enough that each kernel got it wrong independently, it hit a broad set of systems — all **running on Intel CPUs**:
+
 - Xen PV guests on Intel hosts (the Xen `SYSRET` path) — a guest → hypervisor escape
 - FreeBSD, NetBSD, Oracle Solaris / illumos, and Microsoft Windows (7 / Server 2008 R2)
 - **Linux was *not* affected in 2012** — it had been fixed since 2006
@@ -330,6 +331,7 @@ JIT compilers are a special case in the mitigation story. The compiler-based mit
 PCID (Process-Context Identifiers) was introduced in Intel Sandy Bridge (2011) and allows the TLB to cache entries tagged with a process identifier, avoiding full TLB flushes on context switches. The KPTI PCID optimization (Linux 4.15) uses PCID to reduce the overhead of the dual-PGD CR3 switches required for Meltdown mitigation.
 
 The `INVPCID` instruction (Invalidate Process-Context Identifier) allows selective TLB invalidation by PCID. It is required for the full KPTI+PCID optimization because:
+
 - Without INVPCID, flushing a specific PCID requires loading CR3 with the no-flush bit cleared, which is a broader operation
 - With INVPCID, you can invalidate exactly the entries you need
 

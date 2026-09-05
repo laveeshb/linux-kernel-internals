@@ -7,6 +7,7 @@
 The Linux Security Module framework (introduced in Linux 2.6.0, December 2003) provides a set of hooks throughout the kernel where security modules can enforce additional access controls beyond standard DAC. Designed by Crispin Cowan (WireX) with NSA, SGI, and others — presented at USENIX Security 2002: ["Linux Security Modules: General Security Support for the Linux Kernel"](https://www.usenix.org/conference/11th-usenix-security-symposium/linux-security-modules-general-security-support-linux). Kernel docs: [security/lsm.html](https://www.kernel.org/doc/html/latest/security/lsm.html).
 
 LSM hooks are called at security-critical points:
+
 - File open/read/write/execute
 - Network socket creation and connections
 - Process creation and credential changes

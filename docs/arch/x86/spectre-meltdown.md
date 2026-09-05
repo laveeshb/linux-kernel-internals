@@ -293,6 +293,7 @@ cat /sys/devices/system/cpu/vulnerabilities/spec_store_bypass
 MDS is a family of vulnerabilities that allow leaking data from CPU internal buffers (line fill buffer, store buffer, load ports) to an attacker on the same physical CPU core.
 
 Variants:
+
 - **MFBDS** (CVE-2018-12130): Microarchitectural Fill Buffer Data Sampling (ZombieLoad)
 - **MLPDS** (CVE-2018-12127): Microarchitectural Load Port Data Sampling
 - **MSBDS** (CVE-2018-12126): Microarchitectural Store Buffer Data Sampling (Fallout)
@@ -348,6 +349,7 @@ The mitigations impose measurable overhead, concentrated in syscall-heavy and co
 | Spectre v4 | SSBD | 2–8% when enabled per-thread; negligible when off |
 
 Workload-specific impact:
+
 - **Database servers (PostgreSQL, MySQL)**: high syscall rate → KPTI and IBPB have the most impact
 - **Web servers (nginx, Apache)**: moderate syscall rate; retpoline overhead visible
 - **HPC / batch compute**: mostly user-space computation; mitigations largely invisible

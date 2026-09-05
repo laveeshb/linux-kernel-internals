@@ -5,6 +5,7 @@
 ## Why load balancing is hard
 
 Load balancing must trade off:
+
 - **Throughput**: spread tasks evenly to use all CPUs
 - **Cache affinity**: a task recently on CPU A has hot cache — migrating it to B is expensive
 - **NUMA locality**: migrating across NUMA nodes is more expensive than across cores

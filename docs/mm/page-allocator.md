@@ -290,6 +290,7 @@ cat /proc/pagetypeinfo
 Large contiguous allocations (order > 3) can fail due to fragmentation even with free memory.
 
 **Solutions**:
+
 - Use `__GFP_RETRY_MAYFAIL` to try harder
 - Use vmalloc instead (virtual contiguity)
 - Enable compaction (`/proc/sys/vm/compact_memory`)

@@ -7,6 +7,7 @@
 The Virtual Filesystem Switch (VFS) is an abstraction layer that allows the kernel to support many different filesystems (ext4, btrfs, tmpfs, procfs, NFS...) through a common interface. When your program calls `read()`, it goes through VFS, which dispatches to the appropriate filesystem implementation.
 
 VFS makes the following possible:
+
 - A single `open()`, `read()`, `write()` API works for ext4, NFS, /proc, /sys, pipes, and sockets
 - Files can be accessed across mounted filesystems transparently
 - Filesystems can be developed as kernel modules

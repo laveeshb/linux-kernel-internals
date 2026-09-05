@@ -125,6 +125,7 @@ struct ext4_extent_header {
 ```
 
 Benefits over old indirect maps:
+
 - A single extent covers contiguous blocks (e.g., 128MB in one entry)
 - Sequential reads are contiguous on disk → fast
 - Reduces inode tree depth for large files
@@ -221,6 +222,7 @@ ext4_writepages()
 ```
 
 Benefits:
+
 - Small writes that are quickly deleted never need block allocation
 - Large sequential writes get contiguous blocks (better for extent efficiency)
 - Reduces journal pressure (allocations batched)

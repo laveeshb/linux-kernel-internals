@@ -171,11 +171,13 @@ cat /proc/sys/kernel/numa_balancing_scan_period_max_ms  # Max time between scans
 ### Trade-offs
 
 **Benefits**:
+
 - No application changes needed
 - Adapts to changing access patterns
 - Helps poorly-placed workloads
 
 **Costs**:
+
 - CPU overhead from fault handling
 - Migration overhead
 - Can fight with explicit policies
@@ -273,6 +275,7 @@ Allocations forced to remote nodes due to local exhaustion.
 **Symptoms**: High `numa_miss` in `/proc/vmstat`
 
 **Solutions**:
+
 - Balance workload memory across nodes
 - Use `MPOL_INTERLEAVE` for large allocations
 - Reserve memory on each node
@@ -284,6 +287,7 @@ Excessive migration and fault handling.
 **Symptoms**: High CPU in `task_numa_fault`, many page migrations
 
 **Solutions**:
+
 - Disable if workload has stable access patterns: `echo 0 > /proc/sys/kernel/numa_balancing`
 - Tune scan rates
 - Use explicit memory policies
@@ -295,6 +299,7 @@ One node exhausted while others have free memory.
 **Debug**: Check `/sys/devices/system/node/node*/meminfo`
 
 **Solutions**:
+
 - Use `MPOL_INTERLEAVE` for large allocations
 - Improve workload distribution
 

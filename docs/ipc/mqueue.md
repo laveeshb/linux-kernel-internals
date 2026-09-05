@@ -5,6 +5,7 @@
 ## Overview
 
 POSIX message queues (`mq_open`, `mq_send`, `mq_receive`) provide a message-passing IPC mechanism with:
+
 - **Priority ordering**: messages are dequeued highest-priority first
 - **Blocking and non-blocking**: readers block until a message arrives
 - **Async notification**: `mq_notify` delivers a signal or starts a thread when a message arrives

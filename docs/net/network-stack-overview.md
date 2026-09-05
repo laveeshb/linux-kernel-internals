@@ -139,6 +139,7 @@ The best way to understand the stack is to follow a packet:
 - [Life of a Packet (transmit)](life-of-packet-tx.md) — Application to wire
 
 Or start with the key structures:
+
 - [sk_buff](sk-buff.md) — The packet structure used everywhere
 - [Socket Layer Overview](socket-layer.md) — The socket/sock/proto hierarchy
 - [Network Device and NAPI](napi.md) — The receive hardware interface

@@ -5,6 +5,7 @@
 ## The periodic tick
 
 The kernel runs a periodic timer interrupt (the "tick") at a rate of `HZ` times per second. The tick drives:
+
 - Updating `jiffies` (coarse-grained time)
 - Updating process CPU time accounting
 - Checking if the current task should be preempted (`scheduler_tick`)
@@ -231,6 +232,7 @@ static bool can_stop_full_tick(int cpu, struct tick_sched *ts)
 ```
 
 NOHZ full CPUs receive a tick "kick" from CPU 0 when:
+
 - Another task is added to the run queue
 - RCU needs a quiescent state
 - Timers expire
@@ -260,6 +262,7 @@ DEFINE_PER_CPU(struct tick_device, tick_cpu_device);
 ```
 
 On x86:
+
 - BSP (boot CPU): uses TSC or HPET for the tick
 - Other CPUs: use the local APIC timer
 - All CPUs: can switch to one-shot mode (for NOHZ)

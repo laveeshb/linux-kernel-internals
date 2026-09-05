@@ -5,6 +5,7 @@
 ## Why walk page tables?
 
 The kernel needs to inspect or modify page table entries programmatically in many contexts:
+
 - **KVM**: scan guest memory to find dirty pages
 - **Migration**: find all PTEs mapping a page before moving it
 - **Debugging**: `ptdump` dumps page tables to `/sys/kernel/debug/kernel_page_tables`

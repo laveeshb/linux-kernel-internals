@@ -16,6 +16,7 @@ With IOMMU:
 ```
 
 Beyond security, the IOMMU enables:
+
 - **IOVA remapping**: devices with < 64-bit address buses can DMA to high memory
 - **Scatter-gather flattening**: discontiguous physical pages appear contiguous to the device
 - **Device passthrough (VFIO)**: safely assign physical devices to VMs

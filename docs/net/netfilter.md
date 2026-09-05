@@ -59,6 +59,7 @@ struct nf_hook_ops {
 ```
 
 Hook verdicts:
+
 - `NF_ACCEPT` — continue processing
 - `NF_DROP` — drop the packet
 - `NF_STOLEN` — hook took ownership (no further processing)
@@ -131,6 +132,7 @@ nft add rule inet myfilter input ip saddr @allowed_ips accept
 ## Connection tracking (conntrack)
 
 **Conntrack** is the stateful packet inspection layer. It tracks every connection through the kernel, enabling:
+
 - Stateful firewall rules (`-m state --state ESTABLISHED,RELATED`)
 - NAT (both DNAT and SNAT need to rewrite both directions)
 - Connection-aware applications (via NFQUEUE or nf_conntrack events)

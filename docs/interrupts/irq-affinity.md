@@ -5,6 +5,7 @@
 ## Why IRQ affinity matters
 
 By default, the kernel distributes interrupts across CPUs automatically (`irqbalance` daemon). For latency-sensitive or high-throughput workloads, manual affinity control lets you:
+
 - Dedicate CPUs to specific network queues (one queue per CPU)
 - Isolate real-time tasks from interrupt storms
 - Colocate IRQ handling with the NUMA node that owns the memory

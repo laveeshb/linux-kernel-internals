@@ -147,6 +147,7 @@ score = RSS + swap entries + page table pages
 | Adjustment | `oom_score_adj * totalpages / 1000` |
 
 Special cases:
+
 - `oom_score_adj = -1000`: process is immune (never selected)
 - `oom_score_adj = 1000`: adds `totalpages` to score (guaranteed victim)
 - Kernel threads and init (PID 1) are never killed

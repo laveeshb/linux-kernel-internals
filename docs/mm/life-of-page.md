@@ -137,6 +137,7 @@ flowchart LR
 ```
 
 The [`_mapcount`](https://lwn.net/Articles/974223/) tracks page table mappings specifically (see [`include/linux/mm.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mm.h)):
+
 - `-1`: Not mapped in any page table
 - `0`: Mapped in exactly one page table
 - `N`: Mapped in N+1 page tables (shared)
@@ -361,6 +362,7 @@ flowchart LR
 ```
 
 The page stays in swap cache until:
+
 - All processes have private copies (after COW)
 - Or the swap slot is needed
 
@@ -523,6 +525,7 @@ The `struct page` has grown and changed significantly over the years:
 **Author**: Matthew Wilcox (Oracle)
 
 Throughout the lifecycle above, you see `folio` instead of `page` in modern code:
+
 - **Stage 1**: `vma_alloc_zeroed_movable_folio()` allocates a folio
 - **Stage 4**: `shrink_folio_list()` processes folios during reclaim
 - **Why it matters**: A folio explicitly represents one or more contiguous pages as a unit, eliminating ambiguity about whether a function receives a head page, tail page, or single page
@@ -625,6 +628,7 @@ Pages must be properly added to and removed from LRU lists. Bugs in this code ca
 #### The bug class
 
 Common patterns:
+
 - Adding a page to LRU twice
 - Removing a page not on LRU
 - Racing between LRU add/remove and page free
@@ -636,6 +640,7 @@ From a [Red Hat bug report](https://access.redhat.com/solutions/5773601):
 #### Why it's hard
 
 LRU operations happen from multiple contexts:
+
 - Page allocation (add to LRU)
 - Page reclaim (remove from LRU)
 - Page migration (move between LRUs)
@@ -665,12 +670,14 @@ When reclaiming a page, the kernel must:
 3. Only then free the page
 
 If rmap is corrupted or incomplete:
+
 - PTEs point to freed pages → **use-after-free**
 - Pages can't be reclaimed → **memory leak**
 
 #### Historical example
 
 Early rmap implementations had scalability issues. A page mapped by 1000 processes required walking 1000 entries. This led to:
+
 - Long reclaim latencies
 - Lock contention
 - Livelock under pressure
@@ -696,6 +703,7 @@ From a kernel fix for `mm/hwpoison`:
 > *"After trying to drain pages from pagevec/pageset, the reference count of the page was not reduced if the page was still not on the LRU list."*
 
 Hwpoison must handle pages in various states:
+
 - On LRU, can be isolated normally
 - In pagevec (batched, not yet on LRU)
 - Being migrated
@@ -714,6 +722,7 @@ The fix adds `put_page()` to drop the page reference from `__get_any_page()` whe
 #### Why this matters
 
 Hardware errors are rare but when they occur:
+
 - Page must be isolated immediately
 - Processes mapping the page need `SIGBUS`
 - Page must never be reallocated

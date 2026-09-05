@@ -165,6 +165,7 @@ echo 100M > /sys/fs/cgroup/mygroup/memory.reclaim
 ```
 
 Useful for:
+
 - Pre-warming before load spike
 - Reducing memory before migration
 - Testing reclaim behavior
@@ -335,6 +336,7 @@ Container hit its `memory.max` limit.
 **Debug**: Check `memory.events` for `oom` count.
 
 **Solutions**:
+
 - Increase limit
 - Optimize application memory usage
 - Add swap and `memory.swap.max`
@@ -346,6 +348,7 @@ Memory being reclaimed during startup.
 **Debug**: Check `memory.pressure`
 
 **Solutions**:
+
 - Increase `memory.high`
 - Pre-warm with `memory.reclaim`
 - Check if limit is too low

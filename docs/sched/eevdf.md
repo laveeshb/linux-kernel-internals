@@ -17,6 +17,7 @@ EEVDF is based on the 1995 technical report ["Earliest Eligible Virtual Deadline
 It was implemented for Linux by Peter Zijlstra (Intel) and merged in kernel 6.6 (October 2023). **Patch series**: [lore.kernel.org, May 2023](https://lore.kernel.org/lkml/20230531115839.089944915@infradead.org/)
 
 **Commits**:
+
 - [`147f3efaa241`](https://git.kernel.org/linus/147f3efaa24182a21706bca15eab2f3f4630b5fe) — `sched/fair: Implement an EEVDF-like scheduling algorithm`
 - [`5e963f2bd465`](https://git.kernel.org/linus/5e963f2bd4654a202a8a05aa3a86cb0300b10e6c) — `sched/fair: Commit to EEVDF` (makes EEVDF unconditional in `pick_next_entity`)
 

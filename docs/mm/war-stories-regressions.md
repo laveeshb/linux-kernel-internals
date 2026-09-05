@@ -320,10 +320,12 @@ sysctl vm.page_cluster=5  # prefetch 32 pages
 ```
 
 Setting `vm.page_cluster=0` disables swap readahead entirely, reading exactly the page that faulted. This is appropriate for:
+
 - Systems with NVMe swap where random I/O latency is low
 - Workloads with random swap access patterns (many small independent processes)
 
 Higher values (3-5) are appropriate for:
+
 - Rotational disk swap where sequential I/O is much faster than random I/O
 - Single large processes being restored from swap
 

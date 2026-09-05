@@ -7,6 +7,7 @@
 CPU weight (shares) controls the *proportion* of CPU a group gets when the system is busy. Bandwidth control caps the *absolute* amount — a group set to 50% will be throttled to 50% even if the other 99% of CPU is idle.
 
 This matters for:
+
 - **Predictable latency**: Ensure a group never monopolizes the CPU
 - **Multi-tenant isolation**: Prevent one tenant from starving others
 - **Resource accounting**: Know exactly how much CPU a container is using
@@ -212,6 +213,7 @@ echo "200000 100000" > /sys/fs/cgroup/mygroup/cpu.max
 ## Bandwidth slice tuning
 
 The default 5ms slice is a trade-off between:
+
 - **Too small** (< 1ms): High lock contention on `cfs_b->lock`
 - **Too large** (> 10ms): CPU gets 10ms of budget it may never use; throttle response is slow
 

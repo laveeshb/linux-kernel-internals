@@ -109,6 +109,7 @@ QEMU on the source enables dirty logging, then repeatedly:
 3. Sends the newly-dirtied pages.
 
 Each round sends fewer pages — the guest's working set converges. QEMU tracks:
+
 - **Dirty rate**: pages dirtied per second by the guest.
 - **Bandwidth**: pages transferred per second to the destination.
 

@@ -11,6 +11,7 @@ Application → plaintext → OpenSSL encrypt → ciphertext → write() syscall
 ```
 
 This means:
+
 - Every TLS record copy: user buffer → kernel socket buffer
 - `sendfile()` doesn't work: data must pass through userspace for encryption
 - TLS offload to NIC requires kernel involvement anyway
@@ -22,6 +23,7 @@ Application → plaintext → write()/sendfile() → kernel TLS encrypt → NIC
 ```
 
 Benefits:
+
 - `sendfile()` works for TLS: zero-copy file → TLS → NIC
 - NIC TLS offload: kernel can push crypto to hardware
 - Lower CPU usage for TLS-heavy workloads (nginx, envoy)

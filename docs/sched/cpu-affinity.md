@@ -7,6 +7,7 @@
 CPU affinity lets a task (or an admin) restrict which CPUs a specific task may run on. Unlike cpuset — which applies to an entire cgroup — affinity is **per-task**.
 
 Common uses:
+
 - **Cache locality**: Pin a task to CPUs sharing an L3 cache
 - **Interrupt binding**: Keep a task on the same CPU as the NIC interrupt it processes
 - **Benchmarking**: Eliminate CPU-to-CPU variation by pinning to one core
@@ -103,6 +104,7 @@ taskset -p $PID            # effective: only 4-7 (cpuset intersection)
 ```
 
 The kernel stores both masks separately:
+
 - `user_cpus_ptr`: what the user asked for
 - `cpus_mask`: the intersection with cpuset (what's actually enforced)
 

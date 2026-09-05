@@ -5,11 +5,13 @@
 ## When to add a new syscall
 
 A new syscall is the right approach when:
+
 - Exposing a new kernel capability to userspace
 - The operation requires privilege or atomic semantics unavailable in userspace
 - It needs access to kernel-internal state
 
 Avoid adding syscalls for things that can be done via:
+
 - `ioctl` on an existing device/file (for device-specific operations)
 - `sysfs`/`procfs` (for configuration and observation)
 - Netlink (for networking-related configuration)
@@ -90,6 +92,7 @@ struct hello_args {
 ```
 
 Key rules for UAPI structs:
+
 - Use `__u8`, `__u16`, `__u32`, `__u64` (not `int`, `long`, etc.)
 - Add explicit padding (`__u32 pad`) for alignment — never rely on implicit struct holes
 - Use `__u64` for pointer-sized fields (enables compat with 32-bit userspace)

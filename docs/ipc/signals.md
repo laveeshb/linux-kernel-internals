@@ -144,6 +144,7 @@ static void my_handler(int sig, siginfo_t *info, void *ctx)
 ```
 
 Important flags:
+
 - `SA_SIGINFO` — use `sa_sigaction` (3-arg handler) instead of `sa_handler`
 - `SA_RESTART` — auto-restart interrupted syscalls (`EINTR` hidden from app)
 - `SA_NODEFER` — don't block the signal during its own handler (reentrant)
@@ -199,6 +200,7 @@ struct sigpending {
 ## Real-time signals
 
 Real-time signals (SIGRTMIN..SIGRTMAX) differ from standard signals:
+
 - **Queued**: multiple sends before delivery are all delivered (FIFO order)
 - **Value**: can carry an integer or pointer (via sigqueue + `si_value`)
 - **Priority**: lower signal number = higher priority within real-time range

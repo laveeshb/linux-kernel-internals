@@ -259,6 +259,7 @@ From the fix commit message:
 **Author**: John Hubbard (NVIDIA)
 
 Post-Dirty COW, the kernel needed a clean distinction between:
+
 - **get_user_pages()**: Short-term references (will be released quickly)
 - **pin_user_pages()**: Long-term pins for DMA (new FOLL_PIN flag)
 

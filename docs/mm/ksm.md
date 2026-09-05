@@ -47,6 +47,7 @@ With KSM: Shared pages reduce to ~8GB (varies by workload)
 ### Beyond VMs
 
 KSM also helps:
+
 - Containers with shared base images
 - Multiple instances of the same application
 - Fork-heavy workloads
@@ -76,10 +77,12 @@ ksmd loop:
 KSM uses two red-black trees:
 
 **Stable tree**: Contains merged (shared) pages
+
 - Pages already deduplicated
 - Searched first for matches
 
 **Unstable tree**: Contains candidate pages
+
 - Pages seen once, waiting for a match
 - Rebuilt each scan cycle
 
@@ -287,6 +290,7 @@ ksmd consuming too much CPU.
 **Symptoms**: High CPU in `ksmd` process
 
 **Solutions**:
+
 - Reduce `pages_to_scan`
 - Increase `sleep_millisecs`
 - Disable if savings are minimal
@@ -298,6 +302,7 @@ Few pages being merged.
 **Debug**: Check `pages_shared` vs `pages_unshared`
 
 **Causes**:
+
 - Workloads with unique data
 - Scan rate too slow
 - Memory not marked `MADV_MERGEABLE`

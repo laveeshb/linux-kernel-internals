@@ -164,6 +164,7 @@ Use spinlock when:
 Before `struct mutex` existed, the standard sleeping lock in the kernel was `struct semaphore`. A semaphore has a count — `down()` decrements it and sleeps if the count reaches zero; `up()` increments it and wakes a waiter.
 
 The problem with using a counting semaphore as a mutex: because `up()` can be called by *any* task (not just the one that called `down()`), the kernel couldn't enforce ownership. This ruled out:
+
 - Detecting recursive locking (which could deadlock)
 - Priority inheritance (who holds the lock? unknown)
 - Debugging tools that check "is the lock held when the task exits?"
@@ -178,6 +179,7 @@ The BKL (`lock_kernel()` / `unlock_kernel()`) was a single global recursive spin
 The BKL had unusual properties: it was released automatically on `schedule()` (so the holder could sleep without deadlocking other holders) and it was recursive. These properties made it easy to adopt but hard to remove, because removing it required proving that the protected code was safe without it.
 
 Subsystem by subsystem, developers replaced BKL sections with proper per-subsystem mutexes and spinlocks. The process took over a decade:
+
 - VFS: converted ~2004–2007 (big_kernel_lock → i_mutex, etc.)
 - TTY layer: converted ~2009
 - Remaining network drivers, sound: converted ~2011–2013

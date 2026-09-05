@@ -145,6 +145,7 @@ This is analogous to TCP's Nagle algorithm: batching small operations into large
 The `elevator_queue` in `request_queue` is optional. The I/O scheduler sits between bio submission and hardware dispatch, reordering and merging requests. For HDDs this was essential — an elevator scheduler could turn random writes into sequential I/O, doubling throughput by reducing seek time.
 
 NVMe changes the calculus:
+
 - No seek latency: request order is irrelevant to performance.
 - Hardware does its own internal scheduling across NAND dies.
 - Adding a software scheduler introduces latency (requests wait in the scheduler queue) with zero benefit.

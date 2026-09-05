@@ -163,11 +163,8 @@ numastat -m | grep -i huge
 **Workloads that benefit:**
 
 - **In-memory databases** — Oracle Database, SAP HANA, and similar systems with buffer pools larger than ~100GB. The buffer pool is accessed randomly; every cache hit becomes a TLB miss at 2MB granularity when the working set exceeds TLB capacity.
-
 - **ML training with large model weights** — Large language model training loads multi-gigabyte weight tensors that are repeatedly accessed. With 1GB pages, the entire weight tensor for a transformer layer can fit in a handful of TLB entries.
-
 - **HPC with dense matrices** — Scientific codes doing dense linear algebra (DGEMM, FFTs) on large matrices see measurable speedups from 1GB pages when matrix dimensions push working sets into the hundreds of gigabytes.
-
 - **DPDK and high-speed packet processing** — DPDK has long recommended 1GB pages for its memory pools. A single TLB entry covers the entire packet buffer pool, and the zero TLB miss rate on packet descriptor lookups is measurable in throughput.
 
 **Rule of thumb:** consider 1GB pages when:

@@ -192,11 +192,13 @@ if (pmd_large(*pmd)) {
 ```
 
 Benefits:
+
 - Fewer TLB entries needed
 - Reduced page table memory
 - Fewer page faults
 
 Trade-offs:
+
 - Internal fragmentation
 - Allocation challenges
 
@@ -275,6 +277,7 @@ Sparse address spaces waste page table memory.
 Can't allocate huge pages due to fragmentation.
 
 **Solutions**:
+
 - Reserve at boot: `hugepages=N`
 - Enable THP: `/sys/kernel/mm/transparent_hugepage/enabled`
 - Compact memory: `echo 1 > /proc/sys/vm/compact_memory`

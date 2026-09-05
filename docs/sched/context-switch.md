@@ -40,6 +40,7 @@ static void resched_curr(struct rq *rq)
 ```
 
 Common triggers:
+
 - **Timer tick** (`task_tick_fair()`): current task has run too long
 - **Wakeup** (`wakeup_preempt()`): a higher-priority task became runnable
 - **Explicit yield** (`sched_yield()`): task voluntarily gives up the CPU

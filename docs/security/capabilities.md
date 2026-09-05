@@ -86,6 +86,7 @@ struct cred {
 ```
 
 Rules:
+
 - **Effective**: used in access checks (`capable()`)
 - **Permitted**: superset of effective; can re-add dropped effective caps
 - **Inheritable**: can be passed across exec if the file also has it
@@ -157,6 +158,7 @@ setcap cap_dac_read_search=+eip /usr/sbin/rsync  # backup without root
 ```
 
 The `e`, `i`, `p` flags:
+
 - `e` = effective
 - `i` = inheritable
 - `p` = permitted

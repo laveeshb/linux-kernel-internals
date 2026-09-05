@@ -166,6 +166,7 @@ cat /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none
 ### Databases
 
 Databases often benefit from THP but can suffer from:
+
 - Latency spikes during compaction
 - Memory bloat (2MB granularity)
 
@@ -276,6 +277,7 @@ THP defragmentation can cause allocation stalls.
 **Symptoms**: Random latency spikes in latency-sensitive applications
 
 **Solutions**:
+
 - Use `defrag=defer` or `defrag=madvise`
 - Set `enabled=madvise` and control per-region
 - Disable THP for latency-critical apps
@@ -289,6 +291,7 @@ Small allocations rounded up to 2MB.
 **Debug**: Compare `AnonHugePages` vs `Anonymous` in `/proc/meminfo`
 
 **Solutions**:
+
 - Use `madvise` mode
 - Tune application allocation patterns
 
@@ -299,6 +302,7 @@ khugepaged consuming too much CPU.
 **Debug**: `top` or `perf top`
 
 **Solutions**:
+
 - Increase `scan_sleep_millisecs`
 - Reduce `pages_to_scan`
 
@@ -333,6 +337,7 @@ The khugepaged daemon scans memory looking for 512 contiguous 4KB pages to colla
 #### The bug class
 
 Multiple bugs have been found in khugepaged collapse:
+
 - Race with concurrent page faults
 - Race with munmap
 - Race with madvise(MADV_DONTNEED)

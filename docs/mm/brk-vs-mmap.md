@@ -45,6 +45,7 @@ syscall(SYS_brk, current_brk + 4096);             // Extend by 4KB
 ```
 
 **Characteristics:**
+
 - Single contiguous region
 - Grows upward
 - Cannot release memory in the middle
@@ -82,6 +83,7 @@ void *p = mmap(NULL, size,
 See [`do_mmap()`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/mmap.c) for the kernel implementation.
 
 **Characteristics:**
+
 - Arbitrary location in address space
 - Each mapping independent
 - Can release (`munmap`) individually
@@ -130,22 +132,26 @@ See [glibc malloc tunables](https://www.gnu.org/software/libc/manual/html_node/M
 ### Small allocations → brk (heap)
 
 **Pros:**
+
 - Lower syscall overhead (glibc extends heap in large chunks, serves many mallocs per brk call)
 - Good locality (allocations are adjacent)
 - Fast allocation from free lists
 
 **Cons:**
+
 - Memory fragmentation over time
 - Harder to return memory to OS (requires free space at top of heap)
 
 ### Large allocations → mmap
 
 **Pros:**
+
 - Memory returned to OS immediately on free (`munmap()`)
 - No heap fragmentation from large blocks
 - Predictable cleanup
 
 **Cons:**
+
 - Per-allocation syscall overhead
 - TLB pressure (each mapping needs entries)
 - Potential address space fragmentation
@@ -277,6 +283,7 @@ These two system calls come from different eras and were designed for different 
 For over a decade, `brk()` was the **only** way for applications to acquire heap memory. Every `malloc()` implementation used it.
 
 The call is now considered a historical artifact:
+
 - Marked **LEGACY** in Single UNIX Specification v2
 - **Removed** from POSIX.1-2001
 - Linux keeps it for compatibility, but modern allocators use it less
@@ -286,6 +293,7 @@ The call is now considered a historical artifact:
 `mmap()` was designed for a completely different purpose: **memory-mapped files**.
 
 Timeline:
+
 - **1983 (4.2BSD)**: API designed and documented, but not implemented
 - **~1988 (SunOS 4.0)**: First working implementation by Sun Microsystems
 - **4.3BSD-Reno**: BSD implementation (based on Mach VM, after Sun refused to share their code)

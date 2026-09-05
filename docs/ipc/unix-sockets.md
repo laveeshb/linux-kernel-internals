@@ -51,6 +51,7 @@ listen(srv, SOMAXCONN);
 ```
 
 Properties:
+
 - Permissions are enforced by the file's mode bits (`chmod 0660 /run/myservice.sock`)
 - The socket file persists after the server exits — must be removed with `unlink()` before rebinding
 - Controlled by the filesystem namespace: containers with separate mount namespaces cannot see each other's socket files
@@ -70,6 +71,7 @@ bind(srv, (struct sockaddr *)&addr, addrlen);
 ```
 
 Properties:
+
 - Automatically cleaned up when the last file descriptor referencing it is closed — no `unlink()` needed
 - Name is arbitrary bytes, not a C string; can contain null bytes beyond the first
 - Visible only within the same network namespace (`ip netns` or container namespaces provide isolation)

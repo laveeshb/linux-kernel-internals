@@ -324,6 +324,7 @@ flowchart LR
 ```
 
 After I/O completes successfully:
+
 - Page is removed from swap cache
 - Physical page is freed
 - Only the swap slot remains with the data
@@ -600,11 +601,13 @@ flowchart LR
 ```
 
 **Signs of thrashing**:
+
 - High swap I/O (`vmstat` si/so columns)
 - High CPU time in kernel (`top` shows high sy/wa)
 - Application responsiveness drops drastically
 
 **Solutions**:
+
 - Add more RAM
 - Reduce memory usage
 - Use zswap or zram for compression
@@ -863,6 +866,7 @@ If `do_swap_page()` retrieves the page from swap cache, it returns stale data - 
 #### Mitigations
 
 Zswap has undergone multiple locking improvements to address these races. The interactions between:
+
 - Zswap entry lifecycle
 - Swap cache operations
 - Page writeback
@@ -906,6 +910,7 @@ Swap files introduce additional complexity compared to swap partitions because t
 #### The bug
 
 With swap files, `swap_writepage()` must go through the filesystem. This can race with:
+
 - Filesystem operations on the same device
 - Filesystem metadata updates
 - Journal commits

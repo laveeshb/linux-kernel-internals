@@ -9,6 +9,7 @@ This documentation explains how Linux manages memory - not just the theory, but 
 ### Prerequisites
 
 This documentation assumes familiarity with:
+
 - **C programming** - The kernel is written in C
 - **Pointers and memory addresses** - Virtual vs physical addressing
 - **Basic OS concepts** - Processes, kernel vs userspace

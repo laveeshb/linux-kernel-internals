@@ -15,6 +15,7 @@ The answer lies in understanding three different ways of measuring memory.
 **What it is:** The total address space a process has mapped.
 
 **What it includes:**
+
 - Code (text segment)
 - Data (heap, stack, globals)
 - Shared libraries
@@ -39,6 +40,7 @@ In this example, `bash` has 500MB of virtual address space but only ~12MB reside
 **What it is:** Actual RAM chips in your system.
 
 **What uses it:**
+
 - Kernel code and data structures
 - Process pages that are resident (`RSS`)
 - Page cache (file data cached in memory, including block buffers)
@@ -59,10 +61,12 @@ Here, 10GB is "used" by cache but available if needed.
 **What it is:** The portion of virtual memory currently in physical RAM.
 
 **What it includes:**
+
 - Private pages actually in RAM
 - Shared pages (libraries, shared memory)
 
 **What it excludes:**
+
 - Swapped out pages
 - Pages never touched (demand paging)
 - Memory-mapped files not currently loaded
@@ -219,6 +223,7 @@ Memory metrics evolved as systems became more complex and the question "how much
 ### Early Unix: Simple Metrics
 
 In early Unix systems, memory accounting was straightforward:
+
 - **Virtual size**: How much address space is mapped
 - **Resident size**: How much is in physical RAM
 
@@ -271,6 +276,7 @@ RssShmem:     3456 kB
 ### Modern Challenges
 
 Today's complexity continues to grow:
+
 - **`cgroups`**: Memory limits across process groups
 - **`KSM`**: Identical pages merged across processes
 - **Transparent Huge Pages**: 2MB/1GB pages complicate accounting

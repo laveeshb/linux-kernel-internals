@@ -143,6 +143,7 @@ ip rule show
 ```
 
 Rules can match on:
+
 - Source address (`from`)
 - Destination address (`to`)
 - Incoming interface (`iif`)

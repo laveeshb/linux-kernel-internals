@@ -11,6 +11,7 @@
 - **cpuset**: Which CPUs are even eligible — tasks never run on excluded CPUs
 
 This matters for:
+
 - **NUMA locality**: Pin tasks to CPUs close to their memory
 - **Core isolation**: Reserve specific cores for latency-sensitive workloads
 - **Hardware partitioning**: Assign CPUs to dedicated containers
@@ -129,6 +130,7 @@ echo "isolated" > /sys/fs/cgroup/mygroup/cpuset.cpus.partition
 ```
 
 Partition states:
+
 - `member` (default): Normal cpuset, shares parent's scheduling domain
 - `root`: Carves out CPUs into a dedicated scheduling domain
 - `isolated`: Like root, but also disables load balancing within the partition

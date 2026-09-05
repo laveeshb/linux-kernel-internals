@@ -110,6 +110,7 @@ perf sched script | head -20
 ### perf sched latency
 
 High "Maximum delay" for a task means it was occasionally stuck waiting for the CPU for a long time. Common causes:
+
 - CPU temporarily saturated
 - Lock contention in the scheduler (rare)
 - NUMA migration overhead
@@ -221,6 +222,7 @@ myapp-1234 [002] 12345.678901: sched_switch: prev_comm=myapp prev_pid=1234
 ```
 
 Interpretation:
+
 - `myapp` (pid 1234) on CPU 2 switched to sleep (`prev_state=S`)
 - `kworker/2:1` (pid 5678) is now running on CPU 2
 - Both at priority 120 (nice 0)

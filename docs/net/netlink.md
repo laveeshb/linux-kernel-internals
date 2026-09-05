@@ -52,6 +52,7 @@ struct nlmsghdr {
 ```
 
 Common flags:
+
 - `NLM_F_REQUEST`: this is a request to the kernel
 - `NLM_F_ACK`: request an acknowledgement
 - `NLM_F_DUMP`: dump all objects of this type

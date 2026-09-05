@@ -5,6 +5,7 @@
 ## The problem with hardirq handlers
 
 Hardware interrupt handlers (hardirq) run with interrupts disabled on the current CPU. This means:
+
 - They cannot sleep
 - They cannot acquire sleeping locks (mutex, semaphore)
 - They block other interrupts on the same CPU

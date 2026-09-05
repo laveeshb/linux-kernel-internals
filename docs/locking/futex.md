@@ -15,6 +15,7 @@ futex(2) entered Linux 2.6.0 (December 2003) — see [`man 2 futex`](https://www
 A **futex** (fast userspace mutex) is the kernel mechanism that allows userspace locking primitives (pthreads mutex, condition variables, semaphores) to be efficient. The key insight: in the common uncontended case, locking and unlocking should happen entirely in userspace with no kernel involvement. The kernel is only called when there's actual contention.
 
 The futex syscall (`futex(2)`) provides two core operations:
+
 - `FUTEX_WAIT`: sleep if the futex word has a given value
 - `FUTEX_WAKE`: wake one or more waiters
 
@@ -150,6 +151,7 @@ int futex_wait(u32 __user *uaddr, u32 val, ...)
 ```
 
 The crucial step is checking the value **under the hash bucket lock** (step 3). This prevents a race where:
+
 - Userspace sees the lock is contended and calls FUTEX_WAIT
 - The lock holder unlocks and calls FUTEX_WAKE before we've queued
 - We'd sleep forever without the lock check

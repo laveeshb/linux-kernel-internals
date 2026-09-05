@@ -195,6 +195,7 @@ A complete cgroup OOM log has these sections:
 ```
 
 Key differences from a global OOM log:
+
 - Section 3 shows `Memory cgroup stats for <path>:` with named byte counters, not the zone-based `Mem-Info:` dump
 - Section 4 lists only processes in the cgroup
 - Section 5 shows `constraint=CONSTRAINT_MEMCG` and `Memory cgroup out of memory:`

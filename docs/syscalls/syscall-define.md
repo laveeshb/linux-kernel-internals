@@ -141,11 +141,13 @@ __SYSCALL(__NR_io_destroy, sys_io_destroy)
 Once a syscall is merged, its number and argument semantics are **never changed**. This is a hard kernel rule: user-space must not break.
 
 Specific guarantees:
+
 - Syscall numbers don't change
 - Existing arguments are never reinterpreted
 - Structs passed by pointer only grow (new fields at the end, with zero meaning "not set")
 
 For new features, the kernel adds new syscalls rather than extend old ones in incompatible ways:
+
 - `clone()` → `clone3()` (struct-based, extensible)
 - `open()` → `openat()` → `openat2()` (added `how` struct)
 - `read()` → `pread64()`, `readv()`, `preadv()`, `preadv2()`
@@ -175,6 +177,7 @@ SYSCALL_DEFINE2(clone3, struct clone_args __user *, uargs, size_t, size)
 ```
 
 `copy_struct_from_user` handles the versioning:
+
 - If `size < sizeof(kargs)`: copies what's there, zeros the rest (old userspace)
 - If `size > sizeof(kargs)`: checks that extension bytes are zero (new userspace, old kernel)
 

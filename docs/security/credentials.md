@@ -103,6 +103,7 @@ int cap_bprm_creds_from_file(struct linux_binprm *bprm, const struct file *file)
 ## User namespaces
 
 A **user namespace** creates a private mapping between UIDs/GIDs in the namespace and the host system. This allows:
+
 - Unprivileged container creation
 - "root" inside a container without host root
 - Capability isolation: root inside namespace ≠ root outside

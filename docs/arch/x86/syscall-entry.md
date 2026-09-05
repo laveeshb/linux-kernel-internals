@@ -296,6 +296,7 @@ cat /proc/self/maps | grep vdso
 ### vDSO source
 
 The vDSO is compiled as a special shared library:
+
 - `arch/x86/vdso/` — x86-64 vDSO source
 - `arch/x86/vdso/vdso64.lds.S` — linker script
 - `arch/x86/vdso/vclock_gettime.c` — `clock_gettime` implementation

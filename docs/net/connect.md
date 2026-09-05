@@ -110,6 +110,7 @@ int tcp_connect(struct sock *sk)
 ```
 
 SYN options set in the SYN packet:
+
 - **MSS** (Maximum Segment Size): tells the server the max segment we'll accept
 - **WSCALE**: window scaling factor for large windows
 - **SACK_PERM**: we support Selective ACK

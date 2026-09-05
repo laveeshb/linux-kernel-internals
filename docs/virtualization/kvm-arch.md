@@ -5,6 +5,7 @@
 ## Intel VT-x: hardware virtualization basics
 
 Intel VT-x adds two new CPU operating modes:
+
 - **VMX root mode**: where the hypervisor (KVM) runs — full privilege
 - **VMX non-root mode**: where the guest OS runs — hardware-restricted
 

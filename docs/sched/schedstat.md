@@ -179,6 +179,7 @@ done | sort -rn | head -20
 ```
 
 High `wait_time` relative to `cpu_time` means a task is often runnable but waiting for a CPU. Possible causes:
+
 - System is overloaded (more runnable tasks than CPUs)
 - Task has low priority (nice value or cgroup weight)
 - CPU affinity is too restrictive

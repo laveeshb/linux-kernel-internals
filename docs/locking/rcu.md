@@ -33,6 +33,7 @@ The critical property: **readers pay almost nothing**. On non-preemptible kernel
 A **grace period** is the time the writer waits after publishing the new pointer before freeing the old one. A grace period ends when every CPU has passed through a **quiescent state** — a point where no RCU read-side critical section can be in progress.
 
 Quiescent states include:
+
 - Context switch (the CPU was preempted)
 - Idle (the CPU has no work)
 - User mode execution

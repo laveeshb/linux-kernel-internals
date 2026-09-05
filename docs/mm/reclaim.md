@@ -137,6 +137,7 @@ The kernel tracks page usage with LRU (Least Recently Used) lists. Pages move be
 ```
 
 Four lists per node (two types x two states):
+
 - `LRU_INACTIVE_ANON` - Inactive anonymous pages
 - `LRU_ACTIVE_ANON` - Active anonymous pages
 - `LRU_INACTIVE_FILE` - Inactive file-backed pages
@@ -154,6 +155,7 @@ Generation 0 (oldest) ──> Generation 1 ──> ... ──> Generation N (you
 ```
 
 **Benefits**:
+
 - Better detection of hot vs cold pages
 - Reduced CPU overhead from page table scanning
 - Improved performance under memory pressure
@@ -355,6 +357,7 @@ Processes blocked in direct reclaim, causing latency spikes.
 **Debug**: Check `allocstall_*` in `/proc/vmstat`
 
 **Solutions**:
+
 - Increase `vm.min_free_kbytes`
 - Add swap if missing
 - Reduce memory pressure
@@ -366,6 +369,7 @@ kswapd consuming excessive CPU.
 **Debug**: `top` or `perf top`
 
 **Causes**:
+
 - Too little free memory
 - Workload constantly dirtying pages
 - Swap thrashing

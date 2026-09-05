@@ -76,6 +76,7 @@ tc qdisc show dev eth0
 ```
 
 Parameters:
+
 - `target`: acceptable minimum standing queue delay (default 5ms)
 - `interval`: control loop interval for CoDel (default 100ms)
 - `flows`: number of hash buckets for fair queueing (default 1024)
@@ -174,6 +175,7 @@ tc filter add dev eth0 ingress bpf obj tc_ingress.o sec tc direct-action
 ```
 
 TC-BPF verdicts:
+
 - `TC_ACT_OK` (= 0): pass to next stage
 - `TC_ACT_SHOT` (= 2): drop
 - `TC_ACT_REDIRECT` (= 7): redirect to another interface

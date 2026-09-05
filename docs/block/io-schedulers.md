@@ -35,6 +35,7 @@ echo none > /sys/block/nvme0n1/queue/scheduler  # for NVMe
 ### none
 
 No scheduling. Requests are dispatched in submission order. Optimal for:
+
 - NVMe SSDs with hardware queues (no seek latency, no benefit from reordering)
 - Very low-latency workloads where scheduler overhead matters
 
@@ -88,6 +89,7 @@ cat /sys/block/sda/queue/iosched/fifo_batch  # default 16
 BFQ assigns each process or group a **budget** of sectors to serve. When the budget is exhausted, the scheduler moves to the next process. Budget is dynamically sized based on workload characteristics.
 
 Key properties:
+
 - Interactive processes get boosted priority (short bursts are rewarded)
 - cgroups integration: `/sys/block/sda/queue/iosched/` exposes per-group weights
 - `CONFIG_BFQ_GROUP_IOSCHED` enables cgroup-based I/O isolation
@@ -111,6 +113,7 @@ ionice -c 3 rsync source/ dest/         # idle class
 **For multi-queue, low-latency devices (NVMe, SSDs).** Introduced in Linux 4.12 by Omar Sandoval — [`00e043936e9a`](https://git.kernel.org/linus/00e043936e9a1c274c29366c7ecd9e17c79418e6), [LWN](https://lwn.net/Articles/720675/). Uses per-operation-type queues (read, write, discard) with token-based latency targeting.
 
 Rather than reordering, kyber:
+
 - Limits in-flight requests per category to hit target latencies
 - Doesn't do merging (relies on hardware)
 - Very low overhead

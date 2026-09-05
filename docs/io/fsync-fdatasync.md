@@ -258,11 +258,13 @@ The latency is dominated by the time to drain the write cache and for the journa
 > *If the file is not in a special file, it is not required to update metadata such as st_atime or st_mtime.*
 
 The metadata `fdatasync()` can skip:
+
 - `atime` (last access time) — never affects data retrieval
 - `mtime` (last modification time) — does not affect data location
 - `ctime` (last status change time) — inode change timestamp
 
 The metadata `fdatasync()` **must** flush:
+
 - File size (`i_size`) — if the file grew, the new size is needed to locate the new data
 - Block pointers — any newly allocated data blocks must be findable
 - Indirect/extent tree changes — required to locate data
@@ -480,6 +482,7 @@ The large ratio for random 4KB writes is because each write round-trips to the d
 Consider a database writing a data page and then a journal record describing that write. If the storage device reorders these two writes — journal record lands first, crash occurs, data page never arrives — recovery replays a journal entry that points to stale data. The file is now corrupt.
 
 Write barriers solve this: a barrier ensures all writes issued before it are persistent before any write issued after it begins. On NVMe:
+
 - **FUA (Force Unit Access)**: a flag on a specific write command that bypasses the volatile write cache for that command only.
 - **FLUSH command** (`REQ_OP_FLUSH`): drains the entire volatile write cache; all previous writes are persistent before this command returns.
 
@@ -796,6 +799,7 @@ fio --name=odsync --rw=randwrite --bs=4k --size=1G \
 ```
 
 Key fio output fields for fsync benchmarking:
+
 - `lat (usec)`: per-operation latency including the fsync
 - `iops`: operations per second
 - `clat percentiles`: 99th/99.9th percentile latency reveals outliers

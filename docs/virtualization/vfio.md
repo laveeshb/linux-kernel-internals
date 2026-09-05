@@ -17,6 +17,7 @@ With VFIO passthrough:
 ```
 
 **Requirements**:
+
 - IOMMU hardware (Intel VT-d or AMD-Vi)
 - Device must be in its own IOMMU group (or group isolation satisfied)
 - `intel_iommu=on` or `amd_iommu=on` boot parameter

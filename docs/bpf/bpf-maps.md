@@ -59,6 +59,7 @@ if (count) {
 ```
 
 Update flags:
+
 - `BPF_ANY` — create or update
 - `BPF_NOEXIST` — create only (fail if key exists)
 - `BPF_EXIST` — update only (fail if key doesn't exist)
@@ -164,6 +165,7 @@ static int handle_event(void *ctx, void *data, size_t size)
 ```
 
 Why ringbuf over perf_event output:
+
 - Single shared ring across all CPUs (no per-CPU waste)
 - Events are ordered within the ring
 - No copy — userspace reads directly from the ring memory

@@ -5,6 +5,7 @@
 ## What the audit subsystem does
 
 The Linux audit subsystem provides mandatory, tamper-resistant logging of security-relevant events:
+
 - Syscall execution (who called `open()`, `execve()`, `setuid()`?)
 - File access (who read `/etc/shadow`?)
 - Authentication events (PAM, sudo)

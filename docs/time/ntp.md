@@ -167,6 +167,7 @@ A time synchronization daemon:
 4. Adjusts `constant` (the PLL time constant) based on the poll interval — longer poll intervals use a larger time constant for stability.
 
 `chrony` differs from `ntpd` in several ways:
+
 - Uses `ADJ_SETOFFSET` to make fast step corrections when the offset is large (e.g., on first start), rather than slewing slowly.
 - Supports hardware timestamping via `SO_TIMESTAMPING` for sub-microsecond accuracy with a PPS or PTP source.
 - Tracks multiple reference sources and weights them by jitter and distance.

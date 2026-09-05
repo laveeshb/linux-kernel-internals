@@ -5,6 +5,7 @@
 ## What network namespaces provide
 
 Each **network namespace** has its own:
+
 - Network interfaces (lo, eth0, etc.)
 - IP addresses and routing tables
 - iptables/nftables rules

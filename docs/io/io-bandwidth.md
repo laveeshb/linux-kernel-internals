@@ -123,6 +123,7 @@ dd if=/dev/nvme0n1 of=/dev/null bs=1M count=10240 iflag=direct
 ```
 
 **CPU-limited bandwidth symptoms:**
+
 - `iostat %util` < 100% but bandwidth plateau at ~3–4 GB/s
 - One CPU core at 100% (`mpstat` shows high `%irq` or `%soft`)
 - Throughput increases linearly with the number of parallel jobs (up to CPU saturation)
@@ -220,6 +221,7 @@ fio --name=fs --rw=read --bs=1M --direct=1 --iodepth=32 \
 ```
 
 Typical filesystem overhead for sequential I/O with `O_DIRECT`:
+
 - **ext4, XFS**: 3–8% overhead (extent lookup, inode lock)
 - **Btrfs**: 5–15% overhead (tree operations, checksums)
 - **tmpfs**: 0% (memory-backed, no device I/O)

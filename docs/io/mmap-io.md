@@ -904,6 +904,7 @@ void db_close(db_env_t *env)
 ```
 
 Key design points from LMDB:
+
 - The mapping is `MAP_SHARED` — writes are visible to all reader processes immediately.
 - Readers need no locks for read-only access because the B-tree is updated via copy-on-write at the database level (MVCC pages, not OS COW).
 - `msync(MS_SYNC)` is called only when committing a transaction, not on every write.

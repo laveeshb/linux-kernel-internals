@@ -54,6 +54,7 @@ getfattr -d report.pdf
 ```
 
 Restrictions:
+
 - Not supported on symlinks or device files (to prevent privilege escalation via root-owned devices)
 - Subject to filesystem quota if enabled
 
@@ -75,6 +76,7 @@ Setting `security.*` requires `CAP_SYS_ADMIN` or LSM-specific permissions.
 ### `trusted` namespace
 
 Requires `CAP_SYS_ADMIN`. Used by:
+
 - **OverlayFS**: `trusted.overlay.opaque`, `trusted.overlay.whiteout` for directory/file hiding
 - **Container runtimes**: Store container metadata on image layers
 - **Quota systems**: Some implementations store quota data in `trusted.*`

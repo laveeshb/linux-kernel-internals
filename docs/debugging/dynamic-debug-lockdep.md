@@ -74,6 +74,7 @@ Each lock in the splat is annotated with `{+.+.}-{3:3}`:
 ```
 
 Common annotations:
+
 - `{+.+.}` — mutex taken in process context with IRQs enabled
 - `{-.-.}` — spinlock taken with IRQs disabled
 - `{++++}` — rwsem taken in all four contexts (e.g., i_data_sem)
@@ -343,6 +344,7 @@ lock_stat version 0.4
 ```
 
 Key columns:
+
 - **con-bounces** — lock was contended and the CPU changed hands between acquire and release
 - **contentions** — total number of times a task had to wait for this lock
 - **waittime-min/max/total** — time spent waiting (microseconds)

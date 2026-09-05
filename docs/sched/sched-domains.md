@@ -9,6 +9,7 @@ The Linux scheduler doesn't just balance load between individual CPUs — it use
 Each level in the tree is a `sched_domain` spanning a set of CPUs. When load balancing runs, it works domain by domain, from narrowest (SMT) to widest (NUMA), respecting topology boundaries.
 
 This matters because:
+
 - Moving a task between SMT siblings is cheap (shared L1/L2 cache)
 - Moving between NUMA sockets is expensive (remote memory access)
 - The scheduler should balance aggressively at the cheap levels and conservatively at the expensive ones
@@ -124,6 +125,7 @@ static int build_sched_domains(const struct cpumask *cpu_map,
 ```
 
 This is called via `rebuild_sched_domains()`, which is triggered by:
+
 - `sched_domain_sysctl` changes
 - CPU hotplug events
 - cpuset partition root changes

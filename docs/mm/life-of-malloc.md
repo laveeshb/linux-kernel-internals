@@ -533,6 +533,7 @@ Fixed in glibc 2.39. The vulnerability was introduced in glibc 2.37 by commit `5
 #### Mitigations
 
 Modern glibc includes:
+
 - **Safe-linking**: Pointer mangling in fastbins/tcache
 - **Chunk size validation**: Detect corrupted size fields
 - **Top chunk integrity checks**: Prevent wilderness corruption
@@ -561,6 +562,7 @@ void vulnerable() {
 #### Real-world implications
 
 Local privilege escalation on many Linux distributions. The vulnerability affected:
+
 - Linux (CVE-2017-1000364)
 - FreeBSD, OpenBSD, NetBSD, Solaris
 - Programs using large stack allocations
@@ -598,6 +600,7 @@ From [Red Hat's advisory](https://access.redhat.com/articles/17995):
 #### The fix
 
 Multiple commits fixed the SELinux policy and strengthened `mmap_min_addr` enforcement:
+
 - [9c0d9010](https://git.kernel.org/linus/9c0d9010)
 - [8cf948e7](https://git.kernel.org/linus/8cf948e7)
 
@@ -654,6 +657,7 @@ ASLR (Address Space Layout Randomization) randomizes mmap but historically left 
 If `brk()` always returns the same address, heap exploitation becomes easier - attackers know where heap data lives.
 
 Early ASLR implementations randomized:
+
 - Stack location ✓
 - mmap base ✓
 - brk/heap location - **partially or not at all**

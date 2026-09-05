@@ -5,6 +5,7 @@
 ## Why a DMA API?
 
 DMA programming is architecture-dependent:
+
 - x86 with IOMMU: allocate IOVA, program device with IOVA
 - x86 without IOMMU: device uses physical addresses directly
 - ARM with non-coherent cache: must flush/invalidate cache around DMA
@@ -56,6 +57,7 @@ dma_free_coherent(dev, size, cpu_addr, dma_handle);
 ```
 
 **How it works under the hood:**
+
 - x86 with cache-coherent bus: `dma_alloc_coherent` → `alloc_pages` + IOMMU mapping
 - ARM non-coherent: `dma_alloc_coherent` → `alloc_pages` + mark as uncached (`pgprot_noncached`)
 - No IOMMU: `dma_alloc_coherent` → `alloc_pages` restricted to DMA zone (< 4GB if 32-bit mask)
@@ -95,6 +97,7 @@ dma_unmap_single(dev, dma_handle, size, DMA_TO_DEVICE);
 ```
 
 **What happens at map/unmap:**
+
 - With IOMMU: allocate IOVA, create IOMMU mapping
 - Without IOMMU, coherent cache: mapping is a no-op (physical == device address)
 - Without IOMMU, non-coherent cache: `map` flushes CPU cache; `unmap` invalidates CPU cache

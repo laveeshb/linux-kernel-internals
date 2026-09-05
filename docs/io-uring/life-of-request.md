@@ -929,6 +929,7 @@ for (int i = 0; i < 1000; i++)
 #### Real-world implications
 
 Any application that submits bursts of requests and reaps lazily must either:
+
 - Size the CQ ring large enough via `IORING_SETUP_CQSIZE` in `io_uring_params`, or
 - Interleave reaping with submission, or
 - Rely on `IORING_FEAT_NODROP` (available since kernel 5.5), which buffers overflowed CQEs internally.

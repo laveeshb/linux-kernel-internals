@@ -65,6 +65,7 @@ ISB
 ```
 
 Use ISB after:
+
 - Writing to system registers that affect instruction execution (e.g., SCTLR_EL1)
 - Self-modifying code
 - Changing the instruction cache attributes

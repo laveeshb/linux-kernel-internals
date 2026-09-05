@@ -40,6 +40,7 @@ struct irq_desc {
 ```
 
 Key fields:
+
 - `handle_irq`: the **flow handler** — decides how to run the action chain (edge-triggered, level-triggered, per-CPU, etc.)
 - `action`: linked list of `irqaction` structs, one per registered handler
 - `depth`: incremented by `disable_irq()`, decremented by `enable_irq()` — only 0 means actually enabled
@@ -141,6 +142,7 @@ The flow handler (`handle_irq` in `irq_desc`) determines how interrupt delivery 
 | `handle_simple_irq` | No mask/ack, just run actions |
 
 The difference between edge and level matters:
+
 - **Edge**: interrupt fires once when signal transitions. If missed, it won't fire again.
 - **Level**: interrupt fires as long as signal is asserted. Must be masked during handling.
 

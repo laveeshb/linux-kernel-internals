@@ -5,6 +5,7 @@
 ## What kernel modules are
 
 A kernel module is an ELF shared object loaded into the kernel at runtime. Modules:
+
 - Share the kernel's address space and run at ring 0 (full privilege)
 - Can export and use symbols from other modules or the core kernel
 - Are loaded by `insmod`/`modprobe` and removed by `rmmod`
