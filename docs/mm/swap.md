@@ -388,6 +388,7 @@ Constant swapping makes system unusable.
 **Symptoms**: High `si`/`so` in vmstat, system unresponsive
 
 **Solutions**:
+
 - Add RAM
 - Reduce workload
 - Lower swappiness
@@ -400,6 +401,7 @@ No swap space available.
 **Symptoms**: OOM kills despite "free" memory
 
 **Solutions**:
+
 - Add more swap
 - Enable zswap/zram
 - Investigate memory usage
@@ -409,6 +411,7 @@ No swap space available.
 Excessive swap writes wearing SSD.
 
 **Solutions**:
+
 - Use zswap (reduces writes 2-5x)
 - Reduce swappiness
 - Add RAM

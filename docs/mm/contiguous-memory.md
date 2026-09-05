@@ -81,6 +81,7 @@ The buddy allocator maintains separate free lists per migrate type ([mm/page_all
 ```
 
 This helps because:
+
 - Movable pages can be migrated to create contiguous free space
 - Reclaimable pages can be freed under pressure
 - Unmovable pages are grouped together, limiting fragmentation spread

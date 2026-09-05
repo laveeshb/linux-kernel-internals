@@ -892,6 +892,7 @@ NVMe controllers are required to honour the Flush command — all preceding writ
 Most HDDs and many SSDs have a DRAM write cache. When the kernel issues a write, the device acknowledges it as soon as the data lands in this cache — before writing it to the platters or NAND. If power fails between the acknowledgement and the actual physical write, data is lost.
 
 This means that even after `fsync()` returns successfully, data can be lost on drives with volatile write caches unless:
+
 - The drive's write cache is disabled (`hdparm -W 0 /dev/sda`), or
 - The drive supports and honours FUA / Flush commands.
 

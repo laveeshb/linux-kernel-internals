@@ -17,10 +17,12 @@ A **kernel oops** is a non-fatal kernel error — the kernel detected an inconsi
 ```
 
 Breaking down the first line:
+
 - `BUG: kernel NULL pointer dereference` — the fault type
 - `address: 0x18` — the virtual address that caused the fault (0x18 = offset 24 in a struct)
 
 The error code `0000`:
+
 - Bit 0 = 0: page not present (vs protection fault)
 - Bit 1 = 0: read (vs write)
 - Bit 2 = 0: kernel mode (vs user mode)
@@ -70,6 +72,7 @@ K — live patched
 ```
 
 Key registers for diagnosis:
+
 - `RIP` — where the crash happened
 - `CR2` — the faulting address (for page faults)
 - `RAX = 0` — often the NULL pointer that was dereferenced

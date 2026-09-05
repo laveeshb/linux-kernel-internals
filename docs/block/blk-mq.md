@@ -7,6 +7,7 @@
 Traditional block layer had a single request queue per device, protected by a global lock. This was fine for HDDs (which are sequential anyway) but became a bottleneck for NVMe SSDs that can handle millions of IOPS across multiple hardware queues.
 
 blk-mq (introduced in Linux 3.13) uses:
+
 - **Multiple software queues** (one per CPU or CPU group) to eliminate lock contention
 - **Multiple hardware queues** (mapped to NVMe queues, SCSI host adapters, etc.)
 - **Per-CPU tag allocation** for request objects

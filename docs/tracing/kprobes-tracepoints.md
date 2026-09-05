@@ -147,6 +147,7 @@ static struct kretprobe my_kretprobe = {
 ## Static tracepoints: TRACE_EVENT
 
 Static tracepoints are annotation points compiled into the kernel at specific places. They have:
+
 - Zero overhead when disabled (a single no-op test)
 - Rich structured data (not just register dumps)
 - Stable ABI (unlike kprobes which depend on function names)

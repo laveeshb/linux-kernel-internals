@@ -25,11 +25,13 @@ The scheduler always picks the task with the **smallest vruntime**. Combined wit
 Three tasks: A (nice -5, weight 3121), B (nice 0, weight 1024), C (nice +5, weight 335).
 
 Total weight = 4480. Ideal CPU shares:
+
 - A: 3121/4480 = 69.7%
 - B: 1024/4480 = 22.9%
 - C:  335/4480 =  7.5%
 
 CFS achieves this by making vruntime advance at different rates:
+
 - A's vruntime grows at `1024/3121` of real time (~0.33x)
 - B's vruntime grows at `1024/1024` of real time (1.0x)
 - C's vruntime grows at `1024/335` of real time (~3.1x)

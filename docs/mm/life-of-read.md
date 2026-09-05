@@ -459,11 +459,13 @@ read(fd, aligned_buffer, size);
 ```
 
 **When to use direct I/O**:
+
 - Database engines (they have their own caching)
 - Very large sequential reads (cache would be wasteful)
 - When you need predictable I/O timing
 
 **Requirements**:
+
 - Buffer must be aligned (typically 512 bytes or 4KB)
 - Offset and size often must be aligned too
 
@@ -635,6 +637,7 @@ If Thread B truncates the file while Thread A is faulting in a page, Thread A mi
 #### Real-world implications
 
 Applications using mmap'd files (databases, VMs, etc.) could see:
+
 - Stale data after truncation
 - Blank pages
 - Crashes on invalid access
@@ -693,6 +696,7 @@ For tmpfs/shmem, there's no backing store to recover from - the data is simply l
 #### Real-world implications
 
 Hardware errors in RAM used for page cache could cause:
+
 - Database corruption
 - Lost user data
 - Inconsistent filesystem state
@@ -700,6 +704,7 @@ Hardware errors in RAM used for page cache could cause:
 #### Mitigation
 
 The patches ensure:
+
 - Poisoned pages are immediately evicted from cache
 - Subsequent reads go to disk (if file-backed)
 - Errors are properly propagated to userspace
@@ -766,6 +771,7 @@ pread(fd_dio, buf, 4, 0);  // Might see old data!
 #### Real-world implications
 
 Databases often use:
+
 - Direct I/O for data files (predictable latency)
 - Buffered I/O for logs (better small-write performance)
 

@@ -19,6 +19,7 @@ When Ingo Molnár replaced the O(1) scheduler with CFS, he also introduced `stru
 **CFS announcement**: [LKML, April 13 2007](https://lkml.org/lkml/2007/4/13/180) — Ingo Molnár, "[Announce] [patch] Modular Scheduler Core and Completely Fair Scheduler [CFS]"
 
 **CFS merge commits** (July 9, 2007, Ingo Molnár):
+
 - [`bf0f6f24a1ec`](https://git.kernel.org/linus/bf0f6f24a1ece8988b243aefe84ee613099a9245) — `sched: cfs core, kernel/sched_fair.c`
 - [`dd41f596cda0`](https://git.kernel.org/linus/dd41f596cda0d7d6e4a8b139ffdfabcefdd46528) — `sched: cfs core code` (wires `struct sched_class` into the core scheduler)
 
@@ -204,6 +205,7 @@ This is where CFS and EEVDF live. See [CFS](cfs.md) and [EEVDF](eevdf.md) for de
 The idle class runs the per-CPU idle thread (`swapper/N`). It's selected only when no other class has a runnable task.
 
 The idle thread calls `cpu_idle_loop()`, which invokes the CPU's idle instruction (`hlt` on x86, `wfi` on ARM). It also handles:
+
 - CPU frequency scaling callbacks
 - RCU quiescent state reporting
 - Polling for new work before sleeping

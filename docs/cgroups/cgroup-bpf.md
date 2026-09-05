@@ -229,6 +229,7 @@ int __cgroup_bpf_check_dev_permission(short dev_type, u32 major, u32 minor,
 ```
 
 These are invoked via macros from:
+
 - `net/ipv4/ip_output.c`, `net/ipv6/ip6_output.c` → `BPF_CGROUP_RUN_PROG_INET_EGRESS`
 - `net/ipv4/ip_input.c` (`ip_rcv`) → `BPF_CGROUP_RUN_PROG_INET_INGRESS`
 - `net/socket.c` (`__sock_create`) → `BPF_CGROUP_RUN_PROG_INET_SOCK`

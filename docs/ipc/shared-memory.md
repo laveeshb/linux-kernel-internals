@@ -209,6 +209,7 @@ void consumer(int efd) {
 ```
 
 eventfd is used extensively in:
+
 - QEMU/KVM virtio notifications
 - io_uring completion notification
 - libuv/libevent event loop backends
@@ -236,6 +237,7 @@ send_fd_over_socket(socket_fd, fd);
 ```
 
 `memfd_create` is used by:
+
 - Graphics/Wayland: sharing framebuffers between client and compositor
 - dbus-broker: passing large messages without DBUS limits
 - D-Bus: replacing shared memory segments

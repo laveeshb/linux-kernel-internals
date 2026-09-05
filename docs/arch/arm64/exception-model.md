@@ -17,6 +17,7 @@ EL0: User space (applications)
 ```
 
 Key properties:
+
 - **EL0**: unprivileged, can only access user-accessible system registers
 - **EL1**: kernel mode, full access to kernel address space and EL1 system registers
 - **EL2**: hypervisor mode, can trap and emulate EL1 operations

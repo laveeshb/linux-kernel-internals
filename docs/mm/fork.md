@@ -699,6 +699,7 @@ The fix removed the `FOLL_WRITE` flag manipulation that created the race window.
 #### Why it went undetected
 
 The bug was subtle:
+
 - Required precise timing between two threads
 - Only affected private mappings of read-only files
 - Normal testing wouldn't trigger the race
@@ -822,6 +823,7 @@ The fix ensures TLB flushes happen before releasing both source and destination 
 #### The pattern
 
 `userfaultfd` allows userspace to handle page faults. This is extremely useful for:
+
 - Live migration of VMs
 - Garbage collectors
 - Custom memory management

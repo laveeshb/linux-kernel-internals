@@ -169,6 +169,7 @@ put_user(x, user_ptr)   /* *user_ptr = x */
 ```
 
 Why mandatory copies?
+
 - User pointers might be NULL or invalid
 - Kernel and user address spaces are separate (KPTI)
 - Userspace can change the pointed-to memory after the check (TOCTOU)
@@ -233,6 +234,7 @@ do_hres(const struct vdso_data *vd, clockid_t clk,
 ```
 
 Syscalls fast-pathed through the vDSO (no ring switch):
+
 - `clock_gettime(CLOCK_REALTIME/MONOTONIC/...)`
 - `gettimeofday()`
 - `clock_getres()`

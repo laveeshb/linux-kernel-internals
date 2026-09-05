@@ -152,6 +152,7 @@ raw_spin_trylock(&raw_lock);       /* returns 1 on success */
 ## Debugging: lockdep catches misuse
 
 With `CONFIG_DEBUG_SPINLOCK` and `CONFIG_LOCKDEP`, the kernel detects:
+
 - Double-locking (taking a lock you already hold)
 - Lock ordering violations (potential deadlocks between lock classes)
 - Sleeping while holding a spinlock

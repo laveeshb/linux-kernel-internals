@@ -9,6 +9,7 @@ This documentation explains how Linux handles I/O — not just the system call A
 ### Prerequisites
 
 This documentation assumes familiarity with:
+
 - **C programming** — The kernel is written in C; syscall behavior is best understood at the C level
 - **Basic OS concepts** — Processes, kernel vs. userspace, system calls, file descriptors
 - **File descriptors** — What they are, how `open()` / `close()` / `dup()` work, and that they reference kernel-side `struct file` objects

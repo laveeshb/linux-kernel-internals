@@ -138,6 +138,7 @@ static void hrtimer_switch_to_hres(void)
 ```
 
 After switching:
+
 - The scheduler tick is implemented via an hrtimer (no longer a fixed-rate interrupt)
 - Timer resolution is limited only by hardware latency (~100ns typical)
 - `NOHZ` (tickless idle) can skip ticks entirely when CPU is idle

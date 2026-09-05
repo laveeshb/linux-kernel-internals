@@ -55,6 +55,7 @@ The Hellwig rework is [documented on LWN](https://lwn.net/Articles/7473/).
 **What changed**: vmalloc can now use `PMD`-sized huge pages for large allocations.
 
 **How it works**:
+
 - If allocation >= `PMD` size, try huge pages first
 - Fall back to small pages if huge allocation fails
 - `VM_NOHUGE` flag to force small pages (needed for module allocations with strict rwx)
@@ -73,11 +74,13 @@ See [vrealloc](vrealloc.md) for detailed history.
 ## When to Use vmalloc
 
 **Use vmalloc when:**
+
 - Allocation is large (multiple pages)
 - Physical contiguity not required
 - Memory won't be used for DMA
 
 **Don't use vmalloc when:**
+
 - Small allocations (use kmalloc - less overhead)
 - Need physical contiguity (use kmalloc or alloc_pages)
 - DMA operations (need physical addresses)
@@ -193,6 +196,7 @@ Each vmalloc region has a guard page (unmapped) at the end. Buffer overflows hit
 ### Why lazy TLB flushing?
 
 TLB flushes are expensive:
+
 - IPI (Inter-Processor Interrupt) to all CPUs
 - Each CPU must flush its TLB
 - All done under lock
@@ -233,6 +237,7 @@ cat /proc/vmallocinfo
 ```
 
 Key fields:
+
 - **Address range**: Virtual address start-end
 - **Size**: In bytes
 - **Caller**: Function that allocated (useful for debugging leaks)

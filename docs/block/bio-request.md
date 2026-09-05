@@ -145,6 +145,7 @@ After merging:
 ```
 
 Merging is constrained by hardware limits:
+
 - `queue->limits.max_sectors` — maximum request size
 - `queue->limits.max_segments` — maximum scatter-gather segments
 - `queue->limits.max_segment_size` — maximum bytes per segment

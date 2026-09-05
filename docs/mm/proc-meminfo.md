@@ -237,6 +237,7 @@ MemTotal ≈ MemFree
 ```
 
 The gap comes from:
+
 - Kernel allocations not individually tracked in meminfo (percpu memory, vmalloc backing pages, kernel page tables)
 - Race conditions — `meminfo_proc_show()` reads counters without a single lock
 - CMA pages in MemFree that are restricted-use
@@ -249,6 +250,7 @@ The gap comes from:
 Watch **MemAvailable**. If it approaches zero, the system is under memory pressure. Do not watch MemFree — it is normally near zero on a healthy system.
 
 Secondary signals:
+
 - SwapFree dropping (swap being consumed)
 - Active(anon) growing
 - `/proc/pressure/memory` showing elevated `some` or `full` (v4.20+)
@@ -263,10 +265,12 @@ Compare `Active(file) + Inactive(file)` with disk I/O rates (from `iostat`):
 ### How to spot a memory leak
 
 **Userspace leak**:
+
 - `AnonPages` and `Committed_AS` growing over time
 - Per-process: watch `/proc/<pid>/status` VmRSS or `/proc/<pid>/smaps_rollup`
 
 **Kernel leak**:
+
 - `SUnreclaim` growing = slab leak (check `slabtop`)
 - `VmallocUsed` growing = vmalloc leak (note: this field was zeroed in v4.4 ([commit a5ad88ce8c7f](https://git.kernel.org/linus/a5ad88ce8c7f)) and restored in v5.3 ([commit 97105f0ab7b8](https://git.kernel.org/linus/97105f0ab7b8)); on kernels 4.4-5.2, check `/proc/vmallocinfo` instead)
 - `KernelStack` growing with stable process count = thread leak

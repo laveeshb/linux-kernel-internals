@@ -311,11 +311,13 @@ int fd = open("file", O_RDWR | O_DIRECT);
 ```
 
 **Use cases**:
+
 - Databases with their own caching
 - Avoiding double-caching
 - Predictable latency
 
 **Trade-offs**:
+
 - No readahead benefits
 - No write buffering
 - Application must handle caching
@@ -329,6 +331,7 @@ Working set larger than available RAM.
 **Symptoms**: High `pgpgin`/`pgpgout`, slow I/O
 
 **Solutions**:
+
 - Add RAM
 - Reduce working set
 - Use O_DIRECT for some workloads
@@ -340,6 +343,7 @@ Too many dirty pages causing write stalls.
 **Symptoms**: Processes blocked in `balance_dirty_pages`
 
 **Solutions**:
+
 - Lower `dirty_ratio`
 - Faster storage
 - Reduce write rate
@@ -349,6 +353,7 @@ Too many dirty pages causing write stalls.
 Sequential readahead hurts random workloads.
 
 **Solutions**:
+
 - Use `posix_fadvise(POSIX_FADV_RANDOM)`
 - Reduce `read_ahead_kb`
 - Use `madvise(MADV_RANDOM)` for mmap

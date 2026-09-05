@@ -5,6 +5,7 @@
 ## Why module signing?
 
 Without module signing, anyone with root access can insert arbitrary kernel code via `insmod`. Module signing prevents loading unauthorized modules in security-sensitive environments:
+
 - **Secure Boot**: UEFI firmware verifies the boot chain; modules must also be verified
 - **Locked-down kernel**: `lockdown=integrity` mode prevents unsigned modules
 - **Compliance**: PCI-DSS, FIPS 140-3 requirements

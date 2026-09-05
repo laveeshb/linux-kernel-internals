@@ -38,6 +38,7 @@ Unlike services, systemd does not start or stop processes in a scope — it only
 Hierarchical grouping containers for services and scopes. A slice does not hold processes directly; it holds child slices, services, and scopes. Its cgroup provides a resource envelope shared by all children.
 
 The default slices are:
+
 - `system.slice` — all system services
 - `user.slice` — all user sessions
 - `machine.slice` — VMs and containers managed by `systemd-machined`
@@ -147,6 +148,7 @@ Delegate=cpu memory pids
 ```
 
 This is used by:
+
 - **containerd** / **Docker** — create per-container sub-cgroups under `containerd.service/`
 - **Kubernetes kubelet** — creates per-pod cgroups under `kubelet.service/` or a dedicated slice
 - **User systemd instances** — `user@1000.service` is delegated so the per-user systemd can manage `user.slice/user-1000.slice/`

@@ -102,6 +102,7 @@ vfs_write() → file->f_op->write_iter()
 ```
 
 Data is only guaranteed on disk after:
+
 - `fsync(fd)` or `fdatasync(fd)` — explicit flush [(man page)](https://man7.org/linux/man-pages/man2/fsync.2.html)
 - The writeback daemon flushes (typically after 30 seconds or when memory pressure is high; controlled by `dirty_expire_centisecs`)
 - The filesystem's `sync_fs()` is called
@@ -165,6 +166,7 @@ __close_fd() → filp_close()
 ```
 
 `flush()` vs `release()`:
+
 - `flush()`: called on every `close()` — some filesystems use this for error checking (NFS flushing dirty data)
 - `release()`: called only when the last reference to the `struct file` is dropped (e.g., after all `dup()`'d fds are closed)
 

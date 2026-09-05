@@ -101,6 +101,7 @@ atomic_long_cmpxchg(&v, old, new);
 ## READ_ONCE and WRITE_ONCE
 
 Two CPUs accessing a variable simultaneously is undefined behavior in C. `READ_ONCE` and `WRITE_ONCE` prevent the compiler from:
+
 - Tearing the access (splitting a word-sized read/write into multiple)
 - Merging or reordering accesses
 - Caching the value in a register across function calls

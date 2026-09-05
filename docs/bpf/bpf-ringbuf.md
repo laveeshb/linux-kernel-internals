@@ -24,6 +24,7 @@ int trace_write(struct trace_event_raw_sys_enter *ctx) {
 ```
 
 Problems with `PERF_EVENT_ARRAY`:
+
 - **Per-CPU**: separate buffer per CPU, requires per-CPU polling in userspace
 - **Memory waste**: each CPU gets a full buffer even if mostly idle
 - **No variable-size records**: must pre-declare event size
@@ -55,6 +56,7 @@ Ring buffer memory layout:
 ```
 
 Key properties:
+
 - **Single buffer**: no per-CPU waste; all CPUs share one ring
 - **Spinlock-free**: compare-and-swap for producer position reservation
 - **Two-phase commit**: reserve space, fill it, then submit or discard

@@ -611,6 +611,7 @@ The main advantage of `io_uring` over `preadv2` is not the per-call flags (those
 | `io_uring` | no | yes | yes | High-concurrency, batch submission |
 
 For a database using multiple threads to issue random reads:
+
 - `read()` + `lseek()`: requires external mutex around each seek+read pair.
 - `pread()`: safe without any mutex; each thread passes its own offset.
 - `preadv()`: safe and avoids an extra `memcpy` when the page header and body go to different structures.

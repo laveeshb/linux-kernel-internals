@@ -40,6 +40,7 @@ if (pid == 0) {
 Without overcommit, `fork()` would need 8GB total (4GB parent + 4GB child) even though the child immediately calls `exec()` and discards its copy.
 
 With copy-on-write and overcommit:
+
 - Child shares parent's pages (no copy yet)
 - `exec()` replaces address space before any copy happens
 - Actual memory needed: ~4GB (not 8GB)
@@ -248,6 +249,7 @@ The inevitable consequence of optimistic allocation: sometimes the bet fails. Ri
 > *"Thanks go out to Claus Fischer for some serious inspiration and for goading me into coding this file."*
 
 The OOM killer was controversial from day one. But the alternatives are worse:
+
 - **(a)** Return `ENOMEM` and have programs crash anyway
 - **(b)** Never overcommit and waste enormous amounts of memory
 - **(c)** Kill something and let the system recover
@@ -274,6 +276,7 @@ echo -1000 > /proc/<pid>/oom_score_adj
 ```
 
 **For containers:**
+
 - Use memory cgroups to limit and isolate
 - Let container runtime handle OOM
 

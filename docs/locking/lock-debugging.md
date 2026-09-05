@@ -5,6 +5,7 @@
 ## Identifying the problem
 
 Lock contention manifests as CPUs burning time waiting rather than doing useful work. Symptoms:
+
 - High CPU utilization but low throughput
 - `perf top` shows `_raw_spin_lock` or `mutex_lock` near the top
 - `sar -u` shows high `%sys` with low actual work rate
@@ -33,6 +34,7 @@ class name    con-bounces  contentions  waittime-min  waittime-max  waittime-tot
 ```
 
 Key columns:
+
 - **contentions**: number of times a caller had to wait (lock was already held)
 - **waittime-max**: worst-case wait time (µs) — your tail latency
 - **holdtime-total**: total time the lock was held — high means long critical sections

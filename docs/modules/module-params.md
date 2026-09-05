@@ -25,6 +25,7 @@ MODULE_PARM_DESC(enable_feature, "Enable experimental feature");
 ```
 
 The third argument is the `sysfs` permission:
+
 - `0644` — owner read-write, group/other read-only → visible and changeable
 - `0444` — read-only for everyone
 - `0` — not exposed in sysfs (load-time only)
@@ -211,6 +212,7 @@ Addresses are hidden from unprivileged readers. `/proc/kallsyms` calls
 than the real addresses shown above — hence the `sudo`.
 
 Symbol types:
+
 - `T`/`t` — code (.text) — uppercase=global, lowercase=local
 - `D`/`d` — data (.data)
 - `R`/`r` — read-only data (.rodata)

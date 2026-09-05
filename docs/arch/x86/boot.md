@@ -27,6 +27,7 @@ Modern x86-64 systems boot via one of two firmware interfaces:
 On power-on, the x86-64 CPU resets to real mode and executes its first instruction at the **reset vector**: physical address `0xFFFFFFF0` (mapped to ROM). This is the top 16 bytes of the 4GB address space.
 
 The BIOS firmware runs **POST** (Power-On Self Test):
+
 - Initializes and tests RAM
 - Enumerates PCI devices
 - Detects the memory map (passed to the OS via INT 0x15/E820)
@@ -129,6 +130,7 @@ The resulting e820 table describes which physical memory ranges are usable RAM, 
 ### Video mode setup and other detection
 
 The setup code also:
+
 - Detects available video modes and sets the console resolution
 - Queries APM BIOS, EDD (Enhanced Disk Drive) information
 - Reads CPUID to detect CPU capabilities
@@ -217,6 +219,7 @@ lret    /* pops cs:eip from stack, cs selects 64-bit descriptor */
 ### startup_64 (`arch/x86/boot/compressed/head_64.S`)
 
 `startup_64` is the first 64-bit code. At this point:
+
 - The CPU is in 64-bit long mode
 - Only a minimal identity-mapped page table exists
 - The compressed kernel blob is still in memory, not yet decompressed

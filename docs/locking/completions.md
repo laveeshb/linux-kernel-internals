@@ -69,6 +69,7 @@ if (try_wait_for_completion(&c)) {
 ## struct wait_queue_head_t
 
 `wait_queue_head_t` is the lower-level primitive that `completion` builds on. It supports:
+
 - Multiple waiters on the same event
 - Custom wake conditions
 - Exclusive vs non-exclusive wakeup

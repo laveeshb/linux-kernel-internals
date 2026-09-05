@@ -268,6 +268,7 @@ int cgroup_filter(struct __sk_buff *skb)
 ```
 
 Supported BPF attach types on cgroups:
+
 - `BPF_CGROUP_INET_INGRESS` / `BPF_CGROUP_INET_EGRESS`
 - `BPF_CGROUP_INET_SOCK_CREATE` / `BPF_CGROUP_SOCK_OPS`
 - `BPF_CGROUP_DEVICE` — device access control

@@ -44,6 +44,7 @@ Linus Torvalds, a 21-year-old student at University of Helsinki, [posted to `com
 > *"I'm doing a (free) operating system (just a hobby, won't be big and professional like gnu) for 386(486) AT clones."*
 
 He was frustrated that MINIX (Andrew Tanenbaum's teaching OS) couldn't be freely modified. Linux 0.01 had:
+
 - Basic process management
 - Simple memory management (buddy allocator)
 - Minimal filesystem support
@@ -52,6 +53,7 @@ He was frustrated that MINIX (Andrew Tanenbaum's teaching OS) couldn't be freely
 ### The GPL Decision (1992)
 
 Originally under a restrictive license, Torvalds switched to [GPL](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html) in February 1992. This was pivotal - it meant:
+
 - Anyone could contribute
 - Improvements had to be shared back
 - Companies couldn't make proprietary forks
@@ -59,6 +61,7 @@ Originally under a restrictive license, Torvalds switched to [GPL](https://www.g
 ### The Tanenbaum Debate (January 1992)
 
 Andrew Tanenbaum [declared "Linux is obsolete"](https://www.oreilly.com/openbook/opensources/book/appa.html), arguing:
+
 - Monolithic kernels were outdated
 - Microkernels were the future
 - Linux was too tied to `i386`
@@ -68,6 +71,7 @@ Torvalds defended the pragmatic choice: monolithic was simpler, faster, and actu
 ### v1.0 (March 1994)
 
 After 3 years of development, [Linux 1.0](https://cdn.kernel.org/pub/linux/kernel/v1.0/) was released. It supported:
+
 - Networking (`TCP/IP`)
 - Loadable kernel modules
 - Multiple filesystems
@@ -82,6 +86,7 @@ After 3 years of development, [Linux 1.0](https://cdn.kernel.org/pub/linux/kerne
 **The need**: Multi-processor systems were becoming affordable.
 
 **The challenge**: The original kernel assumed single CPU. Adding SMP required:
+
 - Spinlocks for synchronization
 - Per-CPU data structures
 - Big Kernel Lock (`BKL`) as initial solution
@@ -91,6 +96,7 @@ The `BKL` was a single global lock - simple but limited scalability. It took yea
 ### Enterprise Interest Begins
 
 By late 1990s, companies noticed Linux:
+
 - **1998**: [Oracle shipped Oracle8 for Linux](https://www.theregister.com/1998/10/09/oracle_aims_oracle8_for_linux/)
 - **1999**: [HP formed Linux organization](https://www.linux.co.cr/oem-support/review/1999/0301.html), offered 24x7 support
 - **2000**: [IBM invested $1 billion in Linux](https://www.linux.co.cr/oem-support/review/2000/1212.html), Dell shipping Linux servers
@@ -111,6 +117,7 @@ By late 1990s, companies noticed Linux:
 ### v2.4: Production Ready (2001)
 
 The kernel that convinced enterprises:
+
 - Journaling filesystems (`ext3`, ReiserFS)
 - LVM (Logical Volume Manager)
 - USB support
@@ -121,6 +128,7 @@ The kernel that convinced enterprises:
 ### The SCO Lawsuit (2003-2007)
 
 [SCO Group sued IBM](https://en.wikipedia.org/wiki/SCO_Group,_Inc._v._International_Business_Machines_Corp.) claiming Linux contained stolen Unix code. The lawsuit:
+
 - Created fear, uncertainty, doubt (FUD)
 - Led to better documentation of code origins
 - Eventually collapsed (SCO lost, [settled 2021](https://en.wikipedia.org/wiki/SCO%E2%80%93Linux_disputes#Settlement))
@@ -132,6 +140,7 @@ Result: Stronger processes for tracking code provenance, [Developer Certificate 
 ### v2.6: The Scalability Kernel (2003)
 
 Major rewrite with:
+
 - **`O(1)` scheduler**: Constant-time scheduling regardless of process count (later replaced by CFS in v2.6.23, 2007)
 - **Preemptible kernel**: Better responsiveness
 - **NPTL**: Native POSIX Thread Library (vastly improved threading)
@@ -142,6 +151,7 @@ This kernel could scale from embedded to enterprise.
 ### Git Created (2005)
 
 Kernel development outgrew BitKeeper (proprietary). Torvalds [announced the need for a replacement](https://lore.kernel.org/all/Pine.LNX.4.58.0504060800280.2215@ppc970.osdl.org/) and wrote Git in weeks. Impact:
+
 - Distributed development model
 - Anyone can have full history
 - Branching/merging became trivial
@@ -154,6 +164,7 @@ Kernel development outgrew BitKeeper (proprietary). Torvalds [announced the need
 ### Android Announced (November 2007)
 
 [Google's mobile OS](https://www.openhandsetalliance.com/press_110507.html), built on Linux kernel. Required:
+
 - **Binder IPC**: Fast inter-process communication
 - **Ashmem**: Anonymous shared memory for apps
 - **Wakelocks**: Power management for mobile
@@ -164,6 +175,7 @@ Some Android patches took years to upstream, others remain Android-specific.
 ### Containers Foundation (2006-2008)
 
 Cloud computing needed lightweight virtualization:
+
 - **Namespaces** (2006): Isolate process views of system
 - **[Cgroups](https://lwn.net/Articles/236038/)** (v2.6.24, 2008): Resource limits per process group
 
@@ -172,6 +184,7 @@ These became the foundation for Docker (2013) and modern container orchestration
 ### v2.6.28-v2.6.39: Rapid Evolution
 
 The 2.6.x series lasted until 2011, with rapid feature additions:
+
 - [KVM virtualization](https://lwn.net/Articles/205580/) (v2.6.20, 2007)
 - `ext4` filesystem (2008)
 - `btrfs` development begins
@@ -188,6 +201,7 @@ Not a major technical change - Torvalds [changed versioning](https://lwn.net/Art
 ### Supercomputer Dominance
 
 Linux share of [TOP500 supercomputers](https://www.top500.org/statistics/details/osfam/1):
+
 - 2000: ~30%
 - 2005: ~75%
 - 2010: ~90%
@@ -202,6 +216,7 @@ Not kernel, but significant: [systemd](https://systemd.io/) replaced SysVinit ac
 ### Real-time Improvements (`PREEMPT_RT`)
 
 Gradual merging of real-time patches:
+
 - Threaded interrupt handlers
 - Priority inheritance for mutexes
 - High-resolution timers
@@ -215,6 +230,7 @@ Enabling Linux in industrial and automotive applications.
 ### Meltdown/Spectre (2018)
 
 [CPU vulnerabilities](https://meltdownattack.com/) requiring kernel-level mitigations:
+
 - **[KPTI](https://lore.kernel.org/all/20171204150606.306546484@linutronix.de/T/)**: Kernel page table isolation (Meltdown)
 - **Retpoline**: Speculative execution mitigation
 - **`IBRS`/`IBPB`**: Indirect branch controls
@@ -224,6 +240,7 @@ Performance impact: 5-30% for some workloads. Led to hardware/software co-design
 ### Extended BPF (eBPF)
 
 [Extended BPF (eBPF)](https://lore.kernel.org/netdev/1395404418-25376-9-git-send-email-dborkman@redhat.com/) transformed from packet filtering to:
+
 - Tracing and profiling
 - Security enforcement
 - Network acceleration
@@ -236,6 +253,7 @@ Safe, JIT-compiled programs running in kernel space with verifier guarantees.
 **Commit**: [8aebac82933f](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8aebac82933ff1a7c8eede18cab11e1115e2062b) (v6.1)
 
 First high-level language besides C in Linux kernel. [Pull request for v6.1](https://lore.kernel.org/lkml/CAK7LNAQ2xBLG_aSDm64SSYRBOBKwhJnZ6UDg8ycAezATVToFLg@mail.gmail.com/t/) accepted. Motivation:
+
 - Memory safety guarantees
 - Prevent entire classes of bugs
 - Modern language features
@@ -286,6 +304,7 @@ CPU architectures are only part of the story — buses, network hardware, and bo
 ### The Maintainer Model
 
 Linux uses a hierarchical [maintainer model](https://docs.kernel.org/process/maintainer-netdev.html):
+
 - ~1,700 active maintainers
 - Subsystem maintainers review patches
 - Lieutenants collect subsystem work

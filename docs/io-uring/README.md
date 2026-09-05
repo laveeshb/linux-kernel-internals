@@ -9,6 +9,7 @@ This documentation explains how io_uring works — not just the API, but the des
 ### Prerequisites
 
 This documentation assumes familiarity with:
+
 - **C programming** — io_uring's API and the kernel implementation are both in C
 - **File descriptors and syscalls** — how `read()`, `write()`, `accept()` work at the OS level
 - **Basic async concepts** — event loops, non-blocking I/O, callbacks

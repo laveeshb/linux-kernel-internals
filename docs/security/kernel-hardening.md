@@ -43,6 +43,7 @@ Boot time:
 ```
 
 **Bypass**: KASLR is defeated by:
+
 - Kernel pointer leaks via `/proc`, uninitialized reads, or info-disclosure bugs
 - `CONFIG_RANDOMIZE_BASE=n` in non-default configs
 

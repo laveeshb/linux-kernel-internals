@@ -59,6 +59,7 @@ How Linux memory allocators relate to each other:
 ```
 
 **Key insight**: All allocators ultimately get pages from the buddy allocator. The difference is how they present memory to callers:
+
 - **kmalloc/SLUB**: Physically contiguous, fast, small allocations
 - **vmalloc**: Virtually contiguous, can satisfy large requests from fragmented memory
 
@@ -116,6 +117,7 @@ When they free those 2 pages, you merge them back with their "buddy":
 ### The Problem
 
 The page allocator works in page-sized chunks (`4KB`). But kernel objects are often tiny:
+
 - An inode? ~600 bytes
 - A dentry? ~200 bytes
 - A socket buffer? ~200 bytes
@@ -143,6 +145,7 @@ Each object type gets its own cache. Allocating is fast (grab from cache), freei
 *Note: SLAB predates good LKML archives. The Bonwick paper is the canonical design reference.*
 
 **SLUB (v2.6.22, 2007)**: Simpler redesign by Christoph Lameter.
+
 - **Commit**: [81819f0fc828](https://git.kernel.org/linus/81819f0fc828)
 - Removed complex queuing
 - Lower memory overhead
@@ -193,6 +196,7 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 **The problem**: vunmap needed to flush TLB entries. On multi-core systems, this meant an IPI (interrupt) to *every* CPU. Under a global lock. As core counts grew from 4 to 64+, this became quadratic slowdown.
 
 **The fix**: Nick Piggin rewrote vmalloc from scratch:
+
 - **Commit**: [db64fe02258f](https://git.kernel.org/linus/db64fe02258f)
 - Lazy TLB flushing: Don't flush immediately, batch multiple unmaps
 - RBTree for address lookup: `O(log n)` instead of `O(n)` list scan
@@ -205,6 +209,7 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 **The problem**: With huge vmalloc buffers (BPF programs, modules), each `4KB` page needed a TLB entry. TLB is limited. Lots of TLB misses.
 
 **The fix**: Use huge pages (`2MB`) when possible:
+
 - **Commit**: [121e6f3258fe](https://git.kernel.org/linus/121e6f3258fe) | [LKML](https://lore.kernel.org/linux-mm/1616036421.amjz2efujj.astroid@bobo.none/)
 - Fewer TLB entries needed
 - Trade-off: More internal fragmentation
@@ -214,6 +219,7 @@ Page tables must be set up. TLB (translation cache) entries are consumed. It's s
 **The problem**: You have a vmalloc buffer and want to resize it. Previously, you'd have to allocate new, copy, free old.
 
 **The fix**: `vrealloc()` - resize in place when possible:
+
 - **Commit**: [3ddc2fefe6f3](https://git.kernel.org/linus/3ddc2fefe6f3)
 - Motivated by Rust's allocator needs (`Vec` resizing)
 - See [vrealloc](vrealloc.md) for the full story and bugs found

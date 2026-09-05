@@ -409,6 +409,7 @@ dmesg | grep -i "out of memory"
 ```
 
 The log shows:
+
 - Which process was killed
 - Memory usage breakdown (vm, rss, file, shmem)
 - User ID
@@ -908,6 +909,7 @@ The patch tracked process history in a tree structure:
 > *"The fork bomb killer will perform a depth-first traversal of the process history tree... At the end, the process with the highest score is examined; if there are at least ten processes in the history below the high scorer, it is deemed to be a fork bomb."*
 
 When detected:
+
 - All tasks in the fork bomb are killed
 - New `fork()` in that session returns `-ENOMEM` for 30 seconds
 

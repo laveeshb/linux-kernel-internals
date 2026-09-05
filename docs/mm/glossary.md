@@ -66,6 +66,7 @@ When free memory exists but isn't usable because it's broken into small, non-con
 
 ### GFP Flags (Get Free Pages)
 Flags passed to allocation functions specifying behavior:
+
 - `GFP_KERNEL`: Normal allocation, can sleep
 - `GFP_ATOMIC`: Can't sleep (used in interrupts)
 - `__GFP_ZERO`: Zero the memory before returning
@@ -247,11 +248,13 @@ Resize a vmalloc allocation. Can shrink in-place (freeing pages) or grow (may ne
 Division of physical memory by hardware constraints. Zones vary by architecture:
 
 **x86-64:**
+
 - **`ZONE_DMA`**: First 16MB (legacy 16-bit DMA)
 - **`ZONE_DMA32`**: 16MB - 4GB (32-bit DMA devices)
 - **`ZONE_NORMAL`**: Above 4GB (regular allocations)
 
 **32-bit x86:**
+
 - **`ZONE_DMA`**: First 16MB
 - **`ZONE_NORMAL`**: 16MB - ~896MB (directly mapped)
 - **`ZONE_HIGHMEM`**: Above ~896MB (not directly mapped, requires kmap)

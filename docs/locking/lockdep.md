@@ -77,6 +77,7 @@ the existing dependency chain (in reverse order) is:
 ```
 
 Key fields:
+
 - The lock type annotation `{+.+.}` shows where it's used: `+` = used with IRQs enabled, `-` = used with IRQs disabled, `.` = not used in that context
 - The dependency chain shows the exact call path that created the dependency
 
@@ -162,6 +163,7 @@ cat /proc/lock_stat
 ```
 
 Columns:
+
 - `contentions`: times the lock was already held when taken
 - `waittime-*`: how long callers waited (microseconds)
 - `acquisitions`: total lock acquisitions

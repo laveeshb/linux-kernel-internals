@@ -258,6 +258,7 @@ if (count > 1)
 ```
 
 Overruns happen when:
+
 - Handler takes longer than the period
 - System is loaded; scheduling latency > period
 - Thread was blocked (sleeping, waiting for I/O)

@@ -7,6 +7,7 @@
 Normally, page faults are handled by the kernel: a missing page triggers an anonymous allocation, swap-in, or file read. But some applications need to **intercept** page faults — to provide pages from their own storage or to implement copy-on-write in userspace.
 
 Use cases:
+
 - **QEMU live migration**: receive guest RAM pages on-the-fly as the guest accesses them
 - **CRIU** (Checkpoint/Restore In Userspace): restore process memory lazily
 - **Hypervisors**: implement demand-paging for guest memory from userspace

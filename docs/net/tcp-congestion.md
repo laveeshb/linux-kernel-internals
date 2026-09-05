@@ -14,6 +14,7 @@ cwnd: sender's estimate of network capacity (congestion control)
 ```
 
 The congestion controller runs on the sender and responds to:
+
 - **ACK received**: increase cwnd (network has capacity)
 - **Loss detected**: decrease cwnd (congestion)
 - **ECN (Explicit Congestion Notification)**: decrease cwnd before loss
@@ -147,6 +148,7 @@ CUBIC window function:
 ```
 
 The cubic shape means CUBIC:
+
 - Grows quickly far below Wmax (catching up after loss)
 - Slows near Wmax (probing carefully)
 - Overshoots if Wmax was limited by receiver
@@ -197,6 +199,7 @@ static void bictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 ### HyStart++: safe slow start exit
 
 CUBIC uses HyStart to exit slow start before actual loss:
+
 - **Delay increase**: exit when RTT increases by more than a threshold (ACK train delay)
 - **ACK train end**: exit when ACK spacing shows the pipe is full
 

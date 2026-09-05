@@ -5,6 +5,7 @@
 ## The problem
 
 Every system call requires a mode switch: user → kernel → user. For `gettimeofday()`, this means:
+
 - Save registers, change privilege level (CPL 0)
 - Look up time in the kernel
 - Restore registers, return to userspace
@@ -43,6 +44,7 @@ __vdso_getcpu()           /* getcpu() — current CPU/NUMA node   — fast */
 ## The vdso_data shared page
 
 The kernel maintains a **vvar** (vDSO variable) page that is:
+
 - Mapped read-only into every process
 - Written by the kernel (holding current time)
 - Read by the vDSO functions (no syscall)

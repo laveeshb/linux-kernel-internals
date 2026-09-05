@@ -11,6 +11,7 @@ The consequence: a task scheduled on socket 0 could read `CLOCK_MONOTONIC` via t
 The kernel's fix is the **clocksource watchdog** (`kernel/time/clocksource.c`, `clocksource_watchdog()`). A periodic timer compares TSC readings against a reference clocksource (HPET or ACPI PM timer). If the TSC and the reference diverge by more than a threshold, the TSC is marked `CLOCK_SOURCE_UNSTABLE` and the kernel downgrades to the next-best clocksource (typically HPET, with a rating of 250 vs TSC's fixed rating of 300).
 
 Modern Intel and AMD CPUs expose the **Invariant TSC** feature: `CPUID` leaf `0x80000007`, EDX bit 8 (`TSC_INVARIANT`). An invariant TSC:
+
 - Runs at a constant rate regardless of CPU frequency scaling (P-states) and power states (C-states up to C1).
 - Is synchronized across all cores in the package.
 - Is synchronized across all sockets on Intel platforms using RESET synchronization.
@@ -50,6 +51,7 @@ The result: Reddit, Mozilla, LinkedIn, Qantas, and hundreds of other Linux-based
 Root cause: the leap second handling hrtimers were never notified of the clock step via `clock_was_set()`, so `CLOCK_REALTIME`/`TIMER_ABSTIME` timers fired immediately in a continuous loop. The kernel was subsequently patched with backports that corrected `hrtimer` behavior during leap second insertion.
 
 **Workarounds used at the time:**
+
 - Set the system clock slightly ahead before midnight so the leap second was absorbed as a normal tick, avoiding the confused state entirely.
 - Use `ntpd`'s `leapsmear` option (chrony, NTPD 4.2.6+) to spread the one-second adjustment over a longer window (12–24 hours) so no single second has a discontinuity — preventing the sharp discontinuity that triggered the spin. Many NTP server operators and cloud providers now smear by default. The kernel does not implement smearing natively; it is done by the time daemon.
 - Apply the kernel fix: backported patches that corrected `hrtimer` behavior during leap second insertion were available for affected kernel versions.

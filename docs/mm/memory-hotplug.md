@@ -496,6 +496,7 @@ cat /sys/devices/system/memory/memoryN/valid_zones
 ```
 
 **Remedies**:
+
 - If possible, online the block as `ZONE_MOVABLE` instead (requires re-onlining)
 - Set `auto_online_blocks=online_movable` before the next hotplug event
 - Try the offline repeatedly — memory compaction runs between attempts and may free the range

@@ -95,6 +95,7 @@ bind(xsk_fd, (struct sockaddr *)&sxdp, sizeof(sxdp));
 ## Zero-copy mode
 
 In **zero-copy** mode (`XDP_ZEROCOPY`), the NIC DMA-writes packets directly into the UMEM frames. No data copying occurs between NIC, kernel, and userspace. Requires:
+
 - Driver support (i40e, mlx5, ixgbe, etc.)
 - UMEM frames pinned in memory
 

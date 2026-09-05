@@ -234,6 +234,7 @@ dmesg | grep -E "random:|crng"
 ```
 
 The VM was:
+
 - Running under KVM without virtio-rng device configured
 - CPU feature masking prevented RDRAND from being visible to the guest
 - `systemd-random-seed.service` was loading the seed file too late in the boot sequence
@@ -350,6 +351,7 @@ static int proc_keys_show(struct seq_file *m, void *v)
 
 The default permissions for user-created keys give `view` permission to the world
 (`other` bits include `0x01 = view`). A key with `perm = 0x1f3f0000` has:
+
 - possessor: `0x1f` = view|read|write|search|link (setattr bit 0x20 is NOT set)
 - user: `0x3f` = all permissions (view|read|write|search|link|setattr)
 - group: `0x00` = no permissions

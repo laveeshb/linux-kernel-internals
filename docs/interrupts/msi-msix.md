@@ -5,6 +5,7 @@
 ## Why MSI-X?
 
 Legacy PCI interrupts (INTx, INTA-INTD) have fundamental limitations:
+
 - **Shared**: multiple devices share one IRQ line → spurious interrupts, no isolation
 - **Level-triggered**: interrupt line held until acknowledged → cannot miss (line stays asserted until cleared); edge-triggered interrupts can be missed if the transition occurs while masked
 - **Limited**: only 4 lines per PCI bus

@@ -5,6 +5,7 @@
 ## Why a slab allocator?
 
 `kmalloc` could just call the page allocator for every allocation, but that's wasteful:
+
 - Page allocator minimum granularity: 4096 bytes
 - Typical kernel allocation: 32–512 bytes
 - Objects of the same type are created and freed repeatedly

@@ -7,6 +7,7 @@
 dm-verity provides **transparent integrity checking** of a block device using a Merkle (hash) tree. Every read is verified against pre-computed hashes. If data is tampered with, the kernel returns an error or panics.
 
 Used by:
+
 - **Android**: verifying the read-only system partition
 - **ChromeOS**: verified boot for rootfs
 - **Linux distributions**: immutable root filesystem with integrity

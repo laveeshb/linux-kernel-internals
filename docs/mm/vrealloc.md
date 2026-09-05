@@ -48,6 +48,7 @@ The existing `kvrealloc()` had inconsistent behavior compared to `krealloc()`:
 **Author**: Kees Cook
 
 Introduced `vm_struct::requested_size` to track actual requested size separately from allocated area. This enabled:
+
 - Correct KASAN poisoning boundaries
 - Growing within existing allocation
 - Foundation for shrink optimization
@@ -81,6 +82,7 @@ Introduced `vm_struct::requested_size` to track actual requested size separately
 **Problem identified**: `vrealloc()` shrinking only updated metadata but kept all pages mapped. Shrinking `256KB` to `16KB` still consumed `256KB` of physical memory.
 
 **The fix**:
+
 - Unmap pages beyond new size via `vunmap_range()`
 - Free pages via `__free_page()`
 - Update memcg accounting
@@ -93,6 +95,7 @@ Introduced `vm_struct::requested_size` to track actual requested size separately
 ### Shrinking
 
 When shrinking (size < current):
+
 - Preserves data up to new size
 - Frees unused pages (since e64f42036ef4)
 - Returns same pointer (no copy)
@@ -100,6 +103,7 @@ When shrinking (size < current):
 ### Growing
 
 When growing (size > current):
+
 - May reuse existing allocation if space allows (since a0309faf1cb0)
 - Otherwise: allocate new, copy, free old
 - Returns potentially new pointer
@@ -117,6 +121,7 @@ The first page is used for memcg accounting via `mod_memcg_page_state()`. The me
 ### Why no minimum threshold for shrink
 
 Early iterations considered requiring >= 4 pages to free before actually freeing. This was removed:
+
 - Callers should control behavior, not arbitrary kernel policy
 - Any freed memory has value
 - Magic thresholds are hard to justify in review

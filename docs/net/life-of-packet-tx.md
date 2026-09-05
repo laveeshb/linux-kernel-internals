@@ -65,6 +65,7 @@ Data is held in `sk->sk_write_queue` until TCP decides to send it.
 ## Phase 2: TCP write: tcp_write_xmit()
 
 TCP decides *when* to send based on:
+
 - Congestion window (`tp->snd_cwnd`)
 - Receive window advertised by peer (`tp->snd_wnd`)
 - Nagle algorithm (delay small packets)
@@ -232,6 +233,7 @@ int dev_queue_xmit(struct sk_buff *skb)
 ```
 
 The qdisc can:
+
 - Drop packets (rate limiting via TBF, policing)
 - Reorder packets (FQ scheduling)
 - Delay packets (netem for testing)

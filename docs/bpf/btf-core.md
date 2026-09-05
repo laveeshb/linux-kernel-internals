@@ -51,6 +51,7 @@ struct btf_member {
 ```
 
 The kernel loads BTF via `BTF_LOAD` bpf() command and uses it:
+
 - For the verifier: to understand pointed-to struct layouts
 - For CO-RE relocation: to patch field offsets at program load time
 - For bpftool/libbpf: to pretty-print map values and program contexts

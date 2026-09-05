@@ -5,12 +5,14 @@
 ## What cgroups and namespaces do
 
 **Cgroups (control groups)** limit *how much* resource a group of processes can use:
+
 - CPU time (cpu.weight, cpu.max)
 - Memory (memory.max, memory.swap.max)
 - I/O bandwidth (io.weight, io.max)
 - Process count (pids.max)
 
 **Namespaces** control *what* processes can see:
+
 - Which processes are visible (PID namespace)
 - Which filesystem view they have (mount namespace)
 - Which network interfaces and addresses they have (network namespace)

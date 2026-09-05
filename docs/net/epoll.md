@@ -5,6 +5,7 @@
 ## The problem with poll/select
 
 `select()` and `poll()` require passing the entire set of monitored file descriptors on every call. For N fds:
+
 - Userspace → kernel copy: O(N)
 - Kernel scans all fds for readiness: O(N)
 - Kernel → userspace copy of ready fds: O(N)

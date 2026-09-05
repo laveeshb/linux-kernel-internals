@@ -48,6 +48,7 @@ Freed by task 12:
 ```
 
 Reading the report:
+
 - The **Read of size 4** is accessing `skb->len` (a `__u32` at offset `0x68` in `struct sk_buff`)
 - The free stack shows `mydrv_rx_completion+0x198`; the access stack shows `mydrv_rx_completion+0x1a8` — the access is 16 bytes later in the same function, confirming a use-after-free in the same call frame
 

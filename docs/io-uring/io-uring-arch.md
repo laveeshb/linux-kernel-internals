@@ -5,6 +5,7 @@
 ## The problem io_uring solves
 
 Traditional I/O interfaces:
+
 - `read()`/`write()`: one syscall per operation, blocking
 - `aio_read()` (POSIX AIO): thread-pool based, complex API, poor performance
 - `epoll` + non-blocking: two syscalls per operation (one to check, one to act), no batching
@@ -165,6 +166,7 @@ struct io_uring_cqe {
 ```
 
 `res` semantics mirror the corresponding blocking syscall:
+
 - `IORING_OP_READ`: bytes read, or -errno
 - `IORING_OP_WRITE`: bytes written, or -errno
 - `IORING_OP_ACCEPT`: new fd, or -errno

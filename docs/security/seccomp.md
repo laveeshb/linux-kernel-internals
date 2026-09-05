@@ -5,6 +5,7 @@
 ## What seccomp does
 
 seccomp (secure computing mode) installs a BPF program that runs on every syscall entry. The filter can:
+
 - Allow the syscall to proceed
 - Return an error to the caller (without kernel processing)
 - Kill the process
@@ -191,6 +192,7 @@ docker run --security-opt seccomp=/path/to/profile.json ubuntu bash
 ```
 
 The default Docker profile blocks (among others):
+
 - `acct` — process accounting
 - `add_key` — kernel keyring
 - `bpf` — BPF programs
@@ -205,6 +207,7 @@ The default Docker profile blocks (among others):
 ## SECCOMP_RET_USER_NOTIF: supervisor pattern
 
 Since Linux 5.0, a filter can defer decisions to a supervisor process. This enables:
+
 - Userspace policy enforcement
 - Container escape prevention (container manager approves mounts)
 - Debugging (supervisor logs allowed syscalls)

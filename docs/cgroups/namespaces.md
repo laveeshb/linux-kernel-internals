@@ -181,6 +181,7 @@ mount --make-unbindable /mnt
 ## Network namespace
 
 Each network namespace has its own:
+
 - Network interfaces (except loopback is separate per-ns)
 - IP routing table
 - Netfilter rules (iptables)
@@ -296,6 +297,7 @@ The key property: a process can be UID 0 (root) inside a user namespace but have
 ### Capability scope
 
 Capabilities in a user namespace only grant privilege over resources owned by that namespace and its descendants. Root in a user namespace cannot:
+
 - Load kernel modules
 - Modify kernel parameters outside the namespace
 - Read files owned by other users on the host

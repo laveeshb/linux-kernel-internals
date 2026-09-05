@@ -158,6 +158,7 @@ struct bpf_insn {
 ```
 
 Register conventions:
+
 - `r0` — return value from helper calls and program exit
 - `r1`–`r5` — function arguments (r1 = context pointer on entry)
 - `r6`–`r9` — callee-saved registers
@@ -263,6 +264,7 @@ int xdp_drop_icmp(struct xdp_md *ctx)
 ```
 
 XDP return codes:
+
 - `XDP_ABORTED` — bug/error, drops packet + fires tracepoint
 - `XDP_DROP` — drop immediately (before skb allocation)
 - `XDP_PASS` — pass to normal networking stack
@@ -288,6 +290,7 @@ refcount==0:               → bpf_prog_free()
 ```
 
 BPF links (`BPF_LINK_CREATE`) are preferred over legacy attach methods because:
+
 - Closing the link_fd automatically detaches (no dangling programs)
 - Links survive the original loader process exiting (if pinned)
 - Atomic program replacement via `BPF_LINK_UPDATE`

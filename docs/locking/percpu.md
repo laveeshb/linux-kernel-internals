@@ -7,6 +7,7 @@
 Many kernel subsystems maintain per-CPU counters or state — a count of context switches, cache statistics, a runqueue pointer. The obvious approach is a global variable with a lock. But the per-CPU approach is better: give each CPU its own copy.
 
 Benefits:
+
 - **No synchronization needed for CPU-local access**: reading/writing your own CPU's copy requires no locks
 - **No cache line bouncing**: each CPU touches only its own data, no false sharing
 - **Naturally scalable**: performance doesn't degrade as CPU count increases
@@ -54,6 +55,7 @@ this_cpu_write(my_counter, 0);
 ```
 
 The difference between `get_cpu_var` and `this_cpu_*`:
+
 - `get_cpu_var` disables preemption — safe even if code can be preempted
 - `this_cpu_*` does NOT disable preemption — caller must guarantee they won't migrate (e.g., already in a preemption-disabled section, or in a per-CPU context)
 
