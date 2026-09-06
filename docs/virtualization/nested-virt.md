@@ -59,21 +59,23 @@ L0 keeps an in-memory copy of what L1 believes the VMCS contains. This is `struc
 
 ```c
 /* arch/x86/kvm/vmx/vmcs12.h (selected fields) */
-struct vmcs12 {
-    /* Header — must match the hardware VMCS revision identifier */
-    u32 revision_id;
-    u32 abort;            /* VM-entry abort indicator */
+typedef u64 natural_width;  /* aliased so vmcs12 has a fixed layout across 32/64-bit L1s */
+
+struct __packed vmcs12 {
+    /* Header: must match the hardware VMCS revision identifier */
+    struct vmcs_hdr hdr;   /* revision_id:31, shadow_vmcs:1 */
+    u32 abort;
 
     /* Guest state area: what L1 puts here is L2's state */
-    u64 guest_cr0, guest_cr3, guest_cr4;
-    u64 guest_rsp, guest_rip, guest_rflags;
+    natural_width guest_cr0, guest_cr3, guest_cr4;
+    natural_width guest_rsp, guest_rip, guest_rflags;
     u64 guest_ia32_efer;
     u16 guest_cs_selector, guest_ss_selector;
     /* ... all segment registers, descriptor table regs ... */
 
     /* Host state area: where L1 wants to return after L2 exits */
-    u64 host_cr0, host_cr3, host_cr4;
-    u64 host_rsp, host_rip;
+    natural_width host_cr0, host_cr3, host_cr4;
+    natural_width host_rsp, host_rip;
     u64 host_ia32_efer;
 
     /* Control fields: what L1 wants to intercept for L2 */
@@ -85,12 +87,14 @@ struct vmcs12 {
 
     /* Exit/entry info: filled by L0 when synthesizing exits to L1 */
     u32 vm_exit_reason;
-    u64 exit_qualification;
-    u64 guest_physical_address;  /* GPA that caused EPT violation */
+    natural_width exit_qualification;
+    u64 guest_physical_address;  /* GPA that caused an EPT violation */
     u32 vm_instruction_error;
     /* ... */
 };
 ```
+
+`natural_width` is a `u64` typedef, not a distinct machine type — the comment in `vmcs12.h` explains why: to migrate an L1 (and its L2 guests) between hosts of different natural widths (32-bit vs. 64-bit), these fields can't be plain `unsigned long`, so KVM fixes them at 64 bits and relies on x86 being little-endian.
 
 L0 allocates one `struct vmcs12` per L1 vCPU and stores a pointer in `struct vcpu_vmx.nested.cached_vmcs12` (in `arch/x86/kvm/vmx/vmx.h`). When L1 executes `VMREAD`/`VMWRITE`, L0 reads/writes fields of this in-memory structure rather than touching a real VMCS.
 
@@ -105,13 +109,31 @@ Instead, L0 creates **vmcs02**: a real VMCS that merges L1's intent with L0's re
 
 ```
 vmcs01 (L0 → L1):        vmcs12 (L1's intent for L2):     vmcs02 (L0 → L2 on real hardware):
-  L0's EPT for L1           L1's EPT for L2                  Two-level EPT (nested EPT)
+  L0's EPT for L1           L1's EPT for L2                  A shadow EPT flattening both (see below)
   L0's MSR bitmap           L1's MSR bitmap                  Union of both bitmaps
   L0 host state             L1 host state (= L2 exit target) L0 host state
   L1 guest state            L2 guest state                   L2 guest state
 ```
 
-The merge is performed via `nested_vmx_run()` → `prepare_vmcs02()` in `arch/x86/kvm/vmx/nested.c`:
+The merge is performed via `nested_vmx_run()` → `nested_vmx_enter_non_root_mode()` → `prepare_vmcs02_early()` and `prepare_vmcs02()`, all in `arch/x86/kvm/vmx/nested.c`. Control-field merging happens first, in `prepare_vmcs02_early()`:
+
+```c
+/* arch/x86/kvm/vmx/nested.c (simplified) */
+static void prepare_vmcs02_early(struct vcpu_vmx *vmx, struct loaded_vmcs *vmcs01,
+                                  struct vmcs12 *vmcs12)
+{
+    u32 exec_control;
+
+    /* PIN CONTROLS: union of what L0 wants for L1 and what L1 wants for L2 */
+    exec_control = __pin_controls_get(vmcs01);
+    exec_control |= (vmcs12->pin_based_vm_exec_control &
+                      ~PIN_BASED_VMX_PREEMPTION_TIMER);
+    pin_controls_set(vmx, exec_control);
+    /* EXEC CONTROLS and SECONDARY EXEC CONTROLS are merged the same way */
+}
+```
+
+Guest state and the EPT switch happen afterward, in `prepare_vmcs02()`:
 
 ```c
 /* arch/x86/kvm/vmx/nested.c (simplified) */
@@ -121,32 +143,17 @@ static int prepare_vmcs02(struct kvm_vcpu *vcpu, struct vmcs12 *vmcs12,
     struct vcpu_vmx *vmx = to_vmx(vcpu);
 
     /* Load L2 guest state from vmcs12 into vmcs02 */
-    vmcs_write64(GUEST_RIP,    vmcs12->guest_rip);
-    vmcs_write64(GUEST_RSP,    vmcs12->guest_rsp);
-    vmcs_write64(GUEST_CR0,    vmcs12->guest_cr0);
-    vmcs_write64(GUEST_CR3,    vmcs12->guest_cr3);
-    /* ... all guest state fields ... */
+    vmx_set_rflags(vcpu, vmcs12->guest_rflags);
+    /* ... all other guest state fields ... */
 
-    /* Merge control fields: union of what L0 and L1 want to intercept */
-    vmcs_write32(PIN_BASED_VM_EXEC_CONTROL,
-        vmcs12->pin_based_vm_exec_control |
-        vmx->nested.msrs.pinbased_ctls_fixed1);
-
-    /*
-     * EPT: if L1 enabled EPT for L2, set up the two-level walk.
-     * L2 GPA → L1 HPA (via vmcs12->ept_pointer)
-     * L1 HPA is actually L0 GPA → L0 HPA (via vmcs01's EPT)
-     * Hardware walks both levels on each L2 memory access.
-     */
-    if (nested_vmx_ept_enabled(vmcs12))
-        vmcs_write64(EPT_POINTER, vmx->nested.ept_pointer);
-    else
-        /* Shadow paging fallback for L2 */
-        ;
+    if (nested_cpu_has_ept(vmcs12))
+        nested_ept_init_mmu_context(vcpu);
 
     return 0;
 }
 ```
+
+The EPT setup is not a direct `EPT_POINTER` write — `nested_ept_init_mmu_context()` switches the vCPU to a *shadow* EPT MMU (`kvm_init_shadow_ept_mmu()`), which builds its own single, flattened EPT table for hardware to walk. See the walk-cost section below for what that actually means for performance.
 
 ## L2 exit handling: who handles what?
 
@@ -183,17 +190,18 @@ When L0 decides to reflect the exit to L1:
 
 ```c
 /* Synthesize the vmexit: fill vmcs12 exit fields, restore L1 state */
-static void nested_vmx_vmexit(struct kvm_vcpu *vcpu, u32 exit_reason,
-                               u32 exit_intr_info, unsigned long exit_qualification)
+static inline void nested_vmx_vmexit(struct kvm_vcpu *vcpu, u32 vm_exit_reason,
+                                      u32 exit_intr_info, unsigned long exit_qualification)
 {
+    struct vcpu_vmx *vmx = to_vmx(vcpu);
     struct vmcs12 *vmcs12 = get_vmcs12(vcpu);
 
-    /* Write exit information into vmcs12 so L1 can read it via VMREAD */
-    vmcs12->vm_exit_reason        = exit_reason;
-    vmcs12->exit_qualification    = exit_qualification;
-    vmcs12->vm_exit_intr_info     = exit_intr_info;
-    vmcs12->guest_rip             = kvm_rip_read(vcpu); /* L2's RIP at exit */
-    vmcs12->guest_physical_address = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
+    leave_guest_mode(vcpu);
+
+    /* prepare_vmcs12() writes vm_exit_reason/exit_qualification/vm_exit_intr_info
+     * into vmcs12 so L1 can read them back via VMREAD. guest_physical_address is
+     * set separately, only on EPT-violation exits, before this function runs. */
+    prepare_vmcs12(vcpu, vmcs12, vm_exit_reason, exit_intr_info, exit_qualification, 0);
 
     /* Switch from vmcs02 back to vmcs01 (restore L1 as the active guest) */
     vmx->loaded_vmcs = &vmx->vmcs01;
@@ -210,29 +218,24 @@ AMD uses the VMCB (Virtual Machine Control Block) instead of the VMCS. The neste
 
 | Intel (VMX) | AMD (SVM) |
 |------------|-----------|
-| `struct vmcs12` | `struct vmcb` pointed to by `nested.vmcb12` |
-| `prepare_vmcs02()` | `nested_svm_vmrun()` in `arch/x86/kvm/svm/nested.c` |
+| `struct vmcs12` (L0's copy of L1's VMCS) | Not a struct copy — L0 caches L1's control/save-area fields in `nested.ctl`/`nested.save`, keyed by the guest-physical address `nested.vmcb12_gpa` |
+| `prepare_vmcs02_early()`/`prepare_vmcs02()` | `nested_vmcb02_prepare_control()`/`nested_vmcb02_prepare_save()`, called from `nested_svm_vmrun()` in `arch/x86/kvm/svm/nested.c` |
 | vmcs02 | vmcb02 — the merged VMCB used to run L2 |
-| Two-level EPT | Two-level NPT (nested page tables) |
+| Two-level (shadow) EPT | Two-level (shadow) NPT — same multi-dimensional-paging technique |
 | `VMLAUNCH`/`VMRESUME` | `VMRUN` |
-| `VMPTRLD`/`VMREAD`/`VMWRITE` | `VMSAVE`/`VMLOAD` |
+| `VMPTRLD`/`VMREAD`/`VMWRITE` | *(no equivalent needed — see below)* |
 
-AMD's approach is conceptually identical: L1 executes `VMRUN` which exits to L0; L0 merges L1's VMCB (vmcb12) with its own (vmcb01) to produce vmcb02 and loads that to run L2 on real hardware.
+AMD's approach is conceptually similar — L1 executes `VMRUN` which exits to L0; L0 merges L1's VMCB (vmcb12) with its own (vmcb01) to produce vmcb02 and loads that to run L2 on real hardware — but the instruction-level mechanics differ from Intel in one important way: **the VMCB has a fixed, publicly documented in-memory layout**, unlike Intel's opaque VMCS. So there's no AMD analog of `VMPTRLD`/`VMREAD`/`VMWRITE` — L1 (and L0, emulating it) can read and write VMCB fields with ordinary memory loads and stores. `VMLOAD`/`VMSAVE` are unrelated, real SVM instructions that copy a small set of state *not* covered by the VMCB save area (segment bases for FS/GS/LDTR/TR, `KernelGSBase`, `STAR`/`LSTAR`/`CSTAR`/`SFMASK`, the SYSENTER MSRs) between memory and the processor — every SVM hypervisor uses them, nested or not.
 
-## Two-level EPT: the performance cost
+## Two-level EPT: not what hardware does, what KVM builds
 
-The most significant performance impact of nested virtualization comes from memory address translation. In the non-nested case, a guest memory access requires a single EPT walk (4 levels of page table for GPA → HPA). With nesting:
+Neither VMX nor SVM gives hardware a way to walk two EPT/NPT tables back to back for a single memory access — there is no "EPT-on-EPT" instruction-level feature. If L0 naively let L1 use its own emulated EPT for L2, every L2 memory access would need software to resolve L2 GPA → L1 HPA (via `vmcs12->ept_pointer`) and then L1 HPA (which is really an L0 GPA) → L0 HPA (via L0's own EPT) — the "shadow-on-EPT" approach, which is correct but slow because every L2 page fault and page-table write has to trap up to L1 for handling.
 
-```
-L2 GVA → L2 GPA:   L2's own page tables (4 levels)  ← each entry is a GPA
-L2 GPA → L1 HPA:   L1's EPT (vmcs12->ept_pointer)   ← 4 levels, each entry GPA walks L0 EPT
-L1 HPA = L0 GPA → L0 HPA: L0's EPT (vmcs01's EPT)   ← 4 levels
+KVM instead uses **multi-dimensional paging**: `nested_ept_init_mmu_context()` (`arch/x86/kvm/vmx/nested.c`) switches the vCPU to a *shadow* EPT MMU (`kvm_init_shadow_ept_mmu()`, `arch/x86/kvm/mmu/mmu.c`) that flattens the two levels into a single EPT table — call it EPT02 — that hardware walks directly, at the same cost as an ordinary non-nested EPT walk. L0 builds EPT02 lazily: on each EPT violation it walks L1's EPT structures (`vmcs12->ept_pointer`) in software to compose the entry, exactly like classic shadow paging. AMD's nested SVM code uses the same technique for NPT.
 
-Worst case EPT walk: 4 × (4+1) + (4+1) = 25 memory accesses per TLB miss
-Non-nested EPT walk: (4+1) = 5 memory accesses per TLB miss
-```
+So the overhead isn't paid on every memory access — it's paid when a shadow EPT02 entry has to be constructed or invalidated (first touch of a page, or after L1 modifies its EPT / executes `INVEPT`). This is also why the specific instruction mix matters: a workload that causes many page faults sees much more nested overhead than one that mostly hits already-built EPT02 entries.
 
-Hardware vendors have optimized this (Intel's "EPT with shadow" elimination via tagged TLBs, VPID), but the fundamental overhead remains. Measurements show nested KVM typically runs 10–20% slower than non-nested for CPU-bound workloads, and more for memory-intensive or I/O-heavy workloads.
+For measured numbers: IBM's Turtles project — the paper [kernel documentation for nested VMX](https://docs.kernel.org/virt/kvm/x86/nested-vmx.html) itself cites for "the theory behind the nested VMX feature, its implementation and its performance characteristics" — reported nested KVM within **6–8% of single-level virtualization for common workloads** using this multi-dimensional-paging technique, with their CPU-bound macro-benchmarks (`kernbench`, `SPECjbb`) measuring 6–15% overhead depending on optimization level. The same paper measured a *~3x* speedup from multi-dimensional paging over the naive shadow-on-EPT approach on page-fault-heavy workloads, and found I/O-intensive nested workloads (particularly interrupt-heavy ones) considerably more expensive than CPU-bound ones. See [The Turtles Project](https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Ben-Yehuda.pdf) (USENIX OSDI 2010) for the full measurements.
 
 ## KVM_CAP_NESTED_STATE: migrating nested guests
 
@@ -262,17 +265,14 @@ cat /proc/cpuinfo | grep hypervisor   # hypervisor flag present in L2
 
 # L0: see that nested exits are happening
 echo 1 > /sys/kernel/tracing/events/kvm/kvm_nested_vmexit/enable
-echo 1 > /sys/kernel/tracing/events/kvm/kvm_nested_vmentry/enable
 cat /sys/kernel/tracing/trace_pipe
-# qemu-1234 [000] kvm_nested_vmentry: rip=0xffffffff81234567
-# qemu-1234 [000] kvm_nested_vmexit: reason=EXIT_REASON_EPT_VIOLATION ...
+# qemu-1234 [000] kvm_nested_vmexit: rip=... reason=EPT_VIOLATION ...
 
 # perf: compare exit rates nested vs non-nested
 perf kvm stat report   # look for elevated EPT_VIOLATION, VMLAUNCH/VMRESUME counts
 
-# L0 debugfs: nested-specific counters
-cat /sys/kernel/debug/kvm/*/nested_run_pending
-cat /sys/kernel/debug/kvm/*/l1_set_tpr
+# L0 debugfs: per-vCPU nested-run counter (see the vcpuN/ hierarchy in KVM Architecture)
+cat /sys/kernel/debug/kvm/<pid>-<vm-fd-name>/vcpuN/nested_run
 
 # Module parameter (read-only after boot; set at load time)
 cat /sys/module/kvm_intel/parameters/nested   # Y or N
@@ -308,3 +308,4 @@ Nested virtualization exposes a large attack surface. L1 can craft arbitrary VMC
 
 - [Nested VMX](https://docs.kernel.org/virt/kvm/x86/nested-vmx.html) — kernel documentation for Intel nested VMX: the L0/L1/L2 model, vmcs01/vmcs12/vmcs02, and the full `struct vmcs12` field layout
 - [KVM API docs: `KVM_GET_NESTED_STATE`/`KVM_SET_NESTED_STATE`](https://docs.kernel.org/virt/kvm/api.html#kvm-get-nested-state) — the `struct kvm_nested_state` layout and `KVM_CAP_NESTED_STATE` used for live migration of nested guests
+- [The Turtles Project: Design and Implementation of Nested Virtualization](https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Ben-Yehuda.pdf) (USENIX OSDI 2010) — multi-dimensional paging, the shadow-EPT/NPT mechanism, and the measured performance overhead of nested virtualization
