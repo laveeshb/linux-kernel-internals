@@ -55,16 +55,21 @@ The vvar page is mapped read-only in userspace but read-write in the kernel. The
 `[vvar]`; the kernel timer interrupt writes to it. No ring transition is needed because reading a
 mapped page is a plain memory access.
 
-## struct vdso_data
+## struct vdso_time_data and struct vdso_clock
 
-The core data structure in the vvar page is `struct vdso_data`, defined in `include/vdso/datapage.h`:
+There is no single combined `struct vdso_data` in current kernels. The vvar page is `struct vdso_time_data`,
+and the per-clocksource seqlock state it holds an array of is `struct vdso_clock` — both defined in
+`include/vdso/datapage.h`:
 
 ```c
 /* include/vdso/datapage.h */
-struct vdso_data {
+struct vdso_clock {
     u32             seq;            /* seqlock sequence counter */
     s32             clock_mode;     /* VDSO_CLOCKMODE_TSC, _PVCLOCK, _HVCLOCK, _NONE */
     u64             cycle_last;     /* TSC value at last update */
+#ifdef CONFIG_GENERIC_VDSO_OVERFLOW_PROTECT
+    u64             max_cycles;     /* largest safe delta before the multiply could overflow */
+#endif
     u64             mask;           /* TSC mask (for 32-bit counters) */
     u32             mult;           /* TSC-to-ns multiplier */
     u32             shift;          /* right-shift for mult */
@@ -72,11 +77,16 @@ struct vdso_data {
         struct vdso_timestamp   basetime[VDSO_BASES]; /* per-clock base */
         struct timens_offset    offset[VDSO_BASES];   /* time namespace offsets */
     };
-    s32             tz_minuteswest; /* timezone */
-    s32             tz_dsttime;
-    u32             hrtimer_res;    /* hrtimer resolution in ns */
-    u32             __unused;
-    struct arch_vdso_data arch_data; /* architecture-specific */
+};
+
+struct vdso_time_data {
+    struct arch_vdso_time_data  arch_data;               /* architecture-specific */
+    struct vdso_clock           clock_data[CS_BASES];     /* one per clocksource */
+    struct vdso_clock           aux_clock_data[MAX_AUX_CLOCKS]; /* auxiliary clocksources */
+    s32                         tz_minuteswest; /* timezone */
+    s32                         tz_dsttime;
+    u32                         hrtimer_res;    /* hrtimer resolution in ns */
+    u32                         __unused;
 };
 
 struct vdso_timestamp {
@@ -85,78 +95,94 @@ struct vdso_timestamp {
 };
 ```
 
-`VDSO_BASES` is the number of supported clock IDs. Each entry in `basetime[]` holds the time value at the
-moment of the last kernel update.
+`VDSO_BASES` is the number of supported clock IDs; each `vdso_clock`'s `basetime[]` holds one entry per
+clock ID. `CS_BASES` is the number of clocksource "bases" the top-level page tracks (hi-res and its coarse
+counterpart) — `clock_data[CS_BASES]` is what used to be a single embedded seqlock inside one big struct,
+before the vdso_clock/vdso_time_data split separated "per-clocksource state that gets its own seqlock" from
+"page-wide data updated once."
 
 ## The seqlock pattern
 
-Because the kernel updates `vdso_data` from timer interrupt context (and possibly from multiple CPUs), the
-vDSO must handle concurrent reads. It uses a **seqlock** — a lockless read-side protocol:
-
-In current kernels (after the vdso_clock refactoring), the seqlock helpers take `const struct vdso_clock *`
-rather than `const struct vdso_data *`. The vDSO code accesses clock data via a `vdso_clock` sub-struct:
+Because the kernel updates the vvar page from timer interrupt context (and possibly from multiple CPUs),
+the vDSO must handle concurrent reads. It uses a **seqlock** — a lockless read-side protocol — scoped to
+each `vdso_clock`, not a raw `seqcount_t`/`seqcount_latch_t`. `include/vdso/helpers.h` implements the
+retry loop by hand with `READ_ONCE()`/`cpu_relax()`/`smp_rmb()`, rather than calling out to the generic
+seqcount-latch helpers:
 
 ```c
 /* include/vdso/helpers.h */
 static __always_inline u32 vdso_read_begin(const struct vdso_clock *vc)
 {
-    return seqcount_latch_read_begin(&vc->seq);
+    u32 seq;
+
+    while (unlikely((seq = READ_ONCE(vc->seq)) & 1))
+        cpu_relax();   /* odd sequence number: a writer is mid-update, spin */
+
+    smp_rmb();
+    return seq;
 }
 
-static __always_inline bool vdso_read_retry(const struct vdso_clock *vc, u32 start)
+static __always_inline u32 vdso_read_retry(const struct vdso_clock *vc, u32 start)
 {
-    return seqcount_latch_read_retry(&vc->seq, start);
-}
+    u32 seq;
 
-/* In the vDSO clocktime function: */
-const struct vdso_data *vd = __arch_get_vdso_data();
-const struct vdso_clock *vc = &vd->clock_data[clock_mode];
+    smp_rmb();
+    seq = READ_ONCE(vc->seq);
+    return unlikely(seq != start);
+}
 ```
 
-A typical clock read loop then looks like:
+A typical clock read then looks like this — `do_hres()` (`lib/vdso/gettimeofday.c`) drives the seqlock
+loop, and delegates the actual TSC-to-nanoseconds math to `vdso_get_timestamp()` in the same file:
 
 ```c
-/* arch/x86/entry/vdso/vclock_gettime.c */
-static __always_inline int do_hres(const struct vdso_data *vd, clockid_t clk,
-                                    struct __kernel_timespec *ts)
+/* lib/vdso/gettimeofday.c */
+bool do_hres(const struct vdso_time_data *vd, const struct vdso_clock *vc,
+             clockid_t clk, struct __kernel_timespec *ts)
 {
-    const struct vdso_clock *vc = &vd->clock_data[clk];
-    const struct vdso_timestamp *vdso_ts = &vc->basetime[clk];
-    u64 cycles, last, sec, ns;
+    u64 sec, ns;
     u32 seq;
 
     do {
-        seq = vdso_read_begin(vc);   /* read seq; if odd, writer in progress — spin */
+        seq = vdso_read_begin(vc);
+        if (!vdso_get_timestamp(vd, vc, clk, &sec, &ns))
+            return false;   /* clock_mode == VDSO_CLOCKMODE_NONE: caller falls back to a real syscall */
+    } while (vdso_read_retry(vc, seq));
 
-        /* Read clock mode; if not TSC, fall back to real syscall */
-        if (unlikely(vc->clock_mode == VDSO_CLOCKMODE_NONE))
-            return clock_gettime_fallback(clk, ts);
+    vdso_set_timespec(ts, sec, ns);
+    return true;
+}
 
-        cycles = __arch_get_hw_counter(vc->clock_mode, vd);
-        last   = vc->cycle_last;
-        ns     = vdso_ts->nsec;
-        sec    = vdso_ts->sec;
+static __always_inline bool
+vdso_get_timestamp(const struct vdso_time_data *vd, const struct vdso_clock *vc,
+                    unsigned int clkidx, u64 *sec, u64 *ns)
+{
+    const struct vdso_timestamp *vdso_ts = &vc->basetime[clkidx];
+    u64 cycles;
 
-        /* Convert TSC delta to nanoseconds */
-        ns += vdso_calc_delta(cycles, last, vc->mask, vc->mult);
-        ns >>= vc->shift;
+    if (unlikely(!vdso_clocksource_ok(vc)))
+        return false;
 
-    } while (unlikely(vdso_read_retry(vc, seq)));  /* retry if seq changed */
+    cycles = __arch_get_hw_counter(vc->clock_mode, vd);
+    if (unlikely(!vdso_cycles_ok(cycles)))
+        return false;
 
-    ts->tv_sec  = sec + __iter_div_u64_rem(ns, NSEC_PER_SEC, &ns);
-    ts->tv_nsec = ns;
-    return 0;
+    *ns  = vdso_calc_ns(vc, cycles, vdso_ts->nsec);  /* TSC delta → ns, multiply-and-shift */
+    *sec = vdso_ts->sec;
+    return true;
 }
 ```
 
-`vdso_read_begin()` reads the sequence counter and spins while it is odd (a writer holds the lock).
-`vdso_read_retry()` reads the counter again and returns true if it has changed, meaning a kernel update
-happened mid-read and the values are inconsistent. The loop retries until a clean read completes — in
-practice, zero or one retries.
+(The real `do_hres()` also has a time-namespace branch, checked via `vdso_read_begin_timens()` before the
+loop above, that this sketch leaves out.) `vdso_read_begin()` reads the sequence counter and spins while it
+is odd (a writer holds the lock). `vdso_read_retry()` reads the counter again and returns true if it has
+changed, meaning a kernel update happened mid-read and the values are inconsistent. The loop retries until
+a clean read completes — in practice, zero or one retries.
 
 ## TSC to wall-clock conversion
 
-The nanosecond conversion uses a multiply-and-shift formula that avoids division:
+`vdso_get_timestamp()` calls `vdso_calc_ns()` to do the nanosecond conversion — a multiply-and-shift
+formula that avoids division:
 
 ```
 ns = ((cycles - cycle_last) * mult) >> shift
@@ -191,14 +217,17 @@ one jiffy, ~1–4 ms). This makes them even cheaper than the TSC-based clocks.
 
 If the TSC is not reliable — for example, after live VM migration (the TSC may jump), during CPU hotplug,
 or when the kernel detects TSC instability — the kernel sets `clock_mode` to `VDSO_CLOCKMODE_NONE`. The
-vDSO detects this and calls `clock_gettime_fallback()`, which executes the real `syscall` instruction:
+vDSO detects this and calls `clock_gettime_fallback()`, which is arch-specific — on x86-64 it lives in
+`arch/x86/include/asm/vdso/gettimeofday.h`, not the shared `lib/vdso/gettimeofday.c`, because the vDSO runs
+without a libc and can't call libc's `syscall()`: it issues the real syscall instruction directly through
+the `VDSO_SYSCALL2()` macro instead:
 
 ```c
-/* lib/vdso/gettimeofday.c */
-static __always_inline long clock_gettime_fallback(clockid_t clk,
-                                                    struct __kernel_timespec *ts)
+/* arch/x86/include/asm/vdso/gettimeofday.h */
+static __always_inline
+long clock_gettime_fallback(clockid_t _clkid, struct __kernel_timespec *_ts)
 {
-    return syscall(__NR_clock_gettime, clk, ts);
+    return VDSO_SYSCALL2(clock_gettime, 64, _clkid, _ts);
 }
 ```
 
@@ -208,28 +237,36 @@ This fallback is transparent to the caller — the function signature and return
 
 ## getcpu() in the vDSO
 
-`getcpu(cpu, node, NULL)` returns the current CPU and NUMA node without a syscall. On x86-64, `__vdso_getcpu()`
-uses either `RDPID` (if available, reads `MSR_TSC_AUX` directly) or `RDTSCP` (reads the TSC and stores
-the CPU+NUMA node in ECX via `MSR_TSC_AUX`). The kernel sets `MSR_TSC_AUX` per-CPU via
-`set_cpu_rdtscp_id()` during CPU bringup. No GS-relative memory access is involved — GS is a kernel-mode
-register and userspace cannot access the kernel's GS base.
+`getcpu(cpu, node, NULL)` returns the current CPU and NUMA node without a syscall. On x86-64,
+`__vdso_getcpu()` delegates to `vdso_read_cpunode()` (`arch/x86/include/asm/segment.h`), which defaults to
+the `LSL` instruction — reading a CPU/node-encoding descriptor limit out of a per-CPU GDT entry — and uses
+`RDPID` instead when the CPU supports it, via `alternative_io`. `RDTSCP` is not used for this at all; LSL
+was chosen specifically because it's faster than RDTSCP and works on every CPU. The per-CPU setup function
+`setup_getcpu()` (`arch/x86/kernel/cpu/common.c`) both programs that GDT entry *and* writes `MSR_TSC_AUX`
+(RDPID reads this MSR directly) when the CPU has `RDTSCP` or `RDPID`. No GS-relative memory access is
+involved — GS is a kernel-mode register and userspace cannot access the kernel's GS base.
 
 ```c
-/* arch/x86/entry/vdso/vgetcpu.c */
-static __always_inline int __vdso_getcpu(unsigned *cpu, unsigned *node,
-                                          struct getcpu_cache *unused)
+/* arch/x86/entry/vdso/common/vgetcpu.c */
+notrace long __vdso_getcpu(unsigned *cpu, unsigned *node, void *unused)
 {
-    unsigned int p;
+    vdso_read_cpunode(cpu, node);
+    return 0;
+}
 
-    /* RDPID: reads MSR_TSC_AUX into p (cpu | (node << 12)) */
-    /* Falls back to RDTSCP if RDPID unavailable */
-    p = __rdpid();    /* or RDTSCP ecx */
+/* arch/x86/include/asm/segment.h */
+static inline void vdso_read_cpunode(unsigned *cpu, unsigned *node)
+{
+    unsigned long p;
+
+    /* LSL is faster than RDTSCP and works on all CPUs; use RDPID instead if available */
+    alternative_io("lsl %[seg],%k[p]", "rdpid %[p]", X86_FEATURE_RDPID,
+                    [p] "=r" (p), [seg] "r" (__CPUNODE_SEG));
 
     if (cpu)
-        *cpu = p & 0xfff;
+        *cpu = p & VDSO_CPUNODE_MASK;   /* 0xfff */
     if (node)
-        *node = p >> 12;
-    return 0;
+        *node = p >> VDSO_CPUNODE_BITS; /* 12 */
 }
 ```
 
@@ -267,9 +304,9 @@ printf("vDSO ELF at: 0x%lx\n", vdso_addr);
 
 ```bash
 # The vvar page is not directly readable from userspace tools,
-# but kernel debuggers can inspect the vdso_data struct:
+# but kernel debuggers can inspect the vdso_time_data struct:
 # (crash or gdb with vmlinux)
-# p *((struct vdso_data *)vdso_data_ptr)
+# p *((struct vdso_time_data *)vdso_data_ptr)
 ```
 
 ## vsyscall: legacy fixed-address interface (x86-64 only)
@@ -278,12 +315,15 @@ Before the vDSO, x86-64 had the **vsyscall** page: code mapped at the fixed addr
 that implemented `gettimeofday`, `time`, and `getcpu`. Because the address was fixed, it was trivially
 exploitable for return-oriented programming (ROP) gadgets.
 
-Modern kernels default to `vsyscall=emulate`: the page is not executable, but page faults at those addresses
-are caught and emulated by the kernel. `vsyscall=none` returns `SIGSEGV`. `vsyscall=native` maps the page
-executable (insecure, not recommended).
+There are three modes, controlled by the `vsyscall=` boot parameter — there is no `native` mode any more.
+The kernel's own default, `CONFIG_LEGACY_VSYSCALL_XONLY`, is `vsyscall=xonly`: the page traps and emulates
+execution but denies reads, closing off the use of the vsyscall page's fixed address as a data-read gadget.
+`vsyscall=emulate` (execution trapped and emulated, reads also allowed) still exists but is deprecated and
+selectable only from the command line, not as a build-time default. `vsyscall=none` removes the mapping
+entirely — old binaries that need it get `SIGSEGV`.
 
 ```bash
-# Check vsyscall mode (shows in /proc/self/maps on kernels with vsyscall=emulate)
+# Check vsyscall mode (shows in /proc/self/maps whenever the mapping exists at all)
 cat /proc/self/maps | grep vsyscall
 # ffffffffff600000-ffffffffff601000 --xp 00000000 00:00 0  [vsyscall]
 ```
@@ -293,9 +333,9 @@ All modern software uses the vDSO exclusively.
 
 ## arm64 vDSO
 
-arm64 has its own vDSO at `arch/arm64/kernel/vdso/`. The mechanism is identical — a vvar page with
-`struct vdso_data`, a seqlock, and the same TSC-equivalent using the ARM generic timer (`CNTVCT_EL0`
-counter register). The key difference:
+arm64 has its own vDSO at `arch/arm64/kernel/vdso/`. The mechanism is identical — a vvar page with the same
+`struct vdso_time_data`/`struct vdso_clock` layout, a seqlock, and the same TSC-equivalent using the ARM
+generic timer (`CNTVCT_EL0` counter register). The key difference:
 
 - There is no vsyscall legacy on arm64.
 - The fallback uses the `svc #0` instruction (arm64 system call) rather than `syscall`.
@@ -308,9 +348,9 @@ hardware counter read (`__arch_get_hw_counter`) is architecture-specific.
 
 ### Kernel source
 
-- [include/vdso/datapage.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/vdso/datapage.h) — `struct vdso_clock` and `struct vdso_time_data`: the current vvar layout. Note: current kernels no longer have a single combined `struct vdso_data` as shown earlier on this page — that layout was split into `vdso_clock` (per-clocksource seqlock state) and `vdso_time_data` (the top-level vvar struct) some time ago
+- [include/vdso/datapage.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/vdso/datapage.h) — `struct vdso_clock` and `struct vdso_time_data`: the current vvar layout, replacing an older single combined `struct vdso_data`
 - [include/vdso/helpers.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/vdso/helpers.h) — `vdso_read_begin()` / `vdso_read_retry()`: the seqlock read-side helpers
-- [lib/vdso/gettimeofday.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/vdso/gettimeofday.c) — `do_hres()`: the shared TSC-to-timespec read loop used by all architectures
+- [lib/vdso/gettimeofday.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/vdso/gettimeofday.c) — `do_hres()` and `vdso_get_timestamp()`: the shared seqlock-guarded, TSC-to-timespec read path used by all architectures
 - [arch/x86/entry/vdso/common/vclock_gettime.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/vdso/common/vclock_gettime.c) — `__vdso_clock_gettime()` / `__vdso_gettimeofday()`: the x86-64 entry points
 - [arch/x86/entry/vdso/common/vgetcpu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/vdso/common/vgetcpu.c) — `__vdso_getcpu()`
 - [arch/x86/include/asm/vdso/gettimeofday.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/vdso/gettimeofday.h) — `clock_gettime_fallback()` and `__arch_get_hw_counter()`: the real syscall fallback and the TSC read
