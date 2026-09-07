@@ -59,7 +59,7 @@ The build system generates `arch/x86/include/generated/asm/syscalls_32.h`, which
 ```c
 /* arch/x86/entry/syscall_32.c */
 #define __SYSCALL(nr, sym) case nr: return __ia32_##sym(regs);
-long ia32_sys_call(const struct pt_regs *regs, unsigned int nr)
+static noinline long ia32_sys_call(const struct pt_regs *regs, unsigned int nr)
 {
 	switch (nr) {
 	#include <asm/syscalls_32.h>
@@ -78,7 +78,7 @@ used for dispatch.
 ## Key compat types
 
 ```c
-/* include/linux/compat.h */
+/* include/asm-generic/compat.h (pulled in by each arch's asm/compat.h) */
 typedef u32                 compat_uptr_t;   /* 32-bit userspace pointer */
 typedef u32                 compat_size_t;   /* 32-bit size_t */
 typedef s32                 compat_ssize_t;
@@ -87,18 +87,20 @@ typedef u32                 compat_ulong_t;
 typedef s32                 compat_int_t;
 typedef s64 __attribute__((aligned(4))) compat_s64;
 typedef u64 __attribute__((aligned(4))) compat_u64;
+```
 
-/* compat_timespec64: two s32s instead of two long/int64 */
-struct compat_timespec64 {
-    s32     tv_sec;
-    s32     tv_nsec;
+```c
+/* include/vdso/time32.h */
+struct old_timespec32 {
+    old_time32_t tv_sec;   /* s32 */
+    s32          tv_nsec;
 };
 ```
 
-The `compat_timespec64` aligns at 4 bytes rather than 8, matching the layout a 32-bit compiler would produce.
+`old_timespec32` aligns at 4 bytes rather than 8, matching the layout a 32-bit compiler would produce.
 This is the fundamental reason 32-bit `clock_gettime()` cannot share the 64-bit handler.
 
-## compat_ptr() and compat_ptr_to_user_ptr()
+## compat_ptr() and ptr_to_compat()
 
 `compat_ptr()` converts a `compat_uptr_t` (u32) into a kernel `void __user *` by zero-extending:
 
@@ -125,22 +127,36 @@ static inline compat_uptr_t ptr_to_compat(void __user *uptr)
 ## in_compat_syscall()
 
 Code that needs to behave differently for 32-bit callers (e.g., to pick the right struct size) uses
-`in_compat_syscall()`. On x86-64, `in_compat_syscall()` checks `current_thread_info()->status & TS_COMPAT`
-— a per-syscall status bit set in the syscall entry path, not a thread flag. Some other architectures
-(ARM64, MIPS) use `TIF_32BIT`. The generic declaration is in `include/linux/compat.h`:
+`in_compat_syscall()`. On x86, it isn't a single check but a three-level chain down to a per-syscall status
+bit — not a thread flag. Some other architectures (ARM64, MIPS) use `TIF_32BIT` instead. The generic
+declaration is in `include/linux/compat.h`; x86 overrides it in `arch/x86/include/asm/compat.h`:
 
 ```c
-/* include/linux/compat.h */
+/* include/linux/compat.h — generic fallback */
 static inline bool in_compat_syscall(void)
 {
     return is_compat_task();  /* arch-specific */
 }
 
-/* x86-64: arch/x86/include/asm/compat.h */
+/* arch/x86/include/asm/compat.h — x86 override */
+static inline bool in_32bit_syscall(void)
+{
+    return in_ia32_syscall() || in_x32_syscall();
+}
+
 static inline bool in_compat_syscall(void)
 {
-    return current_thread_info()->status & TS_COMPAT;
+    return in_32bit_syscall();
 }
+```
+
+`in_ia32_syscall()` is a macro, not a function — it's defined two levels down in
+`arch/x86/include/asm/thread_info.h`:
+
+```c
+/* arch/x86/include/asm/thread_info.h */
+#define in_ia32_syscall() (IS_ENABLED(CONFIG_IA32_EMULATION) && \
+                           current_thread_info()->status & TS_COMPAT)
 ```
 
 `TS_COMPAT` is set when a task is executing in 32-bit compatibility mode. It is checked at various points in
@@ -175,10 +191,10 @@ element. `readv()` and `writev()` must detect the compat case and iterate using 
 struct compat_stat {
     u32             st_dev;
     compat_ino_t    st_ino;     /* u32 */
-    compat_mode_t   st_mode;    /* u32 */
-    compat_nlink_t  st_nlink;   /* u32 */
-    __compat_uid16_t st_uid;    /* u16 */
-    __compat_gid16_t st_gid;    /* u16 */
+    compat_mode_t   st_mode;    /* u16 on x86; u32 in the generic definition */
+    compat_nlink_t  st_nlink;   /* u16 on x86; u32 in the generic definition */
+    __compat_uid_t  st_uid;     /* u16 on x86; u32 in the generic definition */
+    __compat_gid_t  st_gid;     /* u16 on x86; u32 in the generic definition */
     u32             st_rdev;
     u32             st_size;    /* only 32 bits! */
     u32             st_blksize;
@@ -230,10 +246,14 @@ struct file_operations {
 };
 ```
 
-When a 32-bit process calls `ioctl()`, the VFS layer calls `compat_ioctl` if it is non-NULL. If only
-`unlocked_ioctl` is set, `compat_ioctl_process_request()` tries a compatibility translation table for known
-commands. For commands that pass opaque `unsigned long` values (rather than pointers), `unlocked_ioctl` and
-`compat_ioctl` are often identical — the driver just sets both pointers to the same function.
+When a 32-bit process calls `ioctl()`, the compat ioctl syscall first tries `do_vfs_ioctl()` for commands the
+VFS itself understands generically (independent of the driver). If that returns `-ENOIOCTLCMD` (not one of
+those), it falls through to the driver's `compat_ioctl`, if set. There is no generic, automatic
+translation-table fallback for arbitrary driver-specific commands — if `compat_ioctl` is NULL, a 32-bit
+caller gets `-ENOTTY` for anything the driver hasn't explicitly handled. For commands whose only argument is
+either absent or already compatible between widths (pointers, not raw `unsigned long` values embedding a
+pointer), a driver can opt in to the generic `compat_ptr_ioctl()` helper (`fs/ioctl.c`) instead of writing
+its own — it just zero-extends `arg` through `compat_ptr()` and calls `unlocked_ioctl`.
 
 ```c
 /* Example: driver that handles compat explicitly */
@@ -270,18 +290,28 @@ No separate compat handler is needed.
 
 ```c
 /* net/compat.c */
-COMPAT_SYSCALL_DEFINE3(sendmsg, int, fd,
-                       struct compat_msghdr __user *, msg,
+static inline long __compat_sys_sendmsg(int fd, struct compat_msghdr __user *msg,
+                                        unsigned int flags)
+{
+    return __sys_sendmsg(fd, (struct user_msghdr __user *)msg,
+                         flags | MSG_CMSG_COMPAT, false);
+}
+
+COMPAT_SYSCALL_DEFINE3(sendmsg, int, fd, struct compat_msghdr __user *, msg,
                        unsigned int, flags)
 {
-    return __sys_sendmsg(fd, (struct user_msghdr __user *)msg, flags,
-                         true);   /* true = compat mode */
+    return __compat_sys_sendmsg(fd, msg, flags);
 }
 ```
 
-`__sys_sendmsg()` checks the `compat` parameter and calls either `copy_msghdr_from_user()` (native) or
-`compat_msghdr_from_user()`, which reads `struct compat_msghdr` (containing `compat_uptr_t` fields) and
-reconstructs a native `struct msghdr` in kernel space before proceeding.
+The `MSG_CMSG_COMPAT` flag, not a separate boolean, is what marks this as a compat call — it's OR'd in here.
+The final argument to `__sys_sendmsg()` is `forbid_cmsg_compat`: when `true`, it rejects a caller that has
+`MSG_CMSG_COMPAT` set (used by the *native* `sys_sendmsg` path, to reject a native caller spoofing that
+flag); the compat path legitimately sets the flag itself, so it passes `false`. Downstream,
+`sendmsg_copy_msghdr()` (`net/socket.c`) is what actually branches on `MSG_CMSG_COMPAT`: on the compat path
+it calls `get_compat_msghdr()`, which reads `struct compat_msghdr` (containing `compat_uptr_t` fields) and
+reconstructs a native `struct msghdr` in kernel space before proceeding; on the native path it calls
+`copy_msghdr_from_user()` instead.
 
 ## Detecting 32-bit processes
 
@@ -297,26 +327,30 @@ file /proc/$(pidof myapp)/exe
 Inside the kernel, `task_pt_regs(task)->cs` is compared to `__USER32_CS` to determine the execution mode of
 a traced task.
 
-## compat_alloc_user_space()
+## The old compat_alloc_user_space() pattern — removed in Linux 5.15
 
-For compat handlers that need to construct a native struct on the user stack (a legacy pattern), the kernel
-provides `compat_alloc_user_space()`.
+Older compat handlers used a different strategy from the shared-helper pattern above: build a native-layout
+struct in a scratch region carved out below the user's own stack pointer, then call the *native* syscall
+handler as if userspace itself had passed that struct. `compat_alloc_user_space()` was the function that
+carved out that scratch region — it aligned the result to 16 bytes, checked it stayed within the caller's
+address range, and validated it with `access_ok()` before handing it back.
 
-`compat_alloc_user_space()` carves space below the user stack pointer, but must also: (1) align the result
-to 16 bytes, (2) verify the result is within the 32-bit address range for compat tasks, and (3) check with
-`access_ok()`. Showing the bare `sp - len` form is misleading — the real implementation in
-`arch/x86/include/asm/compat.h` includes these checks.
+That function, and the pattern it enabled, is gone. Arnd Bergmann's series eliminating `set_fs()`-based
+address-space overrides removed the last callers, and `compat_alloc_user_space()` itself in
+[commit a7a08b275a8b](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a7a08b275a8bbade798c4bdaad07ade68fe7003c)
+("arch: remove compat_alloc_user_space") — first absent starting in **Linux 5.15** (October 2021).
 
-```c
-/* arch/x86/include/asm/compat.h */
-/* Allocate len bytes on the user stack of a 32-bit process.
- * Aligns result, verifies within 32-bit range, calls access_ok(). */
-void __user *compat_alloc_user_space(unsigned long len);
-```
-
-It is used by older compat wrappers (e.g., `compat_sys_socketcall`) that reconstruct the native argument
-layout and then call the 64-bit handler. New code should avoid this pattern and use explicit kernel-space
-structs instead.
+The replacement isn't a new function; it's the shared-kernel-space-helper pattern this page already showed
+for `sendmsg()`: a common `__sys_*()` function that takes already-copied-in kernel data and is called
+directly from both the native and compat entry points, with any compat-specific translation (pointer width,
+`MSG_CMSG_COMPAT`, etc.) done in kernel space along the way — never by faking a struct on the user's own
+stack and re-entering as if userspace had built it. `compat_sys_socketcall()` (`net/compat.c`) — the very
+function this section used to cite as a `compat_alloc_user_space()` user — is a good example of the
+*before* and *after* in one place: it's still a genuinely separate compat handler (a 32-bit process packs
+its socketcall argument array as `u32`s, not native `unsigned long`s, so it can't just reuse the native
+parser), but it now `copy_from_user()`s that array into kernel space and dispatches straight to the same
+internal helpers the native path uses (`__sys_bind()`, `__sys_connect()`, ...), translating pointer-sized
+arguments with `compat_ptr()` along the way — no user-stack scratch space involved.
 
 ## Summary: when to write a compat handler
 
@@ -334,13 +368,16 @@ structs instead.
 
 - [include/linux/compat.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/compat.h) — `COMPAT_SYSCALL_DEFINEx()` macros, `compat_ptr()`/`ptr_to_compat()`, `struct compat_iovec`
 - [include/asm-generic/compat.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/asm-generic/compat.h) — the base `compat_uptr_t`, `compat_size_t`, `compat_long_t`, `compat_s64`/`compat_u64` typedefs (pulled in by each arch's `asm/compat.h`)
-- [arch/x86/include/asm/compat.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/compat.h) — `struct compat_stat` and the x86-64 override of `in_compat_syscall()`
+- [arch/x86/include/asm/compat.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/compat.h) — `struct compat_stat` and the x86 override of `in_compat_syscall()`/`in_32bit_syscall()`
+- [arch/x86/include/asm/thread_info.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/thread_info.h) — the `in_ia32_syscall()` macro and the `TS_COMPAT` flag it checks
+- [include/vdso/time32.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/vdso/time32.h) — `struct old_timespec32`, the real 32-bit-layout timespec
 - [arch/x86/include/asm/syscall_wrapper.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/syscall_wrapper.h) — `__IA32_COMPAT_SYS_STUBx()`: generates the `__ia32_compat_sys_xxx` entry stub
 - [arch/x86/entry/syscalls/syscall_32.tbl](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/entry/syscalls/syscall_32.tbl) — the ia32 syscall table, including its compat-entry-point column
 - [include/uapi/linux/openat2.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/openat2.h) — `struct open_how`: an explicit-width UAPI struct that needs no compat handler
-- [net/compat.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/compat.c) — `compat_sys_sendmsg`/`compat_sys_recvmsg` and `get_compat_msghdr()`
+- [net/compat.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/compat.c) — `compat_sys_sendmsg`/`compat_sys_recvmsg`, `compat_sys_socketcall()`, and `get_compat_msghdr()`
 - [include/linux/fs.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/fs.h) — `struct file_operations`, including the `compat_ioctl` member
 - [fs/ioctl.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/ioctl.c) — `compat_ptr_ioctl()` and the compat `ioctl()` syscall's dispatch logic
+- [commit a7a08b275a8b](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a7a08b275a8bbade798c4bdaad07ade68fe7003c) — "arch: remove compat_alloc_user_space", Arnd Bergmann, first in Linux 5.15
 
 ### Related pages
 
