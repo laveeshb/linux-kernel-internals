@@ -73,6 +73,8 @@ struct vring_used {
 };
 ```
 
+This is the **split ring** layout — three separate regions (descriptor table, avail ring, used ring), the classic/default virtqueue format. Negotiating `VIRTIO_F_RING_PACKED` (see feature bits below) switches to the **packed ring** layout instead: a single combined ring of `struct vring_packed_desc` entries that fold descriptor, availability, and completion state into one cache-line-friendly structure, avoiding the split layout's three-region indirection.
+
 ### virtqueue lifecycle
 
 ```
@@ -135,11 +137,12 @@ struct virtnet_info {
     bool                    has_rss;
 };
 
-/* TX path: enqueue packet */
+/* TX path: enqueue packet (conceptual sketch — the real xmit_skb() in
+ * drivers/net/virtio_net.c has grown to handle a whole family of header
+ * variants, tunneling, and a header-push optimization; see below) */
 static int xmit_skb(struct send_queue *sq, struct sk_buff *skb)
 {
-    struct virtio_net_hdr_mrg_rxbuf *hdr;
-    const unsigned char *dest = ((struct ethhdr *)skb->data)->h_dest;
+    struct virtio_net_hdr *hdr;
     struct virtnet_info *vi = sq->vq->vdev->priv;
     int num_sg;
 
@@ -147,12 +150,8 @@ static int xmit_skb(struct send_queue *sq, struct sk_buff *skb)
     hdr = skb_push(skb, vi->hdr_len);
     memset(hdr, 0, vi->hdr_len);
 
-    /* If TSO/checksum offload: set flags in hdr */
-    if (skb->ip_summed == CHECKSUM_PARTIAL) {
-        hdr->hdr.flags   = VIRTIO_NET_HDR_F_NEEDS_CSUM;
-        hdr->hdr.csum_offset = skb->csum_offset;
-        hdr->hdr.csum_start  = skb_checksum_start_offset(skb);
-    }
+    /* Fill in checksum/GSO offload fields from the skb's own state */
+    virtio_net_hdr_from_skb(skb, hdr, virtio_is_little_endian(vi->vdev), false, 0);
 
     /* Build scatter-gather list from skb frags */
     num_sg = skb_to_sgvec(skb, sq->sg, 0, skb->len);
@@ -161,36 +160,45 @@ static int xmit_skb(struct send_queue *sq, struct sk_buff *skb)
 }
 ```
 
+The real `xmit_skb()` (which now also takes an `orphan` flag) doesn't hand-roll the checksum/GSO logic shown above inline — that's factored into the `virtio_net_hdr_from_skb()` helper (`include/linux/virtio_net.h`), which is what actually sets `VIRTIO_NET_HDR_F_NEEDS_CSUM`/`csum_start`/`csum_offset` when `skb->ip_summed == CHECKSUM_PARTIAL`, and fills in GSO fields when the skb is a GSO packet. The real function also picks from several header variants depending on negotiated features — plain `struct virtio_net_hdr`, the mergeable-rx-buffers variant below, or (for the newer hash/tunnel offloads) `struct virtio_net_hdr_v1_hash_tunnel` — and enqueues through a `virtnet_add_outbuf()` wrapper rather than calling `virtqueue_add_outbuf()` directly. The sketch above keeps the core idea — prepend a header, let the skb's own checksum/GSO state drive it, hand the buffer to the ring — without the header-variant dispatch and TX batching logic.
+
 ### virtio-net header
 
 ```c
 /* include/uapi/linux/virtio_net.h */
 struct virtio_net_hdr {
-    __u8  flags;       /* VIRTIO_NET_HDR_F_NEEDS_CSUM, etc. */
-    __u8  gso_type;    /* VIRTIO_NET_HDR_GSO_TCPV4/6, etc. */
-    __le16 hdr_len;    /* ethernet+IP+TCP header length */
-    __le16 gso_size;   /* max segment size for GSO */
-    __le16 csum_start; /* offset to start of checksum */
-    __le16 csum_offset;/* offset within csum_start to place checksum */
+    __u8       flags;       /* VIRTIO_NET_HDR_F_NEEDS_CSUM, etc. */
+    __u8       gso_type;    /* VIRTIO_NET_HDR_GSO_TCPV4/6, etc. */
+    __virtio16 hdr_len;     /* ethernet+IP+TCP header length */
+    __virtio16 gso_size;    /* max segment size for GSO */
+    __virtio16 csum_start;  /* offset to start of checksum */
+    __virtio16 csum_offset; /* offset within csum_start to place checksum */
+};
+
+/* Negotiating VIRTIO_NET_F_MRG_RXBUF (below) adds one field on top —
+ * still the live, current wire format for receive-side buffer merging: */
+struct virtio_net_hdr_mrg_rxbuf {
+    struct virtio_net_hdr hdr;
+    __virtio16 num_buffers; /* number of merged RX buffers this packet spans */
 };
 ```
 
-This header lets the host/guest negotiate hardware offloads: checksum, segmentation (TSO), receive-side coalescing (LRO).
+These 16-bit fields are `__virtio16`, not a fixed-endian type — virtio's wire byte order depends on which VIRTIO_F_VERSION_1 mode was negotiated (modern devices are always little-endian; legacy ones use the guest's native order), so the header itself can't commit to `__le16` at the type level. This header lets the host/guest negotiate hardware offloads: checksum, segmentation (TSO), receive-side coalescing (LRO).
 
 ## virtio-blk
 
 ```c
 /* include/uapi/linux/virtio_blk.h */
-struct virtio_blk_req {
+struct virtio_blk_outhdr {
     __virtio32 type;    /* VIRTIO_BLK_T_IN / T_OUT / T_FLUSH / T_DISCARD */
     __virtio32 ioprio;
     __virtio64 sector;  /* 512-byte sector number */
 };
 
 /* A complete I/O request descriptor chain:
-   [0] virtio_blk_req header  (device-readable)
-   [1] data buffer            (device-writable for read, device-readable for write)
-   [2] status byte            (device-writable: 0=success, 1=error, 2=unsupported) */
+   [0] virtio_blk_outhdr header (device-readable)
+   [1] data buffer              (device-writable for read, device-readable for write)
+   [2] status byte              (device-writable: VIRTIO_BLK_S_OK=0, S_IOERR=1, S_UNSUPP=2) */
 ```
 
 ### Why virtio-blk is fast
@@ -255,7 +263,7 @@ With vhost-net:
 ```c
 /* drivers/vhost/net.c */
 struct vhost_net {
-    struct vhost_dev dev;           /* owns vhost worker thread */
+    struct vhost_dev dev;           /* the generic vhost core (worker, iotlb, ...) */
     struct vhost_net_virtqueue vqs[VHOST_NET_VQ_MAX];
     /* ... */
 };
@@ -265,17 +273,21 @@ struct vhost_dev {
     struct mutex mutex;
     struct vhost_virtqueue **vqs;
     int nvqs;
-    struct task_struct *worker;     /* kernel thread doing I/O */
+    struct xarray worker_xa;        /* registry of this device's worker(s) */
+    bool use_worker;
     /* ... */
 };
 
-/* vhost worker: polls virtqueue, processes TX/RX */
-static void handle_tx(struct vhost_net *net)
+/* Illustrative only — not a real function. The general vhost worker
+ * pattern: read descriptors off the guest's avail ring, do the I/O,
+ * post completions to the used ring, signal the guest. In
+ * drivers/vhost/net.c this is spread across handle_tx() (a thin
+ * dispatcher), get_tx_bufs(), and handle_tx_copy()/handle_tx_zerocopy(),
+ * which add TX batching, XDP, and busy-polling this sketch leaves out: */
+static void vhost_worker_tx_sketch(struct vhost_net *net, struct vhost_virtqueue *vq)
 {
-    struct vhost_net_virtqueue *nvq = &net->vqs[VHOST_NET_VQ_TX];
-    struct vhost_virtqueue *vq = &nvq->vq;
+    unsigned int head;
 
-    /* Read from guest avail ring */
     while ((head = vhost_get_vq_desc(vq, ...)) != vq->num) {
         /* GPA → HVA translation using guest mm */
         /* write to socket / TAP fd */
@@ -284,6 +296,8 @@ static void handle_tx(struct vhost_net *net)
     vhost_signal(&net->dev, vq);  /* interrupt guest */
 }
 ```
+
+`struct vhost_dev` used to own a single `struct task_struct *worker` directly; it's since been refactored so a device can register multiple workers (`worker_xa`, keyed for cases like per-vq worker assignment), created via `vhost_task_create()` rather than a raw kthread — the worker's `comm` is still `vhost-<owner-pid>`, so `pgrep vhost` (further down) still finds it.
 
 ### vhost-user: userspace vhost
 
@@ -329,9 +343,12 @@ cat /sys/block/vda/stat
 # vhost-net stats (on host)
 cat /proc/net/dev   # TAP interface throughput
 
-# Kick/interrupt frequency (low = batching, high = latency-sensitive)
-cat /sys/kernel/debug/virtio*/virtqueue*/avail_idx
-cat /sys/kernel/debug/virtio*/virtqueue*/used_idx
+# Kick/interrupt frequency (low = batching, high = latency-sensitive):
+# virtio/vring expose no debugfs or tracepoint interface for this, so
+# count calls to the real kick/interrupt entry points directly instead:
+perf probe -a virtqueue_notify
+perf probe -a vring_interrupt
+perf stat -e probe:virtqueue_notify,probe:vring_interrupt -a sleep 5
 
 # perf: vhost worker CPU usage
 perf top -p $(pgrep vhost)
@@ -348,10 +365,11 @@ perf top -p $(pgrep vhost)
 - [drivers/virtio/virtio_ring.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/virtio/virtio_ring.c) — `virtqueue_add_outbuf()` and `virtqueue_kick()`: the split- and packed-ring implementation behind the vring diagrams above
 - [include/uapi/linux/virtio_ring.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/virtio_ring.h) — `struct vring_desc`, `vring_avail`, `vring_used`: the on-the-wire descriptor/available/used ring layout
 - [drivers/net/virtio_net.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/net/virtio_net.c) — the virtio-net driver: `struct virtnet_info`, `xmit_skb()`
-- [include/uapi/linux/virtio_net.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/virtio_net.h) — `struct virtio_net_hdr` and the `VIRTIO_NET_F_*` feature bits
+- [include/linux/virtio_net.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/virtio_net.h) — `virtio_net_hdr_from_skb()`: fills the checksum/GSO offload fields `xmit_skb()` writes into the header
+- [include/uapi/linux/virtio_net.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/virtio_net.h) — `struct virtio_net_hdr`, `struct virtio_net_hdr_mrg_rxbuf`, and the `VIRTIO_NET_F_*` feature bits
 - [drivers/block/virtio_blk.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/virtio_blk.c) — the virtio-blk driver
 - [include/uapi/linux/virtio_blk.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/virtio_blk.h) — `struct virtio_blk_outhdr` and the `VIRTIO_BLK_F_*` feature bits (`DISCARD`, `WRITE_ZEROES`, `FLUSH`)
-- [drivers/vhost/net.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vhost/net.c) — the vhost-net kernel backend: `struct vhost_net`, `handle_tx()`
+- [drivers/vhost/net.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vhost/net.c) — the vhost-net kernel backend: `struct vhost_net`, `handle_tx()` dispatching to `handle_tx_copy()`/`handle_tx_zerocopy()`
 - [drivers/vhost/vhost.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vhost/vhost.h) — `struct vhost_dev`: the generic vhost core shared by vhost-net, vhost-scsi, and vhost-vsock
 
 ### Related pages
