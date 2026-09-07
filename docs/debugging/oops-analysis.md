@@ -13,8 +13,10 @@ A **kernel oops** is a non-fatal kernel error — the kernel detected an inconsi
 [  123.456790] #PF: supervisor read access in kernel mode
 [  123.456791] #PF: error_code(0x0000) - not-present page
 [  123.456792] PGD 0 P4D 0
-[  123.456793] Oops: 0000 [#1] PREEMPT SMP NOPTI
+[  123.456793] Oops: Oops: 0000 [#1] SMP NOPTI
 ```
+
+The doubled "Oops: Oops:" is real, not a typo: `__die_header()` (`arch/x86/kernel/dumpstack.c`) always prints `"Oops: %s: ..."`, and the generic kernel-mode page-fault handler (`arch/x86/mm/fault.c`) passes the literal string `"Oops"` as that `%s` — so the two collide. The flags after `[#1]` are conditional, built from the running kernel's config: `SMP` (`CONFIG_SMP`), `DEBUG_PAGEALLOC` (if `debug_pagealloc_enabled()`), `KASAN` (`CONFIG_KASAN`), and `PTI`/`NOPTI` (`CONFIG_MITIGATION_PAGE_TABLE_ISOLATION`, `PTI` if the CPU needs the mitigation, `NOPTI` if not) — there is no `PREEMPT` flag in this line at all.
 
 Breaking down the first line:
 
