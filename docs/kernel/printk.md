@@ -9,14 +9,14 @@
 printk(KERN_INFO "my_driver: initialized, irq=%d\n", irq);
 
 /* Convenience macros (preferred): */
-pr_emerg("...");    /* KERN_EMERG   = "<0>" */
-pr_alert("...");    /* KERN_ALERT   = "<1>" */
-pr_crit("...");     /* KERN_CRIT    = "<2>" */
-pr_err("...");      /* KERN_ERR     = "<3>" */
-pr_warn("...");     /* KERN_WARNING = "<4>" */
-pr_notice("...");   /* KERN_NOTICE  = "<5>" */
-pr_info("...");     /* KERN_INFO    = "<6>" */
-pr_debug("...");    /* KERN_DEBUG   = "<7>" (only if DEBUG defined) */
+pr_emerg("...");    /* KERN_EMERG   = KERN_SOH "0" */
+pr_alert("...");    /* KERN_ALERT   = KERN_SOH "1" */
+pr_crit("...");     /* KERN_CRIT    = KERN_SOH "2" */
+pr_err("...");      /* KERN_ERR     = KERN_SOH "3" */
+pr_warn("...");     /* KERN_WARNING = KERN_SOH "4" */
+pr_notice("...");   /* KERN_NOTICE  = KERN_SOH "5" */
+pr_info("...");     /* KERN_INFO    = KERN_SOH "6" */
+pr_debug("...");    /* KERN_DEBUG   = KERN_SOH "7" (only if DEBUG defined) */
 
 /* Device-aware wrappers (include dev name/address in output): */
 dev_err(&pdev->dev, "failed to map IO: %d\n", ret);
@@ -24,6 +24,10 @@ dev_info(&client->dev, "probe OK, addr=0x%02x\n", client->addr);
 dev_warn(&pdev->dev, "timeout, retrying\n");
 dev_dbg(&pdev->dev, "IRQ status: 0x%08x\n", status);
 ```
+
+`KERN_SOH` (`include/linux/kern_levels.h`) is the literal ASCII SOH control character (`"\001"`), not the
+angle brackets shown in a formatted `dmesg` line — those are dmesg's own rendering of the `<level>` prefix
+after it parses the SOH-prefixed loglevel byte back out of the message.
 
 ## Log levels and console
 
@@ -55,13 +59,13 @@ echo 8 > /proc/sys/kernel/printk
 ## Circular log buffer
 
 ```c
-/* kernel/printk/printk.c */
 /*
  * The ring buffer stores records with metadata.
  * Size controlled by: CONFIG_LOG_BUF_SHIFT (default 17 = 128KB)
  * Boot parameter: log_buf_len=4M
  */
 
+/* kernel/printk/printk_ringbuffer.h */
 struct printk_info {
     u64     seq;         /* sequence number */
     u64     ts_nsec;     /* timestamp in nanoseconds */
@@ -69,9 +73,19 @@ struct printk_info {
     u8      facility;    /* syslog facility */
     u8      flags:5;     /* internal record flags */
     u8      level:3;     /* syslog level, 0-7 */
-    u32     caller_id;   /* cpu/task ID */
-};
+    u32     caller_id;   /* thread id or processor id */
 
+    struct dev_printk_info dev_info;  /* subsystem/device, for dev_printk() callers */
+};
+```
+
+`struct dev_printk_info` (`include/linux/dev_printk.h`) is just two fixed-size char arrays —
+`subsystem`/`device` — filled in by `dev_err()`/`dev_info()`/etc. so `/dev/kmsg` readers can recover which
+device a message came from without parsing the formatted text. A newer, `CONFIG_PRINTK_EXECUTION_CTX`-gated
+build also adds a `caller_id2` and a `comm[TASK_COMM_LEN]` field to `struct printk_info`, not shown above —
+not yet the common case.
+
+```c
 /*
  * Ring buffer is a lock-free multi-producer multi-consumer design.
  * Readers (dmesg, /dev/kmsg) never block the writer (printk).
@@ -169,8 +183,8 @@ echo "file drivers/net/e1000.c +p" > /sys/kernel/debug/dynamic_debug/control
 # Enable all debug messages in a module:
 echo "module e1000 +p" > /sys/kernel/debug/dynamic_debug/control
 
-# Enable with flags (p=print, f=filename, l=line, m=module, t=thread):
-echo "file net/ipv4/tcp.c +pflmt" > /sys/kernel/debug/dynamic_debug/control
+# Enable with flags (p=print, f=function name, l=line, m=module, t=thread, s=source filename):
+echo "file net/ipv4/tcp.c +pflmts" > /sys/kernel/debug/dynamic_debug/control
 
 # List all dynamic debug sites:
 cat /sys/kernel/debug/dynamic_debug/control | grep "e1000"
@@ -198,8 +212,7 @@ cat /sys/fs/pstore/dmesg-ramoops-0
 # Trace all printk calls:
 bpftrace -e '
 kprobe:vprintk_emit {
-    printf("printk level=%d: %s\n", (int)arg1,
-           str(*(char **)arg3));
+    printf("printk level=%d: %s\n", (int)arg1, str(arg3));
 }'
 
 # Serial console speed bottleneck:
