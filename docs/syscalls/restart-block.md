@@ -95,11 +95,18 @@ signal handler runs** (the no-handler path inside `arch_do_signal_or_restart()`)
 ```c
 /* Only in the no-handler path (arch_do_signal_or_restart): */
 case -ERESTART_RESTARTBLOCK:
-    regs->ax  = __NR_restart_syscall;
+    regs->ax  = get_nr_restart_syscall(regs);
     regs->ip -= 2;
     /* rip is already pointing at the syscall instruction */
     break;
 ```
+
+`get_nr_restart_syscall()` isn't always plain `__NR_restart_syscall`: for a 32-bit
+compat task (`restart_block.arch_data & TS_COMPAT` — the same `arch_data` field
+from the struct above) it returns `__NR_ia32_restart_syscall` instead, and for
+the x32 ABI it ORs in `__X32_SYSCALL_BIT`. This is why `arch_data` has to be
+captured at the point the restart is set up: the CPU needs the *right* syscall
+number to re-dispatch through, native or compat.
 
 When a signal handler IS delivered, `handle_signal()` converts
 `ERESTART_RESTARTBLOCK` to `-EINTR` instead (see the switch above).
@@ -129,10 +136,13 @@ struct restart_block {
 
         /* nanosleep / clock_nanosleep */
         struct {
-            clockid_t                       clockid;
-            enum timespec_type              type;
-            struct __kernel_timespec __user *rmtp;
-            ktime_t                         expires;
+            clockid_t           clockid;
+            enum timespec_type  type;
+            union {
+                struct __kernel_timespec __user *rmtp;      /* native (64-bit) */
+                struct old_timespec32 __user    *compat_rmtp; /* 32-bit compat */
+            };
+            ktime_t             expires;
         } nanosleep;
 
         /* poll / ppoll */
@@ -187,7 +197,7 @@ Userspace never sees `__NR_restart_syscall` in normal operation. It appears in
 
 4.  Fills in restart_block:
         current->restart_block.fn              = hrtimer_nanosleep_restart;
-        current->restart_block.nanosleep.clockid = CLOCK_REALTIME;
+        current->restart_block.nanosleep.clockid = CLOCK_MONOTONIC;  /* plain nanosleep() always sleeps against CLOCK_MONOTONIC; clock_nanosleep() could pass a different clock */
         current->restart_block.nanosleep.rmtp    = &rem (userspace pointer);
         current->restart_block.nanosleep.expires = now + 2_seconds_in_ns;
 
@@ -195,7 +205,9 @@ Userspace never sees `__NR_restart_syscall` in normal operation. It appears in
 
 6.  Signal path (no handler installed / no-handler restart path):
         - Sees -ERESTART_RESTARTBLOCK in regs->ax
-        - Rewrites regs->ax = __NR_restart_syscall (219)
+        - Rewrites regs->ax = get_nr_restart_syscall(regs)
+          = __NR_restart_syscall (219) — this is a native 64-bit task,
+            so no compat/x32 translation applies
         - Rewinds rip by 2 bytes
         (If a handler IS installed and runs, handle_signal() converts
          -ERESTART_RESTARTBLOCK to -EINTR instead — no restart occurs.)
@@ -278,7 +290,7 @@ cat /proc/$(pgrep myapp)/syscall
 - [include/linux/sched.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/sched.h) — `restart_block` embedded directly in `struct task_struct`
 - [include/linux/thread_info.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/thread_info.h) — `set_restart_fn()`: sets `restart->fn` and returns `-ERESTART_RESTARTBLOCK`
 - [kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/signal.c) — `SYSCALL_DEFINE0(restart_syscall)` and `do_no_restart_syscall()`
-- [arch/x86/kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/signal.c) — `handle_signal()` and `arch_do_signal_or_restart()`: where the `ERESTART*` codes in `regs->ax` are inspected and dispatched
+- [arch/x86/kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/signal.c) — `handle_signal()` and `arch_do_signal_or_restart()`: where the `ERESTART*` codes in `regs->ax` are inspected and dispatched; `get_nr_restart_syscall()`: picks the correct restart syscall number (native, `__NR_ia32_restart_syscall` for 32-bit compat, or x32) based on `restart_block.arch_data`
 - [kernel/time/hrtimer.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/hrtimer.c) — `hrtimer_nanosleep_restart()`: the restart handler `nanosleep()`/`clock_nanosleep()` register in `restart_block.fn`
 
 ### Man pages
