@@ -40,7 +40,7 @@ SYM_CODE_START(entry_SYSCALL_64)
     /* ... (IBRS mitigation, context tracking) ... */
 
     movq    %rsp, %rdi                  /* pt_regs pointer as first arg */
-    movl    %eax, %esi                  /* syscall number as second arg */
+    movslq  %eax, %rsi                  /* sign-extend syscall number into second arg */
     call    do_syscall_64
     /* ... return path ... */
 SYM_CODE_END(entry_SYSCALL_64)
@@ -49,29 +49,31 @@ SYM_CODE_END(entry_SYSCALL_64)
 ## struct pt_regs: saved register state
 
 ```c
-/* arch/x86/include/asm/ptrace.h */
+/* arch/x86/include/asm/ptrace.h — field names are unprefixed
+ * (ax, cx, ... not rax, rcx); the register width is still 64-bit,
+ * "r"-prefixing them in illustrative code is a common but wrong habit. */
 struct pt_regs {
     unsigned long r15;
     unsigned long r14;
     unsigned long r13;
     unsigned long r12;
-    unsigned long rbp;
-    unsigned long rbx;
+    unsigned long bp;
+    unsigned long bx;
     unsigned long r11;
     unsigned long r10;
     unsigned long r9;
     unsigned long r8;
-    unsigned long rax;      /* syscall number / return value */
-    unsigned long rcx;      /* saved rip (from syscall instruction) */
-    unsigned long rdx;
-    unsigned long rsi;
-    unsigned long rdi;
-    unsigned long orig_rax; /* original syscall number (rax before call) */
-    unsigned long rip;      /* userspace instruction pointer */
-    unsigned long cs;
-    unsigned long eflags;
-    unsigned long rsp;      /* userspace stack pointer */
-    unsigned long ss;
+    unsigned long ax;       /* syscall number / return value */
+    unsigned long cx;       /* saved rip (from syscall instruction) */
+    unsigned long dx;
+    unsigned long si;
+    unsigned long di;
+    unsigned long orig_ax;  /* original syscall number (ax before call) */
+    unsigned long ip;       /* userspace instruction pointer */
+    u16           cs;       /* actually a union with a FRED CS extension */
+    unsigned long flags;
+    unsigned long sp;       /* userspace stack pointer */
+    u16           ss;       /* actually a union with a FRED SS extension */
 };
 ```
 
@@ -153,7 +155,7 @@ Syscall arguments come in registers. For pointers into userspace, the kernel mus
 ```c
 /* Copying from userspace */
 copy_from_user(kernel_buf, user_ptr, size)
-    → check_access_ok(user_ptr, size)  /* is address in user range? */
+    → access_ok(user_ptr, size)        /* is address in user range? */
     → __copy_from_user()               /* architecture-specific copy */
     → returns bytes NOT copied (0 = success)
 
@@ -206,32 +208,35 @@ objdump -T /lib/x86_64-linux-gnu/vdso.so.1 2>/dev/null | grep -i clock
 The vDSO reads kernel timekeeping data from a shared memory page (`vvar`) that the kernel updates atomically. The vDSO function reads the data directly, with no privilege switch:
 
 ```c
-/* vDSO: arch/x86/entry/vdso/vclock_gettime.c */
-static __always_inline int
-do_hres(const struct vdso_data *vd, clockid_t clk,
-        struct __kernel_timespec *ts)
+/* lib/vdso/gettimeofday.c — architecture-shared, not x86-specific.
+ * The single struct vdso_data of older kernels is now split in two:
+ * vdso_time_data (the top-level vvar page, arch clocksource state) and
+ * vdso_clock (per-clock basetime/mult/shift, one instance per clock,
+ * needed since time namespaces gave each namespace its own clock data). */
+bool do_hres(const struct vdso_time_data *vd, const struct vdso_clock *vc,
+             clockid_t clk, struct __kernel_timespec *ts)
 {
-    const struct vdso_timestamp *vdso_ts = &vd->basetime[clk];
-    u64 cycles, last, sec, ns;
+    u64 sec, ns;
     u32 seq;
 
     do {
-        seq = vdso_read_begin(vd);     /* seqlock read_begin */
-        cycles = vdso_cycles();        /* read TSC (no syscall) */
-        ns = vdso_ts->nsec;
-        last = vd->cycle_last;
-        if (unlikely((s64)(cycles - last) < 0))
-            return clock_gettime_fallback(clk, ts);
-        ns += vdso_calc_delta(cycles, last, vd->mask, vd->mult);
-        ns >>= vd->shift;
-        sec = vdso_ts->sec;
-    } while (unlikely(vdso_read_retry(vd, seq)));  /* seqlock retry */
+        /* A time-namespace'd task gets its own vdso_clock and a
+         * different (still seqlock-protected) read path here. */
+        if (vdso_read_begin_timens(vc, &seq))
+            return do_hres_timens(vd, vc, clk, ts);
 
-    ts->tv_sec  = sec + __iter_div_u64_rem(ns, NSEC_PER_SEC, &ns);
-    ts->tv_nsec = ns;
-    return 0;
+        /* TSC read + cycle-delta-to-ns math now lives in this shared
+         * helper, used by every clock read path (hres, coarse, timens): */
+        if (!vdso_get_timestamp(vd, vc, clk, &sec, &ns))
+            return false;
+    } while (vdso_read_retry(vc, seq));  /* seqlock retry */
+
+    vdso_set_timespec(ts, sec, ns);  /* sec/ns -> tv_sec/tv_nsec, carrying ns overflow into sec */
+    return true;
 }
 ```
+
+(Simplified: the real function also has an early `__arch_vdso_hres_capable()` bailout, and `vdso_get_timestamp()` itself does the TSC read and the clocksource validity check that older versions inlined directly into `do_hres()`.)
 
 Syscalls fast-pathed through the vDSO (no ring switch):
 
@@ -245,13 +250,21 @@ Syscalls fast-pathed through the vDSO (no ring switch):
 The seccomp filter runs on every syscall before the dispatch table:
 
 ```c
-/* kernel/seccomp.c: in syscall_enter_from_user_mode() */
-if (unlikely(task_work_pending(current)))
-    task_work_run();
+/* Simplified: the real chain runs through several functions —
+ * syscall_enter_from_user_mode_work() (include/linux/entry-common.h)
+ * checks the SYSCALL_WORK_SECCOMP bit and calls syscall_trace_enter(),
+ * which reaches __seccomp_filter() in kernel/seccomp.c: */
+unsigned long work = READ_ONCE(current_thread_info()->syscall_work);
 
-if (unlikely(test_thread_flag(TIF_SECCOMP))) {
-    u32 action = seccomp_run_filters(nr, &match);
-    /* action can be: ALLOW, KILL, ERRNO, TRACE, LOG, TRAP */
+if (work & SYSCALL_WORK_SECCOMP) {
+    struct seccomp_data sd;
+    struct seccomp_filter *match = NULL;
+
+    populate_seccomp_data(&sd);
+    u32 filter_ret = seccomp_run_filters(&sd, &match);
+    u32 action = filter_ret & SECCOMP_RET_ACTION_FULL;
+    /* action can be: SECCOMP_RET_ALLOW, SECCOMP_RET_KILL_(PROCESS|THREAD),
+       SECCOMP_RET_ERRNO, SECCOMP_RET_TRACE, SECCOMP_RET_LOG, SECCOMP_RET_TRAP */
 }
 ```
 
