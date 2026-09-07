@@ -103,14 +103,15 @@ void init_my_obj(struct my_obj *obj)
 }
 ```
 
-The class key is a `struct lock_class_key` that lives in the kernel's `.data` section. It is generated automatically by `spin_lock_init()`, `mutex_init()`, etc., via the macro:
+The class key is a `struct lock_class_key` that lives in the kernel's `.data` section. It is generated automatically by `spin_lock_init()`, `mutex_init()`, etc., via the macro (shown here for the non-`PREEMPT_RT`, `CONFIG_DEBUG_SPINLOCK=y` path — the actual init call is `__raw_spin_lock_init()`, not a plain `__spin_lock_init()`, and it also passes a lock-wait-type tag):
 
 ```c
-/* include/linux/spinlock.h (simplified): */
-#define spin_lock_init(lock)                        \
-do {                                                \
-    static struct lock_class_key __key;             \
-    __spin_lock_init(lock, #lock, &__key);          \
+/* include/linux/spinlock.h: */
+#define spin_lock_init(lock)                                   \
+do {                                                           \
+    static struct lock_class_key __key;                        \
+    __raw_spin_lock_init(spinlock_check(lock), #lock, &__key,   \
+                          LD_WAIT_CONFIG);                      \
 } while (0)
 ```
 
@@ -177,11 +178,11 @@ Assert that the current task holds a specific lock. Use this at the top of funct
 
 ```c
 /* fs/inode.c */
-void inode_set_flags(struct inode *inode, unsigned int flags,
-                     unsigned int mask)
+static void inode_pin_lru_isolating(struct inode *inode)
 {
     lockdep_assert_held(&inode->i_lock);   /* caller must hold i_lock */
-    /* ... modify inode flags ... */
+    WARN_ON(inode_state_read(inode) & (I_LRU_ISOLATING | I_FREEING | I_WILL_FREE));
+    inode_state_set(inode, I_LRU_ISOLATING);
 }
 ```
 
@@ -206,12 +207,17 @@ void some_mm_operation(struct mm_struct *mm)
 For rwsems, assert the specific lock mode:
 
 ```c
-void vma_adjust(struct vm_area_struct *vma, ...)
+/* mm/vma.c — vma_adjust() no longer exists; VMA merge/split/adjust all go
+   through vma_merge_existing_range() and its siblings now: */
+static __must_check struct vm_area_struct *vma_merge_existing_range(
+        struct vma_merge_struct *vmg)
 {
-    lockdep_assert_held_write(&vma->vm_mm->mmap_lock);
-    /* write lock required */
+    mmap_assert_write_locked(vmg->mm);
+    /* ... merge/adjust logic ... */
 }
 ```
+
+`mmap_assert_write_locked()` (`include/linux/mmap_lock.h`) is itself a thin wrapper — it just calls `rwsem_assert_held_write(&mm->mmap_lock)`, since `mmap_lock` is backed by a plain rwsem.
 
 ---
 
@@ -402,6 +408,9 @@ dmesg | grep -A 80 "possible circular locking"
 - [kernel/locking/lockdep_proc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/locking/lockdep_proc.c) — `/proc/lockdep_stats` and `/proc/lock_stat` output formatting (`lock-classes`, `con-bounces`, `contentions`, `waittime-min`, etc.)
 - [include/linux/fs.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/fs.h) — the `I_MUTEX_NORMAL`/`I_MUTEX_PARENT`/`I_MUTEX_CHILD`/`I_MUTEX_XATTR`/`I_MUTEX_NONDIR2` subclass enum used with `lockdep_set_subclass()`
 - [include/linux/spinlock.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/spinlock.h) — `spin_lock_init()`, which allocates the per-call-site `lock_class_key`
+- [fs/inode.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/inode.c) — `inode_pin_lru_isolating()`, a real `lockdep_assert_held(&inode->i_lock)` call site
+- [mm/vma.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/vma.c) — `vma_merge_existing_range()`, the current VMA-merge path that asserts `mmap_assert_write_locked()`
+- [include/linux/mmap_lock.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/mmap_lock.h) — `mmap_assert_write_locked()`/`mmap_assert_locked()`
 - [scripts/faddr2line](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/faddr2line) — resolves `func+0x123/0x456`-style offsets from a splat back to source lines
 - [Documentation/locking/lockdep-design.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/locking/lockdep-design.rst) — lockdep's own design document
 - [Documentation/locking/lockstat.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/locking/lockstat.rst) — `/proc/lock_stat` design document
