@@ -4,12 +4,12 @@
 
 ## Overview
 
-KGDB allows debugging a live kernel using GDB as the front-end. The kernel halts at breakpoints and exposes a GDB remote protocol stub over a serial port or netconsole. A second machine (or a VM host) runs GDB.
+KGDB allows debugging a live kernel using GDB as the front-end. The kernel halts at breakpoints and exposes a GDB remote protocol stub over a serial port. A second machine (or a VM host) runs GDB.
 
 ```
 Target machine (running kernel to debug)
   │
-  │  kgdb serial/network transport
+  │  kgdb serial transport
   │
   ▼
 Host machine (running GDB)
@@ -38,7 +38,11 @@ CONFIG_GDB_SCRIPTS=y           # GDB python scripts for kernel types
 ```bash
 # Target: configure kgdb to use serial port ttyS0 at 115200 baud
 # At boot (kernel parameter):
-console=ttyS0,115200 kgdboc=ttyS0,115200
+console=ttyS0,115200 kgdboc=ttyS0,115200 kgdbwait
+
+# kgdbwait halts early boot until a debugger attaches — without it, kgdboc
+# only registers the serial console as a kgdb I/O backend; the kernel keeps
+# booting and you have to trigger entry yourself (SysRq-g or a breakpoint).
 
 # Or at runtime (if kernel supports it):
 echo ttyS0,115200 > /sys/module/kgdboc/parameters/kgdboc
@@ -58,23 +62,22 @@ gdb vmlinux
 # (gdb) ...
 ```
 
-### Over network (kgdboe)
+### There is no network transport in mainline
 
-kgdboe (KGDB over Ethernet) uses the netpoll framework:
+Mainline kgdb has no Ethernet/UDP I/O backend — `kgdboc` (serial) is the only transport, confirmed by the
+complete file list for KGDB/KDB in the kernel's own `MAINTAINERS` entry (`Documentation/process/debugging/kgdb.rst`,
+`drivers/misc/kgdbts.c`, `drivers/tty/serial/kgdboc.c`, `include/linux/kdb.h`, `include/linux/kgdb.h`,
+`kernel/debug/`, `kernel/module/kdb.c` — no network driver). There's no `kgdboe=` boot parameter, no `kgdb_nmi`
+module, and no netpoll-based kgdb backend to load.
 
-```bash
-# Target: kgdboe configuration
-# Format: @target_ip/interface,@host_ip
-insmod kgdb_nmi.ko
-echo "g" > /proc/sysrq-trigger  # (after kgdboe setup)
-# Or at boot:
-kgdboe=@192.168.1.10/eth0,@192.168.1.1
+The name isn't invented, though: `kgdboc.c`'s own header comment says it was written "based on the same
+principle as kgdboe using the NETPOLL api" — kgdboe was a real, netpoll-based kgdb-over-Ethernet design that
+existed as a precedent for kgdboc's author, but it was never merged into mainline (no commit ever added it,
+and it has no `MAINTAINERS` entry). If you need remote access to a serial-attached target, the standard
+approach is a serial-to-network bridge such as `ser2net`, external to the kernel entirely — not a kernel
+feature.
 
-# Host: use GDB with UDP
-# (requires agent-proxy or similar)
-```
-
-For most use cases, serial is simpler and more reliable.
+For serial-attached debugging, `kgdboc` is the only transport, and it's what the rest of this page covers.
 
 ## Basic GDB commands for kernel debugging
 
@@ -244,7 +247,8 @@ KDB (`CONFIG_KGDB_KDB=y`) provides a simpler text-based debugger that runs entir
 
 - [Documentation/process/debugging/kgdb.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/process/debugging/kgdb.rst) — the canonical kgdb/kdb documentation: config options, `kgdboc` syntax, and the kdb command reference (note: this file lived at `Documentation/dev-tools/kgdb.rst` in older trees; it was relocated to `Documentation/process/debugging/`)
 - [kernel/debug/debug_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/debug/debug_core.c) — the debug core shared by both kgdb and kdb: exception entry and breakpoint handling
-- [kernel/debug/kdb/kdb_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/debug/kdb/kdb_main.c) — the kdb command table (`ps`, `bt`, `btp`, `go`, `dmesg`, `lsmod`, `md`, `mm`, `help`, ...)
+- [kernel/debug/kdb/kdb_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/debug/kdb/kdb_main.c) — most of the kdb command table (`ps`, `bt`, `btp`, `go`, `dmesg`, `lsmod`, `md`, `mm`, `help`, ...)
+- [kernel/debug/kdb/kdb_bp.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/debug/kdb/kdb_bp.c) — the `bp`/`bph` breakpoint commands, registered separately from `kdb_main.c`'s table
 - [drivers/tty/serial/kgdboc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/tty/serial/kgdboc.c) — the `kgdboc` I/O driver that binds kgdb to a serial console
 - [scripts/gdb/vmlinux-gdb.py](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/gdb/vmlinux-gdb.py) — entry point that loads the `lx-*` GDB helper commands (`lx-ps`, `lx-dmesg`, `lx-lsmod`, `lx-symbols`, ...) and convenience functions (`$lx_current()`, `$lx_per_cpu()`, `$container_of()`) from `scripts/gdb/linux/`
 
