@@ -55,18 +55,25 @@ syscall boundary code:
 
 ```c
 /* include/linux/audit.h */
-void audit_syscall_entry(int major, unsigned long a1, unsigned long a2,
-                          unsigned long a3, unsigned long a4);
+static inline void audit_syscall_entry(int major, unsigned long a0,
+                                        unsigned long a1, unsigned long a2,
+                                        unsigned long a3);
 static inline void audit_syscall_exit(void *pt_regs);
 ```
+
+Both are `static inline` wrappers that check `audit_context()` before doing any
+work, then forward to the real implementations — `__audit_syscall_entry()` and
+`__audit_syscall_exit()` — defined in `kernel/auditsc.c`.
 
 These are called from `syscall_enter_from_user_mode()` and
 `syscall_exit_to_user_mode()` in `include/linux/entry-common.h` when the
 `SYSCALL_WORK_SYSCALL_AUDIT` flag is set in the current task's `syscall_work`.
 
-`SYSCALL_WORK_SYSCALL_AUDIT` is set when audit rules are loaded that could match the
-task. Tasks with no matching rules never set `SYSCALL_WORK_SYSCALL_AUDIT` and never pay
-the cost of audit context allocation.
+`SYSCALL_WORK_SYSCALL_AUDIT` is set in `audit_alloc()` whenever a context is
+allocated for the task — which, once auditing is enabled system-wide, is the
+common case (see the next section). Only a task that a task-level rule
+explicitly disables, or a system where audit has never been enabled at all,
+skips this entirely.
 
 ## struct audit_context
 
@@ -83,7 +90,8 @@ struct audit_context {
         AUDIT_CTX_SYSCALL,
         AUDIT_CTX_URING,
     }                  context;
-    enum audit_state   current_state; /* AUDIT_STATE_DISABLED / AUDIT_STATE_BUILD / AUDIT_STATE_RECORD */
+    enum audit_state   state;         /* baseline from audit_filter_task(), set once at audit_alloc() */
+    enum audit_state   current_state; /* per-syscall; reset to 'state' each syscall, refined by audit_filter_syscall() */
 
     int                major;        /* syscall number */
     unsigned long      argv[4];      /* first four syscall arguments */
@@ -104,14 +112,44 @@ Note: `serial` and `ctime` are accessed as `ctx->stamp.serial` and
 `sessionid` are not fields of `struct audit_context` — they live directly on
 `struct task_struct` (`tsk->loginuid`, `tsk->sessionid`).
 
-The context is attached to `current->audit_context`. It is allocated (or
-re-initialised) in `audit_syscall_entry()` and released (and flushed to the
-netlink socket) in `audit_syscall_exit()`.
+The context is attached to `current->audit_context` and is a per-*task*
+allocation, not a per-syscall one — it's allocated once, in `audit_alloc()`
+(see the next section), and reused for every syscall the task makes.
+`audit_syscall_entry()` doesn't allocate anything; on each syscall it
+re-populates the existing context's fields (`major`, `argv`, `arch`,
+`context = AUDIT_CTX_SYSCALL`, a fresh timestamp) for the syscall that's
+starting. `audit_syscall_exit()` doesn't free it either — after filtering and
+optionally logging, it calls `audit_reset_context()`, which frees the
+*accumulated* per-syscall data (names, aux records) and clears `current_state`
+back to the baseline `state`, leaving the context ready for the task's next
+syscall. The context struct itself is only freed at task exit, via
+`audit_free()`/`audit_free_context()`.
 
-## audit_filter_syscall(): per-rule matching
+## Two filter stages: audit_filter_task() and audit_filter_syscall()
 
-Before allocating any context, the kernel checks whether any loaded rule
-matches the current task and syscall:
+Rule matching happens in two separate stages, not one:
+
+**1. `audit_filter_task()`** (`kernel/auditsc.c`) runs once per task, from
+`audit_alloc()` at task-creation/exec time — *before* any context exists for
+that task:
+
+```c
+/* kernel/auditsc.c */
+static enum audit_state audit_filter_task(struct task_struct *tsk, char **key);
+```
+
+If a task-level rule matches, its state (`AUDIT_STATE_RECORD` or
+`AUDIT_STATE_DISABLED`) is returned directly. If nothing matches,
+`audit_filter_task()` defaults to `AUDIT_STATE_RECORD`'s weaker cousin,
+`AUDIT_STATE_BUILD` — **not** `AUDIT_STATE_DISABLED`. `audit_alloc()` only skips
+context allocation entirely when the state comes back `AUDIT_STATE_DISABLED`;
+`AUDIT_STATE_BUILD` still gets a context. In practice, once *any* audit rule
+has ever been loaded system-wide, essentially every task gets a `BUILD`-state
+context — the real savings come from the next stage deferring the expensive
+work, not from skipping allocation.
+
+**2. `audit_filter_syscall()`** (`kernel/auditsc.c`) runs at syscall *exit*,
+against the context `audit_filter_task()` already allocated:
 
 ```c
 /* kernel/auditsc.c */
@@ -119,7 +157,7 @@ static void audit_filter_syscall(struct task_struct *tsk,
                                   struct audit_context *ctx);
 ```
 
-Rules are matched on combinations of:
+Rules here are matched on combinations of:
 
 - Syscall number (`-S openat`, `-S execve`)
 - Architecture (`-F arch=b64`)
@@ -129,16 +167,19 @@ Rules are matched on combinations of:
 - File path (watch rules, `-w /etc/passwd`)
 - Custom key (`-k mykey`)
 
-`audit_filter_syscall()` is `static void` — it does not return a value.
-Instead, it modifies `ctx->current_state` in place. If no rule matches,
-`ctx->current_state` is set to `AUDIT_STATE_DISABLED` and the syscall
-proceeds without any audit overhead. If a rule matches with action `always`,
-`ctx->current_state` is set to `AUDIT_STATE_RECORD` and context allocation
-proceeds.
+`audit_filter_syscall()` is `static void` — it does not return a value or set
+`ctx->current_state` itself. It delegates to the shared helper
+`__audit_filter_op()`, which walks the rule list and, on a match, sets
+`ctx->current_state = state` before returning. If nothing matches,
+`current_state` (already `BUILD` from stage 1) is left as-is and no record is
+emitted for this syscall. If a rule matches with action `always`,
+`current_state` becomes `AUDIT_STATE_RECORD` and the accumulated context is
+logged.
 
-This is the fast path: the filter runs on every syscall entry for audited
-tasks, but the check itself is a scan of a short list of pre-compiled rule
-entries.
+This is the fast path: for a `BUILD`-state context, all the bookkeeping
+happened for nothing if `audit_filter_syscall()` finds no match — but that
+bookkeeping is far cheaper than assembling and emitting a full record, which
+is what stage 2 actually gates.
 
 ## The in-kernel audit logging API
 
@@ -159,23 +200,31 @@ void audit_log_format(struct audit_buffer *ab, const char *fmt, ...);
 void audit_log_end(struct audit_buffer *ab);
 ```
 
-Example from `kernel/auditsc.c` (simplified):
+Example from `kernel/auditsc.c` (simplified) — building the `AUDIT_SYSCALL`
+record itself:
 
 ```c
 ab = audit_log_start(context, GFP_KERNEL, AUDIT_SYSCALL);
 if (ab) {
-    audit_log_format(ab, "arch=%x syscall=%d success=%s exit=%ld",
-                     context->arch, context->major,
-                     success ? "yes" : "no",
-                     context->return_code);
-    audit_log_format(ab, " pid=%d uid=%u auid=%u ses=%u",
-                     task_pid_nr(tsk),
-                     from_kuid(&init_user_ns, task_uid(tsk)),
-                     from_kuid(&init_user_ns, tsk->loginuid),
-                     tsk->sessionid);
+    audit_log_format(ab, "arch=%x syscall=%d", context->arch, context->major);
+    if (context->return_valid != AUDITSC_INVALID)
+        audit_log_format(ab, " success=%s exit=%ld",
+                         str_yes_no(context->return_valid == AUDITSC_SUCCESS),
+                         context->return_code);
+    audit_log_format(ab, " a0=%lx a1=%lx a2=%lx a3=%lx items=%d",
+                     context->argv[0], context->argv[1],
+                     context->argv[2], context->argv[3],
+                     context->name_count);
+    audit_log_task_info(ab);   /* appends ppid/pid/auid/uid/gid/.../ses/comm/exe */
+    audit_log_key(ab, context->filterkey);
     audit_log_end(ab);
 }
 ```
+
+The `pid=`/`uid=`/`auid=`/`ses=`/`comm=`/`exe=` fields don't come from a
+hand-rolled format call — `audit_log_task_info()` (`kernel/audit.c`) is a
+shared helper that appends the full process-identity block, reused by every
+record type that needs "who did this," not just `AUDIT_SYSCALL`.
 
 ## Auxiliary records
 
@@ -183,13 +232,21 @@ A single syscall often generates more than one audit record. The `AUDIT_SYSCALL`
 record is emitted first; then one or more auxiliary records are appended in the
 same event group (identified by a shared serial number):
 
-| Record type | When emitted | Source |
+| Record type | When emitted | Captured via |
 |-------------|-------------|--------|
-| `AUDIT_PATH` | For each file path resolved during the syscall | `fs/namei.c: audit_inode()` |
-| `AUDIT_CWD` | Current working directory | `kernel/auditsc.c` |
-| `AUDIT_SOCKADDR` | Socket address used by network syscalls | `net/socket.c` |
-| `AUDIT_IPC` | SysV IPC object accessed | `ipc/util.c` |
-| `AUDIT_MQ_*` | POSIX message queue operations | `ipc/mqueue.c` |
+| `AUDIT_PATH` | For each file path resolved during the syscall | `audit_inode()` in `fs/namei.c` callers |
+| `AUDIT_CWD` | Current working directory | (built directly in `kernel/auditsc.c`) |
+| `AUDIT_SOCKADDR` | Socket address used by network syscalls | `audit_sockaddr()` in `net/socket.c` |
+| `AUDIT_IPC` | SysV IPC object accessed | IPC syscall paths, e.g. `ipc/shm.c`/`ipc/sem.c`/`ipc/msg.c` |
+| `AUDIT_MQ_*` | POSIX message queue operations | `audit_mq_*()` in `ipc/mqueue.c` |
+
+Each of these is a two-step handoff, the same pattern as `audit_inode()` above:
+the syscall path calls a thin capture wrapper (declared in
+`include/linux/audit.h`) to stash the relevant data on the current
+`audit_context`, but the actual `audit_log_start(..., AUDIT_SOCKADDR)`-style
+call that builds and emits the record happens later, centrally, in
+`kernel/auditsc.c` when the context is finalized at syscall exit — not at the
+capture site itself.
 
 All records for one syscall share the same `msg=audit(timestamp:serial)` field.
 `ausearch` and `aureport` group them by serial when presenting output.
@@ -271,30 +328,42 @@ Audit is designed to have near-zero cost for tasks and syscalls that are not
 being audited.
 
 `audit_dummy_context()` returns true when the current task's audit context is
-NULL or when `ctx->dummy` is non-zero. A "dummy" context is one that was
-allocated (to avoid the overhead of checking for a context on every syscall
-once auditing is enabled) but marked dummy because no rule matched at syscall
-entry. It does NOT mean "no context was allocated." Code that would otherwise
-build expensive path or inode records checks `audit_dummy_context()` first and
-skips the work:
+NULL or when `ctx->dummy` is non-zero. `dummy` is set in `__audit_syscall_entry()`
+as `context->dummy = !audit_n_rules` — a global counter of how many audit
+rules are currently loaded, system-wide. This is coarser and cheaper than the
+per-task/per-syscall `current_state` filtering covered above: it doesn't ask
+"does a rule match *this* task or syscall," only "does *any* rule exist
+*anywhere* right now." A "dummy" context is one that was allocated (to avoid
+the overhead of checking for a context's existence on every syscall once
+auditing is enabled) but whose task has nothing to gain from the more precise
+filtering, because there's nothing loaded to filter against. It does NOT mean
+"no context was allocated." Code that would otherwise build expensive path or
+inode records checks `audit_dummy_context()` first and skips the work:
 
 ```c
-/* fs/namei.c */
-void audit_inode(struct filename *name, const struct dentry *dentry,
-                  unsigned int aflags)
+/* include/linux/audit.h */
+static inline void audit_inode(struct filename *name,
+                                const struct dentry *dentry,
+                                unsigned int aflags)
 {
-    struct audit_context *context = audit_context();
-
-    if (audit_dummy_context())
-        return;
-    /* ... expensive record assembly ... */
+    if (unlikely(!audit_dummy_context()))
+        __audit_inode(name, dentry, aflags);
 }
 ```
 
-`SYSCALL_WORK_SYSCALL_AUDIT` ensures the per-syscall hooks run only for tasks that have
-been selected by at least one rule. Tasks that are never matched by any rule
-never set `SYSCALL_WORK_SYSCALL_AUDIT`, so `audit_syscall_entry()` and
-`audit_syscall_exit()` are never called for them.
+`audit_inode()` itself is a thin `static inline` gate in the header — the
+"expensive record assembly" it's guarding lives in `__audit_inode()`
+(`kernel/auditsc.c`), which is only ever reached when there's a real context to
+add the path to.
+
+`SYSCALL_WORK_SYSCALL_AUDIT` gates whether `audit_syscall_entry()` and
+`audit_syscall_exit()` do anything at all — but as covered above, once audit
+is enabled system-wide the flag is set for essentially every task by default
+(`AUDIT_STATE_BUILD`), not just ones a rule specifically selected. The real
+fast path is `audit_dummy_context()`: it's cheap enough to check on every
+`audit_inode()`/`audit_log_start()`-style call site, so a `BUILD`-state
+context that never gets promoted to `RECORD` costs a pointer read and a branch
+per check, not full record assembly.
 
 The `AUDIT_BACKLOG_LIMIT` (configurable via `auditctl -b`) bounds the number of
 audit records buffered in the kernel while `auditd` is slow to consume them.
@@ -307,7 +376,7 @@ on the `backlog_wait_time` setting.
 ### Kernel source
 
 - [include/linux/audit.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/audit.h) — the public `audit_syscall_entry()`/`audit_syscall_exit()`/`audit_inode()` inline wrappers, which call the real `__audit_syscall_entry()`/`__audit_syscall_exit()`/`__audit_inode()` only when a context is present, plus `audit_dummy_context()`
-- [kernel/auditsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/auditsc.c) — `__audit_syscall_entry()`, `__audit_syscall_exit()`, `audit_filter_syscall()`, and `__audit_inode()`: the real implementations behind the inline wrappers
+- [kernel/auditsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/auditsc.c) — `__audit_syscall_entry()`, `__audit_syscall_exit()`, and `__audit_inode()` (the real implementations behind the inline wrappers), plus `audit_alloc()`, `audit_filter_task()`, `audit_filter_syscall()`, and `__audit_filter_op()`: the two-stage rule-matching path
 - [kernel/audit.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/audit.h) — the internal `struct audit_context` and `struct audit_stamp` definitions
 - [kernel/audit.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/audit.c) — the `NETLINK_AUDIT` socket, `audit_log_start()`/`audit_log_format()`/`audit_log_end()`, and `audit_backlog_limit` handling
 - [include/linux/entry-common.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/entry-common.h) — `syscall_enter_from_user_mode()` and `syscall_exit_to_user_mode()`, where `audit_syscall_entry()`/`audit_syscall_exit()` are actually invoked, gated on the `SYSCALL_WORK_SYSCALL_AUDIT` flag
