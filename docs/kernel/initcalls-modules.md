@@ -42,13 +42,19 @@ For a **loadable module** (`.ko` file), `module_init()` creates an alias:
 
 The resulting `init_module` symbol is what the kernel's module loader calls after loading the `.ko`.
 
-For a **built-in module** (`y` in Kconfig), `module_init()` becomes:
+For a **built-in module** (`y` in Kconfig), `module_init()` doesn't expand directly to `device_initcall()` —
+there's an indirection layer in between:
 
 ```c
-#define module_init(initfn)     device_initcall(initfn)
+#define module_init(x)     __initcall(x);
+#define __initcall(fn)      device_initcall(fn)
+#define device_initcall(fn) __define_initcall(fn, 6)
 ```
 
-which places the function pointer in the `.initcall6.init` ELF section, called by `do_initcalls()` during boot. See [Early Boot and start_kernel()](early-boot.md) for the full initcall level table.
+`__initcall(fn)` is itself just an alias for `device_initcall(fn)` (no behavioral difference — both land in
+initcall level 6), but it's the macro `module_init()` actually invokes. `__define_initcall(fn, 6)` is what
+places the function pointer in the `.initcall6.init` ELF section, called by `do_initcalls()` during boot. See
+[Early Boot and start_kernel()](early-boot.md) for the full initcall level table.
 
 `module_exit()` for built-in code expands to nothing — built-in code can never be unloaded, so the exit function is not needed (and is discarded by the linker from `.exit.text`).
 
@@ -123,20 +129,27 @@ The kernel exposes two syscalls for loading modules:
 
 ```
 load_module()
-    1. copy_module_from_user() / copy_module_from_fd()
-       - Read the ELF image from userspace
-
-    2. elf_validity_check()
-       - Verify ELF magic, architecture, section headers
-
-    3. module_sig_check()       [if CONFIG_MODULE_SIG]
-       - Verify PKCS#7 signature against built-in public key
+    1. module_sig_check()       [if CONFIG_MODULE_SIG]
+       - Runs FIRST, before the ELF is even parsed
+       - Verify the module's signature against the kernel's built-in
+         public key (not PKCS#7 — see "Module signing" below for the
+         real, non-standard signature format)
        - Fail if CONFIG_MODULE_SIG_FORCE and signature invalid
 
-    4. Allocate struct module
-       - layout_and_allocate(): compute section sizes
+    2. elf_validity_cache_copy()
+       - Verify ELF magic, architecture, section headers
+
+    3. layout_and_allocate()
+       - Compute section sizes
        - module_alloc(): allocate memory in module space
          (vmalloc region, or close to kernel text for 32-bit)
+
+    4. add_unformed_module()
+       - Adds the module to the global modules list, state =
+         MODULE_STATE_UNFORMED, so a concurrent finit_module() of the
+         same module is detected and rejected early
+       - Runs right after allocation — well before init() is ever
+         called, not after it
 
     5. Apply ELF relocations
        - apply_relocations(): resolve symbol references
@@ -145,21 +158,26 @@ load_module()
             GPL/non-GPL license string, not a separate table)
          b. Other loaded modules' exported symbols
 
-    6. module_finalize()
+    6. post_relocation() -> module_finalize()
        - Set up alternatives (CPU feature patching)
        - Set up jump labels
        - Set up ORC unwind info
 
-    7. do_init_module()
-       - Set state = MODULE_STATE_COMING
+    7. complete_formation()
+       - verify_exported_symbols(): reject a module that redefines an
+         existing exported symbol name
+       - Enable RO/NX/ROX memory protections on the module's sections
+       - Set state = MODULE_STATE_COMING (do_init_module(), next, does
+         NOT set this — it's already set by the time init() runs)
+
+    8. mod_sysfs_setup()
+       - Module directory created in /sys/module/
+
+    9. do_init_module()
        - call module->init()   <-- driver's __init function runs
        - If init() returns 0: state = MODULE_STATE_LIVE
        - If init() returns non-zero: module loading fails,
          module freed, error returned to userspace
-
-    8. add_unformed_module() / add_module_to_list()
-       - Module appears in /proc/modules
-       - Module directory created in /sys/module/
 ```
 
 ### Module memory layout
@@ -183,15 +201,19 @@ rmmod mydriver
 
     3. Call module->exit() if it exists
 
-    4. Remove from modules list and /proc/modules
+    4. free_module(): mod_sysfs_teardown() first
+       - Remove from /sys/module/ (before the list unlink below,
+         so nothing can look the module up mid-teardown)
 
-    5. Remove from /sys/module/
+    5. Remove from modules list and /proc/modules
+       - list_del_rcu(&mod->list): a concurrent kallsyms walk of the
+         list may still be in progress
 
-    6. Synchronize with RCU (rcu_barrier())
-       - Ensures all in-flight RCU callbacks that reference
-         the module's code have completed
+    6. Synchronize with RCU (synchronize_rcu(), not rcu_barrier())
+       - Waits out that grace period before the module's memory
+         (which the list node lives inside) can be freed
 
-    7. module_free(): return memory to vmalloc allocator
+    7. free_mod_mem(): return memory to vmalloc allocator
 ```
 
 Modules cannot be unloaded while any code is executing in them (tracked by `refcnt`) or while any other module depends on them (tracked by the `source_list`).
@@ -336,11 +358,9 @@ cat /sys/module/e1000e/sections/.text
 # Sign a module manually (key must match kernel's built-in public key):
 scripts/sign-file sha256 signing_key.pem signing_key.x509 mydriver.ko
 
-# Check if a module is signed:
+# Confirm a signature is present (does not validate it):
 modinfo mydriver.ko | grep sig
-
-# Verify signature:
-openssl cms -verify -inform DER -in mydriver.ko ...
+tail -c 28 mydriver.ko   # should read "~Module signature appended~"
 ```
 
 With `CONFIG_MODULE_SIG_FORCE`, any unsigned or incorrectly signed module is rejected. With `CONFIG_MODULE_SIG` but not `_FORCE`, unsigned modules are accepted with a taint flag:
@@ -350,7 +370,12 @@ mydriver: module verification failed: signature and/or required key missing
 Tainted: G           E
 ```
 
-The module signing infrastructure uses PKCS#7 signatures appended to the `.ko` file (after the ELF data).
+The signature is a small, kernel-specific `struct module_signature` trailer appended after the ELF data —
+not a PKCS#7 (or any other industrial-standard) container. Per the kernel's own documentation: "the
+signatures are not themselves encoded in any industrial standard type." That trailer's `id_type` field does
+name a payload format for the signature bytes it wraps — currently only `PKCS7` is defined — but there's no
+general-purpose `openssl`-style command that verifies it offline; validation only happens inside the kernel,
+against its built-in public key, at load time.
 
 ---
 
@@ -386,7 +411,8 @@ kprobe:do_init_module {
 
 - [include/linux/module.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/module.h) — `module_init()` / `module_exit()` macros and the `struct module` definition
 - [include/linux/init.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/init.h) — the initcall level macros (`early_initcall()` through `late_initcall()`) and `__define_initcall()`
-- [kernel/module/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/main.c) — `load_module()`, `do_init_module()`, `free_module()`
+- [kernel/module/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/main.c) — `load_module()` and the steps it calls in order: `module_sig_check()`, `elf_validity_cache_copy()`, `layout_and_allocate()`, `add_unformed_module()`, `apply_relocations()`, `post_relocation()`, `complete_formation()`, `do_init_module()`; unloading via `SYSCALL_DEFINE2(delete_module, ...)` → `try_stop_module()` → `free_module()` (`mod_sysfs_teardown()`, `synchronize_rcu()`, `free_mod_mem()`)
+- [include/uapi/linux/module_signature.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/module_signature.h) — `struct module_signature`, the custom trailer appended to a signed `.ko`
 - [include/linux/export.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/export.h) — `EXPORT_SYMBOL()` and `EXPORT_SYMBOL_GPL()`
 - [kernel/module/internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/module/internal.h) — the current `struct kernel_symbol` definition and the `__ksymtab` boundary symbols
 
