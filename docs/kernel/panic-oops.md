@@ -156,32 +156,61 @@ On x86 (and other architectures defining `__WARN_FLAGS`), `WARN()` expands to a 
 
 ## `panic()`: the point of no return
 
+`panic()` itself is a thin variadic wrapper; all of the actual logic lives in `vpanic()`, which it calls with a `va_list`:
+
 ```c
-/* kernel/panic.c */
+/* kernel/panic.c (simplified — the real vpanic() also handles multi-CPU
+ * panic redirection, kgdb, sysinfo dumping, and console flushing) */
 void panic(const char *fmt, ...)
 {
-    /* 1. Disable preemption and local IRQs */
-    preempt_disable();
+    va_list args;
+
+    va_start(args, fmt);
+    vpanic(fmt, args);
+    va_end(args);
+}
+
+void vpanic(const char *fmt, va_list args)
+{
+    /* 1. Disable local IRQs and preemption */
+    local_irq_disable();
+    preempt_disable_notrace();
 
     /* 2. Format and print the panic message */
+    console_verbose();
+    bust_spinlocks(1);
+    static char buf[PANIC_MSG_BUFSZ];
+    vscnprintf(buf, sizeof(buf), fmt, args);
     pr_emerg("Kernel panic - not syncing: %s\n", buf);
 
-    /* 3. Trigger any registered panic notifiers */
+    /* 3. Attempt to kexec into the crash kernel *before* the notifier
+     *    chain runs, unless the crash_kexec_post_notifiers boot param
+     *    asked to defer it until after step 4 instead */
+    if (!crash_kexec_post_notifiers)
+        __crash_kexec(NULL);  /* bypasses public crash_kexec()'s panic-cpu check */
+
+    /* 4. Trigger any registered panic notifiers */
     atomic_notifier_call_chain(&panic_notifier_list, 0, buf);
 
-    /* 4. Attempt to kexec into the crash kernel */
-    __crash_kexec(NULL);  /* panic() bypasses the public wrapper's panic-cpu check */
-
-    /* 5. If kdump didn't take over, try to reboot */
+    /* 5. If kdump didn't take over, try to reboot — using mdelay(),
+     *    since normal timers don't work post-panic, while repeatedly
+     *    touching the NMI watchdog so it doesn't fire during the wait */
     if (panic_timeout > 0) {
         pr_emerg("Rebooting in %d seconds..\n", panic_timeout);
-        ssleep(panic_timeout);
-        emergency_restart();
+        for (long i = 0; i < panic_timeout * 1000; i += PANIC_TIMER_STEP) {
+            touch_nmi_watchdog();
+            mdelay(PANIC_TIMER_STEP);
+        }
     }
+    if (panic_timeout != 0)
+        emergency_restart();
 
-    /* 6. Halt */
-    for (;;)
-        halt();
+    /* 6. Halt: loop forever, touching the softlockup watchdog instead
+     *    (the NMI watchdog would otherwise fire and reboot the box) */
+    for (long i = 0; ; i += PANIC_TIMER_STEP) {
+        touch_softlockup_watchdog();
+        mdelay(PANIC_TIMER_STEP);
+    }
 }
 ```
 
