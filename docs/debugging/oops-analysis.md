@@ -13,8 +13,10 @@ A **kernel oops** is a non-fatal kernel error — the kernel detected an inconsi
 [  123.456790] #PF: supervisor read access in kernel mode
 [  123.456791] #PF: error_code(0x0000) - not-present page
 [  123.456792] PGD 0 P4D 0
-[  123.456793] Oops: 0000 [#1] PREEMPT SMP NOPTI
+[  123.456793] Oops: Oops: 0000 [#1] SMP NOPTI
 ```
+
+The doubled "Oops: Oops:" is real, not a typo: `__die_header()` (`arch/x86/kernel/dumpstack.c`) always prints `"Oops: %s: ..."`, and the generic kernel-mode page-fault handler (`arch/x86/mm/fault.c`) passes the literal string `"Oops"` as that `%s` — so the two collide. The flags after `[#1]` are conditional, built from the running kernel's config: `SMP` (`CONFIG_SMP`), `DEBUG_PAGEALLOC` (if `debug_pagealloc_enabled()`), `KASAN` (`CONFIG_KASAN`), and `PTI`/`NOPTI` (`CONFIG_MITIGATION_PAGE_TABLE_ISOLATION`, `PTI` if the CPU needs the mitigation, `NOPTI` if not) — there is no `PREEMPT` flag in this line at all.
 
 Breaking down the first line:
 
@@ -178,7 +180,7 @@ struct mydev {
 ### Use-after-free
 
 ```
-BUG: KASAN: use-after-free in mydriver_read+0x45/0x100
+BUG: KASAN: slab-use-after-free in mydriver_read+0x45/0x100
 Read of size 8 at addr ffff888012345678 by task myapp/1234
 Freed by task 5678:
   kfree+0x...
@@ -192,17 +194,19 @@ KASAN shows exactly where the memory was allocated and freed — invaluable for 
 
 ### Stack overflow
 
+With `CONFIG_VMAP_STACK` (the default), kernel stacks are allocated with an unmapped guard page on either side, so overrunning one faults immediately instead of silently corrupting whatever memory follows it. `handle_stack_overflow()` (`arch/x86/kernel/traps.c`) catches that fault and reports it, then calls `die("stack guard page", regs, 0)` to produce a normal oops:
+
 ```
-BUG: stack guard page was hit at 0000000012345678 (stack is 0xffff888012340000..0xffff888012348000)
-kernel stack overflow (page fault): 0000 [#1] PREEMPT SMP
+BUG: IRQ stack guard page was hit at ffffc900012c8000 (stack is ffffc900012c4000..ffffc900012c8000)
+Oops: stack guard page: 0000 [#1] SMP NOPTI
 ```
 
-Kernel stacks are typically 8-16KB. Deep recursion (e.g., deep VFS recursion with overlayfs) can overflow them.
+The stack type ("IRQ", "task", ...) comes from `stack_type_name()`; a task stack overflow reads "task stack guard page was hit" instead. Kernel stacks are typically 8-16KB. Deep recursion (e.g., deep VFS recursion with overlayfs) can overflow them.
 
 ### Soft lockup
 
 ```
-watchdog: BUG: soft lockup - CPU#3 stuck for 22s!
+watchdog: BUG: soft lockup - CPU#3 stuck for 22s! [kworker/3:1:5678]
 Modules linked in: ...
 CPU: 3 PID: 5678 Comm: kworker/3:1
 Call Trace:
@@ -215,9 +219,9 @@ The CPU hasn't scheduled in 20+ seconds. Usually: holding a spinlock too long, o
 ### RCU stall
 
 ```
-rcu: INFO: rcu_sched self-detected stall on CPU 2 (...)
-rcu:     3-second stall for cpumask={2} (t=...
-rcu: rcu_sched kthread starved for ...ms
+rcu: INFO: rcu_sched self-detected stall on CPU
+rcu:    2-O.N.: (1 GPs behind) idle=... softirq=100/205 fqs=0
+rcu:     (t=21012 jiffies g=4989 q=157 ncpus=4)
 ```
 
 An RCU read-side critical section has been held for too long, or the RCU grace period is stalled. Often caused by holding a lock while preemption is disabled for an extended time.
