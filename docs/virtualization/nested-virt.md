@@ -171,7 +171,7 @@ static int vmx_check_nested_events(struct kvm_vcpu *vcpu)
     ...
 }
 
-static bool nested_vmx_reflect_vmexit(struct kvm_vcpu *vcpu)
+bool nested_vmx_reflect_vmexit(struct kvm_vcpu *vcpu)
 {
     /*
      * Returns true if this exit should be "reflected" (forwarded) to L1.
@@ -189,9 +189,12 @@ static bool nested_vmx_reflect_vmexit(struct kvm_vcpu *vcpu)
 When L0 decides to reflect the exit to L1:
 
 ```c
-/* Synthesize the vmexit: fill vmcs12 exit fields, restore L1 state */
-static inline void nested_vmx_vmexit(struct kvm_vcpu *vcpu, u32 vm_exit_reason,
-                                      u32 exit_intr_info, unsigned long exit_qualification)
+/* nested_vmx_vmexit() itself is just an inline wrapper that computes
+ * exit_insn_len and forwards to __nested_vmx_vmexit() — the real work
+ * (simplified here) happens in the latter: */
+void __nested_vmx_vmexit(struct kvm_vcpu *vcpu, u32 vm_exit_reason,
+                          u32 exit_intr_info, unsigned long exit_qualification,
+                          u32 exit_insn_len)
 {
     struct vcpu_vmx *vmx = to_vmx(vcpu);
     struct vmcs12 *vmcs12 = get_vmcs12(vcpu);
@@ -291,9 +294,9 @@ Nested virtualization exposes a large attack surface. L1 can craft arbitrary VMC
 
 ### Kernel source
 
-- [arch/x86/kvm/vmx/nested.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/nested.c) — Intel nested VMX: `handle_vmxon()`, `handle_vmptrld()`, `handle_vmlaunch()`/`handle_vmresume()` → `nested_vmx_run()`, `prepare_vmcs02()`, `vmx_check_nested_events()`, `nested_vmx_reflect_vmexit()`, `nested_vmx_vmexit()`
+- [arch/x86/kvm/vmx/nested.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/nested.c) — Intel nested VMX: `handle_vmxon()`, `handle_vmptrld()`, `handle_vmlaunch()`/`handle_vmresume()` → `nested_vmx_run()`, `prepare_vmcs02_early()`/`prepare_vmcs02()`, `vmx_check_nested_events()`, `nested_vmx_reflect_vmexit()`, `nested_vmx_vmexit()`/`__nested_vmx_vmexit()`
 - [arch/x86/kvm/vmx/vmcs12.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/vmx/vmcs12.h) — `struct vmcs12` definition, L1's view of the VMCS for L2
-- [arch/x86/kvm/svm/nested.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/svm/nested.c) — AMD nested SVM: `nested_svm_vmrun()`, the vmcb02 merge (SVM's analog of `prepare_vmcs02()`)
+- [arch/x86/kvm/svm/nested.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kvm/svm/nested.c) — AMD nested SVM: `nested_svm_vmrun()`, `nested_vmcb02_prepare_control()`/`nested_vmcb02_prepare_save()` (SVM's analog of `prepare_vmcs02_early()`/`prepare_vmcs02()`)
 - [include/uapi/linux/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/kvm.h) — `KVM_GET_NESTED_STATE`/`KVM_SET_NESTED_STATE` ioctl definitions and `KVM_CAP_NESTED_STATE`
 - [arch/x86/include/uapi/asm/kvm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/uapi/asm/kvm.h) — `struct kvm_nested_state` and the `KVM_STATE_NESTED_FORMAT_VMX`/`KVM_STATE_NESTED_FORMAT_SVM` format constants
 
