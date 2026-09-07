@@ -203,7 +203,7 @@ echo c > /proc/sysrq-trigger
 # (system will panic and attempt to capture vmcore)
 ```
 
-Modern distributions expose automatic sizing via `crashkernel=auto`, which the kernel computes based on system RAM. However, "auto" values are conservative minimums and may still be insufficient for systems with many loaded modules or complex memory topologies.
+`crashkernel=auto` is not a value the mainline kernel's own command-line parser understands — `kernel/crash_reserve.c` has no special case for the string "auto"; it expects a concrete size. The auto-sizing some distributions expose is done by their own userspace tooling (e.g. dracut/kdump installer scripts), which computes a size from installed RAM and writes a concrete `crashkernel=N` value into the bootloader config. Whatever size a given distribution's tooling picks, it is still a fixed reservation from the last time it ran — it does not adapt automatically if RAM is later added, which is exactly the failure mode in this case.
 
 ### Lesson
 
