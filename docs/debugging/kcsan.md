@@ -35,13 +35,14 @@ This is a probabilistic approach — not all races are detected, but it finds re
 ## Configuration
 
 ```bash
-# Kconfig options:
+# Kconfig options (all but one are the real defaults once CONFIG_KCSAN=y):
 CONFIG_KCSAN=y
-CONFIG_KCSAN_REPORT_ONCE_IN_MS=3000     # rate-limit reports
-CONFIG_KCSAN_DELAY_RANDOMIZE=y          # randomize watchpoint delay
-CONFIG_KCSAN_NUM_WATCHPOINTS=64         # software watchpoint slots (shared across CPUs)
-CONFIG_KCSAN_INTERRUPT_WATCHER=y        # also watch interrupt context
-CONFIG_KCSAN_REPORT_RACE_UNKNOWN_ORIGIN=y  # report even without second stack
+CONFIG_KCSAN_REPORT_ONCE_IN_MS=3000     # rate-limit reports (default)
+CONFIG_KCSAN_DELAY_RANDOMIZE=y          # randomize watchpoint delay (default)
+CONFIG_KCSAN_NUM_WATCHPOINTS=64         # software watchpoint slots, shared across CPUs (default)
+CONFIG_KCSAN_INTERRUPT_WATCHER=y        # also watch interrupt context -- NOT the default (defaults
+                                         # to n unless KCSAN_STRICT=y); shown here as an opt-in example
+CONFIG_KCSAN_REPORT_RACE_UNKNOWN_ORIGIN=y  # report even without second stack (default)
 
 # Build: set CONFIG_KCSAN=y in .config, then build normally
 ```
@@ -90,7 +91,7 @@ WRITE_ONCE(shared_var, new_val);   /* don't optimize away the write */
 /* data_race() marks an access as intentionally racy: */
 int approximate_count = data_race(shared_counter);
 
-/* KCSAN_NO_SANITIZE_CURRENT: suppress for entire function */
+/* __no_kcsan: suppress instrumentation for the entire function */
 void __no_kcsan my_racy_function(void)
 {
     /* KCSAN won't instrument this function */
@@ -186,9 +187,14 @@ addr2line -e vmlinux -i 0xffffffff12345678
 # 3. Check git log for recent changes:
 git log --oneline mm/slub.c | head -10
 
-# 4. Reproduce deterministically (if possible):
-# Set KCSAN_DELAY_RANDOMIZE=n and KCSAN_DELAY=100 to always delay
-echo 100 > /sys/kernel/debug/kcsan/delay_task  # force 100µs delay
+# 4. Reproduce more reliably (if possible):
+# There is no debugfs delay knob -- delay tuning is a pair of writable
+# module params, kcsan.udelay_task / kcsan.udelay_interrupt (kernel/kcsan/core.c),
+# exposed under /sys/module/kcsan/parameters/:
+echo 100 > /sys/module/kcsan/parameters/udelay_task  # raise the max delay to 100us
+# CONFIG_KCSAN_DELAY_RANDOMIZE=y (the default) subtracts a random amount from
+# this value on each access; rebuilding with it set to =n makes the delay
+# exactly udelay_task every time, for fully deterministic reproduction.
 
 # 5. Fix options:
 # a. Add proper locking
