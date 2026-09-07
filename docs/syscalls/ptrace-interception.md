@@ -52,12 +52,12 @@ costly. A traced process can be 100x slower on syscall-heavy workloads.
 ## Syscall-stops: entry and exit
 
 The kernel notifies ptrace of syscall boundaries via two functions declared as `static inline` in
-`include/linux/ptrace.h` (the underlying implementation calls into `ptrace_report_syscall()`):
+`include/linux/ptrace.h` (both call into the shared `ptrace_report_syscall()` helper):
 
-- `ptrace_report_syscall_entry()` — called from `syscall_enter_from_user_mode_work()` before the syscall handler runs
-- `ptrace_report_syscall_exit()` — called from `syscall_exit_to_user_mode_work()` after the return value is set
+- `ptrace_report_syscall_permit_entry(regs)` — called from `syscall_enter_from_user_mode_work()` before the syscall handler runs. Returns `bool`: if it returns false, the caller must abort the syscall entirely rather than dispatch it.
+- `ptrace_report_syscall_exit(regs, step)` — called from `syscall_exit_to_user_mode_work()` after the return value is set. If `step` is nonzero (single-step/block-step is active), it reports via `user_single_step_report()` instead of the normal syscall-stop path.
 
-Both functions call `ptrace_notify()`, which sets the tracee's stop code to `(SIGTRAP | 0x80)` (the high bit
+`ptrace_report_syscall()` calls `ptrace_notify()`, which sets the tracee's stop code to `(SIGTRAP | 0x80)` (the high bit
 distinguishes a syscall-stop from a plain signal-stop) and sends `SIGCHLD` to the tracer.
 
 ## Reading and modifying syscall args
@@ -102,16 +102,28 @@ tracer detaches. The kernel checks this flag in `syscall_enter_from_user_mode()`
 `syscall_exit_to_user_mode()`:
 
 ```c
-/* kernel/entry/common.c */
-static long syscall_trace_enter(struct pt_regs *regs, long syscall,
-                                 unsigned long work)
+/* include/linux/entry-common.h (simplified — the real function also handles
+ * syscall user dispatch and rseq time-slice extensions, omitted here) */
+static __always_inline long syscall_trace_enter(struct pt_regs *regs, unsigned long work,
+                                                 long syscall)
 {
-    if (work & SYSCALL_WORK_SYSCALL_TRACE)
-        ptrace_report_syscall_entry(regs);
-    /* ... seccomp check, audit ... */
-    return syscall;
+    if (work & (SYSCALL_WORK_SYSCALL_TRACE | SYSCALL_WORK_SYSCALL_EMU)) {
+        if (!arch_ptrace_report_syscall_permit_entry(regs) ||
+            (work & SYSCALL_WORK_SYSCALL_EMU))
+            return false;   /* caller must abort the syscall */
+        work = READ_ONCE(current_thread_info()->syscall_work); /* ptrace may have changed it */
+    }
+    if (work & SYSCALL_WORK_SECCOMP && !__seccomp_permit_syscall())
+        return false;
+    if (work & SYSCALL_WORK_SYSCALL_TRACEPOINT)
+        trace_syscall_enter(regs);
+    if (audit_context())
+        syscall_enter_audit(regs);
+    return true;   /* proceed with the syscall */
 }
 ```
+
+`arch_ptrace_report_syscall_permit_entry()` is an architecture override point that, unless an arch defines its own, falls back directly to `ptrace_report_syscall_permit_entry()` from the previous section.
 
 The same work-flags mechanism also carries `SYSCALL_WORK_SECCOMP` (for seccomp filtering) and
 `SYSCALL_WORK_SYSCALL_AUDIT` (for the audit subsystem), so all three can coexist.
@@ -319,7 +331,7 @@ echo __x64_sys_openat > /sys/kernel/tracing/set_graph_function
 
 ### Kernel source
 
-- [include/linux/ptrace.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/ptrace.h) — `ptrace_report_syscall_entry()`, `ptrace_report_syscall_exit()`, and the shared `ptrace_report_syscall()` helper that calls `ptrace_notify()`
+- [include/linux/ptrace.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/ptrace.h) — `ptrace_report_syscall_permit_entry()`, `ptrace_report_syscall_exit()`, and the shared `ptrace_report_syscall()` helper that calls `ptrace_notify()`
 - [include/linux/entry-common.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/entry-common.h) — `syscall_trace_enter()`, `syscall_enter_from_user_mode_work()`, and `syscall_exit_to_user_mode_work()`, which check `SYSCALL_WORK_SYSCALL_TRACE` and drive ptrace, seccomp, and audit in sequence
 - [include/uapi/linux/ptrace.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/ptrace.h) — `struct ptrace_syscall_info` and the `PTRACE_GET_SYSCALL_INFO` request
 - [include/uapi/linux/seccomp.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/seccomp.h) — `struct seccomp_notif` / `struct seccomp_notif_resp`, `SECCOMP_RET_USER_NOTIF`, `SECCOMP_USER_NOTIF_FLAG_CONTINUE`
