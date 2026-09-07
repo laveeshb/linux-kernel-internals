@@ -178,7 +178,7 @@ struct mydev {
 ### Use-after-free
 
 ```
-BUG: KASAN: use-after-free in mydriver_read+0x45/0x100
+BUG: KASAN: slab-use-after-free in mydriver_read+0x45/0x100
 Read of size 8 at addr ffff888012345678 by task myapp/1234
 Freed by task 5678:
   kfree+0x...
@@ -192,17 +192,19 @@ KASAN shows exactly where the memory was allocated and freed — invaluable for 
 
 ### Stack overflow
 
+With `CONFIG_VMAP_STACK` (the default), kernel stacks are allocated with an unmapped guard page on either side, so overrunning one faults immediately instead of silently corrupting whatever memory follows it. `handle_stack_overflow()` (`arch/x86/kernel/traps.c`) catches that fault and reports it, then calls `die("stack guard page", regs, 0)` to produce a normal oops:
+
 ```
-BUG: stack guard page was hit at 0000000012345678 (stack is 0xffff888012340000..0xffff888012348000)
-kernel stack overflow (page fault): 0000 [#1] PREEMPT SMP
+BUG: IRQ stack guard page was hit at ffffc900012c8000 (stack is ffffc900012c4000..ffffc900012c8000)
+Oops: stack guard page: 0000 [#1] SMP NOPTI
 ```
 
-Kernel stacks are typically 8-16KB. Deep recursion (e.g., deep VFS recursion with overlayfs) can overflow them.
+The stack type ("IRQ", "task", ...) comes from `stack_type_name()`; a task stack overflow reads "task stack guard page was hit" instead. Kernel stacks are typically 8-16KB. Deep recursion (e.g., deep VFS recursion with overlayfs) can overflow them.
 
 ### Soft lockup
 
 ```
-watchdog: BUG: soft lockup - CPU#3 stuck for 22s!
+watchdog: BUG: soft lockup - CPU#3 stuck for 22s! [kworker/3:1:5678]
 Modules linked in: ...
 CPU: 3 PID: 5678 Comm: kworker/3:1
 Call Trace:
@@ -215,9 +217,9 @@ The CPU hasn't scheduled in 20+ seconds. Usually: holding a spinlock too long, o
 ### RCU stall
 
 ```
-rcu: INFO: rcu_sched self-detected stall on CPU 2 (...)
-rcu:     3-second stall for cpumask={2} (t=...
-rcu: rcu_sched kthread starved for ...ms
+rcu: INFO: rcu_sched self-detected stall on CPU
+rcu:    2-O.N.: (1 GPs behind) idle=... softirq=100/205 fqs=0
+rcu:     (t=21012 jiffies g=4989 q=157 ncpus=4)
 ```
 
 An RCU read-side critical section has been held for too long, or the RCU grace period is stalled. Often caused by holding a lock while preemption is disabled for an extended time.
