@@ -22,6 +22,8 @@ With VFIO passthrough:
 - Device must be in its own IOMMU group (or group isolation satisfied)
 - `intel_iommu=on` or `amd_iommu=on` boot parameter
 
+**Two API generations**: everything through the "Userspace VFIO API" section below describes the original group/container model (`/dev/vfio/vfio` + `/dev/vfio/<group_id>`). It's still the default-enabled, majority-used path — `CONFIG_VFIO_GROUP`'s own help text calls it "the traditional model ... used by the majority of userspace applications and drivers." But the kernel's own documentation is explicit that it's a legacy interface being superseded: "Eventually the vfio_iommu_type1 driver, as well as the legacy vfio container and group model is intended to be deprecated," in favor of a newer device-cdev + IOMMUFD model — covered after the classic walkthrough below.
+
 ## IOMMU groups
 
 An IOMMU group is the smallest set of devices that must be isolated together for DMA safety. Devices in the same PCIe hierarchy that can peer-DMA to each other form a group:
@@ -177,6 +179,22 @@ void *mmio = mmap(NULL, reg.size, PROT_READ|PROT_WRITE,
 /* Now: read/write directly to mmio like a kernel driver would */
 ```
 
+## The newer model: device cdev + IOMMUFD
+
+The classic model above ties DMA isolation to IOMMU *groups*: to get a device fd you first open its group. The newer model drops that requirement — with `CONFIG_VFIO_DEVICE_CDEV=y`, a device fd is acquired directly:
+
+```c
+/* Classic: through the group */
+device = ioctl(group_fd, VFIO_GROUP_GET_DEVICE_FD, "0000:03:00.0");
+
+/* Newer: open the device's own character device directly */
+device = open("/dev/vfio/devices/vfio0", O_RDWR);
+```
+
+The device cdev only works with IOMMUFD, not the legacy container: instead of `VFIO_GROUP_SET_CONTAINER`/`VFIO_SET_IOMMU`, userspace opens `/dev/iommu` and claims DMA ownership of the device with `VFIO_DEVICE_BIND_IOMMUFD` before it can be used. IOMMUFD's compatibility mode can also front the *existing* container ioctls (by configuring `CONFIG_IOMMUFD_VFIO_CONTAINER`, or symlinking `/dev/vfio/vfio` to `/dev/iommu`), but as of this writing that compatibility path isn't feature-complete relative to `VFIO_TYPE1v2_IOMMU` — the kernel docs note MMIO DMA mapping in particular as a gap. Group semantics still apply underneath cdev access: devices in the same IOMMU group can't be bound to different `iommufd_ctx` instances or split between kernel and VFIO ownership.
+
+`iommufd` also opens the door to features the legacy `vfio_iommu_type1` driver never supported, like nested IOMMU page tables (an IOMMU-level analog of nested EPT) and PASID-based sub-device isolation.
+
 ## SR-IOV: Virtual Functions
 
 SR-IOV (Single Root I/O Virtualization) allows one physical device to appear as multiple virtual functions (VFs):
@@ -247,7 +265,7 @@ struct vfio_pci_core_device {
     struct vfio_device  vdev;
     struct pci_dev     *pdev;
     void __iomem       *barmap[PCI_STD_NUM_BARS]; /* BAR mappings */
-    struct eventfd_ctx *ctx[VFIO_PCI_NUM_IRQS];  /* IRQ eventfds */
+    struct xarray       ctx;          /* IRQ eventfds, indexed by IRQ vector */
     /* ... */
 };
 ```
@@ -255,15 +273,18 @@ struct vfio_pci_core_device {
 ### DMA mapping path
 
 ```c
-/* When userspace calls VFIO_IOMMU_MAP_DMA: */
-static int vfio_iommu_type1_dma_map(...)
+/* When userspace calls VFIO_IOMMU_MAP_DMA, vfio_iommu_type1.c's
+ * vfio_dma_do_map() handles it (simplified): */
+static int vfio_dma_do_map(struct vfio_iommu *iommu,
+                            struct vfio_iommu_type1_dma_map *map)
 {
     /* 1. Pin the userspace pages */
-    pin_user_pages_fast(vaddr, npage, FOLL_WRITE, pages);
+    vfio_pin_pages_remote(dma, vaddr, npage, &pfn, limit, batch);
 
-    /* 2. Create IOMMU mapping: IOVA → physical pages */
-    iommu_map(domain, iova, phys_addr, size,
-              IOMMU_READ | IOMMU_WRITE | IOMMU_CACHE);
+    /* 2. Create IOMMU mapping: IOVA → physical pages, for every
+     *    IOMMU domain backing this container */
+    iommu_map(domain->domain, iova, phys, size,
+              prot | IOMMU_CACHE, GFP_KERNEL_ACCOUNT);
 
     /* Now device DMA to IOVA goes through IOMMU → correct physical pages */
     /* Without IOMMU: device could DMA anywhere → security hole */
@@ -281,11 +302,13 @@ dmesg | grep -i iommu | head -5
 ls /dev/vfio/
 # vfio  15  23  ...
 
-# IOMMU mappings for a container:
-cat /sys/kernel/debug/iommu/intel/iommu_devices 2>/dev/null | head -20
+# IOMMU domain/device mappings (Intel VT-d):
+cat /sys/kernel/debug/iommu/intel/dmar_translation_struct 2>/dev/null | head -20
 
-# Performance: check for IOMMU TLB shootdowns
-perf stat -e power/pts/  # Intel IOMMU TLB misses
+# Performance: Intel IOMMU exposes a real PMU per DMA remapping unit
+# (drivers/iommu/intel/perfmon.c), named dmar0, dmar1, ... — no
+# direct "miss" counter, but miss rate = iotlb_lookup - iotlb_hit:
+perf stat -e dmar0/iotlb_lookup/,dmar0/iotlb_hit/ -a sleep 5
 ```
 
 ## Further reading
@@ -295,10 +318,12 @@ perf stat -e power/pts/  # Intel IOMMU TLB misses
 - [drivers/vfio/vfio_main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_main.c) — VFIO core: device registration (`vfio_register_group_dev()`), ioctl/mmap/read/write file ops, and subsystem module init (group and container ioctl dispatch live in `group.c`/`container.c`)
 - [drivers/vfio/vfio.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio.h) — `struct vfio_group` definition (`struct vfio_container` is only forward-declared here)
 - [drivers/vfio/container.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/container.c) — `struct vfio_container` definition
-- [drivers/vfio/vfio_iommu_type1.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_iommu_type1.c) — Type1 IOMMU backend: `VFIO_IOMMU_MAP_DMA` handling, page pinning, `iommu_map()`
+- [drivers/vfio/vfio_iommu_type1.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_iommu_type1.c) — Type1 IOMMU backend: `vfio_dma_do_map()` (handles `VFIO_IOMMU_MAP_DMA`), `vfio_pin_pages_remote()`, `iommu_map()`
 - [drivers/vfio/pci/vfio_pci_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/pci/vfio_pci_core.c) — vfio-pci core: BAR/MMIO mapping, config space, IRQ eventfds (backs `struct vfio_pci_core_device` in [include/linux/vfio_pci_core.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/vfio_pci_core.h))
 - [drivers/vfio/mdev/mdev_core.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/mdev/mdev_core.c) — mediated device (mdev) framework used by GPU-sharing drivers like Intel GVT-g
 - [drivers/iommu/iommu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iommu.c) — `iommu_group_alloc()` and IOMMU group management
+- [drivers/iommu/intel/perfmon.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/intel/perfmon.c) — Intel IOMMU PerfMon: the per-DMAR-unit (`dmar0`, `dmar1`, ...) perf PMU and its `iotlb_lookup`/`iotlb_hit` events
+- [drivers/vfio/vfio_main.c: `VFIO_DEVICE_BIND_IOMMUFD` handling](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/vfio/vfio_main.c) — the device-cdev security model that replaces group/container ownership
 
 ### Related pages
 
@@ -313,5 +338,5 @@ perf stat -e power/pts/  # Intel IOMMU TLB misses
 
 ### External
 
-- [VFIO — "Virtual Function I/O"](https://docs.kernel.org/driver-api/vfio.html) — official kernel documentation for the VFIO framework, container/group/device model, and userspace API
+- [VFIO — "Virtual Function I/O"](https://docs.kernel.org/driver-api/vfio.html) — official kernel documentation for the VFIO framework: the classic container/group/device model, the newer device-cdev model, and the IOMMUFD relationship, including the deprecation note quoted above
 - [VFIO Mediated devices](https://docs.kernel.org/driver-api/vfio-mediated-device.html) — official documentation for the mdev framework covered in this page's mediated-devices section
