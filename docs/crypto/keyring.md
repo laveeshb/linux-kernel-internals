@@ -15,7 +15,9 @@ internally to store keys that were installed by userspace.
 
 ## struct key
 
-Every key — including a keyring — is represented by `struct key` in `include/linux/key.h`:
+Every key — including a keyring — is represented by `struct key` in `include/linux/key.h`
+(shown here without its two conditional fields: a `struct watch_list *watchers` under
+`CONFIG_KEY_NOTIFICATIONS`, and a debug `magic` field under `KEY_DEBUGGING`):
 
 ```c
 struct key {
@@ -222,7 +224,7 @@ Keyrings are arranged in a hierarchy. When a key is searched, the kernel walks u
 @s  session keyring       ← per-login-session (inherited across fork/exec)
 @u  user keyring          ← per-UID, persists while user is logged in
 @us user-session keyring  ← per-UID session (union of @u and @s for most purposes)
-@g  group keyring         ← per-GID (rarely used)
+@g  group keyring         ← per-GID (unimplemented — see note below)
 
 System keyrings (kernel-internal, not per-process):
 .builtin_trusted_keys     ← built-in X.509 certificates (module signing, IMA)
@@ -230,6 +232,11 @@ System keyrings (kernel-internal, not per-process):
 .ima                      ← IMA policy and measurement list keys
 .blacklist                ← revoked certificate hashes
 ```
+
+`@g` is a reserved `KEY_SPEC_GROUP_KEYRING` constant, but there is no group-keyring implementation
+behind it: `lookup_user_key()` (`security/keys/process_keys.c`) unconditionally returns `-EINVAL`
+for it, with the comment "group keyrings are not yet supported." It has looked this way since the
+constant was added and shows no sign of changing.
 
 ```bash
 keyctl show         # current session keyring tree
@@ -458,7 +465,10 @@ keyctl add encrypted myenckey "load user:mymaster <hex_blob>" @u
 ```
 
 The payload format on disk is: `<key_type> <master_desc> <datalen> <iv> <ciphertext> <hmac>`,
-all in hex. The encryption uses AES-128-CBC with an HMAC-SHA256 integrity check.
+all in hex. The encryption uses AES-**256**-CBC with an HMAC-SHA256 integrity check —
+`get_derived_key()` (`security/keys/encrypted-keys/encrypted.c`) derives a `HASH_SIZE`
+(32-byte, `SHA256_DIGEST_SIZE`) key from the master key via `sha256()`, and that full
+32-byte key is what's passed to `cbc(aes)` — a 128-bit key was never in the picture.
 
 ## fscrypt and IMA integration
 
@@ -474,7 +484,7 @@ all in hex. The encryption uses AES-128-CBC with an HMAC-SHA256 integrity check.
 # IMA signature verification flow:
 # 1. At boot, IMA loads certs from the IMA keyring (.ima)
 # 2. At file access, IMA reads the security.ima xattr (PKCS#7 signature)
-# 3. ima_verify_signature() looks up the signing key in .ima
+# 3. integrity_digsig_verify(INTEGRITY_KEYRING_IMA, ...) looks up the signing key in .ima
 # 4. If not found, or if the signature is invalid: policy action (warn/deny)
 
 # Add an IMA cert manually (e.g., in initramfs):
@@ -483,9 +493,15 @@ keyctl padd asymmetric "" %:.ima < /etc/ima/signing_key.der
 
 ## Container isolation
 
-Key namespaces (`struct key_namespace`) were added in Linux 5.2, tied to user namespaces
-via `CLONE_NEWUSER`. Each user namespace has its own keyring namespace, providing isolation
-between containers using separate user namespaces. Specifically:
+There is no separate `struct key_namespace`. Instead, the user and user-session keyrings
+were moved directly onto the existing `struct user_namespace` (`user_keyring_register` and
+`keyring_sem` fields, `include/linux/user_namespace.h`) by commit
+[`0f44e4d976f9`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=0f44e4d976f9)
+("keys: Move the user and user-session keyrings to the user_namespace"), which landed in
+**Linux 5.3** (the fields are absent from the v5.2 tag, present from v5.3 on). Each user
+namespace created via `CLONE_NEWUSER` gets its own `user_keyring_register`, so a container's
+`@u`/`@us` are isolated from the host's — without a dedicated "key namespace" type existing
+anywhere in the kernel. Specifically:
 
 - `CLONE_NEWUSER` creates a new user namespace, which gets a fresh user keyring (`@u`)
   and session keyring (`@s`) for UIDs within that namespace.
@@ -537,6 +553,8 @@ keyctl search @u logon fscrypt:0123456789abcdef
 - [include/keys/encrypted-type.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/keys/encrypted-type.h) — `struct encrypted_key_payload`, the AES-CBC + HMAC-SHA256 datablob format
 - [include/uapi/linux/keyctl.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/keyctl.h) — `KEYCTL_*` operation codes and `KEY_SPEC_*` special-keyring constants
 - [Documentation/security/keys/core.rst](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/security/keys/core.rst) — the kernel's own Key Retention Service documentation
+- [include/linux/user_namespace.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/user_namespace.h) — `user_keyring_register`/`keyring_sem`, the per-user-namespace keyring fields that back container isolation
+- [security/keys/process_keys.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/security/keys/process_keys.c) — `lookup_user_key()`, including the unimplemented `KEY_SPEC_GROUP_KEYRING` case
 
 ### Man pages
 
