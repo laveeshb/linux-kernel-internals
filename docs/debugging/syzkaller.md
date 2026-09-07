@@ -97,7 +97,6 @@ CONFIG_DEBUG_INFO=y
 CONFIG_KASAN=y
 CONFIG_KASAN_INLINE=y
 CONFIG_UBSAN=y
-CONFIG_UBSAN_SANITIZE_ALL=y
 CONFIG_FAULT_INJECTION=y
 CONFIG_FAULT_INJECTION_DEBUG_FS=y
 CONFIG_FAILSLAB=y
@@ -184,7 +183,7 @@ gcc -o repro repro.c && sudo ./repro
 # https://syzkaller.appspot.com/upstream
 
 # Each bug report includes:
-# - Title: e.g., "KASAN: use-after-free in sock_destroy"
+# - Title: e.g., "KASAN: use-after-free in sk_destruct"
 # - Kernel version and commit
 # - C reproducer
 # - syzlang reproducer
@@ -211,7 +210,7 @@ git bisect run ./scripts/faddr2line vmlinux <addr>
 # Analyze a core dump with crash:
 crash vmlinux core.dump
 crash> bt      # backtrace of crashed process
-crash> dis -l sock_destroy  # disassemble with source lines
+crash> dis -l sk_destruct  # disassemble with source lines
 ```
 
 ## Further reading
