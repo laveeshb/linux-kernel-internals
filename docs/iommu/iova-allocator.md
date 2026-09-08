@@ -62,6 +62,8 @@ The function searches the rbtree from `limit_pfn` downward (allocating top-down 
 
 The allocation is top-down for an important reason: keeping low IOVA space (below 4 GB) free for 32-bit legacy devices that arrive later. 64-bit-capable devices fill from the top; 32-bit-limited devices fill from `dma_32bit_pfn` downward.
 
+This is a simplification, though: even a device with a 64-bit DMA mask doesn't get a high IOVA on its very first allocation. For PCI devices, `iommu_dma_alloc_iova()` tries the 32-bit range *first* — a SAC-before-DAC compatibility workaround, gated by the per-device `pci_32bit_workaround` flag (`struct dev_iommu`) — and only falls back to the full address range once that 32-bit attempt fails. See the next section for the real allocation logic.
+
 ### free_iova()
 
 ```c
@@ -73,24 +75,40 @@ Removes the node from the rbtree and updates the cached hint. With the spinlock,
 
 ### The DMA-IOMMU wrapper
 
-In practice, drivers don't call `alloc_iova()` directly. The DMA-IOMMU layer calls `iommu_dma_alloc_iova()`, which first checks the per-CPU rcache and falls back to `alloc_iova()` only on a cache miss:
+In practice, drivers don't call `alloc_iova()` directly. The DMA-IOMMU layer calls `iommu_dma_alloc_iova()`, which — for a PCI device that hasn't yet been proven to need the full address range — tries the 32-bit region first, and only calls into the general path (still via the per-CPU rcache, falling back to `alloc_iova()` on a miss) once that's exhausted:
 
 ```c
-/* drivers/iommu/dma-iommu.c (simplified) */
+/* drivers/iommu/dma-iommu.c (simplified — omits the MSI-cookie
+ * short-circuit and the device/domain-aperture dma_limit clamping
+ * that happen before this) */
 static dma_addr_t iommu_dma_alloc_iova(struct iommu_domain *domain,
-                                        size_t size,
-                                        u64 dma_limit,
+                                        size_t size, u64 dma_limit,
                                         struct device *dev)
 {
     struct iommu_dma_cookie *cookie = domain->iova_cookie;
     struct iova_domain *iovad = &cookie->iovad;
     unsigned long shift = iova_shift(iovad);
     unsigned long iova_len = size >> shift;
+    unsigned long iova;
+
+    /* SAC-before-DAC: try the 32-bit range first, once, for PCI devices */
+    if (dma_limit > DMA_BIT_MASK(32) && dev->iommu->pci_32bit_workaround) {
+        iova = alloc_iova_fast(iovad, iova_len, DMA_BIT_MASK(32) >> shift, false);
+        if (iova)
+            goto done;
+        /* Failed: this device really does need the high range */
+        dev->iommu->pci_32bit_workaround = false;
+        dev_notice(dev, "Using %d-bit DMA addresses\n", bits_per(dma_limit));
+    }
 
     /* Fast path: per-CPU rcache (falls back to alloc_iova() on miss) */
-    return alloc_iova_fast(iovad, iova_len, dma_limit >> shift, true);
+    iova = alloc_iova_fast(iovad, iova_len, dma_limit >> shift, true);
+done:
+    return (dma_addr_t)iova << shift;
 }
 ```
+
+`pci_32bit_workaround` starts `true` for every PCI device (unless the `iommu.forcedac` boot parameter disables it) and latches to `false` — permanently, for that device — the first time the 32-bit range can't satisfy a request. The comment in the real source is explicit about why this still matters on modern hardware: "the original SAC vs. DAC reasoning loses relevance with PCIe, but enough hardware and firmware bugs are still lurking out there that it's safest not to venture into the 64-bit space until necessary."
 
 ## Per-CPU IOVA caches (rcache)
 
@@ -162,7 +180,9 @@ The critical property: on the normal alloc/free cycle, no spinlock contention wi
 
 ## IOVA flush queues (struct iova_fq)
 
-Introduced in Linux 5.15, flush queues decouple IOVA freeing from IOTLB invalidation. Unmapping a DMA range requires both freeing the IOVA and flushing the IOMMU TLB. IOTLB flushes are expensive — on Intel VT-d they require a write to the DMAR registers and may stall the bus.
+Flush queues decouple IOVA freeing from IOTLB invalidation. Unmapping a DMA range requires both freeing the IOVA and flushing the IOMMU TLB. IOTLB flushes are expensive — on Intel VT-d they require a write to the DMAR registers and may stall the bus.
+
+The concept dates to Linux 5.15, but not in the per-CPU form shown below: 5.15's flush queue was a single, simpler per-domain structure living in `iova.c`. The per-CPU `struct iova_fq` design in `dma-iommu.c` — what every currently-supported kernel actually runs — landed in a later rework, first appearing in Linux **5.17**.
 
 ```c
 /* drivers/iommu/dma-iommu.c — not include/linux/iova.h, which has no "fq" symbols at all */
