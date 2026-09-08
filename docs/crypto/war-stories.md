@@ -129,7 +129,9 @@ verification bugs.
 use, but wrong for secret comparison. The compiler is also free to optimize comparison code
 in ways that create timing variation.
 
-Linux added `crypto_memneq()` in kernel 3.14 (commit b839da0f) specifically to address this:
+Linux added `crypto_memneq()` in kernel 3.13 (commit `6bf37e5aa90f`, "crypto: crypto_memneq -
+add equality testing of memory regions w/o timing leaks", James Yonan) specifically to
+address this:
 
 ```c
 /* include/crypto/utils.h */
@@ -216,7 +218,7 @@ The blocked call stack (from a kernel oops or via sysrq-T):
 ```
 [<0>] __schedule+0x3c4/0xa80
 [<0>] schedule+0x4a/0xb0
-[<0>] getrandom_wait+0x...     ← waiting for crng_init_done
+[<0>] wait_for_random_bytes+0x...     ← waiting for crng_ready()
 [<0>] sys_getrandom+0x...
 ```
 
@@ -229,9 +231,10 @@ lsmod | grep virtio_rng
 
 # No virtio-rng, no RDRAND passthrough, no saved seed:
 dmesg | grep -E "random:|crng"
-# [    0.301234] random: fast init done
 # [  127.441821] random: crng init done  ← 127 seconds!
 ```
+
+(There is no intermediate "fast init" log line — `drivers/char/random.c` silently transitions through its early-entropy state with no `pr_notice()`/`pr_warn()` of its own; `crng init done` is the only startup message it ever prints.)
 
 The VM was:
 
@@ -268,8 +271,11 @@ Three independent fixes, applied together for defense in depth:
 </rng>
 ```
 
-The guest kernel driver (`drivers/char/hw_random/virtio-rng.c`) calls
-`add_hwgenerator_randomness()`, feeding host entropy into the guest pool immediately.
+The guest kernel driver (`drivers/char/hw_random/virtio-rng.c`) only implements the
+`hwrng.read` callback (`virtio_read()`); it's the generic hwrng core's polling kthread
+(`drivers/char/hw_random/core.c`) that calls the driver's `read()`, then feeds the bytes it
+gets back into the guest's entropy pool via `add_hwgenerator_randomness()` — immediately,
+in this case, since the QEMU-side backend has plenty of host entropy to hand over.
 
 **2. Ensure systemd-random-seed loads early**:
 
@@ -327,14 +333,19 @@ system but is filtered by the calling process's `view` permission.
 for each key, with the `KEY_NEED_VIEW` permission bit:
 
 ```c
-/* security/keys/proc.c */
+/* security/keys/proc.c (simplified — v is really an rb_node needing rb_entry() to
+ * recover the struct key; the real code also first checks, via a
+ * keyring_search_context, whether the caller's credentials actually possess
+ * the key before deciding which key_ref to pass in below) */
 static int proc_keys_show(struct seq_file *m, void *v)
 {
-    struct key *key = v;
+    struct key *key = rb_entry((struct rb_node *)v, struct key, serial_node);
     ...
 
-    /* Skip keys this process can't view */
-    rc = key_task_permission(make_key_ref(key, 0), current_cred(),
+    /* Skip keys this process can't view. Note: the credentials used here are
+     * m->file->f_cred -- captured when /proc/keys was opened -- not
+     * current_cred(), so what a read can see is fixed at open time. */
+    rc = key_task_permission(make_key_ref(key, 0), m->file->f_cred,
                               KEY_NEED_VIEW);
     if (rc < 0)
         return 0;   /* silently skip */
@@ -512,9 +523,11 @@ and more varied inputs:
 
 ```bash
 # Run the AEAD test suite (requires CONFIG_CRYPTO_TEST)
-# Note: tcrypt mode numbers are not stable across kernel versions.
-# The gcm(aes) aead test is in the mode 150s range; verify in your kernel's crypto/tcrypt.c.
-modprobe tcrypt mode=154   # gcm(aes) aead test — verify in your kernel's crypto/tcrypt.c
+# Note: tcrypt mode numbers are not stable across kernel versions and this one has
+# moved before -- the plain gcm(aes) test is mode 35 as of current mainline
+# crypto/tcrypt.c (151/152 are the related rfc4106/rfc4543 AEAD wrappers, not
+# plain gcm(aes)); verify against your kernel's own crypto/tcrypt.c before using.
+modprobe tcrypt mode=35   # gcm(aes) aead test — verify in your kernel's crypto/tcrypt.c
 # testing gcm(aes)...
 # test 0 (512 byte blocks): passed.
 # ...
@@ -544,6 +557,7 @@ validate hardware with workload-realistic test patterns before relying on new ac
 
 - [drivers/md/dm-crypt.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/md/dm-crypt.c) — `crypt_iv_plain_gen()` and `crypt_iv_essiv_gen()`, the IV generators behind Case 1's plain-IV watermarking issue
 - [include/crypto/utils.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/crypto/utils.h) and [lib/crypto/memneq.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/crypto/memneq.c) — `crypto_memneq()`/`__crypto_memneq()`, the constant-time comparison behind Case 2
+- [commit 6bf37e5aa90f](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=6bf37e5aa90f18baf5acf4874bca505dd667c37f) — "crypto: crypto_memneq - add equality testing of memory regions w/o timing leaks", the Linux 3.13 commit that introduced `crypto_memneq()`
 - [drivers/char/random.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/char/random.c) — `add_hwgenerator_randomness()` and the `pr_notice("crng init done\n")` log line behind Case 3
 - [drivers/char/hw_random/virtio-rng.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/char/hw_random/virtio-rng.c) — the virtio-rng guest driver's `hwrng.read` callback that Case 3's fix relies on to feed host entropy into the guest pool
 - [security/keys/proc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/security/keys/proc.c) — `proc_keys_show()` and its `key_task_permission(..., KEY_NEED_VIEW)` check, the `/proc/keys` view-permission filtering behind Case 4
