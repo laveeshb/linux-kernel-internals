@@ -1,0 +1,33 @@
+#!/bin/sh
+# PID 1 inside the sandbox VM. Boots straight into this instead of a real
+# init system — there's nothing else running in here.
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+
+echo ""
+echo "=== Linux Kernel Internals: OOM killer sandbox ==="
+echo "$(grep MemTotal /proc/meminfo) available to this VM."
+echo "Spawning processes until the real kernel has to kill one."
+echo "(Kernel messages, including the real OOM kill, print directly below —"
+echo " this VM boots with logging on, not through a separate log stream.)"
+echo ""
+
+NAMES="browser_tab video_call ide_indexer docker_container photo_editor music_player"
+SIZE=20
+for name in $NAMES; do
+  SIZE=$((SIZE + 8))
+  exec_name="$name"
+  ( exec -a "$exec_name" /hog "$SIZE" ) &
+  sleep 1.5
+done
+
+# Give the kernel time to reach for reclaim, fail, and invoke the OOM
+# killer, then let any last log lines flush before shutting down.
+sleep 12
+
+echo ""
+echo "=== Sandbox done. Powering off. ==="
+sleep 1
+poweroff -f
