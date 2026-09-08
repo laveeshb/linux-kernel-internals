@@ -37,15 +37,15 @@ dmesg | grep "DMAR: IOMMU"
 # DMAR: IOMMU enabled
 
 # DMAR fault registers (Intel VT-d specific)
-# Fault reason 05 = "Write access is not set"
-# (Fault reason 06 = "Read access is not set")
+# Fault reason 05 = "PTE Write access is not set"
+# (Fault reason 06 = "PTE Read access is not set")
 # This means a mapping exists but with wrong permissions (write attempted to read-only mapping)
 
 # Check the IOVA allocator state for the domain
 cat /sys/kernel/debug/iommu/intel/iommu_perf_stats
 ```
 
-Fault reason 05 ("Write access is not set") is the important clue: the mapping exists, but the PTE does not allow writes and the device is trying to write. This points to a driver that incorrectly maps receive buffers as `DMA_TO_DEVICE` (read-only from device perspective) instead of `DMA_FROM_DEVICE`.
+Fault reason 05 ("PTE Write access is not set") is the important clue: the mapping exists, but the PTE does not allow writes and the device is trying to write. This points to a driver that incorrectly maps receive buffers as `DMA_TO_DEVICE` (read-only from device perspective) instead of `DMA_FROM_DEVICE`.
 
 ```bash
 # DMA API debugging catches mismatched directions at map time, but it's a
@@ -240,12 +240,11 @@ Server-grade PCIe switches and root complexes (EPYC, Xeon Scalable) often suppor
 A team deploys Intel DSA (Data Streaming Accelerator) with SVA enabled for user-space copy offload. The application submits thousands of memory copy descriptors using process virtual addresses. Initially it works. Under load, the system slows dramatically and `dmesg` shows:
 
 ```
-idxd 0000:6a:01.0: page request queue overflowed
-idxd 0000:6a:01.0: PRI queue full, dropping page requests
-DMAR: [PASID 0x42] Page request for addr 0x7f3c80000000: retried 3 times
+IOMMU: dmar1: PRQ overflow detected
+IOMMU: dmar1: PRQ overflow cleared
 ```
 
-Application throughput drops by 80%. CPU utilization for interrupt handling spikes.
+Application throughput drops by 80%. CPU utilization for interrupt handling spikes. Note: PRI/PRQ overflow handling lives entirely in the IOMMU driver (`drivers/iommu/intel/prq.c`) — the accelerator driver itself (`idxd`) never prints anything about the page-request queue; the `pr_info_ratelimited()` calls above are tagged by `iommu->name` (e.g. `dmar1`), not by the accelerator's PCI address.
 
 ### Diagnosis
 
@@ -265,7 +264,7 @@ cat /sys/bus/pci/devices/0000:6a:01.0/idxd/dsa0/state
 # Page fault handler activity (tracepoints)
 echo 1 > /sys/kernel/tracing/events/iommu/io_page_fault/enable
 cat /sys/kernel/tracing/trace | head -30
-# iommu_page_fault: pasid=66 iova=0x7f3c80000000 reason=page-not-present
+# io_page_fault: IOMMU:idxd 0000:6a:01.0 iova=0x00007f3c80000000 flags=0x0001
 
 # Check if THP splitting is occurring (a major source of faults)
 grep thp_split /proc/vmstat
@@ -419,7 +418,8 @@ echo "$USED / $TOTAL"
 - [drivers/iommu/iommu.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iommu.c) — `iommu_map()`, `iommu_unmap_fast()`, and the `IOMMU_DOMAIN_DMA_FQ` flush-queue domain type behind Case 2's fix
 - [drivers/pci/pci.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pci/pci.c) — `pci_enable_acs()`, the kernel-side PCIe ACS negotiation behind Case 3's IOMMU group isolation
 - [drivers/iommu/iommu-sva.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/iommu-sva.c) — `iommu_sva_handle_mm()`, which calls `handle_mm_fault()` to resolve device page requests, behind Case 4
-- [drivers/iommu/intel/prq.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/intel/prq.c) — the Intel IOMMU Page Request Queue overflow handling underlying Case 4's PRI-queue scenario
+- [drivers/iommu/intel/prq.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/iommu/intel/prq.c) — the Intel IOMMU Page Request Queue overflow handling underlying Case 4's PRI-queue scenario, including the `pr_info_ratelimited("IOMMU: %s: PRQ overflow detected", iommu->name)` message
+- [include/trace/events/iommu.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/trace/events/iommu.h) — the `io_page_fault` tracepoint (`TP_printk("IOMMU:%s %s iova=0x%016llx flags=0x%04x", ...)`) used in Case 4's diagnosis
 - [mm/madvise.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/mm/madvise.c) — `MADV_POPULATE_WRITE` and `MADV_NOHUGEPAGE`, the mitigations used in Case 4
 - [kernel/dma/swiotlb.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/dma/swiotlb.c) — the swiotlb bounce-buffer pool and its `io_tlb_used`/`io_tlb_nslabs` debugfs counters behind Case 5
 
