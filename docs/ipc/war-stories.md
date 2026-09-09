@@ -15,15 +15,22 @@ A C++ application used SysV semaphores for inter-process locking. Each worker pr
 After 48 hours of operation with periodic connection failures, `ipcs -s` showed 128 semaphore sets — the deployment's `kernel.sem` `SEMMNI` setting had been tuned down from the kernel's 32000 default to 128 as a defensive resource cap, and that limit had been reached. Subsequent worker startups received `ENOSPC` from `semget()`. The service was down.
 
 ```bash
-# Diagnosis: count orphaned sets
+# Diagnosis: count the sets
 ipcs -s | wc -l          # 131 (128 sets + 3 header lines)
 
-# Identify orphaned sets by dead creator pid
-ipcs -s -v | awk 'NR>3 {
-    ret = system("kill -0 " $5 " 2>/dev/null")
-    if (ret != 0) print "orphaned semid=" $2 " key=" $1
-}'
+# Owning UID and last-operation time for each set
+ipcs -s -c   # creator/owner UID and GID
+ipcs -s -t   # last semop() time and last permission-change time
 ```
+
+There's no way to go further than that and pin an orphaned set to the dead process that created
+it: `struct semid_ds` (`ipc/sem.c`, `include/uapi/linux/sem.h`) has no PID field of any kind —
+only the creator/owner's UID and GID, plus the two timestamps above. `ipcs -p` ("show PIDs of
+creator and last operator") exists for shared memory and message queues, which do track a
+`cpid`/`lpid`, but for semaphore sets it's a documented no-op — it prints nothing at all. In
+practice, identifying which sets are truly abandoned means correlating the owning UID and stale
+`otime`/`ctime` against what you already know about your own services, not querying the kernel
+for a PID that was never recorded.
 
 ### Root cause
 
@@ -225,7 +232,7 @@ if (n < 0) {
 Or switch to an IPC mechanism where backpressure is part of the protocol rather than a special error code:
 
 - **POSIX message queue** (`mq_open`): `mq_send()` blocks (or returns `EAGAIN`) when the queue is full (`mq_maxmsg` items); the queue depth is explicit and configurable.
-- **Unix socket** (`AF_UNIX SOCK_DGRAM`): when the receive buffer is full, `sendmsg()` returns `ENOBUFS` or blocks — explicit backpressure on each message.
+- **Unix socket** (`AF_UNIX SOCK_DGRAM`): when the send buffer is full, a non-blocking `sendmsg()` returns `EAGAIN`/`EWOULDBLOCK` (a blocking one waits instead) — explicit backpressure on each message. (`ENOBUFS` is documented for a *network interface's* output queue, per `send(2)`; it doesn't apply here — `net/unix/af_unix.c`'s datagram send path goes through the same generic socket-buffer wait as every other socket type, `sock_alloc_send_pskb()` in `net/core/sock.c`, which returns `-EAGAIN` on a full buffer.)
 - **Blocking eventfd** (without `EFD_NONBLOCK`): the producer blocks when the counter is at maximum, providing natural flow control at the cost of a blocked thread.
 
 The general principle: `EFD_NONBLOCK` is appropriate only when `EAGAIN` is explicitly handled as a first-class condition, not a rare error.
@@ -248,6 +255,7 @@ The general principle: `EFD_NONBLOCK` is appropriate only when `EAGAIN` is expli
 
 - [ipc/util.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/util.c) — `ipc_addid()`, `ipc_rmid()`, and the per-namespace `ipc_ids` table that SysV objects live in until explicitly removed, behind Case 1
 - [ipc/sem.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/ipc/sem.c) — `semget()`, `semctl()`, and the `SEM_UNDO` adjustment-on-exit handling behind Case 1's fix
+- [include/uapi/linux/sem.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/sem.h) — `struct semid_ds`, which has no PID field at all, behind Case 1's diagnosis limits
 - [fs/file.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/file.c) — `receive_fd()`, which reserves and installs a received `SCM_RIGHTS` descriptor into the receiver's own `files_struct`, behind Case 2
 - [net/core/scm.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/core/scm.c) — `scm_detach_fds()` and `scm_recv_one_fd()`, the control-message path that calls `receive_fd()` for each `SCM_RIGHTS` descriptor, behind Case 2
 - [net/unix/garbage.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/unix/garbage.c) — the per-user `unix_inflight` counter and cycle-detecting garbage collector for in-flight `SCM_RIGHTS` fds, behind Case 2
@@ -256,6 +264,7 @@ The general principle: `EFD_NONBLOCK` is appropriate only when `EAGAIN` is expli
 - [kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/signal.c) — `legacy_queue()` and `__send_signal_locked()`, which drop a standard signal that is already pending on the target, behind Case 4
 - [include/linux/signal_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/signal_types.h) — `struct sigpending` (a bitmask) versus `struct sigqueue` (a queued list entry), the data structures behind Case 4's standard/real-time distinction
 - [fs/eventfd.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/eventfd.c) — `eventfd_write()` and the `ULLONG_MAX - 1` blocking/EAGAIN ceiling behind Case 5
+- [net/core/sock.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/core/sock.c) — `sock_alloc_send_pskb()`, the generic full-send-buffer wait/`-EAGAIN` path every socket type (including `AF_UNIX`) goes through, behind Case 5's Unix-socket alternative
 
 ### Man pages
 
