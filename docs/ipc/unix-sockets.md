@@ -147,7 +147,7 @@ if (rcmsg && rcmsg->cmsg_type == SCM_RIGHTS) {
 }
 ```
 
-The kernel's `unix_stream_sendmsg()` / `unix_scm_to_skb()` path (in `net/unix/af_unix.c`) attaches the file references to the socket buffer. On the receive side, `unix_detach_fds()` extracts them from the skb, then `scm_detach_fds()` (in `net/core/scm.c`) installs them into the receiver's `files_struct` via `receive_fd()`.
+The kernel's `unix_stream_sendmsg()` / `unix_scm_to_skb()` path (in `net/unix/af_unix.c`) attaches the file references to the socket buffer. On the receive side, `unix_detach_fds()` extracts them from the skb, then `scm_detach_fds()` (in `net/core/scm.c`) installs each one via `scm_recv_one_fd()` — the same fd-table-installation logic the standalone `receive_fd()` helper (`fs/file.c`) uses for a single fd, inlined here to install a whole batch at once.
 
 ### Leak risk
 
@@ -171,11 +171,14 @@ struct ucred cred = {
     .gid = getgid(),
 };
 char cbuf[CMSG_SPACE(sizeof(struct ucred))];
+struct msghdr msg = { .msg_control = cbuf, .msg_controllen = sizeof(cbuf) };
 struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
 cmsg->cmsg_level = SOL_SOCKET;
 cmsg->cmsg_type  = SCM_CREDENTIALS;
 cmsg->cmsg_len   = CMSG_LEN(sizeof(struct ucred));
 memcpy(CMSG_DATA(cmsg), &cred, sizeof(cred));
+/* msg.msg_iov/msg_iovlen still need to be set before sendmsg() --
+   SCM_CREDENTIALS requires at least one data byte, same as SCM_RIGHTS. */
 ```
 
 For a connected socket, the simpler alternative is `SO_PEERCRED`, which returns the credentials of the *connected* peer without requiring a per-message control message:
@@ -191,13 +194,11 @@ printf("peer pid=%d uid=%d gid=%d\n", peer.pid, peer.uid, peer.gid);
 
 ## Performance
 
-Unix domain sockets bypass the entire TCP/IP stack. Data is copied directly between socket send and receive buffers in the kernel, or in some configurations uses zero-copy tricks via `sk_buff`. Typical throughput on modern hardware:
+Unix domain sockets bypass the entire TCP/IP stack. Data is copied directly between socket send and receive buffers in the kernel, or in some configurations uses zero-copy tricks via `sk_buff`. Actual throughput depends heavily on CPU, message size, and kernel version, so no specific numbers are given here — but the relative ordering below holds, because each step removes more of the copy/protocol overhead than the last:
 
-| Mechanism | Throughput |
-|-----------|-----------|
-| `AF_INET` loopback (`127.0.0.1`) | ~5 GB/s |
-| `AF_UNIX SOCK_STREAM` | ~10–15 GB/s |
-| Shared memory | ~30–50 GB/s |
+1. `AF_INET` loopback (`127.0.0.1`) — pays the full TCP/IP protocol stack, just without a physical NIC
+2. `AF_UNIX SOCK_STREAM` — skips the TCP/IP stack entirely, but still copies data through the kernel
+3. Shared memory — no per-message kernel copy at all; the kernel is only needed to set up the mapping and for synchronization
 
 `AF_UNIX` with `SOCK_DGRAM` avoids connection setup overhead entirely, which is useful for short fire-and-forget control messages between co-located processes.
 
@@ -222,6 +223,7 @@ struct unix_sock {
     struct scm_stat scm_stat;       /* SCM stats for this socket */
     int             inq_len;
     bool            recvmsg_inq;
+    bool            scm_rights_notrunc;
     /* struct sk_buff *oob_skb; -- only under CONFIG_AF_UNIX_OOB */
 };
 ```
