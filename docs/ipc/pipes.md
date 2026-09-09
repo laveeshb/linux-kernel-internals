@@ -74,12 +74,15 @@ struct pipe_inode_info {
     unsigned int        files;          /* sum of readers + writers */
     unsigned int        r_counter;      /* read counter for POLLHUP check */
     unsigned int        w_counter;
-    bool                poll_usage;
-    struct page        *tmp_page[2];    /* reusable pages -- an array, not one pointer */
+    bool                pseudo_edgetrigger; /* per-write wakeups for an EPOLLET consumer */
+    struct anon_pipe_prealloc prealloc; /* small pool of pre-allocated pages,
+                                            not a bare tmp_page pointer/array */
     struct fasync_struct *fasync_readers;
     struct fasync_struct *fasync_writers;
     struct pipe_buffer  *bufs;          /* ring of pipe_buffer[ring_size] */
     struct user_struct  *user;
+    /* plus a watch_queue pointer and a note_loss flag, both under
+     * CONFIG_WATCH_QUEUE only */
 };
 
 struct pipe_buffer {
@@ -155,19 +158,19 @@ echo 4194304 > /proc/sys/fs/pipe-max-size  # increase to 4MB
 /* Copy file → pipe (zero-copy read) */
 ssize_t n = splice(file_fd, &offset,
                    pipe_fd,  NULL,
-                   count, SPLICE_F_MOVE | SPLICE_F_MORE);
+                   count, SPLICE_F_MORE);
 
 /* Copy pipe → socket (zero-copy send) */
 n = splice(pipe_fd, NULL,
            socket_fd, NULL,
-           count, SPLICE_F_MOVE);
+           count, 0);
 
 /* Typical pattern: splice file to network socket without copy */
 splice(file_fd, NULL, pipe_fd, NULL, file_size, SPLICE_F_MORE);
 splice(pipe_fd, NULL, socket_fd, NULL, file_size, 0);
 ```
 
-`splice` works by moving `pipe_buffer` page references — no data is copied. This is how `sendfile` is implemented internally.
+`splice` works by moving `pipe_buffer` page references — no data is copied — and it does this regardless of flags. `SPLICE_F_MOVE` (a hint to move pages instead of copying, mentioned in the LWN citation below since it shipped with the original 2.6.17 `splice()`) has been a no-op since Linux 2.6.21: its first implementation was buggy, so the kernel stopped acting on it, and current `fs/splice.c` contains no code that even reads the flag. It's still accepted for compatibility, but passing it changes nothing. This is how `sendfile` is implemented internally.
 
 ## vmsplice: mapping userspace memory into a pipe
 
@@ -265,6 +268,7 @@ perf trace -e splice,vmsplice -- myprocess
 - [fs/pipe.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/pipe.c) — pipe/FIFO read and write paths (`anon_pipe_read()`, `anon_pipe_write()`, `fifo_open()`), and `F_SETPIPE_SZ`/`F_GETPIPE_SZ` handling
 - [include/linux/pipe_fs_i.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pipe_fs_i.h) — `struct pipe_inode_info` and `struct pipe_buffer` definitions, `PIPE_DEF_BUFFERS`
 - [fs/splice.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/splice.c) — `splice()`, `vmsplice()`, and `tee()` syscall implementations
+- [include/linux/splice.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/splice.h) — the `SPLICE_F_*` flag definitions (`MOVE`, `NONBLOCK`, `MORE`, `GIFT`)
 - [Splice — The Linux Kernel documentation](https://docs.kernel.org/filesystems/splice.html) — kernel-internal splice/pipe API reference (`pipe_buffer` helpers, `splice_to_pipe()`, and friends)
 
 ### Man pages
