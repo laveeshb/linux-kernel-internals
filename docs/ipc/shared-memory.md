@@ -154,66 +154,27 @@ sem_post(sem) {
 
 ## eventfd: lightweight event notification
 
-`eventfd` creates a file descriptor backed by a 64-bit counter. It's the lightest-weight notification mechanism:
+`eventfd` creates a file descriptor backed by a 64-bit counter — the lightest-weight
+notification mechanism, and the standard way to wake an `epoll`-driven event loop from another
+thread or context:
 
 ```c
 #include <sys/eventfd.h>
 
-/* Create eventfd with initial value 0 */
-int efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+int efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);  /* initial value 0 */
 
-/* Signal: add 1 to counter */
 uint64_t val = 1;
-write(efd, &val, sizeof(val));
+write(efd, &val, sizeof(val));      /* signal: counter += 1 */
 
-/* Wait and consume: reads the counter value, resets to 0 */
 uint64_t count;
-read(efd, &count, sizeof(count));  /* blocks if counter == 0 */
-/* count = number of signals since last read */
-
-/* With EFD_SEMAPHORE: read decrements by 1 instead of resetting to 0 */
-int efd = eventfd(0, EFD_SEMAPHORE);
-write(efd, &(uint64_t){5}, 8);  /* counter = 5 */
-read(efd, &count, 8);  /* count = 1, counter = 4 */
-read(efd, &count, 8);  /* count = 1, counter = 3 */
+read(efd, &count, sizeof(count));   /* consume: returns counter, resets to 0 */
 ```
 
-### eventfd with epoll (the idiomatic pattern)
-
-```c
-/* Thread 1: event producer */
-void producer(int efd) {
-    while (1) {
-        /* ... do work ... */
-        uint64_t val = 1;
-        write(efd, &val, sizeof(val));  /* signal consumer */
-    }
-}
-
-/* Thread 2: event consumer with epoll */
-void consumer(int efd) {
-    int epfd = epoll_create1(EPOLL_CLOEXEC);
-    struct epoll_event ev = { .events = EPOLLIN, .data.fd = efd };
-    epoll_ctl(epfd, EPOLL_CTL_ADD, efd, &ev);
-
-    struct epoll_event events[8];
-    while (1) {
-        int n = epoll_wait(epfd, events, 8, -1);
-        for (int i = 0; i < n; i++) {
-            uint64_t count;
-            read(events[i].data.fd, &count, sizeof(count));
-            /* process 'count' pending events */
-        }
-    }
-}
-```
-
-eventfd is used extensively in:
-
-- QEMU/KVM virtio notifications
-- io_uring completion notification
-- libuv/libevent event loop backends
-- Container runtimes (cgroup event notification)
+It's used extensively in QEMU/KVM virtio notifications, io_uring completion notification,
+libuv/libevent event loop backends, and cgroup event notification. See
+[eventfd and signalfd](eventfd-signalfd.md) for the full treatment — `EFD_SEMAPHORE` mode, the
+epoll integration pattern, and the real kernel implementation (`struct eventfd_ctx`,
+`eventfd_write()`/`eventfd_read()`).
 
 ## memfd: anonymous file-backed shared memory
 
@@ -239,8 +200,10 @@ send_fd_over_socket(socket_fd, fd);
 `memfd_create` is used by:
 
 - Graphics/Wayland: sharing framebuffers between client and compositor
-- dbus-broker: passing large messages without DBUS limits
-- D-Bus: replacing shared memory segments
+- dbus-broker: when an oversized log entry doesn't fit in a single datagram to the systemd
+  journal socket, it's sealed into a memfd and sent as the datagram's payload instead — the
+  journal's own convention for large fields, not part of the D-Bus wire protocol itself
+  (`misc_memfd()` in dbus-broker's `src/util/misc.c`, used from `src/util/log.c`)
 
 ## Comparing shared memory approaches
 
