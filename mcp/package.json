@@ -1,0 +1,12 @@
+{
+  "name": "@laveeshb/linux-kernel-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for querying Linux Kernel Internals documentation",
+  "main": "index.js",
+  "bin": {
+    "linux-kernel-mcp": "./index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1"
+  }
+}
