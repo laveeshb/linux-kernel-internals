@@ -91,17 +91,17 @@ static int vfio_dma_do_map(struct vfio_iommu *iommu,
     dma_addr_t iova = map->iova;
     size_t size = map->size;
 
-    /* Pin user pages: HVA → HPA */
-    ret = pin_user_pages_remote(current->mm, vaddr,
-                                 npage, gup_flags, pages);
-
-    /* Record the mapping in our rb-tree */
+    /* Record the mapping in our rb-tree first, before any pinning */
     dma = vfio_find_dma(iommu, iova, size);  /* ensure no overlap */
-    vfio_link_dma(iommu, new_dma);           /* insert into tree */
+    vfio_link_dma(iommu, dma);               /* insert into tree */
 
-    /* Create IOMMU page table entries: IOVA → HPA, across every
-     * domain in iommu->domain_list (a container can span more than
-     * one IOMMU domain) -- not a single iommu->domain pointer */
+    /* Pin the pages AND create IOMMU page table entries -- both happen
+     * inside this one call, not as separate steps: vfio_pin_map_dma()
+     * pins (HVA → HPA, via pin_user_pages_remote() further down the
+     * call chain) and maps (IOVA → HPA) each domain in
+     * iommu->domain_list together, one domain at a time (a container
+     * can span more than one IOMMU domain -- not a single
+     * iommu->domain pointer) */
     vfio_pin_map_dma(iommu, dma, size);
 }
 ```
@@ -180,6 +180,7 @@ vCPU interrupt injection → guest ISR
 ```c
 /* drivers/vfio/pci/vfio_pci_intrs.c */
 struct vfio_pci_irq_ctx {
+    struct vfio_pci_core_device *vdev;    /* the device this IRQ context belongs to */
     struct eventfd_ctx        *trigger;  /* eventfd for interrupt notification */
     struct virqfd             *unmask;   /* for level-triggered IRQs */
     struct virqfd             *mask;
@@ -226,17 +227,19 @@ mdev allows a physical device with internal resources (GPU compute engines, NIC 
 struct mdev_parent {
     struct device            *dev;         /* physical device (PF) */
     struct mdev_driver       *mdev_driver;
+    struct kset              *mdev_types_kset;  /* one entry per supported type */
+    struct rw_semaphore       unreg_sem;
     struct mdev_type        **types;       /* each type is a resource slice */
     unsigned int              nr_types;
     atomic_t                  available_instances;
-    /* ... */
 };
 
 struct mdev_device {
     struct device             dev;
     guid_t                    uuid;        /* identifies the mdev instance */
-    struct mdev_type         *type;        /* reached via type->parent, not a direct field */
-    /* ... */
+    struct list_head          next;
+    struct mdev_type         *type;        /* the resource slice this instance was created from */
+    bool                      active;
 };
 ```
 
@@ -264,6 +267,14 @@ struct vfio_device_ops {
 
     int  (*init)(struct vfio_device *vdev);
     void (*release)(struct vfio_device *vdev);
+
+    /* IOMMUFD lifecycle — bind the device to an iommufd context and
+     * attach it to an IOAS/hwpt; omitted from this sketch, see below */
+    int  (*bind_iommufd)(struct vfio_device *vdev, struct iommufd_ctx *ictx, u32 *out_device_id);
+    void (*unbind_iommufd)(struct vfio_device *vdev);
+    int  (*attach_ioas)(struct vfio_device *vdev, u32 *pt_id);
+    void (*detach_ioas)(struct vfio_device *vdev);
+
     int  (*open_device)(struct vfio_device *vdev);
     void (*close_device)(struct vfio_device *vdev);
 
@@ -279,9 +290,12 @@ struct vfio_device_ops {
 
     int  (*match)(struct vfio_device *vdev, char *buf);
     void (*dma_unmap)(struct vfio_device *vdev, u64 iova, u64 length);
-    /* ... */
+    /* ... plus pasid_attach_ioas/pasid_detach_ioas, match_token_uuid,
+     * get_region_info_caps, and device_feature */
 };
 ```
+
+The `bind_iommufd`/`attach_ioas` pair (and their PASID-scoped variants) are the device-cdev + IOMMUFD ownership hooks discussed in [the virtualization-side VFIO page](../virtualization/vfio.md#the-newer-model-device-cdev-iommufd) — they only run when a device is opened through `/dev/vfio/devices/vfioN` rather than the classic group/container path this page otherwise describes.
 
 **Intel GVT-g** (Intel integrated GPU virtualization, `drivers/gpu/drm/i915/gvt/`) and **nvidia vGPU** implement their own `vfio_device_ops`. The mdev device appears to QEMU as a standard VFIO device, so no QEMU changes are needed — QEMU just opens `/dev/vfio/<group>` and operates normally.
 
