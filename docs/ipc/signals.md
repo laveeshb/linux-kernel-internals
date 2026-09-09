@@ -26,6 +26,7 @@ SIGQUIT (3)  — quit (Ctrl+\) → core dump
 SIGILL  (4)  — illegal instruction → core dump
 SIGTRAP (5)  — debug trap → core dump
 SIGABRT (6)  — abort() → core dump
+SIGBUS  (7)  — bad memory access (e.g. misaligned access, truncated mmap) → core dump
 SIGFPE  (8)  — arithmetic exception → core dump
 SIGKILL (9)  — kill (cannot be caught/ignored) → terminate
 SIGSEGV (11) — invalid memory access → core dump
@@ -80,12 +81,17 @@ kill_pgrp(pgrp, SIGTERM, 0);
  * is in kernel/entry/common.c; arch_do_signal_or_restart()/handle_signal()/
  * setup_rt_frame() are x86-64-specific, in arch/x86/kernel/signal.c */
 
-/* 1. do_send_sig_info(): queues signal to target task */
+/* 1. do_send_sig_info(): queues signal to target task. It's a thin wrapper
+ *    over send_signal_locked() -> __send_signal_locked(), which do the
+ *    actual queuing and dispatch shown below (not do_send_sig_info() itself) */
 do_send_sig_info(sig, info, task, type)
-  /* Process-directed (kill): goes to task->signal->shared_pending */
-  /* Thread-directed (tgkill): goes to task->pending */
-  → sigaddset(&task->signal->shared_pending.signal, sig)  /* process-directed */
-  → signal_wake_up(task, sig == SIGKILL)    /* wake if sleeping, set TIF_SIGPENDING */
+  → send_signal_locked(sig, info, task, type)
+      → __send_signal_locked(sig, info, task, type, force)
+          /* Process-directed (kill): goes to task->signal->shared_pending */
+          /* Thread-directed (tgkill): goes to task->pending */
+          → sigaddset(&pending->signal, sig)
+          → complete_signal(sig, task, type)
+              → signal_wake_up(task, sig == SIGKILL)  /* wake if sleeping, set TIF_SIGPENDING */
 
 /* 2. On return to userspace (syscall return, interrupt return): */
 exit_to_user_mode_loop()
@@ -104,7 +110,7 @@ handle_signal(ksig, regs)
       /* sets frame->pretcode = sa_restorer (a pointer, not pushed code) */
 ```
 
-`setup_rt_frame()` does not push trampoline machine code onto the stack — it requires `SA_RESTORER` and writes only a pointer (`frame->pretcode = ksig->ka.sa.sa_restorer`) to the userspace restorer stub, which normally lives in glibc/vDSO (`__restore_rt`). After the signal handler returns, that restorer calls `rt_sigreturn`, which restores the saved `ucontext_t` (CPU registers before signal delivery) and resumes normal execution.
+`setup_rt_frame()` (`arch/x86/kernel/signal.c`) is itself just a dispatcher that picks the right ABI variant — for a 64-bit process it calls `x64_setup_rt_frame()` in `arch/x86/kernel/signal_64.c`, which does the actual work below. It does not push trampoline machine code onto the stack — it requires `SA_RESTORER` and writes only a pointer (`unsafe_put_user(ksig->ka.sa.sa_restorer, &frame->pretcode, ...)`) to the userspace restorer stub, which normally lives in glibc/vDSO (`__restore_rt`). After the signal handler returns, that restorer calls `rt_sigreturn`, which restores the saved `ucontext_t` (CPU registers before signal delivery) and resumes normal execution.
 
 ## struct sigaction: installing handlers
 
@@ -142,6 +148,8 @@ static void my_handler(int sig, siginfo_t *info, void *ctx)
     printf("signal %d from pid %d\n", sig, info->si_pid);
 }
 ```
+
+**`printf()` is not actually safe to call here.** It's shown above (and in the `sigchld_handler` example below) for brevity, but `printf()` is not on the [signal-safety(7)](https://man7.org/linux/man-pages/man7/signal-safety.7.html) list of async-signal-safe functions — its internal stdio buffering isn't reentrant, so a handler that interrupts another `printf()` call already in progress can corrupt that buffer. Two real fixes: call `write(2)` directly (it *is* async-signal-safe) to emit pre-formatted text, or — the more common pattern — have the handler only set a `volatile sig_atomic_t` flag and do the actual work (including any `printf()`) back in the main loop, outside signal context.
 
 Important flags:
 
@@ -282,9 +290,10 @@ static void sigchld_handler(int sig, siginfo_t *info, void *ctx)
 
 ### Kernel source
 
-- [kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/signal.c) — `do_send_sig_info()`, `signal_wake_up_state()`, and `get_signal()`: the core signal-queuing and dequeuing implementation
+- [kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/signal.c) — `do_send_sig_info()`, `send_signal_locked()`/`__send_signal_locked()`, `complete_signal()`, `signal_wake_up_state()`, and `get_signal()`: the core signal-queuing and dequeuing implementation
 - [kernel/entry/common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/entry/common.c) — `exit_to_user_mode_loop()`: where `TIF_SIGPENDING` is checked on the way back to userspace
-- [arch/x86/kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/signal.c) — `arch_do_signal_or_restart()`, `handle_signal()`, `setup_rt_frame()`: x86-64 signal-frame setup and the `sa_restorer`/`rt_sigreturn` return path
+- [arch/x86/kernel/signal.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/signal.c) — `arch_do_signal_or_restart()`, `handle_signal()`, `setup_rt_frame()` (the ABI dispatcher): x86-64 signal-frame setup and the `sa_restorer`/`rt_sigreturn` return path
+- [arch/x86/kernel/signal_64.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/signal_64.c) — `x64_setup_rt_frame()`, the real 64-bit frame-building code `setup_rt_frame()` dispatches to
 - [include/linux/sched.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/sched.h) — `task_struct`: per-thread `pending`, `blocked`, `real_blocked`, `saved_sigmask`
 - [include/linux/sched/signal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/sched/signal.h) — `signal_struct`: per-process `shared_pending`
 - [include/linux/signal_types.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/signal_types.h) — `struct sigpending` definition
