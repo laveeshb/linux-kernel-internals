@@ -98,7 +98,7 @@ Heo's own framing of the future work is **composability**: letting multiple BPF 
 
 ### Kernel source
 
-Links pinned to the **v6.12** tag — several of these names have since been renamed (e.g. `scx_ops_bypass()` → `scx_bypass()`, `scx_ops_disable_workfn()` → `scx_disable_workfn()` as of v6.13), so a HEAD-tracking link would show different names than described above.
+Links pinned to the **v6.12** tag — several of these names have since been renamed (e.g. `scx_ops_bypass()` → `scx_bypass()`, `scx_ops_disable_workfn()` → `scx_disable_workfn()`, both first appearing at v6.16), so a HEAD-tracking link would show different names than described above.
 
 - [kernel/sched/ext.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/sched/ext.c?h=v6.12) — the sched_ext implementation: `struct sched_ext_ops`, dispatch queues, the watchdog, bypass mode, and the `SysRq-S`/`SysRq-D` handlers
 - [include/linux/sched/ext.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/sched/ext.h?h=v6.12) — `struct scx_dispatch_q` and other public sched_ext types
