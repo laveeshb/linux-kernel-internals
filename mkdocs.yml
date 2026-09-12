@@ -307,6 +307,7 @@ nav:
         - Futex Internals: locking/futex.md
         - SRCU: locking/srcu.md
         - Completions and Wait Queues: locking/completions.md
+        - "PREEMPT_RT: Twenty Years to Mainline": locking/preempt-rt.md
       - War Stories:
         - Locking War Stories: locking/war-stories.md
         - The Deadlock Detector That Scheduled While Atomic: locking/war-stories/rtmutex-deadlock-detector-atomic-sleep.md

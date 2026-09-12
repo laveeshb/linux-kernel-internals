@@ -2,6 +2,8 @@
 
 > Achieving deterministic low-latency with PREEMPT_RT: CPU isolation, memory locking, and IRQ management
 
+See [PREEMPT_RT: Twenty Years to Mainline](../locking/preempt-rt.md) for how this kernel option went from a two-decade out-of-tree patch set to fully mainline in Linux 6.12 — this page covers using it, not its history.
+
 ## What "real-time" means on Linux
 
 A real-time system guarantees a **worst-case response time** — not just average latency. Linux with PREEMPT_RT can achieve:
