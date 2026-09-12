@@ -265,6 +265,7 @@ nav:
         - Scheduler Classes: sched/scheduler-classes.md
         - CFS: sched/cfs.md
         - EEVDF: sched/eevdf.md
+        - sched_ext (BPF Scheduling): sched/sched-ext.md
         - Runqueues & Task Selection: sched/runqueues.md
       - Lifecycle:
         - Life of a Context Switch: sched/context-switch.md
