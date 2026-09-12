@@ -66,6 +66,8 @@ Linux doesn't have one scheduler — it has five, each handling a different clas
 
 A CPU running a deadline task will never run a fair task until the deadline task blocks or its budget is exhausted. This gives real-time and deadline tasks strict priority without any special casing in the core scheduler.
 
+Since Linux 6.12 there's a sixth class alongside these five: [sched_ext](sched-ext.md) (`ext_sched_class`), which lets a BPF program supply scheduling policy instead of a class compiled into the kernel.
+
 ## struct sched_class
 
 Each scheduler class implements a common interface defined in `kernel/sched/sched.h`:

@@ -11,6 +11,7 @@ The Linux scheduler is responsible for deciding which task runs on each CPU at a
 - [Scheduler Classes](scheduler-classes.md) — The five scheduling policies and how they're layered
 - [CFS: Completely Fair Scheduler](cfs.md) — vruntime, the red-black tree, and weighted fairness
 - [EEVDF Scheduler](eevdf.md) — Virtual deadlines, eligibility, and replacing CFS
+- [sched_ext (BPF Scheduling)](sched-ext.md) — The sixth scheduler class: BPF-programmable policy, merged in 6.12
 - [Runqueues and Task Selection](runqueues.md) — Per-CPU runqueues and how tasks are picked
 
 ### Lifecycle
