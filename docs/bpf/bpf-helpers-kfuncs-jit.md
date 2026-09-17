@@ -53,6 +53,7 @@ struct bpf_func_proto {
 	bool gpl_only;
 	bool pkt_access;
 	bool might_sleep;
+	/* ... allow_fastcall omitted here ... */
 	enum bpf_return_type ret_type;
 	union {
 		struct {
@@ -74,7 +75,7 @@ Each program type has a `get_func_proto()` callback that maps a helper's numeric
 
 The helper list is a single, kernel-wide enum: every helper, from every subsystem, is added to the same list, gets the same permanent ABI guarantee, and needs review from BPF maintainers even if it's only useful to one subsystem. That doesn't scale to letting individual subsystems (or even individual kernel modules) expose their own narrow, possibly-unstable functions to BPF.
 
-Kfuncs solve this by letting a subsystem register a set of kernel functions as directly callable from BPF, without going through the helper enum at all. The registration API — `register_btf_kfunc_id_set()`, `struct btf_kfunc_id_set` — was introduced in Linux **5.16**; confirmed by tag-diff of `include/linux/btf.h` (absent at v5.15, present at v5.16).
+Kfuncs solve this by letting a subsystem register a set of kernel functions as directly callable from BPF, without going through the helper enum at all. The registration API — `register_btf_kfunc_id_set()`, `struct btf_kfunc_id_set` — was introduced in Linux **5.18**; confirmed by tag-diff of `include/linux/btf.h` (absent at v5.17, present at v5.18).
 
 A real kfunc set, from `kernel/bpf/helpers.c`:
 
