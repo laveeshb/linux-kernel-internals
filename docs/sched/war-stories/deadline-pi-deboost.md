@@ -3,13 +3,13 @@
 > CVE-2026-23371 — a SCHED_DEADLINE task holding a priority-inheritance mutex, demoted to a lower scheduling class mid-hold, could skip inheriting the waiting donor's deadline parameters entirely, corrupting the kernel's own bandwidth accounting
 
 Reported by
-:   surfaced via `stress-ng --schedpolicy 0` on a PREEMPT_RT kernel on a large multi-CPU machine
+:   Bruno Goncalves (Red Hat), surfaced via `stress-ng --schedpolicy 0` on a PREEMPT_RT kernel on a large multi-CPU machine
 
 Fixed in
-:   commit introducing `__setscheduler_dl_pi()`, backported to 6.18.34 and 6.19.7, mainline in Linux 7.0
+:   commit `d658686a1331` ("sched/deadline: Fix missing ENQUEUE_REPLENISH during PI de-boosting"), Juri Lelli (Red Hat), backported to 6.18.34 and 6.19.7, mainline in Linux 7.0
 
 Bug present since
-:   Linux 5.10, via commit `2279f540ea7d`
+:   Linux 5.10, via commit `2279f540ea7d` (also Juri Lelli)
 
 *Part of [War Stories: Scheduler Bugs](../war-stories.md).*
 
@@ -63,3 +63,4 @@ The fix introduces `__setscheduler_dl_pi()`, called specifically when `sched_set
 ## External references
 
 - [git.kernel.org: security/vulns — CVE-2026-23371](https://git.kernel.org/pub/scm/linux/security/vulns.git/plain/cve/published/2026/CVE-2026-23371.mbox) — the kernel CVE team's official announcement, including the full trace, root-cause writeup, and fixed commits across stable branches
+- [git.kernel.org: d658686a1331](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d658686a1331db3bb108ca079d76deb3208ed949) — "sched/deadline: Fix missing ENQUEUE_REPLENISH during PI de-boosting," Juri Lelli's fix

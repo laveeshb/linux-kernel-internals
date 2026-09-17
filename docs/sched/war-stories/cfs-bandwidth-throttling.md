@@ -6,10 +6,10 @@ Reported by
 :   Kubernetes users (tracked publicly as [kubernetes/kubernetes#67577](https://github.com/kubernetes/kubernetes/issues/67577)); root-caused and fixed by Dave Chiluk (Indeed)
 
 Bug present since
-:   Linux 3.16 (2014), via commit `51f2176d74ac` ("sched/fair: Fix unlocked reads of some cfs_b->quota/period")
+:   the per-CPU slice-expiration design in CFS bandwidth control's original introduction, Linux 3.2 — masked from 2014 by an unrelated fix (`51f2176d74ac`), then re-exposed in Linux 4.18 via commit `512ac999d275` ("sched/fair: Fix bandwidth timer clock drift condition")
 
 Fixed in
-:   commit `de53fd7aedb1` ("sched/fair: Fix low cpu usage with high throttling by removing expiration of cpu-local slices"), mainline Linux 5.4 (August 2019)
+:   commit `de53fd7aedb1` ("sched/fair: Fix low cpu usage with high throttling by removing expiration of cpu-local slices"), mainline Linux 5.4 (November 2019)
 
 Measured impact of the fix
 :   almost 30x throughput improvement on an artificial 80-CPU benchmark (10ms/100ms quota)
@@ -62,5 +62,5 @@ Dave Chiluk's fix, commit `de53fd7aedb1`, doesn't patch the expiration logic fur
 
 - [git.kernel.org: de53fd7aedb1](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=de53fd7aedb100f03e5d2231cfce0e4993282425) — "sched/fair: Fix low cpu usage with high throttling by removing expiration of cpu-local slices," the fix, with Dave Chiluk's full root-cause writeup
 - [git.kernel.org: 512ac999d275](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=512ac999d275) — "sched/fair: Fix bandwidth timer clock drift condition," the fix that re-enabled real expiration and exposed the design flaw
-- [LWN: sched/fair: Fix low cpu usage with high throttling...](https://lwn.net/Articles/792268/) — LWN's coverage of the fix
+- [LWN: sched/fair: Fix low cpu usage with high throttling...](https://lwn.net/Articles/792268/) — Dave Chiluk's posted patch (v5), archived by LWN
 - [kubernetes/kubernetes#67577](https://github.com/kubernetes/kubernetes/issues/67577) — the public user reports that drove the root-cause investigation
