@@ -10,6 +10,7 @@
 | [KLP Consistency Model](klp-consistency.md) | Per-task patch state, stack checking, transition workqueue, forced transitions |
 | [Cumulative Patches and Atomic Replace](klp-cumulative.md) | Patch stacking, .replace=true, struct klp_ops, disabling and removing patches |
 | [KLP State: Custom Consistency Checks](klp-state.md) | klp_state API, transition callbacks, pre/post patch hooks, cumulative state inheritance |
+| [kGraft vs. kpatch History](kgraft-vs-kpatch-history.md) | How SUSE's kGraft and Red Hat's kpatch converged into upstream livepatch, and why the consistency model took years to land |
 | [kexec](kexec.md) | kexec_load, machine_kexec, kdump integration, fast reboot |
 | [War Stories](war-stories.md) | Stuck transitions, shadow variable leaks, compat syscall misses, `old_sympos` ambiguity, missing `.replace` |
 
