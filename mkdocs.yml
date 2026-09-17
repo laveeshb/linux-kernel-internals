@@ -330,6 +330,12 @@ nav:
         - Workqueues: interrupts/workqueues.md
         - Workqueue Internals (cmwq): interrupts/workqueue-internals.md
         - Timers and hrtimers: interrupts/timers.md
+      - War Stories:
+        - Interrupt War Stories: interrupts/war-stories.md
+        - The Vector Leak That Needed Two CPUs to Go Offline in the Wrong Order: interrupts/war-stories/vector-leak-cpu-offline.md
+        - The IPI Verifier That Trusted Its Own Caller: interrupts/war-stories/ipi-send-verify-null-deref.md
+        - The Warning That Vector Space Was Silently Breaking Affinity: interrupts/war-stories/vector-exhaustion-silent-affinity-break.md
+        - The Affinity Notifier That Outlived Its Own Reference Count: interrupts/war-stories/affinity-notifier-uaf.md
     - IPC:
       - Getting Started: ipc/README.md
       - Signals: ipc/signals.md
