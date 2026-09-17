@@ -42,6 +42,7 @@ Userspace                          Kernel
 | [Architecture & Program Types](bpf-overview.md) | bpf() syscall, BPF_PROG_TYPE_*, loading flow |
 | [BPF Maps](bpf-maps.md) | Hash, array, ringbuf, per-CPU maps, pinning |
 | [BPF Verifier](bpf-verifier.md) | Safety proofs, register tracking, pointer restrictions |
+| [BPF Security Model](bpf-security-model.md) | Capabilities, the unprivileged-BPF sysctl, BPF LSM |
 | [BTF and CO-RE](btf-core.md) | Type information, portable programs across kernel versions |
 | [libbpf and Skeletons](libbpf.md) | Userspace API, BPF skeleton workflow |
 | [BPF Ring Buffer](bpf-ringbuf.md) | `BPF_MAP_TYPE_RINGBUF`, reservation model, epoll notification |
