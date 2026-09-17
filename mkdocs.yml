@@ -605,6 +605,7 @@ nav:
       - KLP Consistency Model: livepatch/klp-consistency.md
       - Cumulative Patches and Atomic Replace: livepatch/klp-cumulative.md
       - "KLP State: Custom Consistency Checks": livepatch/klp-state.md
+      - kGraft vs. kpatch History: livepatch/kgraft-vs-kpatch-history.md
       - kexec: livepatch/kexec.md
       - War Stories: livepatch/war-stories.md
   - Observability:
