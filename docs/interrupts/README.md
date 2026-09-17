@@ -37,6 +37,9 @@ Bottom half            ← deferred, runs with interrupts enabled
 - [Workqueues](workqueues.md) — Process-context deferred work
 - [Timers and hrtimers](timers.md) — Deferred work at a specific time
 
+### War stories
+- [War Stories](war-stories.md) — two CVEs and two long-standing bugs in the IRQ-affinity and vector-allocation machinery
+
 ## Execution contexts
 
 Understanding which context code runs in is critical for choosing the right locking:
