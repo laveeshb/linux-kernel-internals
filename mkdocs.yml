@@ -533,6 +533,7 @@ nav:
       - BPF Maps: bpf/bpf-maps.md
       - BPF Verifier: bpf/bpf-verifier.md
       - BTF and CO-RE: bpf/btf-core.md
+      - Helpers, kfuncs, and the JIT: bpf/bpf-helpers-kfuncs-jit.md
       - libbpf and Skeletons: bpf/libbpf.md
       - BPF Ring Buffer: bpf/bpf-ringbuf.md
       - BPF Networking (TC, cgroup, sockmap): bpf/bpf-networking.md

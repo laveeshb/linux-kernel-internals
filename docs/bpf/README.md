@@ -43,6 +43,7 @@ Userspace                          Kernel
 | [BPF Maps](bpf-maps.md) | Hash, array, ringbuf, per-CPU maps, pinning |
 | [BPF Verifier](bpf-verifier.md) | Safety proofs, register tracking, pointer restrictions |
 | [BTF and CO-RE](btf-core.md) | Type information, portable programs across kernel versions |
+| [Helpers, kfuncs, and the JIT](bpf-helpers-kfuncs-jit.md) | The `BPF_CALL` calling convention, the kfunc mechanism, and how a program is compiled to native code |
 | [libbpf and Skeletons](libbpf.md) | Userspace API, BPF skeleton workflow |
 | [BPF Ring Buffer](bpf-ringbuf.md) | `BPF_MAP_TYPE_RINGBUF`, reservation model, epoll notification |
 | [BPF Networking](bpf-networking.md) | TC, cgroup hooks, sockmap |
