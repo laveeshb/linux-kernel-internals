@@ -1,6 +1,6 @@
 # War Stories: Interrupt and IRQ-Affinity Bugs
 
-> Four incidents in the machinery that decides which CPU handles an interrupt and cleans up after it moves — two CVEs, one decade-long silent-failure gap, and one use-after-free in a rarely-exercised notifier path
+> Four incidents in the machinery that decides which CPU handles an interrupt and cleans up after it moves — two CVEs, one two-year silent-failure gap, and one use-after-free in a rarely-exercised notifier path that took two separate fixes to fully close
 
 Interrupt affinity is deceptively simple from the outside — "run this interrupt's handler on that CPU" — and genuinely intricate underneath, because changing it safely means coordinating in-flight interrupt delivery, per-CPU vector allocation, CPU hotplug, and (for drivers that want to know) an asynchronous notification callback, all without ever leaving a window where the same interrupt could be handled twice or a resource freed while something still points at it. Every incident below lives in that coordination layer, not in interrupt handling itself.
 
@@ -18,7 +18,7 @@ A deferred interrupt-affinity change and a CPU hot-unplug, interleaved in one sp
 
 ### [The Warning That Vector Space Was Silently Breaking Affinity](war-stories/vector-exhaustion-silent-affinity-break.md)
 **Linux 5.4 (November 2019) · not a CVE**
-When every CPU in a requested affinity mask had exhausted its 202 assignable interrupt vectors, the kernel silently fell back to a wider CPU set with no log message — for over a decade, an administrator had no way to learn their affinity request had been quietly overruled.
+When every CPU in a reserved affinity mask had exhausted its 202 assignable interrupt vectors, activating the interrupt silently widened the mask with no log message — for about two years, an administrator had no way to learn their affinity request had been quietly overruled.
 
 ### [The Affinity Notifier That Outlived Its Own Reference Count](war-stories/affinity-notifier-uaf.md)
 **Linux 5.2 (July 2019) · not a CVE**
@@ -31,14 +31,14 @@ Replacing an affinity-change notifier dropped the old one's reference count with
 | Involves interrupt CPU-affinity machinery specifically | Yes | Yes (IPI targeting) | Yes | Yes |
 | Root cause: two independently-correct code paths racing against each other | Yes | No | — | No |
 | Root cause: validation ordered after the operation it should have gated | No | Yes | — | No |
-| Root cause: a lifecycle mechanism invisible to a nearby accounting system | No | No | — | Yes |
+| Root cause: a release not synchronized against a still-outstanding deferred use | No | No | — | Yes |
 | Is a security vulnerability (has a CVE) | Yes | Yes | No | No |
 | Fix changed behavior, not just added a diagnostic | Yes | Yes | No (diagnostic only) | Yes |
-| Years between introduction and fix | 7 (2017 rework → 2024) | ~6 months (Aug 2022 authored → Feb 2023 mainlined) | 10+ (feature predates the fix) | Unknown (long-standing API) |
+| Years between introduction and fix | 7 (2017 → 2024) | ~7 (2015 → 2023) | ~2 (2017 → 2019) | ~8 (2011 → 2019) |
 
 **Two of these four are architecturally related.** The vector leak and the vector-exhaustion warning both live in the same x86 per-CPU vector allocator, separated by five years — one is about a resource silently *falling back* to a different CPU when space runs out, the other is about a resource silently *not being reclaimed* after a CPU goes away. Neither is a mistake in the other's fix; they're two different failure modes in the same limited-resource-management problem, discovered independently.
 
-**The IPI verifier bug and the affinity-notifier bug are both, in different ways, stories about validation and cleanup happening in the wrong order relative to the operation they were meant to guard.** The IPI verifier read a value from an unchecked pointer before checking the pointer; the affinity-notifier bug released a reference before confirming a deferred user of that reference had actually finished. Reordering a small number of lines fixed both — the hard part in each case was recognizing that an ordering assumption, not a missing check, was the actual bug.
+**The IPI verifier bug and the affinity-notifier bug are both, in different ways, stories about validation and cleanup happening in the wrong order relative to the operation they were meant to guard.** The IPI verifier read a value from an unchecked pointer before checking the pointer — fixed by reordering a small number of lines. The affinity-notifier bug released a reference before confirming a deferred user of that reference had actually finished — fixed by adding a synchronous cancellation, not by reordering existing code, and it took a second fix a year later to also account for the reference that cancellation itself was holding. In both cases, the hard part was recognizing that an ordering assumption, not a missing check, was the actual bug.
 
 **Only one of the four incidents here — the vector-exhaustion warning — isn't a "wrong behavior" bug at all.** The silent CPU-set fallback it made visible was arguably correct behavior; the gap was purely that nothing told an administrator it had happened. It's the only incident on this page whose fix is a single diagnostic line rather than a change to what the kernel actually does.
 

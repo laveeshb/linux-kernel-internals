@@ -11,7 +11,7 @@ Authors
 CVE
 :   CVE-2024-31076
 
-*Part of [War Stories: Interrupts and Async Processing](../war-stories.md).*
+*Part of [War Stories: Interrupt and IRQ-Affinity Bugs](../war-stories.md).*
 
 ## Before state
 
@@ -27,7 +27,9 @@ The stale vector is now stranded. `__vector_schedule_cleanup()` does still run f
 
 ## Why it happened
 
-This is a race between two independent lifecycles that the code was tracking with local, per-path assumptions rather than a single source of truth: the "has this interrupt's move actually completed" state, and the "is this CPU about to disappear" state. Each individual check — `irq_needs_fixup()`'s affinity test, `irq_complete_move()`'s deferred-cleanup scheduling — is locally correct for the ordering it was written to expect. The bug only appears in the specific interleaving where a CPU offline event lands in the narrow window after an affinity change has been recorded but before the interrupt has fired even once on its new target. That window had existed in the vector-management code since at least the [2017 rework of x86 vector management](https://lwn.net/Articles/733618/) that introduced today's `vector_matrix`/`apicd`-based design — a rework explicitly motivated by cleaning up "CPU offline / hibernation issues" in the *previous* generation of vector-management code, which shows how much of this problem space is inherently about ordering CPU-lifecycle events against in-flight interrupt state, not about any one implementation being sloppy.
+This is a race between two independent lifecycles that the code was tracking with local, per-path assumptions rather than a single source of truth: the "has this interrupt's move actually completed" state, and the "is this CPU about to disappear" state. Each individual check — `irq_needs_fixup()`'s affinity test, `irq_complete_move()`'s deferred-cleanup scheduling — is locally correct for the ordering it was written to expect. The bug only appears in the specific interleaving where a CPU offline event lands in the narrow window after an affinity change has been recorded but before the interrupt has fired even once on its new target.
+
+That window predates the `vector_matrix`/`apicd`-based design most of the rest of this page's incidents live in. The fix's own `Fixes:` tag points to [`f0383c24b485`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f0383c24b4855f6a4b5a358c7b2d2c16e0437e9b) (Thomas Gleixner, June 2017, "genirq/cpuhotplug: Add support for cleaning up move in progress"), which landed in Linux 4.13 — the generic `irq_needs_fixup()`/`irq_force_complete_move()` machinery this bug's race lives in didn't exist before that commit at all. The [2017 rework of x86 vector management](https://lwn.net/Articles/733618/) that introduced today's `vector_matrix`/`apicd`-based design came slightly later, in Linux 4.15, and inherited this specific race rather than introducing it. Both changes were motivated by the same underlying problem — CPU-offline and hibernation fragility in vector management — which shows how much of this problem space is inherently about ordering CPU-lifecycle events against in-flight interrupt state, not about any one implementation being sloppy.
 
 ## Resolution
 
@@ -37,7 +39,7 @@ The fix reorders the outgoing-CPU cleanup path so `irq_force_complete_move()` ru
 
 **Cleanup-on-teardown code paths need to check both possible orderings of the events they're racing against, not just the common one.** The common case — an interrupt fires again before its old CPU goes offline — was handled correctly from the start. The bug lived entirely in the far less common, harder-to-hit ordering, which is exactly the kind of path that survives code review and normal testing for years.
 
-**A major rewrite of a subsystem doesn't retire the class of bug the rewrite was meant to fix — it just changes which specific race is still open.** The 2017 vector-management rework was itself a response to CPU-offline-related fragility in the code it replaced. Seven years later, a CPU-offline-related bug was still there, just in a narrower, harder-to-trigger form.
+**A major rewrite of a subsystem doesn't retire the class of bug the rewrite was meant to fix — it just changes which specific race is still open.** Both the generic cpuhotplug fixup machinery this bug lives in and the x86-specific vector-management rework that came a couple of months later were responses to the same underlying CPU-offline-related fragility. Seven years after the first of those fixes, a CPU-offline-related bug was still there, just in a narrower, harder-to-trigger form.
 
 !!! warning "Pattern to watch for"
     Any deferred cleanup that depends on "the thing I'm waiting for will eventually happen" needs an explicit answer for "what if the resource I'm waiting to clean up on disappears first." If that answer lives in a different code path (here, CPU hotplug) than the one doing the deferring (here, interrupt affinity), audit the interaction directly — each path can be independently correct and still leak when the two overlap.
@@ -51,4 +53,5 @@ The fix reorders the outgoing-CPU cleanup path so `irq_force_complete_move()` ru
 
 - [git.kernel.org: a6c11c0a5235](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a6c11c0a5235) — "genirq/cpuhotplug, x86/vector: Prevent vector leak during CPU offline," the fix commit, with the full root-cause writeup in its own commit message
 - [NVD: CVE-2024-31076](https://nvd.nist.gov/vuln/detail/CVE-2024-31076) — the CVE record, which reproduces the fix commit's description in full
-- [LWN: x86: Rework the vector management](https://lwn.net/Articles/733618/) — Thomas Gleixner's September 2017 cover letter for the 52-patch series that introduced the `vector_matrix`/`apicd` design this bug lived in, explicitly motivated in part by CPU-offline and hibernation fragility in the prior implementation
+- [git.kernel.org: f0383c24b485](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f0383c24b4855f6a4b5a358c7b2d2c16e0437e9b) — "genirq/cpuhotplug: Add support for cleaning up move in progress," the June 2017 commit (Linux 4.13) the fix's own `Fixes:` tag points to, and the actual origin of the generic fixup machinery this bug's race lives in
+- [LWN: x86: Rework the vector management](https://lwn.net/Articles/733618/) — Thomas Gleixner's September 2017 cover letter for the 52-patch series that introduced the `vector_matrix`/`apicd` design (Linux 4.15), a few months after and separate from the commit above, explicitly motivated in part by CPU-offline and hibernation fragility in the prior implementation

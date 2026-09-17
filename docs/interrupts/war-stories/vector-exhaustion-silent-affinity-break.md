@@ -1,6 +1,6 @@
 # The Warning That Vector Space Was Silently Breaking Affinity
 
-> An administrator sets an interrupt's CPU affinity, the kernel silently overrules it when the CPUs they picked have run out of vectors, and for over a decade there was no way to find out from the syslog that it had happened
+> An administrator activates an interrupt whose CPU affinity was reserved when the CPUs it wanted have since run out of vectors, the kernel silently widens the affinity to make it work, and for about two years there was no way to find out from the syslog that it had happened
 
 Landed
 :   Linux 5.4 (November 2019) · fix authored August 22, 2019
@@ -10,7 +10,7 @@ Authors
 
 Not a CVE
 
-*Part of [War Stories: Interrupts and Async Processing](../war-stories.md).*
+*Part of [War Stories: Interrupt and IRQ-Affinity Bugs](../war-stories.md).*
 
 ## Before state
 
@@ -18,11 +18,11 @@ Each x86 CPU has 256 interrupt vectors total, and most of them aren't available 
 
 ## The trigger
 
-On a system with many high-interrupt-count devices — multi-queue NICs and storage controllers on a large-core-count machine are the common case — it's entirely possible for every CPU in a requested affinity mask to already have all 202 of its assignable vectors in use. When that happens, the vector-assignment code doesn't fail the request. It falls back silently to a wider set of CPUs outside the one the administrator asked for, and assigns the interrupt there instead.
+On a system with many high-interrupt-count devices — multi-queue NICs and storage controllers on a large-core-count machine are the common case — it's entirely possible for every CPU in a requested affinity mask to already have all 202 of its assignable vectors in use. This specific failure mode lives in `activate_reserved()`, the function that finalizes a vector assignment for an interrupt whose affinity had been *reserved* rather than assigned immediately — a path introduced in the September 2017 x86 vector-management rework (Linux 4.15). When activation finds every CPU in the reserved mask out of vectors, `assign_irq_vector_any_locked()` doesn't fail the request. It falls back silently to a wider set of CPUs outside the one that had been reserved, and assigns the interrupt there instead. (Before that rework, the older vector-assignment code returned `-ENOSPC` in the equivalent situation rather than silently widening the mask.)
 
 ## Observed behavior
 
-The actual, in-effect affinity was never hidden — it's always been readable from `/proc/irq/$N/effective_affinity` — but nothing wrote to the kernel log when the fallback happened, so there was no indication that a requested affinity change had silently failed. An administrator pinning interrupts for a latency-sensitive or NUMA-aware workload would set the affinity they wanted, see no error, and have no reason to go check `effective_affinity` against what they'd asked for — until performance on the "pinned" workload didn't match expectations, at which point tracking the mismatch back to vector exhaustion elsewhere in the system required already suspecting this specific failure mode. The fix's own `Reported-by`/`Tested-by` tags credit a real reporter who hit this and verified the fix, though the changelog doesn't spell out their exact workload.
+The actual, in-effect affinity was readable from `/proc/irq/$N/effective_affinity` — a file added in Linux 4.13, about two years before this fix — but nothing wrote to the kernel log when the fallback happened, so there was no indication that a reserved affinity had silently widened. For an interrupt that's already active, writing a new affinity through `/proc/irq/$N/smp_affinity` fails visibly with `-ENOSPC` if the allocator can't honor it — the silent case is specifically the *reservation-mode* activation path. An administrator pinning interrupts for a latency-sensitive or NUMA-aware workload would activate the device, see no error, and have no reason to go check `effective_affinity` against what they'd asked for — until performance on the "pinned" workload didn't match expectations, at which point tracking the mismatch back to vector exhaustion elsewhere in the system required already suspecting this specific failure mode. The fix's own `Reported-by`/`Tested-by` tags credit a real reporter who hit this and verified the fix, though the changelog doesn't spell out their exact workload.
 
 ## Why it happened
 
@@ -36,14 +36,14 @@ Neil Horman's fix adds a single check to `activate_reserved()`, the function tha
 
 **A code path can be entirely correct and still constitute a bug from the operator's point of view, if it changes behavior with no way to observe that it happened.** The fallback-to-a-wider-CPU-set logic wasn't wrong; the absence of any log line when it triggered was the actual problem, and it took a real reported case — not a crash, not a test failure — to surface it.
 
-**"The information is technically available somewhere" is not the same as "the information will be found."** `effective_affinity` had always told the truth. What was missing was anything that would prompt someone to go look at it in the first place.
+**"The information is technically available somewhere" is not the same as "the information will be found."** `effective_affinity` told the truth for the entire two years this gap existed. What was missing was anything that would prompt someone to go look at it in the first place.
 
 !!! warning "Pattern to watch for"
     Any code path that silently falls back to a different resource than what was requested — a different CPU, a different memory node, a different device — is a debugging trap waiting to happen, even if the fallback logic itself is sound. If the request can silently not be honored, log it once, even at a low level; the cost of one `pr_warn()` is far lower than the cost of an administrator not knowing where to look.
 
 ## See also
 
-- [IRQ Affinity and CPU Isolation](../irq-affinity.md) — the affinity-configuration interface and `effective_affinity` file this bug involves
+- [IRQ Affinity and CPU Isolation](../irq-affinity.md) — the affinity-configuration interface this bug involves
 - [The Vector Leak That Needed Two CPUs to Go Offline in the Wrong Order](vector-leak-cpu-offline.md) — a different bug in the same vector-allocation machinery, five years later
 
 ## External references

@@ -8,9 +8,12 @@ Landed
 Authors
 :   Prasad Sodagudi (author); Thomas Gleixner (applied the fix)
 
+Heuristic/API introduced by
+:   Ben Hutchings, `irq_set_affinity_notifier()`, January 2011 (Linux 2.6.39) — about eight years before this fix
+
 Not a CVE
 
-*Part of [War Stories: Interrupts and Async Processing](../war-stories.md).*
+*Part of [War Stories: Interrupt and IRQ-Affinity Bugs](../war-stories.md).*
 
 ## Before state
 
@@ -26,26 +29,37 @@ If the old notifier's callback work was still queued at the moment its reference
 
 ## Why it happened
 
-The reference-counting discipline here tracked one kind of ownership — "does anything still hold a pointer to this object" — but a queued work item's use of the object isn't expressed as a `kref` reference the way a live pointer held by another subsystem would be. The work item references the notifier implicitly, through the closure baked into the `struct work_struct` when it was queued, not through anything the `kref` accounting could see. Dropping the last *counted* reference and there being zero *actual* outstanding uses of the object are not automatically the same fact, whenever a mechanism that uses an object doesn't participate in the object's own reference-counting scheme.
+The reference count itself wasn't the gap — the still-queued work item genuinely held one: `irq_set_affinity_locked()` calls `kref_get(&desc->affinity_notify->kref)` before it calls `schedule_work()`, and the callback, `irq_affinity_notify()`, ends with the matching `kref_put()` once it has run. What was missing was any synchronization between *that* lifecycle and the one `irq_set_affinity_notifier()` uses when a driver installs a replacement notifier. The replacement path dropped its own reference on the old notifier — potentially the reference that brought the count to zero and freed it — without first checking, or waiting for, whether the old notifier's work was still sitting in the workqueue. The fix's own commit message states the problem plainly: "nothing prevents the old notifier from remaining queued in the work list. If still queued, this creates a use-after-free... and potential work list corruption." A correctly-counted reference protects an object only for as long as something continues to hold it; it says nothing about *when* the last holder lets go relative to a still-outstanding use elsewhere, and closing that gap needed an explicit wait, not better counting.
 
 ## Resolution
 
-The fix is a single added line: before calling `kref_put()` on the old notifier, `irq_set_affinity_notifier()` now calls `cancel_work_sync(&old_notify->work)` first. `cancel_work_sync()` blocks until the work item is guaranteed to either have already run to completion or never run at all, which means by the time `kref_put()` executes, nothing can still be pending against the notifier being freed.
+The fix adds two lines: before calling `kref_put()` on the old notifier, `irq_set_affinity_notifier()` now calls `cancel_work_sync(&old_notify->work)` first. `cancel_work_sync()` blocks until the work item is guaranteed to either have already run to completion or never run at all, which means by the time `kref_put()` executes, nothing can still be pending against the notifier being freed.
+
+This wasn't quite the end of the story. A year later, commit [`df81dfcfd699`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=df81dfcfd6991d547653d46c051bac195cd182c1) (Edward Cree, landed in Linux 5.7) found that this fix had traded the use-after-free for a reference leak: if `cancel_work_sync()` actually canceled outstanding work, that work's own `kref_get()` was never matched by a `kref_put()`, because the callback that would have released it never got to run. Current mainline handles this by checking `cancel_work_sync()`'s return value and putting the extra reference only when it reports having canceled real pending work:
+```c
+if (old_notify) {
+        if (cancel_work_sync(&old_notify->work)) {
+                /* Pending work had a ref, put that one too */
+                kref_put(&old_notify->kref, old_notify->release);
+        }
+        kref_put(&old_notify->kref, old_notify->release);
+}
+```
 
 ## What it taught us
 
-**A reference count only protects an object from things that actually take a reference to it.** A deferred-execution mechanism like a queued work item can hold an implicit, unaccounted use of an object's memory without ever incrementing the same `kref` that governs when that memory gets freed — and no amount of correctly reading and writing the counter catches that kind of gap, because the gap is in what the counter was tracking in the first place.
+**Cancelling deferred work and releasing a reference are two separate operations, and getting the interaction right took two attempts.** The first fix correctly closed the use-after-free by cancelling the work before dropping the reference, but didn't account for the reference *that cancelled work itself was holding* — trading a crash for a slow leak.
 
-**"Cancel the pending work before releasing what it touches" is the general shape of the fix, and it generalizes far beyond this one notifier.** Any object that both participates in reference counting and can be the target of a still-queued deferred callback needs the cancel-then-release ordering, specifically because the two lifecycle mechanisms don't know about each other by default.
+**"Cancel the pending work before releasing what it touches" is the general shape of the fix, and it generalizes far beyond this one notifier — but only if the cancellation's own bookkeeping is accounted for too.** Any object that both participates in reference counting and can be the target of a still-queued deferred callback needs the cancel-then-release ordering, and needs to ask whether the callback itself held a reference that a successful cancellation now leaves stranded.
 
 !!! warning "Pattern to watch for"
-    Before freeing (or letting a `kref` free) any object that a work item, timer, or tasklet might still reference, ask whether that deferred mechanism was ever cancelled — and cancel it *synchronously*, not just requested-to-cancel, before the free happens. A reference count dropping to zero tells you what it was designed to track; it doesn't automatically account for every other way something in the kernel might still touch that memory.
+    Before freeing (or letting a `kref` free) any object that a work item, timer, or tasklet might still reference, ask whether that deferred mechanism was ever cancelled — and cancel it *synchronously*, not just requested-to-cancel, before the free happens. Then check the other direction too: if the deferred mechanism itself held a counted reference, a successful cancellation means that reference now needs to be released explicitly, since the callback that would have released it will never run.
 
 ## See also
 
-- [IRQ Affinity and CPU Isolation](../irq-affinity.md) — where `irq_set_affinity_notifier()` and the affinity-change notification path live
 - [Workqueues](../workqueues.md) — the deferred-execution mechanism the notifier's callback runs through
 
 ## External references
 
 - [git.kernel.org: 59c39840f5ab](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=59c39840f5ab) — "genirq: Prevent use-after-free and work list corruption," the fix commit
+- [git.kernel.org: df81dfcfd699](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=df81dfcfd6991d547653d46c051bac195cd182c1) — "genirq: fix reference leaks on irq affinity notifiers," Edward Cree's follow-up fix for the reference leak the first fix introduced

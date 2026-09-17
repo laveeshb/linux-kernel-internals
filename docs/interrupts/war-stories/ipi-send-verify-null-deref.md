@@ -11,7 +11,7 @@ Authors
 CVE
 :   CVE-2023-53332
 
-*Part of [War Stories: Interrupts and Async Processing](../war-stories.md).*
+*Part of [War Stories: Interrupt and IRQ-Affinity Bugs](../war-stories.md).*
 
 ## Before state
 
@@ -49,4 +49,4 @@ The fix reorders the function: it no longer calls `irq_data_get_affinity_mask()`
 ## External references
 
 - [git.kernel.org: feabecaff590](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=feabecaff5902f896531dde90646ca5dfa9d4f7d) — "genirq/ipi: Fix NULL pointer deref in irq_data_get_affinity_mask()," the upstream fix, authored by Sergey Shtylyov and carried into mainline by Thomas Gleixner
-- [NVD: CVE-2023-53332](https://nvd.nist.gov/vuln/detail/CVE-2023-53332) — the CVE record; note the "2023" numbering reflects when the CVE identifier was later assigned to this fix, not when the fix itself landed
+- [NVD: CVE-2023-53332](https://nvd.nist.gov/vuln/detail/CVE-2023-53332) — the CVE record; the "2023" in the identifier matches the year the fix actually landed (Linux 6.3, April 2023) — the identifier itself was formally reserved and published later, in September 2025, once the kernel's own CVE-assignment process got around to this fix
