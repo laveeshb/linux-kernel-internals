@@ -263,8 +263,11 @@ Privileged BPF requires:
 ```bash
 # Check kernel BPF settings
 sysctl kernel.unprivileged_bpf_disabled
-# 0 = allow unprivileged BPF, 1 = disable (requires CAP_BPF or CAP_SYS_ADMIN)
+# 0 = allow unprivileged BPF; 1 = disabled, irreversible; 2 = disabled, admin can re-enable
+# (writing this sysctl at all requires CAP_SYS_ADMIN, regardless of value)
 ```
+
+See [BPF Security Model](bpf-security-model.md) for the full three-state breakdown and the capability model behind it.
 
 ## Further reading
 

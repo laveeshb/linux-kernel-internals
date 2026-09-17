@@ -532,6 +532,7 @@ nav:
       - Architecture & Program Types: bpf/bpf-overview.md
       - BPF Maps: bpf/bpf-maps.md
       - BPF Verifier: bpf/bpf-verifier.md
+      - BPF Security Model: bpf/bpf-security-model.md
       - BTF and CO-RE: bpf/btf-core.md
       - libbpf and Skeletons: bpf/libbpf.md
       - BPF Ring Buffer: bpf/bpf-ringbuf.md
