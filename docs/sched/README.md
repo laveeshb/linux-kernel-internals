@@ -38,6 +38,9 @@ The Linux scheduler is responsible for deciding which task runs on each CPU at a
 - [Tracing the Scheduler](sched-tracing.md) — ftrace, perf sched, and scheduler events
 - [Tuning for Latency vs Throughput](sched-tuning.md) — sysctl knobs and their trade-offs
 
+### War Stories
+- [Scheduler War Stories](war-stories.md) — Real CVEs, performance regressions, and one unresolved heuristic tension
+
 ## Key source files
 
 | File | What it does |

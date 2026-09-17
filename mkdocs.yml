@@ -292,6 +292,13 @@ nav:
         - Scheduler Statistics: sched/schedstat.md
         - Scheduler Tracing: sched/sched-tracing.md
         - Scheduler Tuning: sched/sched-tuning.md
+      - War Stories:
+        - Scheduler War Stories: sched/war-stories.md
+        - The DEADLINE Lock Holder That Forgot to Inherit on the Way Down: sched/war-stories/deadline-pi-deboost.md
+        - 'The Cost of Asking "Is There Any Work For Me?" Too Often': sched/war-stories/newidle-balance-cost.md
+        - "PSI Polling: A Waitqueue That Outlived the cgroup That Owned It": sched/war-stories/psi-trigger-uaf.md
+        - "wake_wide(): A Heuristic That Helps One Workload by Hurting Another": sched/war-stories/wake-wide-heuristic.md
+        - The CFS Bandwidth Slice That Expired Before It Was Spent: sched/war-stories/cfs-bandwidth-throttling.md
     - Locking:
       - Getting Started: locking/README.md
       - Fundamentals:
