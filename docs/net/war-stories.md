@@ -11,8 +11,8 @@ Each incident below has its own page: root-cause analysis grounded in the actual
 Ordered reverse chronologically by disclosure date — newest first.
 
 ### [The net/sched act_api Filter-Delete Race](war-stories/act-api-uaf.md)
-**Fixed June 2026, public exploit write-up July 2026 · CVE-2026-53264 · CVSS 7.8 (NVD) / 7.0 (Red Hat)**
-A 2017 comment correctly reasoned that one reader path was RCU-safe and never checked whether a second one was — nine years later, a researcher's AI-assisted write-up turned the resulting use-after-free into a root exploit in about 5 seconds per attempt.
+**Fixed May 2026, disclosed June 2026, independent 0-day write-up July 2026 · CVE-2026-53264 · CVSS 7.8 (Linux kernel CNA) / 7.0 (Red Hat)**
+A 2017 comment correctly reasoned that one reader path was RCU-safe and never checked whether a second one was — nine years later, an OpenAI researcher reported it through normal channels two days before a STAR Labs researcher independently rediscovered it as a 0-day and built an AI-assisted local-root exploit chain around it.
 
 ### [Netfilter x_tables Heap Overflow](war-stories/netfilter-xtables.md)
 **Fixed April 2021, disclosed July 2021 · CVE-2021-22555 · CVSS 8.3 (Google) / 7.8 (NVD)**
