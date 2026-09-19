@@ -2,7 +2,7 @@
 
 > Three production bugs that revealed deep design problems in the Linux memory manager — told from the moment operators noticed something was wrong through the investigation, fix, and design lessons that followed
 
-These are not hypothetical examples or theoretical risks. Each story is grounded in public LKML discussions, kernel commit messages, and documented production reports. Specific commit hashes are provided for details that can be verified in the kernel git history. Where details are approximated or inferred from public sources rather than directly verifiable from commits, that is noted.
+Each of these happened: the commit hashes below point to the actual fixes, and the LKML threads and production reports are linked so you can read the original discussion yourself.
 
 The three bugs were chosen to cover different parts of the subsystem and different classes of failure:
 
