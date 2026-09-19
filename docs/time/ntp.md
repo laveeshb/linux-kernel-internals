@@ -16,7 +16,7 @@ The kernel supports two adjustment strategies:
 
 **Frequency-locked loop (FLL)** — Used when the offset is large or when the clock has not been synchronized for a long time. The kernel adjusts frequency more aggressively based on the rate at which the offset is changing rather than the offset itself. The kernel switches into FLL correction (`ntp_update_offset_fll()`) either because the daemon explicitly sets the `STA_FLL` status flag, or because too much time (`MAXSEC`) has passed since the last update for pure PLL correction to make sense.
 
-The daemon selects the mode by setting `STA_PLL` or `STA_FLL` (or both) in `timex.status` when calling `adjtimex()`.
+`STA_PLL` is what enables offset discipline at all — `ntp_update_offset()` returns immediately if it isn't set. `STA_FLL` doesn't work independently of it; set alongside `STA_PLL`, it biases the correction FLL's way when the update interval is long enough (see `ntp_update_offset_fll()`'s `MINSEC`/`MAXSEC` checks below). The daemon sets these bits in `timex.status` when calling `adjtimex()`.
 
 ## adjtimex()
 
@@ -26,7 +26,7 @@ The daemon selects the mode by setting `STA_PLL` or `STA_FLL` (or both) in `time
 int adjtimex(struct timex *txc);
 ```
 
-That's the glibc-facing prototype; the actual syscall (`SYSCALL_DEFINE1(adjtimex, struct __kernel_timex __user *, txc_p)`) takes `struct __kernel_timex`, a separate, architecture-independent layout `include/uapi/linux/timex.h` defines outside the `#ifndef __KERNEL__` block that hides `struct timex` from the kernel. It's not just a renamed copy: every field is a fixed `long long` (rather than the architecture-dependent `__kernel_long_t` glibc's `struct timex` uses) with explicit padding to keep them aligned the same way on 32- and 64-bit builds, and its embedded `struct __kernel_timex_timeval` uses a 64-bit, Y2038-safe `tv_sec`. glibc's wrapper translates its own `struct timex` into this shape before making the syscall.
+That's the glibc-facing prototype; the actual syscall (`SYSCALL_DEFINE1(adjtimex, struct __kernel_timex __user *, txc_p)`) takes `struct __kernel_timex`, a separate, architecture-independent layout `include/uapi/linux/timex.h` defines outside the `#ifndef __KERNEL__` block that hides `struct timex` from the kernel. It's not just a renamed copy: every field that was `__kernel_long_t` in glibc's `struct timex` (architecture-dependent width) becomes a fixed `long long` here, with explicit `int :32` padding added so the layout stays aligned the same way on 32- and 64-bit builds — `modes`, `status`, `shift`, and `tai` stay plain `int`, unchanged — and its embedded `struct __kernel_timex_timeval` uses a 64-bit, Y2038-safe `tv_sec`. glibc's wrapper translates its own `struct timex` into this shape before making the syscall.
 
 The `struct timex` (defined in `include/uapi/linux/timex.h`):
 
@@ -46,7 +46,7 @@ struct timex {
     __kernel_long_t constant;    /* PLL time constant (log2 of poll interval) */
     __kernel_long_t precision;   /* clock precision (us, read-only) */
     __kernel_long_t tolerance;   /* clock frequency tolerance (read-only) */
-    struct timeval time;         /* current time (read-only) */
+    struct timeval time;         /* current time (read-only, except for ADJ_SETOFFSET) */
     __kernel_long_t tick;        /* us between clock ticks */
     __kernel_long_t ppsfreq;     /* PPS frequency (read-only, scaled ppm) */
     __kernel_long_t jitter;      /* PPS jitter (read-only, ns or us) */
@@ -74,7 +74,7 @@ Important `modes` flags:
 | `ADJ_STATUS` | Update `status` flags (STA_PLL, STA_FLL, etc.) |
 | `ADJ_TIMECONST` | Set `constant` (PLL bandwidth, affects convergence speed) |
 | `ADJ_TAI` | Set the TAI − UTC offset |
-| `ADJ_SETOFFSET` | Step the clock by `offset` (used by chrony for large corrections) |
+| `ADJ_SETOFFSET` | Step the clock by adding `time` (not `offset`) to the current time (used by chrony for large corrections) |
 | `ADJ_NANO` | Interpret `offset` in nanoseconds (otherwise microseconds) |
 
 ### clock_adjtime()
@@ -113,7 +113,7 @@ On every tick, `timekeeping_adjust()` and `__timekeeping_advance()` (both in `ke
 u64 ntp_tick_length(unsigned int tkid);
 ```
 
-This function takes a timekeeper ID (`tkid`) and returns the tick length to add, incorporating the current PLL/FLL frequency correction — but not in plain nanoseconds: the value is scaled left by `NTP_SCALE_SHIFT` (32 bits), i.e. `ns << 32`, the same fixed-point representation `struct timekeeper`'s own internal accumulators use. The base value before scaling is `NSEC_PER_SEC / HZ`; the PLL/FLL correction (`ntp_update_frequency()`, `kernel/time/ntp.c`) shifts it slightly up or down each time the sysadmin or synchronization daemon adjusts frequency.
+This function takes a timekeeper ID (`tkid`) and returns the tick length to add, incorporating the current PLL/FLL frequency correction — but not in plain nanoseconds: the value is scaled left by `NTP_SCALE_SHIFT` (32 bits), i.e. `ns << 32`, the same fixed-point representation `struct timekeeper`'s own `ntp_tick`/`ntp_error` fields use (its `tkr_mono.xtime_nsec` accumulator uses a different, clocksource-specific `shift` instead). The base value before scaling is `NSEC_PER_SEC / HZ`; the PLL/FLL correction (`ntp_update_frequency()`, `kernel/time/ntp.c`) shifts it slightly up or down each time the sysadmin or synchronization daemon adjusts frequency.
 
 ## Leap seconds
 
@@ -161,7 +161,7 @@ adjtimex(&txc);
 
 When the clock is synchronized (`STA_UNSYNC` is clear), the kernel periodically writes the current time to the hardware RTC every 11 minutes. This is implemented in `sync_hw_clock()` (called from a work queue) and ensures that the RTC — which has no NTP correction — stays close to UTC across reboots. The function was renamed from `sync_cmos_clock()` to `sync_hw_clock()` to reflect that it supports modern RTC class devices as well as legacy CMOS/RTC hardware.
 
-The 11-minute interval is hardcoded (`SYNC_PERIOD_NS`, `kernel/time/ntp.c`) and not configurable. `sync_hw_clock()` has no VM-specific check — it simply tries `update_persistent_clock64()` (the legacy CMOS path) and then `update_rtc()` (the modern RTC-class path) in turn, and gives up permanently only once both return `-ENODEV`. In practice that's most often true on a VM with no RTC device exposed to the guest, but the logic itself is just "no RTC of either kind was found," not a virtualization check.
+The 11-minute interval is hardcoded (`SYNC_PERIOD_NS`, `kernel/time/ntp.c`) and not configurable. `sync_hw_clock()` has no VM-specific check — it simply tries `update_persistent_clock64()` (the legacy CMOS path) and then `update_rtc()` (the modern RTC-class path) in turn, and stops rearming its own timer once both return `-ENODEV`. That's not permanent: `ntp_notify_cmos_timer()` re-queues the sync work the next time `adjtimex()` reports the clock as synced, so a guest that later gets an RTC (or a later `adjtimex()` call) can trigger another attempt. In practice `-ENODEV` from both paths is most often seen on a VM with no RTC device exposed to the guest, but the logic itself is just "no RTC of either kind was found right now," not a virtualization check.
 
 ## ntpd / chrony workflow
 
@@ -220,7 +220,7 @@ The `STA_UNSYNC` bit being clear (zero) indicates the kernel considers the clock
 ### Man pages
 
 - [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — system call interface for reading and tuning kernel timekeeping parameters
-- [`clock_adjtime(2)`](https://man7.org/linux/man-pages/man2/clock_adjtime.2.html) — POSIX clock-specific adjustment syscall supporting `CLOCK_REALTIME` and `CLOCK_TAI`
+- [`clock_adjtime(2)`](https://man7.org/linux/man-pages/man2/clock_adjtime.2.html) — POSIX clock-specific adjustment syscall; only `CLOCK_REALTIME` has a `.clock_adj` handler in mainline (`kernel/time/posix-timers.c`), so `CLOCK_TAI` returns `-EOPNOTSUPP` as noted above
 - [`adjtime(3)`](https://man7.org/linux/man-pages/man3/adjtime.3.html) — legacy C library interface for gradual clock slewing
 - [`timedatectl(1)`](https://man7.org/linux/man-pages/man1/timedatectl.1.html) — systemd utility for querying NTP synchronization status and system clock settings
 
