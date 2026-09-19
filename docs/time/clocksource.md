@@ -247,8 +247,7 @@ cat /proc/timer_list | grep "Tick Device" | head -5
 ```c
 /* include/linux/timekeeper_internal.h */
 struct timekeeper {
-    struct tk_read_base     tkr_mono;   /* monotonic clock */
-    struct tk_read_base     tkr_raw;    /* raw hardware clock */
+    struct tk_read_base     tkr_mono;   /* monotonic clock (cacheline 0) */
 
     u64                     xtime_sec;  /* real wall-clock seconds */
     unsigned long           ktime_sec;  /* monotonic seconds */
@@ -256,6 +255,8 @@ struct timekeeper {
     ktime_t                 offs_real;  /* monotonic → realtime offset */
     ktime_t                 offs_boot;  /* boot time offset */
     ktime_t                 offs_tai;   /* TAI offset */
+
+    struct tk_read_base     tkr_raw;    /* raw hardware clock (cacheline 2, not adjacent to tkr_mono) */
 
     s32                     tai_offset; /* TAI - UTC in seconds */
     unsigned int            clock_was_set_seq;

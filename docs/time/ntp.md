@@ -20,7 +20,7 @@ The daemon selects the mode by setting `STA_PLL` or `STA_FLL` (or both) in `time
 
 ## adjtimex()
 
-`adjtimex()` is the kernel's time discipline interface, defined in `kernel/time/ntp.c`:
+`adjtimex()` is the kernel's time discipline interface. The syscall entry point (`SYSCALL_DEFINE1(adjtimex, ...)`) and its underlying `do_adjtimex()` live in `kernel/time/time.c` and `kernel/time/timekeeping.c` respectively; `kernel/time/ntp.c` holds the PLL/FLL math itself (`ntp_adjtimex()`, `ntp_update_frequency()`) that `do_adjtimex()` calls into:
 
 ```c
 int adjtimex(struct timex *txc);
@@ -30,32 +30,36 @@ The `struct timex` (defined in `include/uapi/linux/timex.h`):
 
 ```c
 struct timex {
-    unsigned int modes;     /* ADJ_OFFSET, ADJ_FREQUENCY, ADJ_MAXERROR,
-                               ADJ_ESTERROR, ADJ_STATUS, ADJ_TIMECONST,
-                               ADJ_TAI, ADJ_SETOFFSET, ADJ_NANO, ... */
-    long offset;            /* time offset (ns if STA_NANO set, else us) */
-    long freq;              /* frequency offset (scaled ppm: ppm * 2^16) */
-    long maxerror;          /* maximum error estimate (us) */
-    long esterror;          /* estimated error (us) */
-    int  status;            /* STA_PLL, STA_FLL, STA_NANO, STA_UNSYNC,
-                               STA_INS, STA_DEL, STA_PPSFREQ, STA_PPSTIME,
-                               STA_PPSJITTER, STA_PPSWANDER, STA_PPSERROR,
-                               STA_CLOCKERR, ... */
-    long constant;          /* PLL time constant (log2 of poll interval) */
-    long precision;         /* clock precision (us, read-only) */
-    long tolerance;         /* clock frequency tolerance (read-only) */
-    struct timeval time;    /* current time (read-only) */
-    long tick;              /* us between clock ticks */
-    long ppsfreq;           /* PPS frequency (read-only, scaled ppm) */
-    long jitter;            /* PPS jitter (read-only, ns or us) */
-    int  shift;             /* PPS interval duration (seconds, read-only) */
-    long stabil;            /* PPS stability (read-only, scaled ppm) */
-    long jitcnt;            /* PPS jitter exceeded limit count (read-only) */
-    long calcnt;            /* PPS calibration intervals (read-only) */
-    long errcnt;            /* PPS calibration errors (read-only) */
-    long stbcnt;            /* PPS stability exceeded limit count (read-only) */
-    int  tai;               /* TAI - UTC offset in seconds (read-only unless
-                               ADJ_TAI is set in modes) */
+    unsigned int modes;          /* ADJ_OFFSET, ADJ_FREQUENCY, ADJ_MAXERROR,
+                                    ADJ_ESTERROR, ADJ_STATUS, ADJ_TIMECONST,
+                                    ADJ_TAI, ADJ_SETOFFSET, ADJ_NANO, ... */
+    __kernel_long_t offset;      /* time offset (ns if STA_NANO set, else us) */
+    __kernel_long_t freq;        /* frequency offset (scaled ppm: ppm * 2^16) */
+    __kernel_long_t maxerror;    /* maximum error estimate (us) */
+    __kernel_long_t esterror;    /* estimated error (us) */
+    int  status;                 /* STA_PLL, STA_FLL, STA_NANO, STA_UNSYNC,
+                                    STA_INS, STA_DEL, STA_PPSFREQ, STA_PPSTIME,
+                                    STA_PPSJITTER, STA_PPSWANDER, STA_PPSERROR,
+                                    STA_CLOCKERR, ... */
+    __kernel_long_t constant;    /* PLL time constant (log2 of poll interval) */
+    __kernel_long_t precision;   /* clock precision (us, read-only) */
+    __kernel_long_t tolerance;   /* clock frequency tolerance (read-only) */
+    struct timeval time;         /* current time (read-only) */
+    __kernel_long_t tick;        /* us between clock ticks */
+    __kernel_long_t ppsfreq;     /* PPS frequency (read-only, scaled ppm) */
+    __kernel_long_t jitter;      /* PPS jitter (read-only, ns or us) */
+    int  shift;                  /* PPS interval duration (seconds, read-only) */
+    __kernel_long_t stabil;      /* PPS stability (read-only, scaled ppm) */
+    __kernel_long_t jitcnt;      /* PPS jitter exceeded limit count (read-only) */
+    __kernel_long_t calcnt;      /* PPS calibration intervals (read-only) */
+    __kernel_long_t errcnt;      /* PPS calibration errors (read-only) */
+    __kernel_long_t stbcnt;      /* PPS stability exceeded limit count (read-only) */
+    int  tai;                    /* TAI - UTC offset in seconds (read-only unless
+                                    ADJ_TAI is set in modes) */
+
+    int :32; int :32; int :32; int :32;  /* reserved padding, for future use */
+    int :32; int :32; int :32; int :32;
+    int :32; int :32; int :32;
 };
 ```
 
