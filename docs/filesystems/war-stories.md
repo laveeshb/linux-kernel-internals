@@ -1,6 +1,6 @@
 # Filesystem War Stories
 
-> Three incidents where a filesystem behaved *exactly as designed* and still lost data or handed out root — and what the kernel changed in response
+> Four incidents where a filesystem behaved *exactly as designed* and still lost data, handed out root, or corrupted itself while trying to fix corruption — and what the kernel changed in response
 
 Filesystems fail in instructive ways. The bugs below aren't sloppy code; each one is a design decision colliding with reality — an optimization that widened a crash window, a container feature that trusted the wrong metadata, a RAID layer with no atomicity for its own updates. They map directly onto the concepts in [crash consistency](crash-consistency.md), [overlayfs](overlayfs.md), and [btrfs](btrfs.md).
 
@@ -32,8 +32,18 @@ A RAID5 stripe is several data blocks plus one parity block computed across them
 
 **Lesson:** crash consistency is not a property of "the filesystem" as a whole — each subsystem needs its own atomicity story. btrfs solved it for the tree and for single-device writes, but the parity-RAID stripe update sits *outside* that mechanism, so all the CoW guarantees above it don't reach it.
 
+## 4. CVE-2025-68784: repairing a filesystem's own reallocating buffer out from under itself
+
+XFS's [online repair](xfs.md#online-repair-xfs-519) can salvage extended-attribute values from metadata it otherwise judges too damaged to trust — `xrep_xattr_salvage_remote_attr()` reads a remote (out-of-line) attribute value out of a corrupt leaf block and copies whatever's recoverable into a scratch buffer, `sc->buf`, so it can be reinserted once the attribute structure itself is rebuilt.
+
+The function builds a `struct xfs_da_args` — the argument struct XFS's attribute code passes around internally — as a single initializer, including `.value = ab->value` pointing at that scratch buffer. Only *after* constructing this struct does it call `xchk_setup_xattr_buf()` to make sure the buffer is large enough for the value it's about to salvage, growing it (via `krealloc()`-style reallocation) if the existing one is too small. If that reallocation moves the buffer, `ab->value` gets updated to point at the new memory — but `args.value`, captured at struct-initializer time, still points at the old, now-freed allocation. The subsequent call to `xfs_attr3_leaf_getvalue(leaf_bp, &args)` reads and writes through that stale pointer: a used-after-free in code whose entire job is repairing corruption, on a metadata path that only exists because [online repair](xfs.md#online-repair-xfs-519) added the ability to fix XFS attribute structures without unmounting.
+
+The fix ([`5990fd756943`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5990fd756943836978ad184aac980e2b36ab7e01) "xfs: fix a UAF problem in xattr repair", Darrick J. Wong) is a two-line reordering: drop `.value = ab->value` from the initializer, and assign `args.value = ab->value` explicitly right after `xchk_setup_xattr_buf()` returns successfully — guaranteeing `args.value` always reflects whatever `ab->value` currently is, reallocated or not. The bug had existed since Linux 6.10, when attribute repair itself was added.
+
+**Lesson:** a pointer captured into a struct literal at declaration time is a snapshot, not a live reference — if anything between that declaration and the struct's use can reallocate the thing it points at, the snapshot is stale the moment the reallocation happens. This is the same class of bug as capturing a `container_of()` result across a lock you drop and reacquire: correct at the instant it was taken, wrong by the time it's used.
+
 ## Further reading
 
 - [Crash Consistency and Recovery](crash-consistency.md) — journaling vs CoW, and why `fsync()` is the only durability contract
-- [overlayfs](overlayfs.md) · [btrfs](btrfs.md) · [FUSE](fuse.md) — the subsystems these incidents live in
+- [overlayfs](overlayfs.md) · [btrfs](btrfs.md) · [FUSE](fuse.md) · [XFS](xfs.md) — the subsystems these incidents live in
 - [Kernel docs: ext4 admin guide](https://docs.kernel.org/admin-guide/ext4.html) — `auto_da_alloc` and the other ext4 mount options
