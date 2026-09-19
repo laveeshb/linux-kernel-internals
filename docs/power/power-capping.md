@@ -240,7 +240,7 @@ perf stat -e cpu-cycles,ref-cycles -- sleep 1
 
 - [cpufreq and P-states](cpufreq.md) — frequency scaling; a separate control path from RAPL's own hardware throttling
 - [Thermal Management](thermal.md) — temperature-based throttling; complements RAPL's power-based limits
-- [Power Management War Stories](war-stories.md) — a RAPL DRAM-domain power-limit incident (composite of real failure patterns)
+- [Power Management War Stories](war-stories.md) — a RAPL DRAM-domain power-limit incident
 
 ### LWN articles
 
