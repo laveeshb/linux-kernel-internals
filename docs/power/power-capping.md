@@ -229,7 +229,7 @@ perf stat -e cpu-cycles,ref-cycles -- sleep 1
 - [drivers/powercap/intel_rapl_common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_common.c) — shared RAPL domain/constraint logic used by both interface drivers
 - [drivers/powercap/intel_rapl_msr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_msr.c) — MSR-based RAPL interface driver
 - [arch/x86/include/asm/msr-index.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/msr-index.h) — `MSR_RAPL_POWER_UNIT`, `MSR_PKG_ENERGY_STATUS`, and the other MSR offsets used on this page
-- [drivers/powercap/arm_scmi_powercap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/arm_scmi_powercap.c) — ARM SCMI powercap driver, registering SCMI power domains as powercap zones
+- [drivers/powercap/arm_scmi_powercap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/arm_scmi_powercap.c) — ARM SCMI powercap driver, registering SCMI power-capping domains as powercap zones
 - [arch/x86/events/rapl.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/events/rapl.c) — the `power` PMU backend that exposes RAPL counters to `perf stat -e power/energy-*/`
 
 ### Man pages

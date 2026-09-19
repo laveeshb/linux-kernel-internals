@@ -233,7 +233,7 @@ The global `pm_genpd_summary` file is synthesized by `summary_show()` in `driver
 
 Several production genpd backends illustrate the framework:
 
-**Qualcomm GDSC (Globally Distributed Switch Controller)** — confirmed by the struct comment in `drivers/clk/qcom/gdsc.h` — `drivers/clk/qcom/gdsc.c`. Each GDSC controls one power domain. The `gdsc_enable()` / `gdsc_disable()` functions register directly as a `generic_pm_domain`'s `power_on`/`power_off` callbacks; they toggle the GDSC's collapse bit (via `gdsc_toggle_logic()`) and poll the hardware for the domain to settle before returning.
+**Qualcomm GDSC (Globally Distributed Switch Controller, per the struct comment in `drivers/clk/qcom/gdsc.h`)** — `drivers/clk/qcom/gdsc.c`. Each GDSC controls one power domain. The `gdsc_enable()` / `gdsc_disable()` functions register directly as a `generic_pm_domain`'s `power_on`/`power_off` callbacks; they toggle the GDSC's collapse bit (via `gdsc_toggle_logic()`) and poll the hardware for the domain to settle before returning.
 
 **Samsung Exynos power domains** — `drivers/pmdomain/samsung/exynos-pm-domains.c`. Gates power by writing to a `LOCAL_PWR_CFG` register and polling a status register at offset `+0x4` for the PMU's acknowledgement.
 
