@@ -28,7 +28,7 @@ Boot failures                   early_printk, earlyprintk=ttyS0
 | [syzkaller](syzkaller.md) | Automated syscall fuzzing, syzbot, and reproducer workflow |
 | [KASAN and KFENCE](kasan-kfence.md) | Memory error detection: out-of-bounds, use-after-free, shadow memory |
 | [lockdep in Practice](dynamic-debug-lockdep.md) | Reading splats, annotating false positives, contention stats |
-| [War Stories](war-stories.md) | Real bugs caught by KASAN, lockdep, syzkaller, kdump, and KFENCE |
+| [War Stories](war-stories.md) | Bugs caught by KASAN, lockdep, syzkaller, kdump, and KFENCE |
 
 ## Quick reference
 

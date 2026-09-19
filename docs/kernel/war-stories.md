@@ -1,13 +1,13 @@
 # Kernel Core War Stories
 
-> Composite scenarios: init ordering, boot parameter bugs, panic loops, and more
+> Init ordering, boot parameter bugs, panic loops, and more
 
 The kernel core infrastructure — initcalls, boot parameters, `__init` sections, panic/kdump, module loading — is mature and well-tested. But the interaction between these mechanisms and real-world drivers, configurations, and deployment assumptions produces bugs that are genuinely hard to diagnose. The failures tend to be silent, delayed, or self-concealing.
 
-!!! note "Composite incidents"
-    The five cases below are composite scenarios illustrating real, recurring bug patterns — not write-ups of a single named, datable incident with a specific commit hash. The bug patterns themselves are real and appear repeatedly across different drivers and distributions over time; the references at the end of the page verify the underlying kernel mechanisms against current source and documentation. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's single-named-incident format, each tied to a specific commit or CVE.
+!!! note "How these are written"
+    These aren't write-ups of a single named incident tied to one commit or CVE — they illustrate real, recurring bug patterns that appear repeatedly across different drivers and distributions over time. The references at the end of the page verify the underlying kernel mechanisms against current source and documentation. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's usual format: specific, datable incidents, most (though not all — see [wake_wide()](../sched/war-stories/wake-wide-heuristic.md)) tied to a commit hash or CVE.
 
-This page presents five incidents drawn from real patterns in kernel development history. Each illustrates a fundamental property of how the kernel core works — and what happens when code makes the wrong assumption about it.
+Each of the five illustrates a fundamental property of how the kernel core works — and what happens when code makes the wrong assumption about it.
 
 ---
 

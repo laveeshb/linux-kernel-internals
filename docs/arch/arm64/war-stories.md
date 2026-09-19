@@ -4,8 +4,8 @@
 
 Each story follows a real bug class rooted in ARM64 architecture specifics — weak memory ordering, hardware coherency requirements, CPU feature enforcement, and errata handling.
 
-!!! note "Composite incidents"
-    These are realistic composites of failure patterns that actually occur on ARM64 systems, not write-ups of a single named, datable incident with a specific commit hash. Names and products are illustrative; the failure modes are real. See the [BPF](../../bpf/war-stories.md), [scheduler](../../sched/war-stories.md), or [interrupts](../../interrupts/war-stories.md) war-stories pages for the site's single-named-incident format, each tied to a specific commit or CVE.
+!!! note "How these are written"
+    These aren't write-ups of a single named incident tied to one commit or CVE — they're realistic scenarios built from failure patterns that actually occur on ARM64 systems. Names and products are illustrative; the failure modes are real. See the [BPF](../../bpf/war-stories.md), [scheduler](../../sched/war-stories.md), or [interrupts](../../interrupts/war-stories.md) war-stories pages for the site's usual format: specific, datable incidents, most (though not all — see [wake_wide()](../../sched/war-stories/wake-wide-heuristic.md)) tied to a commit hash or CVE.
 
 ---
 
@@ -378,7 +378,7 @@ static const struct midr_range affected_range[] = {
 At boot, the kernel iterates `arm64_errata[]` and calls the `matches` function for each entry. If the current CPU's MIDR falls within the declared range, the erratum is applied and a boot message is printed:
 
 ```
-[    0.000000] CPU features: detected: Workaround for Cortex-A55 erratum 1530923
+[    0.000000] CPU features: detected: Workaround for Cortex-A55 erratum NNNNNN
 ```
 
 On the affected r0p2 devices, no such message appeared — a clear sign the workaround was not active.

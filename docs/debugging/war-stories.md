@@ -1,11 +1,11 @@
 # Debugging War Stories
 
-> Composite scenarios: bugs caught by KASAN, lockdep, syzkaller, and other tools
+> Bugs caught by KASAN, lockdep, syzkaller, and other tools
 
 These are technically grounded accounts of the kinds of bugs that kernel debugging tools catch in real life. Each story illustrates a class of bug, the tool that surfaced it, how to read the output, and the fix.
 
-!!! note "Composite incidents"
-    The five cases below are composite scenarios illustrating real, recurring bug-and-tool patterns — not write-ups of a single named, datable incident with a specific commit hash (following the same approach as [Kernel Core War Stories](../kernel/war-stories.md)). The references at the end of the page verify the underlying kernel mechanisms — KASAN/KFENCE, lockdep, kdump/crash capture, SLUB debug metadata, io_uring fixed-file resolution — against current mainline source and documentation. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's single-named-incident format, each tied to a specific commit or CVE.
+!!! note "How these are written"
+    These aren't write-ups of a single named incident tied to one commit or CVE — they illustrate real, recurring bug-and-tool patterns instead (following the same approach as [Kernel Core War Stories](../kernel/war-stories.md)). The references at the end of the page verify the underlying kernel mechanisms against current mainline source and documentation. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's usual format: specific, datable incidents, most (though not all — see [wake_wide()](../sched/war-stories/wake-wide-heuristic.md)) tied to a commit hash or CVE.
 
 ---
 

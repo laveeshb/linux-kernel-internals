@@ -4,8 +4,8 @@
 
 Power management is among the most regression-prone areas of the kernel. The state machines are complex, the hardware is diverse, and bugs are often timing- or platform-dependent.
 
-!!! note "Composite incidents"
-    These incidents are composites of real failure patterns, not write-ups of a single named, datable incident with a specific commit hash. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's single-named-incident format, each tied to a specific commit or CVE.
+!!! note "How these are written"
+    These aren't write-ups of a single named incident tied to one commit or CVE — they illustrate real, recurring failure patterns instead. The dated LWN citations in Further Reading verify the underlying mechanisms each incident relies on (the `dev_pm_ops` runtime callbacks, the thermal governor, the RAPL powercap interface) — they aren't citations for the incidents themselves. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's usual format: specific, datable incidents, most (though not all — see [wake_wide()](../sched/war-stories/wake-wide-heuristic.md)) tied to a commit hash or CVE.
 
 ---
 
