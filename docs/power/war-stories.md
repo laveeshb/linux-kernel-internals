@@ -28,9 +28,9 @@ On a laptop running the driver:
 2. PM core calls `dpm_suspend()`, which walks the device list. For each device, `device_suspend()` (`drivers/base/power/main.c`) picks the *first* non-NULL `dev_pm_ops` it finds, checking `pm_domain`, `type`, `class`, then `bus`, and only falling back to the driver's own `dev_pm_ops` if none of those provide a callback. For a PCI device, `dev->bus->pm` is `pci_bus_pm_ops` — always non-NULL — so this device's suspend goes through `pci_pm_suspend()` regardless of what `mynic_pm_ops` contains.
 3. Inside `pci_pm_suspend()`, the bus-level code checks the *driver's* callback itself: `if (pm->suspend) { pm->suspend(dev); ... }`. Since `mynic_pm_ops.suspend` is NULL, that block is simply skipped — no driver code runs — but `pci_pm_suspend()` still returns 0 and the generic PCI suspend machinery proceeds.
 4. `pci_pm_suspend_noirq()` still runs unconditionally later in the same suspend sequence: it calls `pci_save_state()` and puts the device into D3, exactly as it would for a driver with a real `suspend` callback. That call saves the *generic PCI config-space* state (BARs, command register, MSI/MSI-X config) — it has no idea about the NIC's private hardware state, because saving that is the driver's job, and the driver's callback never ran. The PCIe host controller is properly suspended and powers down the bus.
-5. On resume, the host controller resets the PCIe bus (standard PCIe hot-reset behavior on resume).
-6. Generic PCI config space is restored by the bus-level resume path, but the NIC's firmware and internal registers are in reset state, and the driver has not been told — it holds stale DMA ring pointers and register shadows from before suspend.
-7. The driver accesses a DMA ring head pointer register. The hardware returns `0xFFFFFFFF` (PCIe reads to unpowered device). The driver interprets this as a fatal hardware error and calls `BUG()`.
+5. On resume, coming back from D3cold implies a PCIe **Conventional Reset** (PCIe spec §5.8 — not the same thing as a software-triggered "hot reset"/secondary-bus-reset, but the device sees the same effect: it comes back in its power-on reset state).
+6. Generic PCI *config space* (the standard PCI header — BARs, command register, MSI/MSI-X config) is restored by the bus-level resume path. That only proves the device answers config-space accesses; it says nothing about the NIC's own private, driver-owned MMIO registers behind those BARs, which came out of the Conventional Reset in their power-on-default state. The driver was never told to re-initialize them, so it still holds stale DMA ring pointers and register shadows from before suspend.
+7. The driver accesses a DMA ring head pointer register — a private MMIO register, not part of config space. Reading it too soon, before the device has finished coming out of reset (or if it's genuinely still without power), returns `0xFFFFFFFF`, the classic symptom of a PCIe read that couldn't reach a live target. The driver interprets this as a fatal hardware error and calls `BUG()`.
 
 ### Diagnosis
 
@@ -113,7 +113,7 @@ With `CONFIG_DEBUG_ATOMIC_SLEEP` enabled, `might_sleep()` caught it immediately:
 
 ```
 BUG: sleeping function called from invalid context at kernel/locking/mutex.c:580
-in_atomic(): 1, irqs_disabled(): 0, non-block: 0, pid: 88, name: irq/86-mytouch
+in_atomic(): 1, irqs_disabled(): 0, non_block: 0, pid: 88, name: irq/86-mytouch
 ...
 Call Trace:
   __might_sleep
@@ -300,7 +300,7 @@ echo 50000000 > /sys/class/powercap/intel-rapl:0:1/constraint_0_power_limit_uw
 
 After raising the DRAM limit to 50 W — above the workload's ~45 W demand — memory bandwidth throttling disappeared and throughput returned to baseline, still well within the 150 W package budget because the CPU cores were only at 35% load.
 
-**Lesson**: RAPL domain limits are set and enforced independently of one another. Before setting power caps, enumerate all domains with `for zone in /sys/class/powercap/intel-rapl*/; do cat $zone/name $zone/constraint_0_power_limit_uw; done` and understand which domain is the actual bottleneck. Monitor `energy_uj` on all domains during workload characterization.
+**Lesson**: RAPL domain limits are set and enforced independently of one another. Before setting power caps, enumerate all domains with `for zone in /sys/class/powercap/intel-rapl:*/; do cat $zone/name $zone/constraint_0_power_limit_uw; done` and understand which domain is the actual bottleneck (note the colon in the glob — `intel-rapl*` without it would also match the `intel-rapl` control-type directory itself, not just its zones). Monitor `energy_uj` on all domains during workload characterization.
 
 ---
 

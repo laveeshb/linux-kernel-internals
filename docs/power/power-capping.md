@@ -178,14 +178,14 @@ The perf backend is in `arch/x86/events/rapl.c` and registers a PMU named `power
 
 ## ARM equivalent: SCMI power capping
 
-On ARM platforms, SCMI (System Control and Management Interface) provides a comparable capability via the platform firmware. The driver `drivers/powercap/arm_scmi_powercap.c` registers zones from the dedicated SCMI **Powercap** protocol (`SCMI_PROTOCOL_POWERCAP`, protocol ID `0x18`) as powercap zones, so the same `/sys/class/powercap/` interface works on ARM servers (e.g., Ampere Altra). This is a distinct SCMI protocol from **Power domain management** (`SCMI_PROTOCOL_POWER`, protocol ID `0x11`), which is what backs Linux's generic power-domain (genpd) framework, not powercap.
+On ARM platforms, SCMI (System Control and Management Interface) provides a comparable capability via the platform firmware. The driver `drivers/powercap/arm_scmi_powercap.c` registers zones from the dedicated SCMI **Powercap** protocol (`SCMI_PROTOCOL_POWERCAP`, protocol ID `0x18`) as powercap zones, so the same `/sys/class/powercap/` interface works on any ARM platform whose firmware implements it. This is a distinct SCMI protocol from **Power domain management** (`SCMI_PROTOCOL_POWER`, protocol ID `0x11`), which is what backs Linux's generic power-domain (genpd) framework, not powercap. Each zone's name comes straight from the SCMI power-capping domain descriptor the firmware reports (`spz->info->name` in the driver) — it's platform-defined, not a fixed kernel string.
 
 ```bash
-# On an ARM server with SCMI powercap
+# On an ARM platform with SCMI powercap support
 ls /sys/class/powercap/
 # arm-scmi  arm-scmi:0  ...
 cat /sys/class/powercap/arm-scmi:0/name
-# "package_0"
+# whatever name the platform firmware assigned this domain
 ```
 
 The SCMI protocol (defined in Arm DEN0056) runs over shared memory or mailbox between Linux and the SCP (System Control Processor). SCMI message type `POWERCAP_CAP_GET` / `POWERCAP_CAP_SET` map directly to the powercap zone ops.

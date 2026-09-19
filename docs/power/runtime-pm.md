@@ -322,7 +322,9 @@ static int mydriver_probe(struct platform_device *pdev)
     /* missing: pm_runtime_enable(&pdev->dev) */
     return 0;
 }
-/* pm_runtime_get_sync will always return -EACCES when runtime PM disabled */
+/* pm_runtime_get_sync returns -EACCES when runtime PM is disabled here -
+ * except if the device is already RPM_ACTIVE (rpm_resume() then reports
+ * success, retval 1) or the call passes RPM_TRANSPARENT */
 ```
 
 ### Not balancing get/put
