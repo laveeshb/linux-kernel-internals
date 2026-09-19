@@ -222,6 +222,7 @@ struct tick_device {
     enum tick_device_mode      mode;  /* TICKDEV_MODE_PERIODIC or ONESHOT */
 };
 
+/* kernel/time/tick-common.c (declared extern in tick-internal.h) */
 DEFINE_PER_CPU(struct tick_device, tick_cpu_device);
 ```
 
@@ -258,10 +259,10 @@ struct timekeeper {
 
     struct tk_read_base     tkr_raw;    /* raw hardware clock (cacheline 2, not adjacent to tkr_mono) */
 
-    s32                     tai_offset; /* TAI - UTC in seconds */
     unsigned int            clock_was_set_seq;
     u8                      cs_was_changed_seq;
     ktime_t                 next_leap_ktime;
+    s32                     tai_offset; /* TAI - UTC in seconds; last field in the real struct */
 };
 
 /* Reading current time (seqcount protects against concurrent updates): */
