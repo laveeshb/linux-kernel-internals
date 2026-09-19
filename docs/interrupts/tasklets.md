@@ -101,13 +101,23 @@ After CPU 0 finishes: sees SCHED bit, runs tasklet again
 
 This is the key advantage over raw softirqs, where the same handler can run on multiple CPUs simultaneously.
 
-## Tasklets are deprecated for new code
+## The deprecation nobody planned to start, then couldn't finish
 
-Since Linux 5.14 (2021), tasklets are explicitly deprecated for new code [(LWN)](https://lwn.net/Articles/830964/). The reasons:
+Tasklets have existed since the 2.3 development series, essentially unchanged in shape while every other deferred-work mechanism around them evolved. The deprecation comment now sitting in `include/linux/interrupt.h` — *"This API is deprecated. Please consider using threaded IRQs instead"* — first appeared for Linux 5.9 (2020), and it started as a side effect of a patch nobody expected to be controversial.
+
+In 2019, Kees Cook (with Romain Perier) posted a security-motivated patch set on the kernel-hardening mailing list to modernize the tasklet callback signature: the legacy API passes an `unsigned long data` to the callback, which the callback then casts back to whatever type it actually needs — no `container_of()`, no type checking, and, since `.func` and `.data` sit next to each other in `tasklet_struct`, a buffer overflow that reaches one can often overwrite the other, hijacking both the function pointer and its argument in one write. The fix — `DECLARE_TASKLET()`/`tasklet_setup()` passing the `tasklet_struct *` itself, the `from_tasklet()` pattern shown above — merged cleanly.
+
+The discussion it provoked did not stay narrow. Peter Zijlstra used the thread to push for removing tasklets outright: *"I would _MUCH_ rather see tasklets go the way of the dodo [...] Can't we stage an extinction event here instead?"* Thomas Gleixner "grudgingly" acked the API-modernization patches while agreeing with the sentiment: *"I'd rather see tasklets vanish from the planet completely, but that's going to be a daring feat."* ([LWN](https://lwn.net/Articles/830964/)) Sebastian Andrzej Siewior suggested threaded IRQs as the direct replacement — tasklets and threaded handlers both run outside process context by default, so the substitution is often mechanical — while Dmitry Torokhov suggested immediately-expiring timers for other cases.
+
+It's been a "daring feat" indeed. The same discussion surfaced two examples of why: the AMD `ccp` crypto driver combines tasklets with DMA-engine completion callbacks in ways that don't map cleanly onto a single replacement, and the Intel `i915` GPU driver used tasklets to schedule GPU command submission on a fast path where thread-wakeup latency mattered. Removal has proceeded driver by driver and subsystem by subsystem since — Takashi Iwai reported the sound subsystem's conversion ready around the same time — rather than in one sweep, and the deprecation comment is still the only thing marking tasklets as a dead end: as of current mainline, the API still exists, still has real users, and the `tasklet_struct` shown above is unchanged.
+
+This isn't even the argument's first outing. LWN covered essentially the same removal proposal in 2007, when the case for it was interrupt latency (tasklets run in softirq context and can starve even the highest-priority task) and the case against it was performance for drivers needing a fast reaction — the same tension visible above, before threaded IRQs existed as an answer to it. What's different this time is that the alternative mechanisms (workqueues, threaded IRQs) now actually exist and are mature, which is why the 2019–2020 round produced an accepted deprecation notice where the 2007 round produced nothing.
+
+**Practical reasons the deprecation stuck even without a removal date:**
 
 - Softirq context means no sleeping, limited functionality
 - Serialization is too coarse for modern hardware
-- Workqueues provide similar functionality with more flexibility
+- Workqueues and threaded IRQs provide the same properties with fewer sharp edges
 
 New drivers should use `workqueue` (or `threaded IRQ`) instead of tasklets.
 

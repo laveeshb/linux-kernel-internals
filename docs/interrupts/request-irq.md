@@ -25,6 +25,12 @@ int devm_request_irq(struct device *dev, unsigned int irq,
                      const char *name, void *dev_id);
 ```
 
+## Why this API has barely changed while everything under it has
+
+`request_irq()`'s shape has been almost untouched since the early 2.6 series, even as the hardware it sits on top of went through IOAPIC, MSI, MSI-X, per-CPU vectors, and (on other architectures) entirely different controller families like ARM's GIC. That stability isn't an accident or a case of the API being frozen in amber — it's the direct payoff of the `irq_desc`/flow-handler/`irq_chip` separation covered on the [Interrupt Handling Overview](interrupts.md#the-irq_desc-lookup) page: because a driver's handler only ever talks to a Linux IRQ number, and everything controller-specific lives behind `irq_chip` ops the driver never touches, an entirely new interrupt controller can be plugged into the kernel without any existing driver's `request_irq()` call needing to change.
+
+The one real change to the handler signature itself is `irq_handler_t`'s third argument. Through Linux 2.6.18, a handler was `irqreturn_t (*)(int, void *, struct pt_regs *)` — the raw register state at the moment of interrupt was passed to every handler, "just in case." David Howells's [*"IRQ: Maintain regs pointer globally rather than passing to IRQ handlers"*](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7d12e780e003f93433d49ce78cfedf4b4c52adc5) (October 2006) dropped that argument for 2.6.19 (confirmed via tag-diff: present at v2.6.18, gone at v2.6.19), leaving today's `irqreturn_t (*)(int, void *)`. Almost nothing actually used `regs` (the few legitimate consumers — profiling, `/proc/interrupts`-style accounting — could get at the current register state through `get_irq_regs()` instead), and passing a live pointer into every handler was a standing invitation to misuse it for something other than its original diagnostic purpose. Removing an argument nobody needed, once there was an equally capable alternative for the handful of callers who did, is the kind of API cleanup that's much easier to justify than to reverse — which is presumably why, two decades on, it's still the only breaking change this signature has ever had.
+
 ## Handler return values
 
 ```c

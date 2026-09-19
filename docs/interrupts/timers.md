@@ -77,22 +77,32 @@ jiffies + usecs_to_jiffies(500)  /* 500µs */
 long remaining = timer->expires - jiffies;
 ```
 
-### The timer wheel
+### The timer wheel, and why it was rebuilt in 2016
 
-Timers are stored in a hierarchical hash table called the **timer wheel**. The wheel has multiple levels of 64 slots each, covering different time ranges:
+Timers are stored in a hierarchical array structure called the **timer wheel** — but the wheel in current kernels is not the one that shipped for most of Linux's history, and the difference is itself a "why" story worth knowing.
+
+The original wheel, described on LWN as far back as 2005, indexed timers by the low 8 bits of `jiffies` (256 slots) at the finest level, with coarser levels above it. Every 256 jiffies, the kernel had to "cascade" a whole batch of timers down from the level above into individual finer-grained slots — an operation whose cost was, in Jonathan Corbet's words, "to a first approximation, unpredictable," it wasn't cache-friendly, and the design gave no cheap way to answer "when's the next thing that has to fire" without walking multiple levels ([LWN: Reinventing the timer wheel](https://lwn.net/Articles/646950/), June 2015). None of this mattered much when timers mostly just fired on schedule. It mattered a great deal once `NO_HZ` (tickless idle) made "how long can this CPU safely sleep" a question the scheduler needed answered cheaply and often.
+
+Thomas Gleixner's rewrite, merged for **Linux 4.8** (2016) — confirmed absent in `kernel/time/timer.c` at v4.7, present at v4.8 — kept the same hierarchical shape but changed the ratio between levels from 256:1 to 8:1, and made every level the same size (`LVL_SIZE` = 64 slots), trading some timekeeping precision at the higher levels for cascade operations that are now rare rather than routine. At `HZ=1000`, the real current layout (`kernel/time/timer.c`) is:
 
 ```
-Level 0: 64 slots × 1 jiffie   = 64 jiffies (~64ms at HZ=1000)
-Level 1: 64 slots × 64 jiffies = ~4 seconds
-Level 2: 64 slots × 4096 jiffies = ~4.5 minutes
-Level 3: 64 slots × 262144 jiffies = ~4.8 hours
+Level 0:  64 slots × 1 ms granularity   → covers    0 ms –     63 ms
+Level 1:  64 slots × 8 ms granularity   → covers   64 ms –    511 ms
+Level 2:  64 slots × 64 ms granularity  → covers  512 ms –   4095 ms  (~4s)
+Level 3:  64 slots × 512 ms granularity → covers 4096 ms –  32767 ms (~32s)
+...continuing through Level 8 (HZ > 100 builds add a 9th level),
+each level 8× coarser than the one below, up to roughly 12 days.
 ```
 
-On each timer tick, the wheel advances. Timers in the current slot are fired. Timers at higher levels are "cascaded" down as needed.
+On each tick, the wheel advances; timers in the current finest-grained slot fire, and only occasionally — far less often than the old design's every-256-ticks cascade — does a batch need to move down a level. `timer_list` remains the mechanism for **timeouts**: things the kernel expects to cancel before they fire (a missing I/O completion, a missing network ACK), where being a few milliseconds late doesn't matter and where cheap insertion/removal matters more than precision. That's a different job from hrtimer's, below — hrtimer is for things that are expected to actually run, on time.
 
 ## hrtimer: high-resolution timers
 
 hrtimers were introduced in Linux 2.6.16 by Thomas Gleixner [(LWN)](https://lwn.net/Articles/167897/). They use `ktime_t` (nanosecond resolution) and a red-black tree ordered by expiry time. The closest expiry sets the hardware timer interrupt.
+
+Before hrtimer existed as a unified subsystem, high-precision timing on Linux was a patchwork. Gleixner and Ingo Molnar's original design announcement — posted to LKML in September 2005 under the name "ktimers," before the "hrtimer" rename — opens by cataloguing what had accumulated instead of a single answer: UTIME (microsecond timers dating back to Linux 2.0, maintained separately by a Kansas University realtime research project, restricted to a handful of architectures), plus HRT, VST, DTCK, and NEWTOD — each solving one narrow piece (nanosleep here, POSIX interval timers there) for one or two architectures, none of them general. The announcement's own framing: *"All of those patches have one thing in common. They are restricted to a few architectures and address only single problems."* ([lore.kernel.org, mirrored on LWN](https://lwn.net/Articles/152363/))
+
+The proposal also names where the pressure to unify actually came from: *"The efforts to integrate the High Resolution Timer patches into the -rt tree gave a deep insight into the big picture and initiated the ktimers implementation."* Precise timing is a harder requirement for [PREEMPT_RT](../locking/preempt-rt.md) than for a general-purpose kernel — a realtime system that can only promise "sometime in the next 10ms" isn't realtime — so, as with threaded IRQs, the RT tree's needs forced the underlying question ("how does Linux represent a point in time precisely, uniformly, across architectures?") to actually get answered, rather than patched around one more time. `ktime_t` and the API shown below are that answer, merged into mainline as hrtimer for 2.6.16 after roughly six months of the design being reworked in public.
 
 ```c
 /* include/linux/hrtimer.h */
