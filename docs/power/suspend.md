@@ -244,8 +244,9 @@ cat /sys/kernel/debug/wakeup_sources
 # Which IRQs can wake the system?
 cat /proc/interrupts | grep -i wake
 
-# Last wakeup reason (after resume): the IRQ number that woke the system,
-# 0 if none is recorded
+# Last wakeup reason (after resume): the IRQ number that woke the system.
+# Reads "No data available" (-ENODATA) if none is recorded, not 0 -
+# pm_wakeup_irq_show() (kernel/power/main.c) treats a zero IRQ as "none".
 cat /sys/power/pm_wakeup_irq
 ```
 
