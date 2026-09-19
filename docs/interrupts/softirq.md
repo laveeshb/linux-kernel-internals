@@ -32,7 +32,7 @@ Thomas Gleixner introduced threaded IRQ handlers as a better model for most driv
 - It has a **schedulable priority** — RT systems can give it the right priority
 - On `CONFIG_PREEMPT_RT`, all softirq processing (including timers) runs in threads, making the system fully preemptible
 
-Tasklets were explicitly deprecated for new use in Linux 5.14 (2021) [(LWN)](https://lwn.net/Articles/830964/). The recommendation for new driver code is: use threaded IRQs if the handler needs to sleep, or workqueues if it needs to run in process context. Tasklets remain for existing drivers but should not appear in new code.
+Tasklets were explicitly deprecated for new use in Linux 5.9 (2020) [(LWN)](https://lwn.net/Articles/830964/) — see [Tasklets](tasklets.md#the-deprecation-nobody-planned-to-start-then-couldnt-finish) for the deprecation debate itself. The recommendation for new driver code is: use threaded IRQs if the handler needs to sleep, workqueues (including the newer `WQ_BH` kind) if it needs to run in process context, or BH workqueues as the more direct mechanical replacement. Tasklets remain for existing drivers but should not appear in new code.
 
 ## What are softirqs?
 
