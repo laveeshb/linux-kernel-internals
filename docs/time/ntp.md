@@ -12,50 +12,56 @@ The Linux kernel implements this through a control loop in `kernel/time/ntp.c`, 
 
 The kernel supports two adjustment strategies:
 
-**Phase-locked loop (PLL)** — The daemon measures the offset between local time and the reference, then asks the kernel to make small, continuous frequency adjustments to steer the clock toward zero offset. The correction is proportional to the measured offset. PLL is used when the offset is bounded by the `MAXPHASE` phase clamp of 500 ms. This is the steady-state mode for a well-synchronized clock.
+**Phase-locked loop (PLL)** — The daemon measures the offset between local time and the reference, then asks the kernel to make small, continuous frequency adjustments to steer the clock toward zero offset. The correction is proportional to the measured offset, clamped to `±MAXPHASE` (500 ms) before it's applied (`ntp_update_offset()`, `kernel/time/ntp.c`) regardless of which mode is active — that clamp isn't what selects PLL over FLL. This is the steady-state mode for a well-synchronized clock, used whenever updates arrive frequently enough (within `MAXSEC` of each other) and `STA_FLL` isn't set.
 
-**Frequency-locked loop (FLL)** — Used when the offset is large or when the clock has not been synchronized for a long time. The kernel adjusts frequency more aggressively based on the rate at which the offset is changing rather than the offset itself. FLL mode is signaled by the `STA_FLL` status flag.
+**Frequency-locked loop (FLL)** — Used when the offset is large or when the clock has not been synchronized for a long time. The kernel adjusts frequency more aggressively based on the rate at which the offset is changing rather than the offset itself. The kernel switches into FLL correction (`ntp_update_offset_fll()`) either because the daemon explicitly sets the `STA_FLL` status flag, or because too much time (`MAXSEC`) has passed since the last update for pure PLL correction to make sense.
 
-The daemon selects the mode by setting `STA_PLL` or `STA_FLL` (or both) in `timex.status` when calling `adjtimex()`.
+`STA_PLL` is what enables offset discipline at all — `ntp_update_offset()` returns immediately if it isn't set. `STA_FLL` doesn't work independently of it; set alongside `STA_PLL`, it biases the correction FLL's way when the update interval is long enough (see `ntp_update_offset_fll()`'s `MINSEC`/`MAXSEC` checks below). The daemon sets these bits in `timex.status` when calling `adjtimex()`.
 
 ## adjtimex()
 
-`adjtimex()` is the kernel's time discipline interface, defined in `kernel/time/ntp.c`:
+`adjtimex()` is the kernel's time discipline interface. The syscall entry point (`SYSCALL_DEFINE1(adjtimex, ...)`) and its underlying `do_adjtimex()` live in `kernel/time/time.c` and `kernel/time/timekeeping.c` respectively; `kernel/time/ntp.c` holds the PLL/FLL math itself (`ntp_adjtimex()`, `ntp_update_frequency()`) that `do_adjtimex()` calls into:
 
 ```c
 int adjtimex(struct timex *txc);
 ```
 
+That's the glibc-facing prototype; the actual syscall (`SYSCALL_DEFINE1(adjtimex, struct __kernel_timex __user *, txc_p)`) takes `struct __kernel_timex`, a separate, architecture-independent layout `include/uapi/linux/timex.h` defines outside the `#ifndef __KERNEL__` block that hides `struct timex` from the kernel. It's not just a renamed copy: every field that was `__kernel_long_t` in glibc's `struct timex` (architecture-dependent width) becomes a fixed `long long` here, with explicit `int :32` padding added so the layout stays aligned the same way on 32- and 64-bit builds — `modes`, `status`, `shift`, and `tai` stay plain `int`, unchanged — and its embedded `struct __kernel_timex_timeval` uses a 64-bit, Y2038-safe `tv_sec`. glibc's wrapper translates its own `struct timex` into this shape before making the syscall.
+
 The `struct timex` (defined in `include/uapi/linux/timex.h`):
 
 ```c
 struct timex {
-    unsigned int modes;     /* ADJ_OFFSET, ADJ_FREQUENCY, ADJ_MAXERROR,
-                               ADJ_ESTERROR, ADJ_STATUS, ADJ_TIMECONST,
-                               ADJ_TAI, ADJ_SETOFFSET, ADJ_NANO, ... */
-    long offset;            /* time offset (ns if STA_NANO set, else us) */
-    long freq;              /* frequency offset (scaled ppm: ppm * 2^16) */
-    long maxerror;          /* maximum error estimate (us) */
-    long esterror;          /* estimated error (us) */
-    int  status;            /* STA_PLL, STA_FLL, STA_NANO, STA_UNSYNC,
-                               STA_INS, STA_DEL, STA_PPSFREQ, STA_PPSTIME,
-                               STA_PPSJITTER, STA_PPSWANDER, STA_PPSERROR,
-                               STA_CLOCKERR, ... */
-    long constant;          /* PLL time constant (log2 of poll interval) */
-    long precision;         /* clock precision (us, read-only) */
-    long tolerance;         /* clock frequency tolerance (read-only) */
-    struct timeval time;    /* current time (read-only) */
-    long tick;              /* us between clock ticks */
-    long ppsfreq;           /* PPS frequency (read-only, scaled ppm) */
-    long jitter;            /* PPS jitter (read-only, ns or us) */
-    int  shift;             /* PPS interval duration (seconds, read-only) */
-    long stabil;            /* PPS stability (read-only, scaled ppm) */
-    long jitcnt;            /* PPS jitter exceeded limit count (read-only) */
-    long calcnt;            /* PPS calibration intervals (read-only) */
-    long errcnt;            /* PPS calibration errors (read-only) */
-    long stbcnt;            /* PPS stability exceeded limit count (read-only) */
-    int  tai;               /* TAI - UTC offset in seconds (read-only unless
-                               ADJ_TAI is set in modes) */
+    unsigned int modes;          /* ADJ_OFFSET, ADJ_FREQUENCY, ADJ_MAXERROR,
+                                    ADJ_ESTERROR, ADJ_STATUS, ADJ_TIMECONST,
+                                    ADJ_TAI, ADJ_SETOFFSET, ADJ_NANO, ... */
+    __kernel_long_t offset;      /* time offset (ns if STA_NANO set, else us) */
+    __kernel_long_t freq;        /* frequency offset (scaled ppm: ppm * 2^16) */
+    __kernel_long_t maxerror;    /* maximum error estimate (us) */
+    __kernel_long_t esterror;    /* estimated error (us) */
+    int  status;                 /* STA_PLL, STA_FLL, STA_NANO, STA_UNSYNC,
+                                    STA_INS, STA_DEL, STA_PPSFREQ, STA_PPSTIME,
+                                    STA_PPSJITTER, STA_PPSWANDER, STA_PPSERROR,
+                                    STA_CLOCKERR, ... */
+    __kernel_long_t constant;    /* PLL time constant (log2 of poll interval) */
+    __kernel_long_t precision;   /* clock precision (us, read-only) */
+    __kernel_long_t tolerance;   /* clock frequency tolerance (read-only) */
+    struct timeval time;         /* current time (read-only, except for ADJ_SETOFFSET) */
+    __kernel_long_t tick;        /* us between clock ticks */
+    __kernel_long_t ppsfreq;     /* PPS frequency (read-only, scaled ppm) */
+    __kernel_long_t jitter;      /* PPS jitter (read-only, ns or us) */
+    int  shift;                  /* PPS interval duration (seconds, read-only) */
+    __kernel_long_t stabil;      /* PPS stability (read-only, scaled ppm) */
+    __kernel_long_t jitcnt;      /* PPS jitter exceeded limit count (read-only) */
+    __kernel_long_t calcnt;      /* PPS calibration intervals (read-only) */
+    __kernel_long_t errcnt;      /* PPS calibration errors (read-only) */
+    __kernel_long_t stbcnt;      /* PPS stability exceeded limit count (read-only) */
+    int  tai;                    /* TAI - UTC offset in seconds (read-only unless
+                                    ADJ_TAI is set in modes) */
+
+    int :32; int :32; int :32; int :32;  /* reserved padding, for future use */
+    int :32; int :32; int :32; int :32;
+    int :32; int :32; int :32;
 };
 ```
 
@@ -68,7 +74,7 @@ Important `modes` flags:
 | `ADJ_STATUS` | Update `status` flags (STA_PLL, STA_FLL, etc.) |
 | `ADJ_TIMECONST` | Set `constant` (PLL bandwidth, affects convergence speed) |
 | `ADJ_TAI` | Set the TAI − UTC offset |
-| `ADJ_SETOFFSET` | Step the clock by `offset` (used by chrony for large corrections) |
+| `ADJ_SETOFFSET` | Step the clock by adding `time` (not `offset`) to the current time (used by chrony for large corrections) |
 | `ADJ_NANO` | Interpret `offset` in nanoseconds (otherwise microseconds) |
 
 ### clock_adjtime()
@@ -79,7 +85,7 @@ Important `modes` flags:
 int clock_adjtime(clockid_t clk_id, struct timex *txc);
 ```
 
-`chrony` prefers `clock_adjtime(CLOCK_REALTIME, ...)` over the older `adjtimex()`. The two calls are equivalent for `CLOCK_REALTIME`; `clock_adjtime()` additionally supports adjusting `CLOCK_TAI` (for the TAI offset).
+`chrony` prefers `clock_adjtime(CLOCK_REALTIME, ...)` over the older `adjtimex()`; the two are equivalent for `CLOCK_REALTIME` (`do_clock_adjtime()` in `kernel/time/posix-timers.c` just dispatches to the same `.clock_adj` handler `adjtimex()` reaches). `clock_adjtime()` doesn't extend this to `CLOCK_TAI`, though — `clock_tai`'s `k_clock` struct has no `.clock_adj` handler at all, so calling it with `CLOCK_TAI` returns `-EOPNOTSUPP`. The TAI offset is set through `CLOCK_REALTIME` with `ADJ_TAI`, as shown below.
 
 ## The NTP state machine
 
@@ -101,13 +107,13 @@ STA_PPSFREQ | STA_PPSTIME   ← PPS-disciplined (highest accuracy)
 
 ## ntp_tick_length()
 
-On every tick, `timekeeping_update()` calls into the NTP code to retrieve the correction to apply:
+On every tick, `timekeeping_adjust()` and `__timekeeping_advance()` (both in `kernel/time/timekeeping.c`) call into the NTP code to retrieve the correction to apply:
 
 ```c
 u64 ntp_tick_length(unsigned int tkid);
 ```
 
-This function takes a timekeeper ID (`tkid`) and returns the number of nanoseconds to add for this tick, incorporating the current PLL/FLL frequency correction. The base value is `NSEC_PER_SEC / HZ`; the PLL correction shifts it slightly up or down. `timekeeping_adjust()` applies the accumulated correction when updating `struct timekeeper`.
+This function takes a timekeeper ID (`tkid`) and returns the tick length to add, incorporating the current PLL/FLL frequency correction — but not in plain nanoseconds: the value is scaled left by `NTP_SCALE_SHIFT` (32 bits), i.e. `ns << 32`, the same fixed-point representation `struct timekeeper`'s own `ntp_tick`/`ntp_error` fields use (its `tkr_mono.xtime_nsec` accumulator uses a different, clocksource-specific `shift` instead). The base value before scaling is `NSEC_PER_SEC / HZ`; the PLL/FLL correction (`ntp_update_frequency()`, `kernel/time/ntp.c`) shifts it slightly up or down each time the sysadmin or synchronization daemon adjusts frequency.
 
 ## Leap seconds
 
@@ -118,11 +124,11 @@ A leap second is a one-second adjustment inserted (or deleted) at the end of a U
 | `STA_INS` | Insert a leap second at the next UTC midnight rollover |
 | `STA_DEL` | Delete a leap second at the next UTC midnight rollover |
 
-When `STA_INS` is set, at the UTC midnight boundary the kernel:
+When `STA_INS` is set, at the UTC midnight boundary the kernel (`second_overflow()` in `kernel/time/ntp.c`):
 
-1. Holds `xtime.tv_sec` at the value of 23:59:59 for two seconds (the "23:59:60" leap second).
-2. Increments `tai_offset` by 1 — TAI is always ahead of UTC by this offset (currently 37 seconds as of 2024).
-3. Clears `STA_INS`.
+1. Holds `xtime.tv_sec` at the value of 23:59:59 for two seconds (the "23:59:60" leap second) and increments `tai_offset` by 1 — TAI is always ahead of UTC by this offset (currently 37 seconds as of 2024).
+2. Moves its internal `time_state` through `TIME_INS` → `TIME_OOP` → `TIME_WAIT`, which is reflected in `adjtimex()`'s return value so a synchronization daemon can observe the leap second happening.
+3. Does *not* clear `STA_INS` itself — that bit stays set until the daemon that requested the leap second explicitly clears it via another `adjtimex()` call. The kernel only returns to `TIME_OK` once `STA_INS`/`STA_DEL` are already clear.
 
 `CLOCK_TAI` reads the TAI clock, which never has leap seconds and counts seconds monotonically. Applications that need a monotonically increasing real-time clock (e.g., financial systems) should use `CLOCK_TAI` rather than `CLOCK_REALTIME`.
 
@@ -155,7 +161,7 @@ adjtimex(&txc);
 
 When the clock is synchronized (`STA_UNSYNC` is clear), the kernel periodically writes the current time to the hardware RTC every 11 minutes. This is implemented in `sync_hw_clock()` (called from a work queue) and ensures that the RTC — which has no NTP correction — stays close to UTC across reboots. The function was renamed from `sync_cmos_clock()` to `sync_hw_clock()` to reflect that it supports modern RTC class devices as well as legacy CMOS/RTC hardware.
 
-The 11-minute interval is hardcoded and not configurable. The write is skipped if the system is a virtual machine without a real CMOS clock.
+The 11-minute interval is hardcoded (`SYNC_PERIOD_NS`, `kernel/time/ntp.c`) and not configurable. `sync_hw_clock()` has no VM-specific check — it simply tries `update_persistent_clock64()` (the legacy CMOS path) and then `update_rtc()` (the modern RTC-class path) in turn, and stops rearming its own timer once both return `-ENODEV`. That's not permanent: `ntp_notify_cmos_timer()` re-queues the sync work the next time `adjtimex()` reports the clock as synced, so a guest that later gets an RTC (or a later `adjtimex()` call) can trigger another attempt. In practice `-ENODEV` from both paths is most often seen on a VM with no RTC device exposed to the guest, but the logic itself is just "no RTC of either kind was found right now," not a virtualization check.
 
 ## ntpd / chrony workflow
 
@@ -206,14 +212,15 @@ The `STA_UNSYNC` bit being clear (zero) indicates the kernel considers the clock
 ### Kernel source
 
 - [kernel/time/ntp.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/ntp.c) — the PLL/FLL time discipline control loop, leap-second state machine, `ntp_tick_length()`, and `sync_hw_clock()`
-- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — `timekeeping_advance()` and `timekeeping_adjust()`, applying NTP tick corrections to `struct timekeeper`
+- [kernel/time/time.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/time.c) — the `adjtimex()`/`adjtimex_time32()` syscall entry points
+- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — `do_adjtimex()`, and `timekeeping_advance()`/`timekeeping_adjust()` applying NTP tick corrections to `struct timekeeper`
 - [include/uapi/linux/timex.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/timex.h) — user-space definitions for `struct timex`, `ADJ_*` modes, `STA_*` status flags, and `TIME_*` return codes
 - [include/linux/timex.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timex.h) — internal kernel timex operations, scaled ppm conversions, and PPS interface hooks
 
 ### Man pages
 
 - [`adjtimex(2)`](https://man7.org/linux/man-pages/man2/adjtimex.2.html) — system call interface for reading and tuning kernel timekeeping parameters
-- [`clock_adjtime(2)`](https://man7.org/linux/man-pages/man2/clock_adjtime.2.html) — POSIX clock-specific adjustment syscall supporting `CLOCK_REALTIME` and `CLOCK_TAI`
+- [`clock_adjtime(2)`](https://man7.org/linux/man-pages/man2/clock_adjtime.2.html) — POSIX clock-specific adjustment syscall; only `CLOCK_REALTIME` has a `.clock_adj` handler in mainline (`kernel/time/posix-timers.c`), so `CLOCK_TAI` returns `-EOPNOTSUPP` as noted above
 - [`adjtime(3)`](https://man7.org/linux/man-pages/man3/adjtime.3.html) — legacy C library interface for gradual clock slewing
 - [`timedatectl(1)`](https://man7.org/linux/man-pages/man1/timedatectl.1.html) — systemd utility for querying NTP synchronization status and system clock settings
 

@@ -103,7 +103,6 @@ struct timekeeper {
 
     u64                    cycle_interval;
     u64                    xtime_interval;
-    s64                    xtime_remainder;
     u64                    raw_interval;
 
     ktime_t                next_leap_ktime;
@@ -111,7 +110,9 @@ struct timekeeper {
     s64                    ntp_error;
     u32                    ntp_error_shift;
     u32                    ntp_err_mult;
+    s64                    cs_tick_adj;
     u32                    skip_second_overflow;
+    s64                    skew_delta;
     s32                    tai_offset;
 };
 
@@ -218,6 +219,7 @@ static void ntp_update_frequency(struct ntp_data *ntpdata)
     second_length        = (u64)(tick_usec * NSEC_PER_USEC * USER_HZ) << NTP_SCALE_SHIFT;
 
     second_length       += ntpdata->ntp_tick_adj;
+    second_length       += ntpdata->cs_tick_adj;
     second_length       += ntpdata->time_freq;
 
     new_base             = div_u64(second_length, NTP_INTERVAL_FREQ);
@@ -226,8 +228,7 @@ static void ntp_update_frequency(struct ntp_data *ntpdata)
      * Don't wait for the next second_overflow, apply the change to the
      * tick length immediately:
      */
-    ntpdata->tick_length        += new_base - ntpdata->tick_length_base;
-    ntpdata->tick_length_base    = new_base;
+    ntpdata->tick_length = new_base;
 }
 ```
 
@@ -295,7 +296,7 @@ cat /proc/timer_list | head -50
 ### Kernel source
 
 - [include/linux/timekeeper_internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/timekeeper_internal.h) — definitions of `struct timekeeper` and `struct tk_read_base` with cacheline alignment comments
-- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — timekeeping core: `ktime_get()`, `timekeeping_advance()`, `timekeeping_update()`, and leap-second processing
+- [kernel/time/timekeeping.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c) — timekeeping core: `ktime_get()`, `timekeeping_advance()`, `timekeeping_update_from_shadow()`, and leap-second processing
 - [kernel/time/timekeeping_internal.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping_internal.h) — internal timekeeping definitions, fast time getters, and vDSO updater prototypes
 - [lib/vdso/gettimeofday.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/vdso/gettimeofday.c) — architecture-generic vDSO clock reading loop (`do_hres()`, `do_coarse()`) using lockless seqlock reads
 - [arch/x86/kernel/tsc.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/kernel/tsc.c) — x86 TSC calibration (`pit_calibrate_tsc()`, `native_calibrate_tsc()`) and stability testing
