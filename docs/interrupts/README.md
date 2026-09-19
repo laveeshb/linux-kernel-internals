@@ -60,4 +60,4 @@ Understanding which context code runs in is critical for choosing the right lock
 | Threaded IRQ | false | Yes | Yes |
 | Workqueue | false | Yes | Yes |
 
-`in_interrupt()` returns true in both softirq and hardirq context. Use `in_irq()` for hardirq-only, `in_softirq()` for softirq-only.
+`in_interrupt()` returns true in both softirq and hardirq context. Use `in_hardirq()` for hardirq-only, `in_softirq()` for softirq-only.
