@@ -103,7 +103,6 @@ struct timekeeper {
 
     u64                    cycle_interval;
     u64                    xtime_interval;
-    s64                    xtime_remainder;
     u64                    raw_interval;
 
     ktime_t                next_leap_ktime;
@@ -111,7 +110,9 @@ struct timekeeper {
     s64                    ntp_error;
     u32                    ntp_error_shift;
     u32                    ntp_err_mult;
+    s64                    cs_tick_adj;
     u32                    skip_second_overflow;
+    s64                    skew_delta;
     s32                    tai_offset;
 };
 
