@@ -303,8 +303,8 @@ echo on   | sudo tee /sys/bus/usb/devices/1-1/power/control  # disable
 # rpm_return_int, rpm_status — include/trace/events/rpm.h)
 echo 1 > /sys/kernel/tracing/events/rpm/enable
 cat /sys/kernel/tracing/trace_pipe
-# mydriver 0000:01:00.0: rpm_idle flags 0x0
-# mydriver 0000:01:00.0: rpm_suspend flags 0x4
+# 0000:01:00.0 flags-0 cnt-0 dep-0 auto-1 p-0 irq-0 child-0
+# 0000:01:00.0 flags-4 cnt-0 dep-0 auto-1 p-0 irq-0 child-0
 
 # powertop shows device runtime PM activity
 sudo powertop --html=powertop.html
@@ -322,7 +322,10 @@ static int mydriver_probe(struct platform_device *pdev)
     /* missing: pm_runtime_enable(&pdev->dev) */
     return 0;
 }
-/* pm_runtime_get_sync will always return -EACCES when runtime PM disabled */
+/* Without pm_runtime_enable(), disable_depth stays at the value
+ * pm_runtime_init() set it to (1). Any later pm_runtime_get_sync() call
+ * on this device goes through rpm_resume(), sees disable_depth > 0,
+ * and returns -EACCES. */
 ```
 
 ### Not balancing get/put

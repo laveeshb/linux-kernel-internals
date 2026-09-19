@@ -25,12 +25,12 @@ The driver worked perfectly on the submitter's test machine, which did not use s
 On a laptop running the driver:
 
 1. User closes lid. Systemd calls `echo mem > /sys/power/state`.
-2. PM core calls `dpm_suspend()`, which walks the device list. For each device, `device_suspend()` (`drivers/base/power/main.c`) picks the *first* non-NULL `dev_pm_ops` it finds, checking `pm_domain`, `type`, `class`, then `bus`, and only falling back to the driver's own `dev_pm_ops` if none of those provide a callback. For a PCI device, `dev->bus->pm` is `pci_bus_pm_ops` — always non-NULL — so this device's suspend goes through `pci_pm_suspend()` regardless of what `mynic_pm_ops` contains.
+2. PM core calls `dpm_suspend()`, which walks the device list. For each device, `device_suspend()` (`drivers/base/power/main.c`) picks the *first* non-NULL `dev_pm_ops` it finds, checking `pm_domain`, `type`, `class`, then `bus`, and only falling back to the driver's own `dev_pm_ops` if none of those provide a callback. For a PCI device, `dev->bus->pm` is `pci_dev_pm_ops` (`drivers/pci/pci-driver.c`, wired in via the `PCI_PM_OPS_PTR` macro) — non-NULL on any `CONFIG_PM` build — so this device's suspend goes through `pci_pm_suspend()` regardless of what `mynic_pm_ops` contains.
 3. Inside `pci_pm_suspend()`, the bus-level code checks the *driver's* callback itself: `if (pm->suspend) { pm->suspend(dev); ... }`. Since `mynic_pm_ops.suspend` is NULL, that block is simply skipped — no driver code runs — but `pci_pm_suspend()` still returns 0 and the generic PCI suspend machinery proceeds.
 4. `pci_pm_suspend_noirq()` still runs unconditionally later in the same suspend sequence: it calls `pci_save_state()` and puts the device into D3, exactly as it would for a driver with a real `suspend` callback. That call saves the *generic PCI config-space* state (BARs, command register, MSI/MSI-X config) — it has no idea about the NIC's private hardware state, because saving that is the driver's job, and the driver's callback never ran. The PCIe host controller is properly suspended and powers down the bus.
-5. On resume, the host controller resets the PCIe bus (standard PCIe hot-reset behavior on resume).
-6. Generic PCI config space is restored by the bus-level resume path, but the NIC's firmware and internal registers are in reset state, and the driver has not been told — it holds stale DMA ring pointers and register shadows from before suspend.
-7. The driver accesses a DMA ring head pointer register. The hardware returns `0xFFFFFFFF` (PCIe reads to unpowered device). The driver interprets this as a fatal hardware error and calls `BUG()`.
+5. On resume, coming back from D3cold implies what the PCIe spec (r6.0 §6.6.1) calls a **Conventional Reset** — specifically a Fundamental Reset, the variant a power-on transition triggers, as opposed to a software-initiated Hot Reset (a bridge's Secondary Bus Reset bit, §6.6.1). Before any config-space access is retried after a reset, PCI core code (`pci_dev_wait()`, `drivers/pci/pci.c`) polls with an exponential backoff starting immediately, not after a fixed delay — `PCI_RESET_WAIT` (1000ms) is the point past which it starts logging that it's still waiting, not a pre-reset pause. By the time this resume path reaches the driver, the device has already passed that check and is answering config-space reads normally.
+6. Generic PCI *config space* (the standard PCI header — BARs, command register — plus the MSI/MSI-X capability structures) is restored by the bus-level resume path. The NIC's own private, driver-owned MMIO registers behind those BARs came out of the Fundamental Reset at their power-on-default values — typically all-zero, not the values they held before suspend. The driver was never told this happened (its `resume` callback never ran either), so its in-memory bookkeeping — where it believes the DMA ring head currently is, which descriptors are in flight — is now stale relative to hardware that has silently gone back to a blank slate.
+7. The driver's interrupt handler acts on that stale bookkeeping: it accesses a DMA ring head pointer register expecting to find the in-flight state it remembers, but the hardware has no memory of any of it. Depending on the driver, this either reads back a value that doesn't match what was expected, or drives the ring logic into a state the driver's own consistency checks weren't written to tolerate. The driver interprets the mismatch as a fatal hardware error and calls `BUG()`.
 
 ### Diagnosis
 
@@ -113,7 +113,7 @@ With `CONFIG_DEBUG_ATOMIC_SLEEP` enabled, `might_sleep()` caught it immediately:
 
 ```
 BUG: sleeping function called from invalid context at kernel/locking/mutex.c:580
-in_atomic(): 1, irqs_disabled(): 0, non-block: 0, pid: 88, name: irq/86-mytouch
+in_atomic(): 1, irqs_disabled(): 0, non_block: 0, pid: 88, name: irq/86-mytouch
 ...
 Call Trace:
   __might_sleep
@@ -300,7 +300,7 @@ echo 50000000 > /sys/class/powercap/intel-rapl:0:1/constraint_0_power_limit_uw
 
 After raising the DRAM limit to 50 W — above the workload's ~45 W demand — memory bandwidth throttling disappeared and throughput returned to baseline, still well within the 150 W package budget because the CPU cores were only at 35% load.
 
-**Lesson**: RAPL domain limits are set and enforced independently of one another. Before setting power caps, enumerate all domains with `for zone in /sys/class/powercap/intel-rapl*/; do cat $zone/name $zone/constraint_0_power_limit_uw; done` and understand which domain is the actual bottleneck. Monitor `energy_uj` on all domains during workload characterization.
+**Lesson**: RAPL domain limits are set and enforced independently of one another. Before setting power caps, enumerate all domains with `for zone in /sys/class/powercap/intel-rapl:*/; do cat $zone/name $zone/constraint_0_power_limit_uw; done` and understand which domain is the actual bottleneck (note the colon in the glob — `intel-rapl*` without it would also match the `intel-rapl` control-type directory itself, not just its zones). Monitor `energy_uj` on all domains during workload characterization.
 
 ---
 
@@ -329,7 +329,7 @@ cat /sys/kernel/debug/wakeup_sources | sort -k4 -rn | head -10
 # (wakeup_count matches the number of lid-close sleep attempts)
 ```
 
-`event_count` (`include/linux/pm_wakeup.h`) counts every wakeup event a source reports, unconditionally. `wakeup_count` is narrower — it only increments while the suspend-events check is armed, i.e. during an actual suspend attempt, since it tracks how many times a source has been responsible for aborting one. Because every one of these wakeups fired while `s2idle` was actively suspending the system, both counters climbed together here: the I2C touchpad's `wakeup_count` (and `event_count`) each incremented by 1 for every lid close. The touchpad's firmware was generating spurious interrupt assertions during idle — even with the lid closed and no finger contact.
+`event_count` (`include/linux/pm_wakeup.h`) counts every wakeup event a source reports, unconditionally. `wakeup_count` is narrower — `wakeup_source_report_event()` (`drivers/base/power/wakeup.c`) only increments it when `events_check_enabled` is set. That flag isn't tied to suspend happening at all; it's set by `pm_save_wakeup_count()`, the function behind the userspace `/sys/power/wakeup_count` protocol — a caller (systemd, in the usual case) writes the current registered-event count there before requesting suspend, and the kernel only arms `wakeup_count` tracking if nothing changed in the meantime. In this trace, that protocol was in play, so both counters climbed together here: the I2C touchpad's `wakeup_count` (and `event_count`) each incremented by 1 for every lid close. The touchpad's firmware was generating spurious interrupt assertions during idle — even with the lid closed and no finger contact.
 
 Confirming via `ftrace`:
 
@@ -339,7 +339,7 @@ cat /sys/kernel/debug/tracing/trace_pipe
 # wakeup_source_activate: i2c-touchpad state=0x1
 ```
 
-(The tracepoint's format string is `"%s state=0x%lx"` — bare source name, no `name=` prefix — and `state` here is the kernel's running count of in-progress wakeup events, not a boolean flag.)
+(The tracepoint's format string is `"%s state=0x%lx"` — bare source name, no `name=` prefix. `state` is `combined_event_count` (`drivers/base/power/wakeup.c`), a single word packing two counters together — registered events in the high bits, events currently in progress in the low bits — not a plain in-progress count on its own; `state=0x1` here means one event has been registered and none are (yet) in progress.)
 
 The wakeup fired from the I2C touchpad device, which had `wakeup` capability enabled by default in the ACPI tables.
 
@@ -377,7 +377,7 @@ echo 'ACTION=="add", SUBSYSTEM=="i2c", ATTR{name}=="ELAN0001:00", \
 - [drivers/base/power/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/main.c) — `device_suspend()`'s callback-selection order (`pm_domain` → `type` → `class` → `bus` → driver `pm`) and `dpm_run_callback()`'s `if (!cb) return 0;`; for a PCI device `dev->bus->pm` is always set, so this particular skip never fires — Case 1
 - [include/linux/pm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm.h) — `DEFINE_SIMPLE_DEV_PM_OPS()` (the current macro; `SIMPLE_DEV_PM_OPS()` is now deprecated but equivalent) and `SET_RUNTIME_PM_OPS()`, Case 1's fix
 - [drivers/pci/pci-driver.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pci/pci-driver.c) — `pci_pm_suspend()`, the bus-level `dev_pm_ops` that wraps a driver's own callbacks and still performs PCI config-space save and the D3 transition, Case 1
-- [include/linux/pm_runtime.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_runtime.h) and [drivers/base/power/runtime.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/runtime.c) — `pm_runtime_get_sync()` (may sleep) versus `pm_runtime_get_if_active()` (never sleeps, returns 1/0), Case 2
+- [include/linux/pm_runtime.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_runtime.h) and [drivers/base/power/runtime.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/runtime.c) — `pm_runtime_get_sync()` (may sleep) versus `pm_runtime_get_if_active()` (never sleeps, tri-valued return — see [Runtime PM](runtime-pm.md#runtime-pm-in-interrupt-context)), Case 2
 - [drivers/thermal/gov_step_wise.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/gov_step_wise.c) and [drivers/thermal/gov_power_allocator.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/gov_power_allocator.c) — the single-step throttling logic versus the PID controller, Case 3
 - [drivers/powercap/intel_rapl_common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_common.c) — `rapl_domain_names[]` (`"package"`, `"core"`, `"uncore"`, `"dram"`), the independent sub-domains behind Case 4
 - [drivers/base/power/wakeup.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/wakeup.c) — `print_wakeup_source_stats()`, the column layout of `/sys/kernel/debug/wakeup_sources`, and the `wakeup_source_activate` tracepoint, Case 5
@@ -398,7 +398,7 @@ echo 'ACTION=="add", SUBSYSTEM=="i2c", ATTR{name}=="ELAN0001:00", \
 
 ### External
 
-- [Runtime Power Management Framework for I/O Devices](https://docs.kernel.org/power/runtime_pm.html) — canonical Runtime PM documentation, including `pm_runtime_get_if_active()`'s never-sleeps guarantee, Case 2
+- [Runtime Power Management Framework for I/O Devices](https://docs.kernel.org/power/runtime_pm.html) — canonical Runtime PM documentation and function return-value reference, Case 2
 - [Basic PM Debugging](https://docs.kernel.org/power/basic-pm-debugging.html) — `/sys/power/pm_test`, `CONFIG_PM_DEBUG`, and the driver-isolation technique from Case 1's diagnosis
 - [Power Capping Framework](https://docs.kernel.org/power/powercap/powercap.html) — the `constraint_N_power_limit_uw`/`enabled` sysfs ABI and the zone hierarchy behind Case 4
 - [System Sleep States](https://docs.kernel.org/admin-guide/pm/sleep-states.html) — suspend-to-idle (`s2idle`), `/sys/power/mem_sleep`, and wakeup-capable devices, Case 5
