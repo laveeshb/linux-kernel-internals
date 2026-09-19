@@ -15,6 +15,14 @@ For complex devices (I2C buses, SPI controllers, touchscreens), the interrupt ha
 
 **Threaded IRQs** were introduced in Linux 2.6.30 by Thomas Gleixner [(commit)](https://git.kernel.org/linus/3aa551c9b4c40018f0e261a178e3d25478dc04a9) [(LWN)](https://lwn.net/Articles/302043/) and solve this by moving the heavy lifting to a dedicated kernel thread that runs in process context.
 
+## Where this actually came from
+
+Mainline didn't invent threaded interrupt handling from scratch in 2009 — it imported an idea the out-of-tree [PREEMPT_RT](../locking/preempt-rt.md) patch set had already been relying on for years. LWN's coverage of the original proposal is explicit about this: *"In the realtime tree, nearly all drivers were mass converted to use threads"* — because PREEMPT_RT's whole premise depends on nothing running with interrupts fully disabled for long, so RT builds had no choice but to move hardirq work into schedulable, preemptible threads ([LWN](https://lwn.net/Articles/302043/), Jake Edge, October 8 2008).
+
+What Gleixner proposed for mainline was narrower and more conservative than the RT tree's approach: instead of force-converting every driver, `request_threaded_irq()` made threading *opt-in*, one driver at a time. That design choice traces to a specific constraint — as LWN reports, *"as requested by Linus Torvalds at this year's Kernel Summit, a new function was introduced rather than changing countless drivers to use a new `request_irq()`"*. Gleixner was also candid that automatic, mechanical conversion wasn't the goal: *"Converting an interrupt to threaded makes only sense when the handler code takes advantage of it by integrating tasklet/softirq functionality and simplifying the locking."* A driver gains nothing from threading just for its own sake — the benefit only shows up when threading lets the driver delete a tasklet or softirq it would otherwise need alongside the hardirq handler.
+
+The same article notes the anticipated payoff went beyond latency: *"Threaded handlers will also help the debuggability of the kernel and may eventually lead to the removal of tasklets from Linux."* That connection is exactly why [tasklets are now deprecated in favor of threaded IRQs](tasklets.md#the-deprecation-nobody-planned-to-start-then-couldnt-finish) — the 2008 proposal was already naming the mechanism that would eventually make tasklets removable, over a decade before the removal push actually started.
+
 ## request_threaded_irq
 
 ```c
