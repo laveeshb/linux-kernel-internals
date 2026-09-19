@@ -1,10 +1,13 @@
 # Kernel Core War Stories
 
-> Real incidents: init ordering, boot parameter bugs, panic loops, and more
+> Init ordering, boot parameter bugs, panic loops, and more
 
 The kernel core infrastructure — initcalls, boot parameters, `__init` sections, panic/kdump, module loading — is mature and well-tested. But the interaction between these mechanisms and real-world drivers, configurations, and deployment assumptions produces bugs that are genuinely hard to diagnose. The failures tend to be silent, delayed, or self-concealing.
 
-This page presents five incidents drawn from real patterns in kernel development history. The bug patterns are real; they appear repeatedly across different drivers and distributions over time. Each illustrates a fundamental property of how the kernel core works — and what happens when code makes the wrong assumption about it.
+!!! note "How these are written"
+    These aren't write-ups of a single named incident tied to one commit or CVE — they illustrate real, recurring bug patterns that appear repeatedly across different drivers and distributions over time. The references at the end of the page verify the underlying kernel mechanisms against current source and documentation. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's usual format: specific, datable incidents, most (though not all — see [wake_wide()](../sched/war-stories/wake-wide-heuristic.md)) tied to a commit hash or CVE.
+
+Each of the five illustrates a fundamental property of how the kernel core works — and what happens when code makes the wrong assumption about it.
 
 ---
 
@@ -403,4 +406,4 @@ Module init functions must return 0 on success or a negative errno on failure. A
 - [Kernel documentation: KASAN](https://docs.kernel.org/dev-tools/kasan.html) — by default, only the linear mapping gets real shadow memory; vmalloc space gets a read-only placeholder shadow page with no real detection, and `CONFIG_KASAN_VMALLOC` is what makes vmalloc allocations individually shadow-tracked — confirming Case 2's claim that `CONFIG_KASAN_VMALLOC` doesn't apply to a direct-mapped `__init` text page in the first place, since that page was never in vmalloc space to begin with
 - [Kernel documentation: Kmemleak](https://docs.kernel.org/dev-tools/kmemleak.html) — "detecting possible kernel memory leaks ... the orphan objects are not freed but only reported," the tool that surfaces the bug in Case 5
 
-No specific commit hashes, CVE numbers, or kernel-version-tied feature claims appear in this page's prose — the five cases are composite scenarios illustrating real, recurring bug patterns rather than write-ups of a single named incident, so there is nothing of that kind to cite in place. The references above verify the underlying kernel mechanisms (initcall ordering, `__init`/KASAN, kdump/crashkernel sizing, unknown-boot-parameter handling, and module init return codes) against current mainline source and documentation.
+As noted at the top of this page, no specific commit hashes, CVE numbers, or kernel-version-tied feature claims appear in the prose above — the references above instead verify the underlying kernel mechanisms (initcall ordering, `__init`/KASAN, kdump/crashkernel sizing, unknown-boot-parameter handling, and module init return codes) against current mainline source and documentation.

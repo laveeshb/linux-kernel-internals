@@ -27,7 +27,7 @@ This is not memory management, not the scheduler, not networking — it is the m
 | [Kernel Boot Parameters](boot-params.md) | Command-line parsing, `__setup`, `early_param`, module params |
 | [Kernel Panic and Oops](panic-oops.md) | Oops handling, `panic()`, stack unwinding, kdump, KASAN/KFENCE |
 | [Module Init and Initcalls](initcalls-modules.md) | `module_init`/`module_exit`, struct module, loading flow, signing |
-| [Kernel Core War Stories](war-stories.md) | Real incidents: init ordering bugs, `__init` misuse, panic loops |
+| [Kernel Core War Stories](war-stories.md) | Init ordering bugs, `__init` misuse, panic loops |
 
 ---
 
