@@ -2,7 +2,10 @@
 
 > Cache coherency bugs, TLB shootdown ordering, BTI enforcement, and SVE context corruption
 
-These are realistic composites of failure patterns that actually occur on ARM64 systems. Each story follows a real bug class rooted in ARM64 architecture specifics — weak memory ordering, hardware coherency requirements, CPU feature enforcement, and errata handling. Names and products are illustrative; the failure modes are real.
+Each story follows a real bug class rooted in ARM64 architecture specifics — weak memory ordering, hardware coherency requirements, CPU feature enforcement, and errata handling.
+
+!!! note "Composite incidents"
+    These are realistic composites of failure patterns that actually occur on ARM64 systems, not write-ups of a single named, datable incident with a specific commit hash. Names and products are illustrative; the failure modes are real. See the [BPF](../../bpf/war-stories.md), [scheduler](../../sched/war-stories.md), or [interrupts](../../interrupts/war-stories.md) war-stories pages for the site's single-named-incident format, each tied to a specific commit or CVE.
 
 ---
 

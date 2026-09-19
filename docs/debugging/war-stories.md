@@ -1,8 +1,11 @@
 # Debugging War Stories
 
-> Real bugs caught by KASAN, lockdep, syzkaller, and other tools
+> Composite scenarios: bugs caught by KASAN, lockdep, syzkaller, and other tools
 
 These are technically grounded accounts of the kinds of bugs that kernel debugging tools catch in real life. Each story illustrates a class of bug, the tool that surfaced it, how to read the output, and the fix.
+
+!!! note "Composite incidents"
+    The five cases below are composite scenarios illustrating real, recurring bug-and-tool patterns — not write-ups of a single named, datable incident with a specific commit hash (following the same approach as [Kernel Core War Stories](../kernel/war-stories.md)). The references at the end of the page verify the underlying kernel mechanisms — KASAN/KFENCE, lockdep, kdump/crash capture, SLUB debug metadata, io_uring fixed-file resolution — against current mainline source and documentation. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's single-named-incident format, each tied to a specific commit or CVE.
 
 ---
 
@@ -486,4 +489,4 @@ static void myblk_end_io(struct bio *bio)
 - [Kernel documentation: kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html) — kexec-based crash-kernel capture and the `crash` utility used to analyze the vmcore in Case 5
 - [Kernel documentation: SLUB debugging](https://docs.kernel.org/admin-guide/mm/slab.html) — `CONFIG_SLUB_DEBUG`, redzoning, and object poisoning — the mechanism that let `crash` trace the corrupted `bio`'s allocation backtrace in Case 5
 
-No specific commit hashes, CVE numbers, or kernel-version-tied feature claims appear in this page's prose — the five cases are composite scenarios illustrating real, recurring bug-and-tool patterns (following the same approach as `docs/kernel/war-stories.md`) rather than write-ups of a single named historical incident, so there is nothing of that kind to cite in place. The references above verify the underlying kernel mechanisms — KASAN/KFENCE detection internals, lockdep cycle detection, kdump/crash capture, SLUB debug metadata, and io_uring fixed-file resolution — against current mainline source and documentation.
+As noted at the top of this page, no specific commit hashes, CVE numbers, or kernel-version-tied feature claims appear in the prose above — the references above instead verify the underlying kernel mechanisms — KASAN/KFENCE detection internals, lockdep cycle detection, kdump/crash capture, SLUB debug metadata, and io_uring fixed-file resolution — against current mainline source and documentation.

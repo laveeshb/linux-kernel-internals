@@ -2,7 +2,10 @@
 
 > Suspend regressions, thermal throttle storms, and runtime PM deadlocks
 
-Power management is among the most regression-prone areas of the kernel. The state machines are complex, the hardware is diverse, and bugs are often timing- or platform-dependent. These incidents are composites of real failure patterns.
+Power management is among the most regression-prone areas of the kernel. The state machines are complex, the hardware is diverse, and bugs are often timing- or platform-dependent.
+
+!!! note "Composite incidents"
+    These incidents are composites of real failure patterns, not write-ups of a single named, datable incident with a specific commit hash. See the [BPF](../bpf/war-stories.md), [scheduler](../sched/war-stories.md), or [interrupts](../interrupts/war-stories.md) war-stories pages for the site's single-named-incident format, each tied to a specific commit or CVE.
 
 ---
 
