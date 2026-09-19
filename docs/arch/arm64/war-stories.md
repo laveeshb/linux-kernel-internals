@@ -2,7 +2,10 @@
 
 > Cache coherency bugs, TLB shootdown ordering, BTI enforcement, and SVE context corruption
 
-These are realistic composites of failure patterns that actually occur on ARM64 systems. Each story follows a real bug class rooted in ARM64 architecture specifics — weak memory ordering, hardware coherency requirements, CPU feature enforcement, and errata handling. Names and products are illustrative; the failure modes are real.
+Each story follows a real bug class rooted in ARM64 architecture specifics — weak memory ordering, hardware coherency requirements, CPU feature enforcement, and errata handling.
+
+!!! note "How these are written"
+    These aren't write-ups of a single named incident tied to one commit or CVE — they're realistic scenarios built from failure patterns that actually occur on ARM64 systems. Names and products are illustrative; the failure modes are real. The references at the end of the page verify the underlying ARM64 mechanisms each case relies on (lazy/context-switched FPSIMD state, TLB/barrier ordering, MIDR-based errata matching, BTI enforcement) against current kernel source and architecture documentation. See the [BPF](../../bpf/war-stories.md), [scheduler](../../sched/war-stories.md), or [interrupts](../../interrupts/war-stories.md) war-stories pages for the site's usual format: specific, datable incidents, most (though not all — see [wake_wide()](../../sched/war-stories/wake-wide-heuristic.md)) tied to a fix commit or CVE.
 
 ---
 
@@ -12,50 +15,53 @@ These are realistic composites of failure patterns that actually occur on ARM64 
 
 A storage driver was optimized to use SIMD to accelerate CRC32 checksums on data blocks during I/O completion. The developer correctly called `kernel_neon_begin()` and `kernel_neon_end()` in the checksum path — or so they thought. A refactoring pass moved some of the checksum logic into a helper function called from a workqueue. In that helper, `kernel_neon_begin()` was present, but an early-return error path skipped `kernel_neon_end()`.
 
-The kernel was running on an ARMv8.2 platform with SVE support. Several userspace threads were using SVE for BLAS routines in a scientific computing workload.
+The kernel was running on an ARMv8.2 platform with SVE support. Several userspace threads were using SVE for BLAS routines in a scientific computing workload, and the storage driver's checksum work ran on the same CPUs under heavy load.
 
 ### What Happened
 
-On a heavily loaded system, a userspace thread using SVE would occasionally produce wrong numerical results — not crashes, not NaN, just subtly incorrect floating-point outputs that only showed up when comparing against a reference implementation.
+On a heavily loaded system, kworker threads doing checksum work would occasionally corrupt seemingly unrelated local state a few calls later — a garbled local variable, or in the worst cases a corrupted return address leading to a crash with a backtrace that made no sense. The corruption was silent at the point it happened and only surfaced later, in different code entirely.
 
-The mechanism was subtle:
+The mechanism, once found:
 
-1. A userspace SVE thread is running in EL0. The `TIF_SVE` flag in its `thread_info` is set, indicating SVE state is live and must be preserved across context switches.
-2. The Linux kernel uses **lazy save/restore** for FP/SIMD state. It does not unconditionally save the FPSIMD/SVE registers on every kernel entry. Instead, `CPACR_EL1.FPEN` is used as a trap gate: when the kernel wants to deny a task's FP state from being touched, it clears `FPEN`, causing any subsequent FPSIMD/SVE instruction to trap to EL1.
-3. The workqueue handler ran in a softirq context on the same CPU. The early-return path skipped `kernel_neon_end()`, which meant `CPACR_EL1.FPEN` was left in the "enabled" state, and the kernel's internal accounting of "NEON is in use by the kernel" was lost.
-4. When the userspace SVE task was scheduled back in, `fpsimd_restore_current_state()` checked the lazy-save bookkeeping and concluded the SVE registers were still valid — it skipped the restore. But the workqueue had already clobbered the FPSIMD register file. The userspace task resumed with wrong vector register contents.
+1. A kernel function calling `kernel_neon_begin()` from process or softirq context (like this workqueue handler) must supply a caller-owned buffer — `struct user_fpsimd_state`, typically declared on the stack — because kernel-mode NEON use in these contexts is **preemptible**, not run with preemption held off for the duration. `kernel_neon_begin(&state)` records that buffer in `current->thread.kernel_fpsimd_state` and sets the `TIF_KERNEL_FPSTATE` thread flag, so that if this task is scheduled out while it still "owns" the NEON registers, the scheduler knows how to save and restore that state across the switch.
+2. `kernel_neon_end(&state)` is the other half of that contract: it clears `TIF_KERNEL_FPSTATE` and resets `current->thread.kernel_fpsimd_state` to `NULL`, telling the scheduler this task no longer has live kernel-mode NEON state to preserve.
+3. The early-return path skipped `kernel_neon_end()`. The function returned — unwinding the stack frame that held `state` — while `TIF_KERNEL_FPSTATE` was still set and `current->thread.kernel_fpsimd_state` still pointed at that now-dead stack address.
+4. If this kworker thread was preempted before anything cleared that state, `fpsimd_thread_switch()` (called from `__switch_to()`) saw `TIF_KERNEL_FPSTATE` set and called `fpsimd_save_kernel_state(current)`, which writes the live NEON register contents into `*current->thread.kernel_fpsimd_state` — the stale stack address. By then, that stack region had very likely been reused by whatever the kworker thread called next, so the write silently clobbered a local variable, a saved register, or a return address belonging to completely different code.
 
-The key registers and functions:
+The key registers and functions (`arch/arm64/kernel/fpsimd.c`):
 
-- `TIF_SVE` — thread flag indicating SVE state is valid and must be saved/restored
-- `CPACR_EL1.FPEN` (bits 21:20) — controls FPSIMD trap to EL1 (not SVE). SVE access is governed by the separate `CPACR_EL1.ZEN` field (bits 17:16). `kernel_neon_begin()` sets both FPEN and ZEN appropriately; code that only sets FPEN still traps on SVE instructions.
-- `fpsimd_save_state()` / `fpsimd_load_state()` — low-level save/restore of the FPSIMD register file
-- `kernel_neon_begin()` — saves userspace FPSIMD/SVE context if needed, enables NEON for kernel use, disables preemption
-- `kernel_neon_end()` — restores accounting state, re-enables preemption
+- `TIF_KERNEL_FPSTATE` — thread flag marking that this task's kernel-mode FPSIMD/NEON state must be saved and restored across a context switch
+- `current->thread.kernel_fpsimd_state` — pointer to the caller-provided buffer backing that state; set by `kernel_neon_begin()`, cleared by `kernel_neon_end()`
+- `get_cpu_fpsimd_context()` / `put_cpu_fpsimd_context()` — a brief `local_bh_disable()`/`local_bh_enable()` pair (or `preempt_disable()`/`preempt_enable()` under `CONFIG_PREEMPT_RT`) held only while `kernel_neon_begin()`/`kernel_neon_end()` update this bookkeeping — not held for the whole NEON critical section
+- `fpsimd_thread_switch()` — called from `__switch_to()`; if the outgoing task has `TIF_KERNEL_FPSTATE` set, calls `fpsimd_save_kernel_state()`, which saves into `task->thread.kernel_fpsimd_state`
 
 ```c
-/* WRONG: early return skips kernel_neon_end() */
+/* WRONG: early return skips kernel_neon_end(), leaving kernel_fpsimd_state
+ * pointing at &state after this stack frame is gone */
 static int checksum_block(struct request *rq)
 {
+    struct user_fpsimd_state state;
     int ret;
 
-    kernel_neon_begin();
+    kernel_neon_begin(&state);
 
     ret = validate_header(rq);
     if (ret < 0)
         return ret;   /* BUG: kernel_neon_end() not called */
 
     do_neon_checksum(rq);
-    kernel_neon_end();
+    kernel_neon_end(&state);
     return 0;
 }
 
-/* CORRECT: every return path calls kernel_neon_end() */
+/* CORRECT: every return path calls kernel_neon_end() before the
+ * stack-allocated state buffer goes out of scope */
 static int checksum_block(struct request *rq)
 {
+    struct user_fpsimd_state state;
     int ret;
 
-    kernel_neon_begin();
+    kernel_neon_begin(&state);
 
     ret = validate_header(rq);
     if (ret < 0)
@@ -63,37 +69,40 @@ static int checksum_block(struct request *rq)
 
     do_neon_checksum(rq);
 out:
-    kernel_neon_end();
+    kernel_neon_end(&state);
     return ret;
 }
 ```
 
 ### Diagnosis
 
-The bug was silent and non-deterministic. Diagnosis steps:
+The bug was silent and non-deterministic, and the corruption surfaced far from its cause. Diagnosis steps:
 
-1. **Reproduce with a stress test**: run the SVE userspace workload alongside heavy I/O to trigger the workqueue path frequently.
-2. **Add assertions**: instrument `kernel_neon_end()` calls by checking that preemption is still disabled (as `kernel_neon_begin()` disables it) — a mismatch signals a missed `kernel_neon_end()`.
-3. **Tracing**: add `ftrace` hooks around `fpsimd_save_state()` and `fpsimd_load_state()` to log which task context they run in; a restore that does not follow a save on the same CPU is the smoking gun.
-4. **`WARN_ON` in scheduler**: the kernel's `fpsimd_thread_switch()` path (called from `__switch_to()`) can be instrumented to check that the NEON-in-kernel state is clean at switch time.
+1. **Reproduce with a stress test**: run the checksum workload under heavy load so this kworker thread is frequently preempted while its stack still holds a live (but abandoned) `kernel_fpsimd_state` pointer.
+2. **Add an assertion**: audit every return path out of a `kernel_neon_begin()`-protected function for a matching `kernel_neon_end()`; a task that returns to userspace, blocks for a long time, or exits while `TIF_KERNEL_FPSTATE` is still set has leaked the pairing.
+3. **Tracing**: add `ftrace` hooks around `kernel_neon_begin()`/`kernel_neon_end()` to log call sites and their `state` pointers; a `begin` whose `state` address never shows up in a matching `end` on the same task is the smoking gun.
+4. **KASAN/stack-protector signal**: since the corrupted memory is a reused stack slot, a stack-protector canary failure or a KASAN stack-out-of-bounds report in a completely unrelated function on the same kworker is consistent with this bug — don't assume the crash site is the bug site.
 
 ### Fix
 
-Ensure every kernel code path that calls `kernel_neon_begin()` has a matching `kernel_neon_end()` on all exit paths. A common pattern is the `goto out` idiom shown above. If the NEON usage can fail partway through, keep `kernel_neon_end()` in a single cleanup label.
+Ensure every kernel code path that calls `kernel_neon_begin()` has a matching `kernel_neon_end()` on all exit paths, using the same `state` buffer on both calls. A common pattern is the `goto out` idiom shown above. If the NEON usage can fail partway through, keep `kernel_neon_end()` in a single cleanup label.
 
-For longer kernel NEON paths: preemption is disabled between `kernel_neon_begin()` and `kernel_neon_end()`, so keep the NEON critical section as short as possible. Do not block, sleep, or call any function that might schedule inside this window.
+Kernel NEON use guarded this way is preemptible on non-`PREEMPT_RT` kernels — that's the reason a caller-provided buffer is required in process/softirq context in the first place. Don't assume preemption is held off for the whole region between `kernel_neon_begin()` and `kernel_neon_end()`; the only thing briefly held off is the internal bookkeeping update inside those two calls themselves.
 
 ### Lesson
 
-ARM64's lazy FPSIMD/SVE save/restore makes kernel NEON use efficient, but the correctness contract is strict: `kernel_neon_begin()` and `kernel_neon_end()` must be perfectly paired. Missing a `kernel_neon_end()` breaks the kernel's accounting without any immediate fault — the corruption only appears later when a userspace task resumes with a clobbered register file. Code review must treat these pairs as carefully as mutex lock/unlock.
+ARM64's context-switchable kernel-mode NEON state makes kernel NEON use both efficient and preemptible, but the correctness contract is strict: `kernel_neon_begin()` and `kernel_neon_end()` must be perfectly paired, using the same caller-owned buffer. Missing a `kernel_neon_end()` doesn't fail immediately — it leaves a dangling pointer in `current->thread.kernel_fpsimd_state` that only causes damage on the next context switch, and the damage lands wherever the stack happens to be reused, not at the site of the bug. Code review must treat these pairs as carefully as mutex lock/unlock — more so, since the failure mode here is a wild write, not a deadlock.
 
 ---
 
 ## 2. The Missing DSB Before TLBI
 
+!!! note "This one is now historical"
+    As of Linux 6.16, `set_pte()` itself calls `queue_pte_barriers()`/`emit_pte_barriers()` — `dsb(ishst); isb();` — automatically for any valid, non-user PTE (confirmed by tag-diff: absent in `arch/arm64/include/asm/pgtable.h` at v6.15, present at v6.16). The specific bug below, reached through the ordinary `set_pte()` helper the driver uses, cannot happen on a 6.16+ kernel. It's included because the underlying ordering rule is still real and still binds any code that bypasses `set_pte()` — a driver-maintained page-table format for an IOMMU or accelerator with its own PTE layout, for instance — and because the "why did this only show up on a 16-core server" reasoning below hasn't changed.
+
 ### Setup
 
-A driver for a custom DMA remapping engine maintained its own set of page table entries to map device-visible buffers into a restricted VA space. When a buffer was replaced, the driver updated the PTE, then called `flush_tlb_range()` to shoot down stale TLB entries on all CPUs. The code was written by an engineer with x86 experience and tested on a single-core development board before being deployed to a 16-core ARM64 server.
+A driver for a custom DMA remapping engine maintained its own set of page table entries to map device-visible buffers into a restricted VA space, predating Linux 6.16's automatic PTE barrier batching. When a buffer was replaced, the driver updated the PTE, then called `flush_tlb_range()` to shoot down stale TLB entries on all CPUs. The code was written by an engineer with x86 experience and tested on a single-core development board before being deployed to a 16-core ARM64 server.
 
 ### What Happened
 
@@ -156,11 +165,11 @@ Why did it work on a single core? With one CPU, there is no other MMU walker to 
 
 ### Fix
 
-Insert `dsb(ishst)` between PTE writes and any TLBI or `flush_tlb_*` call. In most cases, drivers should not be manipulating PTEs directly — using the kernel's `remap_pfn_range()`, `vm_insert_page()`, or `io_remap_pfn_range()` handles barriers correctly. If direct PTE manipulation is unavoidable, follow the full ARM64 sequence explicitly.
+Insert `dsb(ishst)` between PTE writes and any TLBI or `flush_tlb_*` call. In most cases, drivers should not be manipulating PTEs directly — using the kernel's `remap_pfn_range()`, `vm_insert_page()`, or `io_remap_pfn_range()` handles barriers correctly, and as of Linux 6.16 even a direct `set_pte()` call handles this specific ordering automatically. If a driver maintains its own page-table format entirely outside the generic `set_pte()`/`pte_t` machinery — an IOMMU or accelerator with a private table layout — none of that automatic handling applies, and the full ARM64 sequence must still be followed explicitly.
 
 ### Lesson
 
-The ARM64 memory model requires explicit store barriers before TLB invalidates. Code ported from x86 or tested only on uniprocessor systems will appear to work, then fail under load on multi-core ARM64. The `dsb(ishst)` before TLBI is not a performance hint — it is architecturally required for correctness.
+The ARM64 memory model requires explicit store barriers before TLB invalidates. Code ported from x86 or tested only on uniprocessor systems will appear to work, then fail under load on multi-core ARM64. The `dsb(ishst)` before TLBI is not a performance hint — it is architecturally required for correctness, for any page-table format the generic kernel PTE helpers don't already cover.
 
 ---
 
@@ -168,7 +177,7 @@ The ARM64 memory model requires explicit store barriers before TLB invalidates. 
 
 ### Setup
 
-An embedded SoC (a custom ARM64 board for industrial control) had a PCIe endpoint with a proprietary DMA engine. Unlike commodity PCIe cards that participate in cache snooping via PCIe's MESIF coherency protocol, this DMA engine accessed DRAM directly through the SoC's bus fabric — bypassing CPU cache snooping entirely. The SoC datasheet documented this, but the driver author assumed that "PCIe = cache coherent" and wrote the driver accordingly.
+An embedded SoC (a custom ARM64 board for industrial control) had a PCIe endpoint with a proprietary DMA engine. Unlike commodity PCIe cards, whose reads and writes are ordinarily kept coherent because the root complex snoops the CPU caches on their behalf (with a device able to opt out per-transaction via the PCIe "No Snoop" TLP attribute), this DMA engine accessed DRAM directly through the SoC's bus fabric — bypassing that snooping path entirely. The SoC datasheet documented this, but the driver author assumed that "PCIe = cache coherent" and wrote the driver accordingly.
 
 ### What Happened
 
@@ -250,17 +259,17 @@ Cache coherency is not guaranteed for all DMA-capable devices, even on sophistic
 
 ### Setup
 
-A language runtime embedded in a container orchestration agent generated native ARM64 code at runtime to evaluate policy expressions. The JIT compiled policy rules to machine code, mapped the code with `mmap(PROT_READ | PROT_EXEC)`, then called into it via a function pointer. The system was a modern ARM64 server running a distribution kernel compiled with BTI (Branch Target Identification) support.
+A language runtime embedded in a container orchestration agent generated native ARM64 code at runtime to evaluate policy expressions. The JIT deliberately mapped its generated code with `mmap(PROT_READ | PROT_EXEC | PROT_BTI)` — opting the pages into BTI (Branch Target Identification) enforcement on purpose, for the security benefit of blocking arbitrary indirect-branch landing points into JIT-emitted code. The system was a modern ARM64 server running a distribution kernel compiled with BTI support.
 
 ### What Happened
 
-The runtime crashed with a signal, `dmesg` showed:
+The runtime crashed with a signal. `dmesg` showed:
 
 ```
-[12345.678] traps: agent[4321] proc violation BTI pc=0x7f3a0000 addr=0x7f3a0000
+agent[4321]: unhandled exception: BTI, ESR 0x0000000034000002, undefined instruction in agent[7f3a0000+1000]
 ```
 
-The crash occurred precisely when the runtime invoked the JIT-compiled function pointer. BTI (ARMv8.5-A) protection was rejecting the indirect branch into the JIT code.
+The crash occurred precisely when the runtime invoked the JIT-compiled function pointer. BTI (ARMv8.5-A) protection was rejecting the indirect branch into the JIT code, because the JIT itself had opted its pages into that enforcement.
 
 **How BTI works:**
 
@@ -310,14 +319,14 @@ static void emit_function_prologue(struct jit_ctx *ctx)
 
 The encoding of `BTI c` is `0xd503245f` (a hint-space instruction). `BTI j` is `0xd503249f`. `BTI jc` is `0xd50324df`.
 
-Note that BTI enforcement only applies to **pages mapped with** `PROT_BTI` (via `mprotect()`) or to the main executable and its shared libraries when the BTI ELF note is present. If the JIT maps memory with only `PROT_READ | PROT_EXEC`, BTI enforcement may not apply to that region — but if the runtime's own executable is BTI-enabled and uses an indirect call (`blr`) to reach JIT code, the CPU still enforces the BTI requirement at the landing address if the process was started with BTI enabled.
+BTI enforcement is a per-page property, not a whole-process one: it only applies to pages explicitly mapped as "Guarded Pages" (`PTE_GP`), which the kernel sets when a mapping is created or changed with `PROT_BTI` — either directly via `mmap()`/`mprotect()`, as this JIT does, or automatically for the main executable and its shared libraries when the ELF `GNU_PROPERTY_AARCH64_FEATURE_1_BTI` note is present and the whole binary was built BTI-aware. A JIT that maps its generated code with plain `PROT_READ | PROT_EXEC` (no `PROT_BTI`) gets no BTI enforcement on that memory at all, regardless of whether the calling binary itself is BTI-enabled — enforcement follows the target page, not the caller. This JIT asked for that enforcement deliberately, which is exactly what exposed the missing landing pad.
 
 ### Diagnosis
 
 1. The crash backtrace points to the instruction immediately after `blr xN` where `xN` holds the JIT code address.
-2. Decode the ESR_EL1 from the signal info or `dmesg`: `EC=0x0D` (`ESR_ELx_EC_BTI`), ISS indicates BTI failure.
+2. Decode the ESR_EL1 from the signal info or `dmesg`: `EC=0x0D` (`ESR_ELx_EC_BTI`), reported by the kernel's `esr_class_str[]` table as `"BTI"`. This raises `SIGILL` with `si_code` `ILL_ILLOPC` (`do_el0_bti()`, `arch/arm64/kernel/traps.c`) — not a segmentation fault, even though the trigger is a branch-target check.
 3. Inspect the first 4 bytes of the JIT buffer: they should be `5f 24 03 d5` (`bti c`) but instead show the first instruction of the function body.
-4. Confirm BTI is active: `grep BTI /proc/$(pidof agent)/smaps` or check `/proc/cpuinfo` for `bti` in the Features line.
+4. Confirm the JIT pages are Guarded: `grep -E '^VmFlags.*\bbt\b' /proc/$(pidof agent)/smaps` (the kernel's smaps `VmFlags` token for `VM_ARM64_BTI` is the two-letter `bt`, not the string "BTI") or check `/proc/cpuinfo` for `bti` in the Features line to confirm CPU support.
 5. Verify the binary's BTI note: `readelf -n /usr/bin/agent`.
 
 ### Fix
@@ -326,19 +335,22 @@ The JIT emitter must emit `BTI c` as the very first instruction of every functio
 
 If a JIT targets a mixed environment (some callers may be BTI-unaware), `BTI jc` at all entry points provides maximum compatibility.
 
-For the `mmap` region, calling `mprotect(buf, size, PROT_READ | PROT_EXEC | PROT_BTI)` opts the JIT pages into BTI enforcement explicitly (Linux 5.8+), which also enables the kernel to audit the code before execution.
+A JIT that instead starts out mapping its code with plain `PROT_READ | PROT_EXEC` can opt into the same enforcement later with `mprotect(buf, size, PROT_READ | PROT_EXEC | PROT_BTI)` (Linux 5.8+) — worth doing deliberately for the security benefit, but only once every code-generation path actually emits the required landing pads first.
 
 ### Lesson
 
-BTI is a forward-edge CFI (Control Flow Integrity) mechanism baked into ARMv8.5. When a process binary declares BTI support, the kernel enforces landing pad requirements for all indirect branches — including branches into runtime-generated code. JIT compilers, eBPF back-ends, and FFI stubs must all be updated to emit `BTI c` / `BTI j` preambles. This is a one-instruction fix, but it requires explicit awareness of the BTI ABI.
+BTI is a forward-edge CFI (Control Flow Integrity) mechanism baked into ARMv8.5, and it's enforced per-page, not per-process: only memory explicitly mapped `PROT_BTI` (or, in the common case, a BTI-aware executable's own code and its shared libraries) gets landing-pad checks on indirect branches into it. A JIT that opts its generated code into that enforcement gets a real security benefit — but every code-generation path must then emit `BTI c` / `BTI j` preambles, including runtime-generated code, eBPF back-ends, and FFI stubs. This is a one-instruction-per-function-entry fix, but it requires the JIT to actually know about the BTI ABI before it turns enforcement on.
 
 ---
 
 ## 5. The Erratum Workaround with the Wrong MIDR Range
 
+!!! note "Deliberately generic hardware"
+    This case uses a placeholder core name and part number rather than a real ARM design, specifically so the erratum, MIDR value, and revision range below don't get mapped back onto any real, documented silicon erratum — the mechanism (a MIDR revision range in `arm64_errata[]`) is completely generic and doesn't depend on which real core it's protecting.
+
 ### Setup
 
-A SoC vendor shipped a line of ARM Cortex-A55 based processors. Revision r0p2 of the core had an erratum in its speculative prefetcher: under specific conditions, a spurious prefetch could generate a fault for an address that was not actually being accessed, causing a kernel oops. The upstream kernel fix applied a workaround by disabling the prefetcher via an implementation-defined register when the erratum was detected.
+A SoC vendor licensed an ARM Cortex-family core (referred to here as "MyCore," since the specific real core doesn't matter to the bug). Revision r0p2 of the core had an erratum: under specific conditions, a spurious event in the memory pipeline could generate a fault for an address that was not actually being accessed, causing a kernel oops. The upstream kernel fix applied a workaround via an implementation-defined register when the erratum was detected.
 
 A downstream vendor kernel team backported this fix. The erratum workaround was conditional on the MIDR_EL1 value — it should apply to r0p0, r0p1, and r0p2 of the affected core. However, the backport had a transcription error: the revision range in the errata table covered only r0p0 and r0p1.
 
@@ -349,10 +361,10 @@ Production devices, which shipped with r0p2 silicon, hit spurious kernel faults 
 **The MIDR_EL1 register format:**
 
 ```
-Bits [31:24] — Implementer  (e.g., 0x41 = ARM)
+Bits [31:24] — Implementer  (e.g., 0x41 = ARM, the design licensor)
 Bits [23:20] — Variant      (major revision, e.g., 0 = r0)
 Bits [19:16] — Architecture (0xf = ARMv8)
-Bits [15:4]  — Part number  (e.g., 0xD05 = Cortex-A55)
+Bits [15:4]  — Part number  (implementation-defined per core design)
 Bits [3:0]   — Revision     (minor revision, e.g., 2 = p2)
 ```
 
@@ -361,21 +373,21 @@ The `MIDR_CPU_MODEL()` macro matches on implementer and part number. The errata 
 ```c
 /* WRONG: range ends at r0p1 (revision = 1), misses r0p2 */
 static const struct midr_range affected_range[] = {
-    MIDR_RANGE(MIDR_CORTEX_A55, 0, 0, 0, 1),
+    MIDR_RANGE(MIDR_MYCORE, 0, 0, 0, 1),
     /* variant_min=0, revision_min=0, variant_max=0, revision_max=1 */
 };
 
 /* CORRECT: range must include r0p2 (revision = 2) */
 static const struct midr_range affected_range[] = {
-    MIDR_RANGE(MIDR_CORTEX_A55, 0, 0, 0, 2),
+    MIDR_RANGE(MIDR_MYCORE, 0, 0, 0, 2),
     /* variant_min=0, revision_min=0, variant_max=0, revision_max=2 */
 };
 ```
 
-At boot, the kernel iterates `arm64_errata[]` and calls the `matches` function for each entry. If the current CPU's MIDR falls within the declared range, the erratum is applied and a boot message is printed:
+At boot, the kernel iterates `arm64_errata[]` and calls the `matches` function for each entry. If the current CPU's MIDR falls within the declared range, the erratum is applied and a boot message is printed in the form the kernel's `arm64_errata[]` entries actually use — `pr_fmt` for this code is `"CPU features: "`, and each entry's `.desc` string reads just `"ARM erratum NNNNNN"` (see e.g. the real, unrelated entries in `arch/arm64/kernel/cpu_errata.c`, which read `"ARM erratum 832075"`, `"ARM erratum 834220"`, and so on — no core name, no "Workaround for" prefix):
 
 ```
-[    0.000000] CPU features: detected: Workaround for Cortex-A55 erratum 1530923
+CPU features: detected: ARM erratum NNNNNN
 ```
 
 On the affected r0p2 devices, no such message appeared — a clear sign the workaround was not active.
@@ -384,34 +396,29 @@ To read the MIDR of a running system:
 
 ```bash
 cat /sys/devices/system/cpu/cpu0/regs/identification/midr_el1
-# e.g., 0x0000000041AF5402
-#               ^^ ^^^^ ^^
-#               |  |    |--- revision (2 = p2)
-#               |  |-------- part (D05 = Cortex-A55, stored as 0xd05 in bits 15:4)
-#               |------------ implementer (0x41 = ARM)
+# e.g., 0x00000000410FFFF2
 ```
 
-The revision field (`bits[3:0]`) read as `2` (p2), but the erratum table's range only went to `1` (p1) — a one-off error.
+Reading the low 32 bits, `410FFFF2`, against the bit layout above: implementer `0x41` (ARM), variant `0x0` (r0), architecture `0xf` (ARMv8), part number `0xfff` (this core's placeholder part number), revision `0x2` (p2). The revision field (`bits[3:0]`) read as `2` (p2), but the erratum table's range only went to `1` (p1) — a one-off error.
 
 ### Diagnosis
 
 1. **Spurious kernel faults** on an address that is mapped; fault is non-deterministic and load-dependent.
-2. Check whether the erratum workaround boot message appears: `dmesg | grep -i erratum` or `dmesg | grep -i workaround`.
-3. Read `midr_el1` from sysfs: `cat /sys/devices/system/cpu/cpu0/regs/identification/midr_el1`. Decode the revision field.
+2. Check whether the erratum workaround boot message appears: `dmesg | grep -i erratum`. (The kernel's own `.desc` strings for these entries say "ARM erratum ...", not "workaround" — grepping for "workaround" alone won't find it.)
+3. Read `midr_el1` from sysfs: `cat /sys/devices/system/cpu/cpu0/regs/identification/midr_el1`. Decode the revision field as shown above.
 4. Cross-reference the silicon revision against the errata table in the kernel source. Check `arch/arm64/kernel/cpu_errata.c` (or the vendor equivalent) for the MIDR range.
-5. On debug kernels, `/sys/kernel/debug/cpu_features` or `/sys/kernel/debug/arm64_cpu_features` may list active workarounds.
-6. Confirm by patching the range to include r0p2, reboot, and verify the workaround message appears and spurious faults cease.
+5. Confirm by patching the range to include r0p2, reboot, and verify the workaround message appears and spurious faults cease.
 
 ### Fix
 
 Widen the MIDR revision range to include all affected silicon revisions. After the fix, verify with a production r0p2 device that the boot message appears. Add a comment referencing the errata ID and the affected revision range explicitly so future backports are easier to audit:
 
 ```c
-/* Workaround for Cortex-A55 erratum NNNNNN.
+/* Workaround for MyCore erratum NNNNNN.
  * Affected: r0p0, r0p1, r0p2.
  * See ARM erratum document ID NNNNNN, revision C. */
 static const struct midr_range affected_range[] = {
-    MIDR_RANGE(MIDR_CORTEX_A55, 0, 0, 0, 2),
+    MIDR_RANGE(MIDR_MYCORE, 0, 0, 0, 2),
 };
 ```
 
@@ -425,10 +432,10 @@ Errata workarounds are safety-critical: an off-by-one in a MIDR revision range s
 
 | # | Bug | Root cause | Detection method | ARM64-specific? |
 |---|-----|-----------|-----------------|----------------|
-| 1 | SVE context switch corruption | Unmatched `kernel_neon_begin/end` breaks lazy FP save accounting | Userspace numerical errors; ftrace on fpsimd paths | Yes — lazy FPSIMD/SVE save is ARM64-specific |
+| 1 | Stack corruption on preemption | Unmatched `kernel_neon_begin/end` leaves a dangling `kernel_fpsimd_state` pointer into a dead stack frame | Corruption in unrelated code after the buggy function returns; ftrace on begin/end call sites | Yes — ARM64's context-switchable kernel-mode NEON state is ARM64-specific |
 | 2 | Stale PTE after TLBI | Missing `dsb(ishst)` before TLB invalidate | Intermittent translation faults on recently remapped VA | Yes — ARM64 weak ordering; x86 TSO hides this |
 | 3 | Device reads stale DMA data | Non-coherent DMA without cache flush | Device transmits zeros; confirmed with `pgprot_noncached` | Partly — non-coherent DMA exists on other arches but common on embedded ARM64 |
-| 4 | BTI enforcement crash | JIT code missing `BTI c` landing pad instruction | SIGSEGV with ESR EC=0x0D (ESR_ELx_EC_BTI) | Yes — ARMv8.5 BTI is ARM64-specific |
+| 4 | BTI enforcement crash | JIT code missing `BTI c` landing pad instruction | SIGILL (ILL_ILLOPC) with ESR EC=0x0D (ESR_ELx_EC_BTI) | Yes — ARMv8.5 BTI is ARM64-specific |
 | 5 | Erratum workaround not applied | MIDR revision range off-by-one in errata table | Spurious faults; no erratum boot message; `midr_el1` sysfs | Yes — ARM64 MIDR-based errata infrastructure |
 
 ---
