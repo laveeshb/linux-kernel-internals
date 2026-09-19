@@ -300,7 +300,7 @@ Modern laptops use **s2idle** (suspend-to-idle, sometimes called S0ix or "connec
 
 - Bluetooth/WiFi to stay connected
 - Background tasks to run at reduced rate
-- Faster wake time (~1 second vs ~3 seconds for S3)
+- Faster wake time than S3, since there's no full platform power-down/re-init to unwind — how much faster varies widely by platform and firmware
 
 ```bash
 # Force s2idle (ignore platform S3 support)
@@ -377,7 +377,7 @@ echo mem | sudo tee /sys/power/state
 
 - [A new suspend/hibernate infrastructure](https://lwn.net/Articles/274008/) — Jonathan Corbet, March 19, 2008; Rafael Wysocki's rework separating the suspend and hibernation device callback paths
 - [PM / Sleep: Introduce new phases of device suspend/resume](https://lwn.net/Articles/475730/) — Rafael Wysocki's linux-pm patch series (posted January 16, 2012; archived by LWN as a mailing-list thread, not a staff-written article) that added the `.suspend_late`/`.resume_early` phases described above. The `_noirq` phases already existed by the time of the 2008 rework above; this series did not introduce them.
-- [Waking systems from suspend](https://lwn.net/Articles/429925/) — John Stultz, March 2, 2011; how the RTC and other wakeup sources bring a system out of suspend
+- [Waking systems from suspend](https://lwn.net/Articles/429925/) — John Stultz, March 2, 2011; the alarmtimer subsystem that multiplexes many userspace alarms onto a single hardware RTC alarm via a timerqueue, and the API design question of how to expose that (POSIX alarm-clock IDs like `CLOCK_REALTIME_ALARM` vs. Android's `/dev/alarm` ioctl interface)
 
 ### External
 

@@ -178,14 +178,14 @@ The perf backend is in `arch/x86/events/rapl.c` and registers a PMU named `power
 
 ## ARM equivalent: SCMI power capping
 
-On ARM platforms, SCMI (System Control and Management Interface) provides a comparable capability via the platform firmware. The driver `drivers/powercap/arm_scmi_powercap.c` registers zones from the dedicated SCMI **Powercap** protocol (`SCMI_PROTOCOL_POWERCAP`, protocol ID `0x18`) as powercap zones, so the same `/sys/class/powercap/` interface works on ARM servers (e.g., Ampere Altra). This is a distinct SCMI protocol from **Power domain management** (`SCMI_PROTOCOL_POWER`, protocol ID `0x11`), which is what backs Linux's generic power-domain (genpd) framework, not powercap.
+On ARM platforms, SCMI (System Control and Management Interface) provides a comparable capability via the platform firmware. The driver `drivers/powercap/arm_scmi_powercap.c` registers zones from the dedicated SCMI **Powercap** protocol (`SCMI_PROTOCOL_POWERCAP`, protocol ID `0x18`) as powercap zones, so the same `/sys/class/powercap/` interface works on any ARM platform whose firmware implements it. This is a distinct SCMI protocol from **Power domain management** (`SCMI_PROTOCOL_POWER`, protocol ID `0x11`), which is what backs Linux's generic power-domain (genpd) framework, not powercap. Each zone's name comes straight from the SCMI power-capping domain descriptor the firmware reports (`spz->info->name` in the driver) — it's platform-defined, not a fixed kernel string.
 
 ```bash
-# On an ARM server with SCMI powercap
+# On an ARM platform with SCMI powercap support
 ls /sys/class/powercap/
 # arm-scmi  arm-scmi:0  ...
 cat /sys/class/powercap/arm-scmi:0/name
-# "package_0"
+# whatever name the platform firmware assigned this domain
 ```
 
 The SCMI protocol (defined in Arm DEN0056) runs over shared memory or mailbox between Linux and the SCP (System Control Processor). SCMI message type `POWERCAP_CAP_GET` / `POWERCAP_CAP_SET` map directly to the powercap zone ops.
@@ -229,7 +229,7 @@ perf stat -e cpu-cycles,ref-cycles -- sleep 1
 - [drivers/powercap/intel_rapl_common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_common.c) — shared RAPL domain/constraint logic used by both interface drivers
 - [drivers/powercap/intel_rapl_msr.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_msr.c) — MSR-based RAPL interface driver
 - [arch/x86/include/asm/msr-index.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/include/asm/msr-index.h) — `MSR_RAPL_POWER_UNIT`, `MSR_PKG_ENERGY_STATUS`, and the other MSR offsets used on this page
-- [drivers/powercap/arm_scmi_powercap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/arm_scmi_powercap.c) — ARM SCMI powercap driver, registering SCMI power domains as powercap zones
+- [drivers/powercap/arm_scmi_powercap.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/arm_scmi_powercap.c) — ARM SCMI powercap driver, registering SCMI power-capping domains as powercap zones
 - [arch/x86/events/rapl.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/arch/x86/events/rapl.c) — the `power` PMU backend that exposes RAPL counters to `perf stat -e power/energy-*/`
 
 ### Man pages

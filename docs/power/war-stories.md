@@ -25,12 +25,12 @@ The driver worked perfectly on the submitter's test machine, which did not use s
 On a laptop running the driver:
 
 1. User closes lid. Systemd calls `echo mem > /sys/power/state`.
-2. PM core calls `dpm_suspend()`, which walks the device list. For each device, `device_suspend()` (`drivers/base/power/main.c`) picks the *first* non-NULL `dev_pm_ops` it finds, checking `pm_domain`, `type`, `class`, then `bus`, and only falling back to the driver's own `dev_pm_ops` if none of those provide a callback. For a PCI device, `dev->bus->pm` is `pci_bus_pm_ops` — always non-NULL — so this device's suspend goes through `pci_pm_suspend()` regardless of what `mynic_pm_ops` contains.
+2. PM core calls `dpm_suspend()`, which walks the device list. For each device, `device_suspend()` (`drivers/base/power/main.c`) picks the *first* non-NULL `dev_pm_ops` it finds, checking `pm_domain`, `type`, `class`, then `bus`, and only falling back to the driver's own `dev_pm_ops` if none of those provide a callback. For a PCI device, `dev->bus->pm` is `pci_dev_pm_ops` (`drivers/pci/pci-driver.c`, wired in via the `PCI_PM_OPS_PTR` macro) — non-NULL on any `CONFIG_PM` build — so this device's suspend goes through `pci_pm_suspend()` regardless of what `mynic_pm_ops` contains.
 3. Inside `pci_pm_suspend()`, the bus-level code checks the *driver's* callback itself: `if (pm->suspend) { pm->suspend(dev); ... }`. Since `mynic_pm_ops.suspend` is NULL, that block is simply skipped — no driver code runs — but `pci_pm_suspend()` still returns 0 and the generic PCI suspend machinery proceeds.
 4. `pci_pm_suspend_noirq()` still runs unconditionally later in the same suspend sequence: it calls `pci_save_state()` and puts the device into D3, exactly as it would for a driver with a real `suspend` callback. That call saves the *generic PCI config-space* state (BARs, command register, MSI/MSI-X config) — it has no idea about the NIC's private hardware state, because saving that is the driver's job, and the driver's callback never ran. The PCIe host controller is properly suspended and powers down the bus.
-5. On resume, the host controller resets the PCIe bus (standard PCIe hot-reset behavior on resume).
-6. Generic PCI config space is restored by the bus-level resume path, but the NIC's firmware and internal registers are in reset state, and the driver has not been told — it holds stale DMA ring pointers and register shadows from before suspend.
-7. The driver accesses a DMA ring head pointer register. The hardware returns `0xFFFFFFFF` (PCIe reads to unpowered device). The driver interprets this as a fatal hardware error and calls `BUG()`.
+5. On resume, coming back from D3cold implies a PCIe **Fundamental Reset** (PCIe spec §5.8) — one of the two forms of what the spec calls a Conventional Reset, the other being a software-triggered hot reset (a bridge's Secondary Bus Reset bit). Either way, the device comes back in its power-on reset state.
+6. Generic PCI *config space* (the standard PCI header — BARs, command register, MSI/MSI-X config) is restored by the bus-level resume path once the device responds again. That only proves the device answers config-space accesses; it says nothing about the NIC's own private, driver-owned MMIO registers behind those BARs, which came out of the reset in their power-on-default state. The driver was never told to re-initialize them, so it still holds stale DMA ring pointers and register shadows from before suspend.
+7. The driver accesses a DMA ring head pointer register — a private MMIO register, not part of config space, and not something the generic PCI resume path initializes or waits on. Normal PCI core code re-reading config space after a reset waits out `PCI_RESET_WAIT` before trying; the driver's interrupt handler has no such gate, because the driver's own `resume` callback — the thing that would normally re-initialize these registers and only then re-enable interrupts — never ran either. Reading a private register the device hasn't finished bringing back up yet returns `0xFFFFFFFF`, the classic symptom of a PCIe read that couldn't reach a live target. The driver interprets this as a fatal hardware error and calls `BUG()`.
 
 ### Diagnosis
 
@@ -113,7 +113,7 @@ With `CONFIG_DEBUG_ATOMIC_SLEEP` enabled, `might_sleep()` caught it immediately:
 
 ```
 BUG: sleeping function called from invalid context at kernel/locking/mutex.c:580
-in_atomic(): 1, irqs_disabled(): 0, non-block: 0, pid: 88, name: irq/86-mytouch
+in_atomic(): 1, irqs_disabled(): 0, non_block: 0, pid: 88, name: irq/86-mytouch
 ...
 Call Trace:
   __might_sleep
@@ -300,7 +300,7 @@ echo 50000000 > /sys/class/powercap/intel-rapl:0:1/constraint_0_power_limit_uw
 
 After raising the DRAM limit to 50 W — above the workload's ~45 W demand — memory bandwidth throttling disappeared and throughput returned to baseline, still well within the 150 W package budget because the CPU cores were only at 35% load.
 
-**Lesson**: RAPL domain limits are set and enforced independently of one another. Before setting power caps, enumerate all domains with `for zone in /sys/class/powercap/intel-rapl*/; do cat $zone/name $zone/constraint_0_power_limit_uw; done` and understand which domain is the actual bottleneck. Monitor `energy_uj` on all domains during workload characterization.
+**Lesson**: RAPL domain limits are set and enforced independently of one another. Before setting power caps, enumerate all domains with `for zone in /sys/class/powercap/intel-rapl:*/; do cat $zone/name $zone/constraint_0_power_limit_uw; done` and understand which domain is the actual bottleneck (note the colon in the glob — `intel-rapl*` without it would also match the `intel-rapl` control-type directory itself, not just its zones). Monitor `energy_uj` on all domains during workload characterization.
 
 ---
 
@@ -377,7 +377,7 @@ echo 'ACTION=="add", SUBSYSTEM=="i2c", ATTR{name}=="ELAN0001:00", \
 - [drivers/base/power/main.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/main.c) — `device_suspend()`'s callback-selection order (`pm_domain` → `type` → `class` → `bus` → driver `pm`) and `dpm_run_callback()`'s `if (!cb) return 0;`; for a PCI device `dev->bus->pm` is always set, so this particular skip never fires — Case 1
 - [include/linux/pm.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm.h) — `DEFINE_SIMPLE_DEV_PM_OPS()` (the current macro; `SIMPLE_DEV_PM_OPS()` is now deprecated but equivalent) and `SET_RUNTIME_PM_OPS()`, Case 1's fix
 - [drivers/pci/pci-driver.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/pci/pci-driver.c) — `pci_pm_suspend()`, the bus-level `dev_pm_ops` that wraps a driver's own callbacks and still performs PCI config-space save and the D3 transition, Case 1
-- [include/linux/pm_runtime.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_runtime.h) and [drivers/base/power/runtime.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/runtime.c) — `pm_runtime_get_sync()` (may sleep) versus `pm_runtime_get_if_active()` (never sleeps, returns 1/0), Case 2
+- [include/linux/pm_runtime.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/pm_runtime.h) and [drivers/base/power/runtime.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/runtime.c) — `pm_runtime_get_sync()` (may sleep) versus `pm_runtime_get_if_active()` (never sleeps, tri-valued return — see [Runtime PM](runtime-pm.md#usage-counting-get-and-put)), Case 2
 - [drivers/thermal/gov_step_wise.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/gov_step_wise.c) and [drivers/thermal/gov_power_allocator.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/thermal/gov_power_allocator.c) — the single-step throttling logic versus the PID controller, Case 3
 - [drivers/powercap/intel_rapl_common.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/powercap/intel_rapl_common.c) — `rapl_domain_names[]` (`"package"`, `"core"`, `"uncore"`, `"dram"`), the independent sub-domains behind Case 4
 - [drivers/base/power/wakeup.c](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/base/power/wakeup.c) — `print_wakeup_source_stats()`, the column layout of `/sys/kernel/debug/wakeup_sources`, and the `wakeup_source_activate` tracepoint, Case 5

@@ -322,7 +322,13 @@ static int mydriver_probe(struct platform_device *pdev)
     /* missing: pm_runtime_enable(&pdev->dev) */
     return 0;
 }
-/* pm_runtime_get_sync will always return -EACCES when runtime PM disabled */
+/* pm_runtime_get_sync() calls rpm_resume() with fixed flags that can never
+ * include RPM_TRANSPARENT, and pm_runtime_init() leaves this device with
+ * runtime_status RPM_SUSPENDED / last_status RPM_INVALID - neither of
+ * rpm_resume()'s two non-error exits (already RPM_ACTIVE with a matching
+ * last_status, or an RPM_TRANSPARENT caller) applies here, so this really
+ * does return -EACCES every time, for exactly this reason: disable_depth
+ * is still 1 because pm_runtime_enable() was never called */
 ```
 
 ### Not balancing get/put
