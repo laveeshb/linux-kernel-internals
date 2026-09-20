@@ -12,7 +12,7 @@ Ordered reverse chronologically by disclosure date — newest first.
 
 ### [The net/sched act_api Filter-Delete Race](war-stories/act-api-uaf.md)
 **Fixed May–June 2026, disclosed June 2026, independent 0-day write-up July 2026 · CVE-2026-53264 · CVSS 7.8 (Linux kernel CNA) / 7.0 (Red Hat)**
-A 2017 comment correctly reasoned that one reader path was RCU-safe and never checked whether a future one would be — a 2023 scalability fix added exactly that reader, unnoticed, and the resulting race sat live for over two years until an OpenAI researcher reported it through normal channels two days before a scheduled exploit competition — unbeknownst to a STAR Labs intern who had independently found and weaponized the same bug as a 0-day for that same competition, using AI to help build the local-root exploit chain, and who only learned of the upstream report afterward.
+A 2017 comment correctly reasoned that one reader path was RCU-safe and never checked whether a future one would be — a 2023 scalability fix added exactly that reader, unnoticed, and the resulting race sat live for over two years until an OpenAI researcher reported it through normal channels shortly before a scheduled exploit competition — unbeknownst to a STAR Labs intern who had independently found the same bug and built a working exploit for it as a 0-day for that same competition, using AI to help build the local-root exploit chain, and who only learned of the upstream report afterward.
 
 ### [Netfilter x_tables Heap Overflow](war-stories/netfilter-xtables.md)
 **Fixed April 2021, disclosed July 2021 · CVE-2021-22555 · CVSS 8.3 (Google) / 7.8 (NVD)**
