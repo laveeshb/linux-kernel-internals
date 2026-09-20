@@ -2,6 +2,17 @@
 
 Big changes to the site — new sections, major expansions, and notable corrections — newest first. This is a *curated* list of the significant milestones, not a full commit log; the complete history lives in [the repository](https://github.com/laveeshb/linux-kernel-internals/commits/main).
 
+## September 2026
+
+- **A subsystem-wide accuracy audit closed out.** Roughly 25 pages across [virtualization](virtualization/README.md), [syscalls](syscalls/README.md), [kernel internals](kernel/README.md), [debugging](debugging/README.md), [crypto](crypto/README.md), and [IOMMU](iommu/README.md) had fabricated struct fields, invented function names, wrong Kconfig defaults, or other stale claims corrected against current kernel source — extending the audit discipline the [virtualization](virtualization/README.md) pass started in August into every subsystem it hadn't reached yet.
+- **IPC content refreshed against current source.** [Pipes](ipc/pipes.md), [Unix sockets](ipc/unix-sockets.md), [shared memory](ipc/shared-memory.md), [signals](ipc/signals.md), and [war stories](ipc/war-stories.md) updated to match current kernel behavior.
+- **New: [PREEMPT_RT](locking/preempt-rt.md) and [sched_ext](sched/sched-ext.md).** Two long-queued pages landed, each with a follow-up accuracy pass.
+- **BPF deepened.** Added [the BPF security model](bpf/bpf-security-model.md) (capabilities, unprivileged BPF, LSM hooks) and [helpers, kfuncs, and the JIT](bpf/bpf-helpers-kfuncs-jit.md).
+- **New war-stories pages:** [scheduler](sched/war-stories.md), [interrupts](interrupts/war-stories.md), and [livepatch's kGraft-vs-kpatch history](livepatch/kgraft-vs-kpatch-history.md).
+- **War-stories editorial cleanup.** Clarified how the four *illustrative* pages — [power](power/war-stories.md), [debugging](debugging/war-stories.md), [kernel](kernel/war-stories.md), [arm64](arch/arm64/war-stories.md) — differ from the rest of the collection's real, individually-cited incidents, and fixed several technical errors surfaced along the way.
+- **Five new real-incident war stories.** Three USB use-after-frees (CVE-2024-36896, CVE-2026-80824, CVE-2025-68282), an XFS online-repair use-after-free (CVE-2025-68784), and a [net/sched act_api race](net/war-stories/act-api-uaf.md) (CVE-2026-53264) — the last one also covering an independently-found, AI-assisted 0-day exploit built for the same bug before the upstream fix landed.
+- **[Interrupts](interrupts/README.md), given real design history.** The section's six shallowest pages — [README](interrupts/README.md), [overview](interrupts/interrupts.md), [tasklets](interrupts/tasklets.md), [threaded IRQs](interrupts/threaded-irq.md), [request_irq](interrupts/request-irq.md), and [timers](interrupts/timers.md) — went from mechanism-only reference to sourced history: why there are five separate deferred-work mechanisms, the real tasklet-deprecation debate and `WQ_BH`'s origin, and the 2016 timer-wheel rewrite that eliminated cascading outright.
+
 ## August 2026
 
 - **New section: [USB](usb/README.md).** A full walkthrough of the USB subsystem — the host-scheduled bus model, [enumeration and descriptors](usb/enumeration.md), [URBs and the four transfer types](usb/urbs.md), [host controllers (xHCI) and gadget mode](usb/xhci-gadget.md), and [war stories](usb/war-stories.md) (BadUSB, a MIDI double-free, fuzzing the host stack).
