@@ -36,7 +36,7 @@ A hosting company's engineer found it while investigating what looked like ordin
 
 ## How it was found
 
-For nearly a year, nobody knew this was a security bug. It presented as flaky data corruption.
+For nearly a year, nobody knew this was a security bug — the first support ticket landed April 29, 2021, and the corruption wasn't identified as a kernel bug until February 19, 2022. Kellermann's own account of the mystery runs through the usual hardware suspects before that: "Is this caused by flaky hardware? Bad RAM? Bad storage? Cosmic rays?"
 
 CM4all's hosting platform compresses daily web access logs with zlib and serves a month's worth as one concatenated `.gz` — or, for Windows users, wrapped in a ZIP container — using `splice()` to push file data straight into the HTTP connection. Starting April 2021, customers occasionally reported that downloaded logs failed CRC validation. The first ticket was closed by hand-patching the CRC.
 
