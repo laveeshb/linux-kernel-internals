@@ -32,6 +32,33 @@ The commit message gives two reasons. The narrow one is that a related rewrite m
 
 That gap didn't turn into a live bug the moment it opened. Direct action-index lookups — what a concurrent `RTM_NEWTFILTER` performs, via `tcf_idr_check_alloc()` — were, through Linux 6.7, entirely mutex-protected: the function took `idrinfo->lock` before calling `idr_find()` and held it through the `refcount_inc()`, so there was no RCU-only reader of the action IDR at all, and the 2017 comment's claim held safely, if incidentally. That changed in December 2023: Pedro Tammela's commit [`4b55e86736d5`](https://git.kernel.org/linus/4b55e86736d5) ("net/sched: act_api: rely on rcu in tcf_idr_check_alloc"), merged for Linux 6.8, rewrote the function to reduce mutex contention when many filters bind to the same action concurrently — replacing the mutex-held lookup with `rcu_read_lock()` around `idr_find()` and `refcount_inc_not_zero()` for the bump, falling back to the mutex only when allocating a brand-new slot. That's exactly the reader the 2017 comment never accounted for, introduced not by carelessness but by an unrelated, individually well-reasoned scalability fix six years later. The exploitable window opened there, in late 2023 — not in 2017. (The CVE record itself lists "affected since 4.14" — that's a mechanical consequence of citing the 2017 commit as the `Fixes:` target, not an independent exploitability analysis; the code above is what actually determines when the window opened.)
 
+The two versions of the read path, trimmed to the locking difference (verified directly against `net/sched/act_api.c` at each tag):
+
+```c
+/* v6.7 — idrinfo->lock held for the entire lookup and refcount bump */
+mutex_lock(&idrinfo->lock);
+p = idr_find(&idrinfo->action_idr, *index);
+if (p) {
+    refcount_inc(&p->tcfa_refcnt);   /* safe: mutex still held, p can't vanish */
+    ...
+}
+mutex_unlock(&idrinfo->lock);
+```
+
+```c
+/* v6.8, commit 4b55e86736d5 — mutex dropped for the lookup itself */
+rcu_read_lock();
+p = idr_find(&idrinfo->action_idr, *index);
+if (p) {
+    if (!refcount_inc_not_zero(&p->tcfa_refcnt))  /* p could already be mid-free */
+        return -EAGAIN;
+    ...
+}
+rcu_read_unlock();
+```
+
+Nothing here is wrong on its own — `refcount_inc_not_zero()` is exactly the right primitive for an RCU-only reader to use. The 2017 comment just predates this reader by six years, and nobody re-checked it against the new code path when this landed.
+
 The chronology, visually:
 
 ```mermaid
@@ -45,6 +72,9 @@ timeline
     2026 : two researchers independently find the race
          : 5057e1aca011 restores RCU-deferred freeing
 ```
+
+!!! tip "The one-sentence version"
+    2017 stopped deferring the action's free because no RCU-only reader existed yet; 2023 added one. Neither change was wrong on its own — the bug lives only in their combination.
 
 ## The trigger
 
