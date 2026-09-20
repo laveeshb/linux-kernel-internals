@@ -4,16 +4,17 @@ Big changes to the site — new sections, major expansions, and notable correcti
 
 ## September 2026
 
-- **Accuracy audit extended site-wide.** Dozens more pages — spanning syscalls, kernel internals, debugging, crypto, IOMMU, virtualization, and IPC — had fabricated or stale technical details corrected against current kernel source, continuing the pass that started in [virtualization/](virtualization/README.md) in August.
-- **New pages: [PREEMPT_RT](locking/preempt-rt.md), [sched_ext](sched/sched-ext.md), and two BPF deep-dives** ([security model](bpf/bpf-security-model.md), [helpers/kfuncs/JIT](bpf/bpf-helpers-kfuncs-jit.md)).
-- **War stories kept growing:** new pages for the scheduler, interrupts, and livepatch's kGraft-vs-kpatch history; five new real-incident CVE write-ups (three USB, one XFS, one net/sched — the last documenting an AI-assisted 0-day exploit); and an editorial pass clarifying which war-stories pages are illustrative versus real, individually-cited incidents.
+- **Accuracy audit extended site-wide.** Dozens more pages — spanning syscalls, kernel internals, debugging, power, time, crypto, IOMMU, virtualization, and IPC — had incorrect or stale technical details corrected against current kernel source, continuing the pass that started in [virtualization/](virtualization/README.md) in August.
+- **New pages: [PREEMPT_RT](locking/preempt-rt.md), [sched_ext](sched/sched-ext.md), [kGraft vs. kpatch](livepatch/kgraft-vs-kpatch-history.md), and two BPF deep-dives** ([security model](bpf/bpf-security-model.md), [helpers/kfuncs/JIT](bpf/bpf-helpers-kfuncs-jit.md)).
+- **War stories kept growing** — new pages for the [scheduler](sched/war-stories.md) and [interrupts](interrupts/war-stories.md), five more independently-sourced CVE write-ups across USB, XFS, and net/sched (the last found independently of the upstream report that fixed it), and an editorial pass clarifying which war-stories pages are illustrative rather than real, individually-cited incidents.
 - **[Interrupts](interrupts/README.md) given real design history** — the section's shallowest pages now explain *why* the kernel has five different deferred-work mechanisms and how each one came to exist, not just how they work.
 
 ## August 2026
 
-- **New content across devices, drivers, and storage.** [USB](usb/README.md) landed as a full new section; the Devices & Drivers category filled out with [GPU/DRM](drm/README.md), [sound/ALSA](alsa/README.md), [input/HID](input/README.md), and [TTY/serial](tty/README.md); [filesystems](filesystems/README.md), the [block layer](block/README.md), and [tracing](tracing/README.md) all deepened; and a new [Hardware Evolution](hardware-evolution.md) timeline traces six moments a hardware shift forced a kernel-design change.
+- **New content across devices, drivers, and storage.** [USB](usb/README.md) landed as a full new section; the Devices & Drivers category filled out with [GPU/DRM](drm/README.md), [sound/ALSA](alsa/README.md), [input/HID](input/README.md), and [TTY/serial](tty/README.md); and [filesystems](filesystems/README.md), the [block layer](block/README.md), and [tracing](tracing/README.md) all deepened.
+- **New: [Hardware Evolution](hardware-evolution.md)**, a companion timeline tracing six moments a hardware shift forced a kernel-design change.
 - **War stories expanded across most of the site**, each incident independently verified against a real commit, CVE, or LWN article rather than summarized from memory.
-- **A citation-integrity sweep** fixed broken and wrong source links and closed out subsystems with no citations at all — which surfaced fabricated technical details in some older illustrative code samples, kicking off the ongoing accuracy audit.
+- **A citation-integrity sweep** fixed broken and wrong source links and closed out subsystems with no citations at all — which surfaced incorrect technical details in some older illustrative code samples, kicking off the ongoing accuracy audit.
 - **Navigation overhaul.** Subsystems are now grouped into themed category tabs with landing pages and a more readable layout.
 
 ## July 2026
