@@ -15,7 +15,7 @@ This matters because every kernel security hook designed around the syscall boun
 
 The io-wq path through `io_uring/io-wq.c` and the core submission machinery in `io_uring/io_uring.c` form a large, complex state machine. Subtle lifetime bugs and type confusions in that state machine have been the source of several privilege-escalation CVEs.
 
-The gap goes deeper than just the io-wq thread pool. seccomp's BPF program runs from a specific hook in the syscall entry path (`secure_computing()`, invoked from arch entry code before a syscall's number and arguments are dispatched) — io-wq worker execution never passes through that entry path at all, so there is no check for it to bypass; the code path the check lives in simply isn't entered. The same gap applies to the submission model itself, independent of io-wq: `io_uring_enter` lets userspace batch an arbitrary number of future operations as opaque binary SQEs into a shared-memory ring, which the kernel then consumes asynchronously. A monitor built around the syscall boundary — seccomp, ptrace, a generic LSM syscall hook — intercepts once per syscall crossing; it has no equivalent point to intercept once per *operation* inside that ring. That is why `IORING_REGISTER_RESTRICTIONS` had to be invented as an io_uring-specific mechanism rather than reusing seccomp, and why SELinux and AppArmor each needed a bespoke `io_uring` object class instead of extending their existing syscall-mediation machinery.
+The gap goes deeper than just the io-wq thread pool. seccomp's BPF program runs from a specific hook in the syscall entry path (`secure_computing()`, invoked from arch entry code before a syscall's number and arguments are dispatched) — io-wq worker execution never passes through that entry path at all, so there is no check for it to bypass; the code path the check lives in simply isn't entered. The same gap applies to the submission model itself, independent of io-wq: `io_uring_enter` lets userspace batch an arbitrary number of future operations as opaque binary SQEs into a shared-memory ring, which the kernel then consumes asynchronously. A monitor built strictly around the syscall boundary — seccomp, ptrace — has no equivalent point to intercept once per *operation* inside that ring, only once per `io_uring_enter` call covering however many operations were batched. LSM hooks are different: they mediate at the point of object access (opening a file, a socket operation), so they still fire for work an io-wq thread performs — which is why SELinux and AppArmor were able to add `io_uring`-specific object classes covering credential sharing (`personality`/`override_creds`) and SQPOLL rather than needing a wholesale redesign. `IORING_REGISTER_RESTRICTIONS` fills a narrower gap: an allowlist a trusted component can apply before handing a ring to untrusted code, independent of whichever LSM (if any) is active.
 
 ## seccomp and io_uring
 
@@ -37,7 +37,7 @@ Without `IORING_SETUP_SQPOLL` (the default), there is no dedicated polling threa
 
 `IORING_SETUP_SINGLE_ISSUER` (Linux 6.0) restricts submission to the one thread that created the ring, but does not change the seccomp bypass property.
 
-The practical consequence: **seccomp alone is not a sufficient sandbox for processes that have access to an io_uring file descriptor**. Android, Chrome OS, and gVisor all respond to this by disabling `io_uring_setup` outright in their seccomp policies (see below).
+The practical consequence: **seccomp alone is not a sufficient sandbox for processes that have access to an io_uring file descriptor**. Android, Chrome OS, and gVisor each restrict io_uring for untrusted code as a result, though not all by the same mechanism (see below).
 
 ## Restrictions added over time
 
@@ -142,7 +142,7 @@ After `IORING_REGISTER_RESTRICTIONS` is applied, the kernel checks each SQE agai
 
 The complexity of the io_uring state machine — cancellation, timeouts, linked requests, fixed buffers, registered credentials — creates a large surface for subtle memory-safety bugs:
 
-**CVE-2022-29582** — use-after-free in io_uring timeout handling (`fs/io_uring.c`, before the 5.19 split into the `io_uring/` directory). A race between `io_flush_timeouts()` and linked-timeout cancellation, triggered by combining `IORING_OP_TIMEOUT` and `IORING_OP_LINK_TIMEOUT` in a linked SQE chain, allowed a local attacker to escalate privileges. Fixed in Linux 5.17.3 / 5.15.34 (also backported to 5.10.111). CVSS 7.0.
+**CVE-2022-29582** — use-after-free in io_uring timeout handling (`fs/io_uring.c`, before the 6.0 split into the `io_uring/` directory). A race between `io_flush_timeouts()` and linked-timeout cancellation, triggered by combining `IORING_OP_TIMEOUT` and `IORING_OP_LINK_TIMEOUT` in a linked SQE chain, allowed a local attacker to escalate privileges. Fixed in Linux 5.17.3 / 5.15.34 (also backported to 5.10.111). CVSS 7.0.
 
 **CVE-2023-2598** — integer overflow in fixed buffer registration. When registering fixed buffers via `IORING_REGISTER_BUFFERS`, insufficient validation of the buffer count allowed an overflow that corrupted kernel memory. The bug was introduced in 6.3-rc1 and fixed in 6.3.2 (mainline 6.4) — kernels 6.3.0 and 6.3.1 shipped with it. The vulnerable calculation was in `io_uring/rsrc.c:io_sqe_buffer_register()`.
 
@@ -152,19 +152,19 @@ Staying on a recent kernel is the most effective mitigation. The io_uring subsys
 
 ## Android, Chrome OS, and gVisor restrictions
 
-These platforms concluded that the seccomp bypass risk outweighs the performance benefit for their threat models:
+Each of these platforms restricts io_uring for untrusted code, citing the difficulty of sandboxing it as the reason:
 
-**Android**: since a July 2023 announcement, Google blocks io_uring for regular apps — "our seccomp-bpf filter ensures that io_uring is unreachable to apps" — after io_uring accounted for roughly 60% of the kernel exploits reported to Android's bug-bounty program in 2022. The stated follow-up plan is to further restrict access with SELinux to a small set of system processes (`fastbootd`, `snapuserd`).
+**Android**: since a June 2023 announcement, Google blocks io_uring for regular apps — "our seccomp-bpf filter ensures that io_uring is unreachable to apps" — after io_uring accounted for roughly 60% of the kernel exploits submitted to Google's kCTF vulnerability-reward program in 2022. AOSP's sepolicy grants io_uring access only to a small set of system processes, such as `fastbootd` and `snapuserd`.
 
-**Chrome OS**: disabled io_uring at the kernel level while exploring better sandboxing options, per the same 2023 announcement — not a Chrome-sandbox seccomp-bpf policy scoped to specific process types.
+**Chrome OS**: disabled io_uring while exploring better sandboxing options, per the same 2023 announcement — not a Chrome-sandbox seccomp-bpf policy scoped to specific process types.
 
 **gVisor**: `io_uring_setup` and `io_uring_enter` have a partial implementation, off by default and limited to basic I/O operations when enabled; `io_uring_register` is unimplemented and returns `ENOSYS`.
 
 **Linux Security Modules**: SELinux gained an `io_uring` object class with dedicated LSM hooks in Linux 5.16; AppArmor added its own io_uring mediation much later, in Linux 6.7. Policy can deny `sqpoll` (spawning the SQPOLL kernel thread) and `override_creds` (using the `personality` field to run ops under alternate credentials) independently of the general io_uring access.
 
 ```
-# SELinux: deny SQPOLL thread creation for confined_t
-deny confined_t self:io_uring sqpoll;
+# SELinux: forbid SQPOLL thread creation for confined_t
+neverallow confined_t self:io_uring sqpoll;
 
 # AppArmor: deny credential override
 deny io_uring override_creds,
@@ -175,7 +175,7 @@ deny io_uring override_creds,
 **Minimize flags**
 
 - Default: omit `IORING_SETUP_SQPOLL` unless polling latency is critical and the process is trusted. SQPOLL spawns a kernel thread that runs continuously with the process's credentials.
-- Use `IORING_SETUP_SINGLE_ISSUER` (Linux 6.2+) for any ring accessed from a single submission thread.
+- Use `IORING_SETUP_SINGLE_ISSUER` (Linux 6.0+) for any ring accessed from a single submission thread.
 - Use `IORING_SETUP_DEFER_TASKRUN` (Linux 6.1+) alongside `IORING_SETUP_SINGLE_ISSUER` to avoid spawning io-wq threads for completion processing.
 
 **Lock down rings in sandboxed contexts**

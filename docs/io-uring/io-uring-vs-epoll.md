@@ -593,8 +593,8 @@ io_uring.
 5.7   — IORING_OP_SPLICE, IOSQE_BUFFER_SELECT
 5.10  — IORING_REGISTER_RESTRICTIONS, good stability baseline
 5.11  — SQPOLL usable non-root with CAP_SYS_NICE
-5.13  — SQPOLL fully unprivileged
-5.19  — multishot poll/accept
+5.13  — SQPOLL fully unprivileged, multishot poll (IORING_POLL_ADD_MULTI)
+5.19  — multishot accept
 6.0   — multishot recvmsg, IORING_OP_SEND_ZC stable
 ```
 
