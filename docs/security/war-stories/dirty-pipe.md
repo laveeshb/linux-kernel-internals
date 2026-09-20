@@ -30,7 +30,7 @@ Actively exploited
 
 ## What happened
 
-A single missing line of code — `buf->flags = 0;` — sat dormant in a pair of functions that feed file data into a pipe, for four years, before an unrelated, well-reasoned refactor turned it into one of the most severe local-privilege-escalation bugs in the kernel's history: CVE-2022-0847, exploitable with no capabilities and no write permission at all.
+A missing initializer — `buf->flags = 0;` — sat dormant in a pair of functions that feed file data into a pipe, for four years, before an unrelated, well-reasoned refactor turned it into one of the most severe local-privilege-escalation bugs in the kernel's history: CVE-2022-0847, exploitable with no capabilities and no write permission at all.
 
 A hosting company's engineer found it while investigating what looked like ordinary data corruption in customer log files, not while hunting for kernel bugs — and once he understood the mechanism, turning it into a working exploit took five syscalls in a fixed order, no race and no privileges required.
 
@@ -69,7 +69,7 @@ The rough analogy is CVE-2016-5195, Dirty COW, which Kellermann invokes in the n
 
 ## How the code was vulnerable
 
-To see how a four-year-old missing line of code produced all of that, start with how pipes actually work. A Linux pipe is a ring of `struct pipe_buffer` entries, each pointing at a page. See [Pipes and FIFOs](../../ipc/pipes.md) for the ring mechanics and [splice, sendfile, and Zero-Copy](../../io/splice-sendfile.md) for how `splice()` moves pages into that ring without copying.
+To see how that gap produced all of that, start with how pipes actually work. A Linux pipe is a ring of `struct pipe_buffer` entries, each pointing at a page. See [Pipes and FIFOs](../../ipc/pipes.md) for the ring mechanics and [splice, sendfile, and Zero-Copy](../../io/splice-sendfile.md) for how `splice()` moves pages into that ring without copying.
 
 The relevant optimization is **merging**. If the last write to a pipe didn't fill its page, the next `write()` can append into the same page rather than allocating a new one. That is safe for *anonymous* pipe buffers, whose pages the pipe owns outright. It is emphatically not safe for buffers created by `splice()` from a file, because those point directly into the **page cache** — the page belongs to the file, not to the pipe, and appending to it would be writing to the file.
 
@@ -171,7 +171,7 @@ The commit carries `Fixes: 241699cd72a8 ("new iov_iter flavour: pipe-backed")` a
 
 > Applied, will push to Linus...
 
-That brevity is the story rather than an absence of one. Per Kellermann's timeline, the bug report, exploit, and patch went to the closed `security@kernel.org` list on February 20; the LKML posting the next day was made **"(without vulnerability details) as suggested by Linus Torvalds, Willy Tarreau and Al Viro"** — a patch that reads as a trivial missing-initializer cleanup, merged on its own merits, with the exploitability discussion kept off the public archive until fixes had shipped. Anyone searching lore for a design argument about this CVE will not find one, and that is the intended outcome of the [kernel's security-bug process](https://docs.kernel.org/process/security-bugs.html), not a gap in the record.
+That brevity is the story rather than an absence of one. This next part isn't in the public LKML archive at all — it comes from the timeline in [Kellermann's own disclosure writeup](https://dirtypipe.cm4all.com/): the bug report, exploit, and patch went to the closed `security@kernel.org` list on February 20, and the LKML posting the next day was made **"(without vulnerability details) as suggested by Linus Torvalds, Willy Tarreau and Al Viro"** — a patch that reads as a trivial missing-initializer cleanup, merged on its own merits, with the exploitability discussion kept off the public archive until fixes had shipped. Anyone searching lore for a design argument about this CVE will not find one, and that is the intended outcome of the [kernel's security-bug process](https://docs.kernel.org/process/security-bugs.html), not a gap in the record.
 
 The rest of the timeline, from Kellermann's disclosure:
 
