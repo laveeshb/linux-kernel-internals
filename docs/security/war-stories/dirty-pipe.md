@@ -28,7 +28,46 @@ Actively exploited
 
 *Part of [War Stories: Linux Security Bugs and CVEs](../war-stories.md).*
 
-## Before state
+## What happened
+
+A single missing line of code — `buf->flags = 0;` — sat dormant in Linux's pipe implementation for four years before an unrelated, well-reasoned refactor turned it into one of the most severe local-privilege-escalation bugs in the kernel's history. The result, CVE-2022-0847, let any unprivileged user who could merely *read* a file overwrite its contents in the page cache — bypassing read-only mounts, immutable file flags, and even read-only btrfs snapshots, with no capabilities required at all.
+
+It wasn't found by a security researcher hunting for kernel bugs. A hosting company's engineer spent nearly a year chasing what looked like ordinary data corruption in customer log files before realizing he'd found a kernel vulnerability — and once he understood the mechanism, reproducing it took four syscalls in a fixed order.
+
+## How it was found
+
+For nearly a year, nobody knew this was a security bug. It presented as flaky data corruption.
+
+CM4all's hosting platform compresses daily web access logs with zlib and serves a month's worth as one concatenated `.gz` — or, for Windows users, wrapped in a ZIP container — using `splice()` to push file data straight into the HTTP connection. Starting April 2021, customers occasionally reported that downloaded logs failed CRC validation. The first ticket was closed by hand-patching the CRC.
+
+The corruption had a signature. Every affected file ended with the same eight wrong bytes:
+
+```
+000005f0  81 d6 94 39 8a 05 b0 ed  e9 c0 fd 07 00 00 ff ff
+00000600  03 00 50 4b 01 02 1e 03  14 00
+```
+
+`50 4b` is `PK`. `01 02` is a ZIP central directory file header. The bytes overwriting the log files were the ZIP header that the *web service* wrote to its pipe after splicing all the daily files — a process running as a different user, with no write permission on those files, which never opened them for writing at all.
+
+A full-disk scan turned up 37 corrupt files over three months, clustered hard on the last day of each month — because the download loop sends days in order, so the last day's file is always the one immediately followed by the `PK` header. Only the server actually serving HTTP downloads was affected; its standby, running the identical log-splitting job, had zero corruptions.
+
+Kellermann's minimal reproducer is two small programs: one that loops `write(1, "AAAAA", 5)` into a file, and one that loops `splice()` from that file into a pipe followed by `write(1, "BBBBB", 5)`. "BBBBB" started appearing inside the file. A bisect across the 185,011 commits between v4.19 and v5.10 took 17 steps and landed on `f6dd975583bd`.
+
+His initial read was that this required a concurrent privileged writer and won a race. Once he understood the actual mechanism, the hole widened enormously: no writer, no race, arbitrary data at almost arbitrary offsets in any file the attacker can read. `/etc/passwd`, a setuid binary, `authorized_keys` — anything.
+
+## The impact
+
+One property makes this especially nasty operationally: overwriting a page-cache page this way never marks the page dirty, so writeback never runs. The change is live for every process that reads the file, and it evaporates on reboot or reclaim without ever touching the disk. Kellermann's understated note — "This allows interesting attacks without leaving a trace on hard disk" — describes an incident that leaves no forensic artifact in the filesystem.
+
+Exploitation in the wild followed quickly and is well documented:
+
+- **CISA** added CVE-2022-0847 to the Known Exploited Vulnerabilities catalog on **April 25, 2022**, confirmed via [NVD](https://nvd.nist.gov/vuln/detail/CVE-2022-0847), seven weeks after disclosure, with a federal remediation deadline of May 16, 2022.
+- **Google's [Android Security Bulletin for May 2022](https://source.android.com/docs/security/bulletin/2022-05-01)** lists CVE-2022-0847 (component: `pipes`, EoP, High, bug A-220741611) and flags it under "There are indications that the following may be under limited, targeted exploitation." Kellermann had reproduced the bug on a Google Pixel 6 the day after reporting it.
+- **Exploit-DB** carries entry [50808](https://www.exploit-db.com/exploits/50808), "Linux Kernel 5.8 < 5.16.11 - Local Privilege Escalation (DirtyPipe)," published March 8, 2022 — the day after public disclosure. NVD's reference list additionally tags three Packet Storm entries as `Exploit`, one of them a SUID-binary hijack variant and the other two generic local-privilege-escalation writeups of the same bug.
+
+The rough analogy is CVE-2016-5195, Dirty COW, which Kellermann invokes in the name — but he is explicit that this one "is easier to exploit," and it is: Dirty COW needed a race window, this needs four syscalls in a fixed order.
+
+## How the code was vulnerable
 
 A Linux pipe is a ring of `struct pipe_buffer` entries, each pointing at a page. See [Pipes and FIFOs](../../ipc/pipes.md) for the ring mechanics and [splice, sendfile, and Zero-Copy](../../io/splice-sendfile.md) for how `splice()` moves pages into that ring without copying.
 
@@ -92,39 +131,6 @@ The exploit's own comment on the `open()` call — `open(path, O_RDONLY); // yes
 
 As Kellermann put it: it "not only works without write permissions, it also works with immutable files, on read-only btrfs snapshots and on read-only mounts (including CD-ROM mounts). That is because the page cache is always writable (by the kernel), and writing to a pipe never checks any permissions."
 
-## Observed behavior
-
-For nearly a year, nobody knew this was a security bug. It presented as flaky data corruption.
-
-CM4all's hosting platform compresses daily web access logs with zlib and serves a month's worth as one concatenated `.gz` — or, for Windows users, wrapped in a ZIP container — using `splice()` to push file data straight into the HTTP connection. Starting April 2021, customers occasionally reported that downloaded logs failed CRC validation. The first ticket was closed by hand-patching the CRC.
-
-The corruption had a signature. Every affected file ended with the same eight wrong bytes:
-
-```
-000005f0  81 d6 94 39 8a 05 b0 ed  e9 c0 fd 07 00 00 ff ff
-00000600  03 00 50 4b 01 02 1e 03  14 00
-```
-
-`50 4b` is `PK`. `01 02` is a ZIP central directory file header. The bytes overwriting the log files were the ZIP header that the *web service* wrote to its pipe after splicing all the daily files — a process running as a different user, with no write permission on those files, which never opened them for writing at all.
-
-A full-disk scan turned up 37 corrupt files over three months, clustered hard on the last day of each month — because the download loop sends days in order, so the last day's file is always the one immediately followed by the `PK` header. Only the server actually serving HTTP downloads was affected; its standby, running the identical log-splitting job, had zero corruptions.
-
-Kellermann's minimal reproducer is two small programs: one that loops `write(1, "AAAAA", 5)` into a file, and one that loops `splice()` from that file into a pipe followed by `write(1, "BBBBB", 5)`. "BBBBB" started appearing inside the file. A bisect across the 185,011 commits between v4.19 and v5.10 took 17 steps and landed on `f6dd975583bd`.
-
-His initial read was that this required a concurrent privileged writer and won a race. Once he understood the actual mechanism, the hole widened enormously: no writer, no race, arbitrary data at almost arbitrary offsets in any file the attacker can read. `/etc/passwd`, a setuid binary, `authorized_keys` — anything.
-
-One property makes it especially nasty operationally: overwriting a page-cache page this way never marks the page dirty, so writeback never runs. The change is live for every process that reads the file, and it evaporates on reboot or reclaim without ever touching the disk. Kellermann's understated note — "This allows interesting attacks without leaving a trace on hard disk" — describes an incident that leaves no forensic artifact in the filesystem.
-
-Exploitation in the wild followed quickly and is well documented:
-
-- **CISA** added CVE-2022-0847 to the Known Exploited Vulnerabilities catalog on **April 25, 2022**, confirmed via [NVD](https://nvd.nist.gov/vuln/detail/CVE-2022-0847), seven weeks after disclosure, with a federal remediation deadline of May 16, 2022.
-- **Google's [Android Security Bulletin for May 2022](https://source.android.com/docs/security/bulletin/2022-05-01)** lists CVE-2022-0847 (component: `pipes`, EoP, High, bug A-220741611) and flags it under "There are indications that the following may be under limited, targeted exploitation." Kellermann had reproduced the bug on a Google Pixel 6 the day after reporting it.
-- **Exploit-DB** carries entry [50808](https://www.exploit-db.com/exploits/50808), "Linux Kernel 5.8 < 5.16.11 - Local Privilege Escalation (DirtyPipe)," published March 8, 2022 — the day after public disclosure. NVD's reference list additionally tags three Packet Storm entries as `Exploit`, one of them a SUID-binary hijack variant and the other two generic local-privilege-escalation writeups of the same bug.
-
-The rough analogy is CVE-2016-5195, Dirty COW, which Kellermann invokes in the name — but he is explicit that this one "is easier to exploit," and it is: Dirty COW needed a race window, this needs four syscalls in a fixed order.
-
-## Why it happened
-
 The proximate cause is two missing initializers. The interesting cause is *why nobody noticed them for six years*.
 
 **The safety check moved from a field that was always initialized to one that wasn't.** Every version of the merge check was correct at the time it was written. `copy_page_to_iter_pipe()` and `push_pipe()` had always set `buf->ops` correctly, so for as long as the answer was derived from `ops`, they were fine — accidentally. `f6dd975583bd` was a clean, well-reasoned dead-code cleanup that read the merge decision out of `flags` instead. It could not have known that two functions in `lib/iov_iter.c` — a different file, a different subsystem, added by a different author four years earlier — happened to populate `pipe_buffer` by hand and skipped that one member. Kellermann is unambiguous in the PoC's own comments: "The commit did not introduce the bug, it was there before, it just provided an easy way to exploit it."
@@ -135,7 +141,7 @@ The proximate cause is two missing initializers. The interesting cause is *why n
 
 **This exact bug class had already been found and fixed once, in a sibling caller, five years earlier — twice, in one day.** In February 2017, Miklos Szeredi committed [`84588a93d097`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=84588a93d097bace24b9233930f82511d4f34210), titled — word for word — "fuse: fix uninitialized flags in pipe_buffer." Its one-line diff adds `bufs[page_nr].flags = 0;` right after a `bufs[page_nr].ops = ...` assignment in `fuse_dev_splice_read()`, and its `Fixes:` tag points at [`d82718e348fe`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d82718e348fee15dbce8f578ff2588982b7cc7ca) ("fuse_dev_splice_read(): switch to add_to_pipe()"), part of the same 4.9-era pipe-backed-iov_iter conversion that introduced the `lib/iov_iter.c` instances. The fuse fix never got a standalone posting of its own — it reached Linus inside a [pull request](https://lore.kernel.org/linux-fsdevel/20170216164335.GB30656@veci.piliscsaba.szeredi.hu/) Szeredi sent that same day. Five minutes later, [Szeredi posted a second fix](https://lore.kernel.org/linux-fsdevel/20170216164902.GC30656@veci.piliscsaba.szeredi.hu/): the identical one-line fix for `splice_to_pipe()`, whose commit message notes the uninitialized flags "appears to have been there from the introduction of the splice syscall" — i.e. since 2006. Two callers of the same pattern got audited and patched on the same day; the two in `lib/iov_iter.c`, written by the same 2016 conversion, did not. At the time it made no difference. Three years later it made all the difference.
 
-## Resolution
+## How it was fixed
 
 The fix, [`9d2231c5d74e`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9d2231c5d74e13b2a0546fee6737ee4446017903) ("lib/iov_iter: initialize \"flags\" in new pipe_buffer", Max Kellermann), is two lines:
 
