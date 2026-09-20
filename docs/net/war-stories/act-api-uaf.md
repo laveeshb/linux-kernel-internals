@@ -1,6 +1,6 @@
 # The net/sched act_api Filter-Delete Race
 
-> CVE-2026-53264 — a 2017 comment's reasoning about RCU safety covered every reader that existed at the time; a 2023 scalability fix quietly added the one it hadn't, and a researcher rediscovered the resulting bug independently as a fresh 0-day, with AI accelerating the exploit build
+> CVE-2026-53264 — a 2017 comment's reasoning about RCU safety covered every reader that existed at the time; a 2023 scalability fix quietly added the one it hadn't, and a second researcher independently found and weaponized the resulting bug as a fresh 0-day, with AI accelerating the exploit build
 
 Disclosed
 :   2026-06-25 (Linux kernel CNA record); independent 0-day exploit write-up published July 27, 2026 (STAR Labs)
@@ -90,7 +90,7 @@ Independent verification confirms the fix's placement in mainline: `net/sched/ac
 - [Traffic Control and Queueing Disciplines](../tc-qdisc.md) — the `tc` filter/action architecture this bug lives in
 - [Netlink Sockets](../netlink.md) — how `RTM_NEWTFILTER`/`RTM_DELTFILTER` requests reach the kernel
 - [Network Namespaces](../net-namespaces.md) — how unprivileged user+network namespaces expose the capabilities this exploit needs
-- [AF_PACKET TPACKET_V3 Privilege Escalation](af-packet.md) — another local UAF-to-root chain on this page, for comparison
+- [AF_PACKET TPACKET_V3 Privilege Escalation](af-packet.md) — another local UAF-to-root chain in this collection, for comparison
 
 ## External references
 
