@@ -6,7 +6,7 @@ Disclosed
 :   2026-06-25 (Linux kernel CNA record); independent 0-day exploit write-up published July 27, 2026 (STAR Labs)
 
 Reported by
-:   Kyle Zeng (OpenAI security research) — original kernel bug report, credited in the fix commit's `Reported-by` tag (syzbot is credited separately, as `Tested-by`, not as an independent discoverer); Lee Jia Jie (STAR Labs, Singapore) — independently found the same bug and built a working exploit for it as a 0-day, learning only afterward, by their own account, that Zeng had already reported it upstream
+:   Kyle Zeng (OpenAI security research) — original kernel bug report, credited in the fix commit's `Reported-by` tag; Lee Jia Jie (STAR Labs, Singapore) — independently found the same bug and built a working exploit for it as a 0-day, learning only afterward, by their own account, that Zeng had already reported it upstream
 
 CVSS
 :   7.8 HIGH (Linux kernel CNA, vector `CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`; mirrored, not independently scored, by NVD) / 7.0 (Red Hat's own scoring, vector `CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`)
