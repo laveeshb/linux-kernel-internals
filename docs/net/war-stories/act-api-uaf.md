@@ -32,6 +32,20 @@ The commit message gives two reasons. The narrow one is that a related rewrite m
 
 That gap didn't turn into a live bug the moment it opened. Direct action-index lookups — what a concurrent `RTM_NEWTFILTER` performs, via `tcf_idr_check_alloc()` — were, through Linux 6.7, entirely mutex-protected: the function took `idrinfo->lock` before calling `idr_find()` and held it through the `refcount_inc()`, so there was no RCU-only reader of the action IDR at all, and the 2017 comment's claim held safely, if incidentally. That changed in December 2023: Pedro Tammela's commit [`4b55e86736d5`](https://git.kernel.org/linus/4b55e86736d5) ("net/sched: act_api: rely on rcu in tcf_idr_check_alloc"), merged for Linux 6.8, rewrote the function to reduce mutex contention when many filters bind to the same action concurrently — replacing the mutex-held lookup with `rcu_read_lock()` around `idr_find()` and `refcount_inc_not_zero()` for the bump, falling back to the mutex only when allocating a brand-new slot. That's exactly the reader the 2017 comment never accounted for, introduced not by carelessness but by an unrelated, individually well-reasoned scalability fix six years later. The exploitable window opened there, in late 2023 — not in 2017. (The CVE record itself lists "affected since 4.14" — that's a mechanical consequence of citing the 2017 commit as the `Fixes:` target, not an independent exploitability analysis; the code above is what actually determines when the window opened.)
 
+The chronology, visually:
+
+```mermaid
+timeline
+    title Two individually-safe changes, six years apart, became one bug
+    2017 : d7fb60b9cafb removes RCU-deferred freeing
+         : safe at the time — no RCU-only reader of the action IDR exists yet
+    2023 : 4b55e86736d5 adds an RCU-only reader
+         : an unrelated scalability fix, merged for Linux 6.8
+         : the exploitable window opens, unnoticed
+    2026 : two researchers independently find the race
+         : 5057e1aca011 restores RCU-deferred freeing
+```
+
 ## The trigger
 
 The fix commit's own description lays out the race with CPU0 running `RTM_NEWTFILTER` and CPU1 running `RTM_DELTFILTER` concurrently against the same action index:
@@ -49,6 +63,24 @@ The fix commit's own description lays out the race with CPU0 running `RTM_NEWTFI
 ```
 
 That diagram is the fix commit's own schematic, and it's worth being precise about where it simplifies. In the actual `tcf_idr_check_alloc()` code (verified directly in `net/sched/act_api.c` at the pre-fix v7.0 tag), CPU0's read side never takes a mutex at all: it's `rcu_read_lock()`, `idr_find()`, `refcount_inc_not_zero()`, `rcu_read_unlock()`, with no mutex anywhere in between — the mutex in the diagram belongs to CPU1's delete path, not CPU0's read. The actual gap is simpler than the diagram implies: CPU0 holds only the RCU read lock for the entire lookup-and-refcount sequence, and the RCU read lock guarantees only that memory a reader already holds a pointer to won't be *reclaimed* via an RCU-deferred free while that lock is held — it says nothing about a concurrent, *non*-deferred `kfree()` elsewhere. If CPU1's delete path runs in the gap and frees `p` immediately (as the 2017 change made it do), CPU0's subsequent `refcount_inc_not_zero()` touches memory that's already back in the slab allocator's hands.
+
+Visually, the actual (not schematic) interleaving:
+
+```mermaid
+sequenceDiagram
+    participant C0 as CPU0 (RTM_NEWTFILTER)
+    participant C1 as CPU1 (RTM_DELTFILTER)
+    C0->>C0: rcu_read_lock()
+    C0->>C0: p = idr_find(idr, index)
+    Note over C0: no mutex held — RCU read lock only
+    C1->>C1: refcount_dec_and_mutex_lock() — refcnt 1→0
+    C1->>C1: idr_remove(idr, index)
+    C1->>C1: mutex_unlock()
+    C1->>C1: kfree(p) — immediate, no RCU deferral
+    Note over C1: p is freed while CPU0 still holds a pointer to it
+    C0->>C0: refcount_inc_not_zero(&p->tcfa_refcnt)
+    Note over C0: use-after-free — p is already back in the slab allocator
+```
 
 ## Observed behavior
 
@@ -69,6 +101,27 @@ The root cause is a locking/RCU mismatch that was the *product* of a reasoning g
 ## Resolution
 
 Commit [`5057e1aca011`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5057e1aca011e51ef51498c940ef96f3d3e8a305) (Jamal Hadi Salim; authored May 31 2026, committed June 1, landed in v7.1-rc7) restores `struct rcu_head tcfa_rcu` to `struct tc_action` and changes `free_tcf()`'s `kfree(p)` back to a deferred `kfree_rcu(p, tcfa_rcu)` — explicitly framed in the commit message as a revert of 2017's `d7fb60b9cafb` combined with a modernization (the original used an explicit `call_rcu()` callback; the fix uses `kfree_rcu()` directly). With the free deferred, CPU0's `idr_find()` either finds a still-live object (and `refcount_inc_not_zero()` succeeds normally) or the object is already unlinked from the IDR and `idr_find()` correctly returns `NULL` — but the memory itself, even if a stale pointer to it exists somewhere, isn't actually released until the RCU grace period elapses, so there's no window left in which a refcount operation can touch freed memory. Suggested-by Jakub Kicinski; reviewed by Pedro Tammela, Eric Dumazet, and Victor Nogueira; tested by Kyle Zeng, syzbot, and Victor Nogueira.
+
+The same interleaving, after the fix:
+
+```mermaid
+sequenceDiagram
+    participant C0 as CPU0 (RTM_NEWTFILTER)
+    participant C1 as CPU1 (RTM_DELTFILTER)
+    C0->>C0: rcu_read_lock()
+    C1->>C1: refcount_dec_and_mutex_lock() — refcnt 1→0
+    C1->>C1: idr_remove(idr, index)
+    C1->>C1: mutex_unlock()
+    C1->>C1: kfree_rcu(p, tcfa_rcu) — free deferred to next grace period
+    C0->>C0: p = idr_find(idr, index)
+    alt object still resolves
+        C0->>C0: refcount_inc_not_zero() succeeds normally
+    else already unlinked
+        Note over C0: idr_find() returns NULL — nothing to touch
+    end
+    C0->>C0: rcu_read_unlock()
+    Note over C1: kfree() itself only runs once the RCU grace period elapses
+```
 
 Independent verification confirms the fix's placement in mainline: `net/sched/act_api.c` at the `v7.0` tag still has the unconditional `kfree(p)`, while current mainline has the restored `kfree_rcu(p, tcfa_rcu)` — consistent with public reporting that pins the mainline landing to `7.1-rc7`. The fix was backported separately to each affected stable branch as seven distinct commits — `98b2e40879ab`, `18af5d2ef0c4`, `1f1b98fea6b9`, `8b136f18ac4b`, `5dd51e09020c`, `b60e9391142e`, and `91d105d2cbe0`, covering 5.10.259, 5.15.210, 6.1.176, 6.6.143, 6.12.94, 6.18.36, and 7.0.13 — each one carrying its own `[ Upstream commit 5057e1aca011... ]` tag; the `98b2e40879ab` backport's sign-off chain was confirmed directly and ends with Sasha Levin's stable-tree sign-off, as is standard for these backports.
 
