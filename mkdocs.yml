@@ -534,6 +534,7 @@ nav:
         - Network Buffer Tuning: net/net-buffer-tuning.md
       - War Stories:
         - Network War Stories: net/war-stories.md
+        - The net/sched act_api Filter-Delete Race: net/war-stories/act-api-uaf.md
         - Netfilter x_tables Heap Overflow: net/war-stories/netfilter-xtables.md
         - The TCP SACK Panic: net/war-stories/sack-panic.md
         - SegmentSmack: net/war-stories/segmentsmack.md
