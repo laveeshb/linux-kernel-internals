@@ -32,7 +32,7 @@ Actively exploited
 
 A single missing line of code — `buf->flags = 0;` — sat dormant in a pair of functions that feed file data into a pipe, for four years, before an unrelated, well-reasoned refactor turned it into one of the most severe local-privilege-escalation bugs in the kernel's history: CVE-2022-0847, exploitable with no capabilities and no write permission at all.
 
-It wasn't found by a security researcher hunting for kernel bugs. A hosting company's engineer spent months chasing what looked like ordinary data corruption in customer log files before realizing what he'd actually found — and once he understood the mechanism, turning it into a working exploit took five syscalls in a fixed order, no race and no privileges required.
+A hosting company's engineer stumbled onto it while chasing what looked like ordinary data corruption in customer log files, not while hunting for kernel bugs — and once he understood the mechanism, turning it into a working exploit took five syscalls in a fixed order, no race and no privileges required.
 
 ## How it was found
 
