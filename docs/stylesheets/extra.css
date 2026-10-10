@@ -39,11 +39,10 @@ html { font-size: 150%; }                                              /* 125%  
   padding: 0.5em 0.8em;
 }
 
-/* Code font: native monospace stack instead of the Roboto Mono webfont.
-   Google serves Roboto Mono as unicode-range subsets that omit the
-   box-drawing block (U+2500-257F), so diagram characters fell back to a
-   different font with a different advance width and the ASCII-art
-   diagrams misaligned. System monospace fonts cover box-drawing. */
+/* Code font: native monospace, not the Roboto Mono webfont. None of the
+   unicode-range subsets served for it cover box-drawing (U+2500-257F); see
+   https://fonts.googleapis.com/css?family=Roboto+Mono. Those glyphs fall back
+   to another font with a different advance width and diagrams misalign (#869). */
 .md-typeset code,
 .md-typeset kbd,
 .md-typeset pre {
