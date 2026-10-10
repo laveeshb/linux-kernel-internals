@@ -39,6 +39,13 @@ html { font-size: 150%; }                                              /* 125%  
   padding: 0.5em 0.8em;
 }
 
+.md-typeset code,
+.md-typeset kbd,
+.md-typeset pre {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono",
+    "Liberation Mono", monospace;
+}
+
 /* Inline code identifiers, em-relative so they track the body size. */
 .md-typeset :not(pre) > code {
   font-size: 0.95em;
