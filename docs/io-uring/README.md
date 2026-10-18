@@ -80,10 +80,10 @@ Because both rings are mapped into userspace memory, submitting and harvesting I
 ```
 Userspace                          Kernel
 ────────────────────────────────────────────────────────────────
-                              ┌──────────────────────┐
-  SQ ring (mmap'd)  ────────► │  io_uring instance   │
+                              ┌───────────────────────┐
+  SQ ring (mmap'd)  ────────► │  io_uring instance    │
   SQE array (mmap'd) ────────►│  (struct io_ring_ctx) │
-                              └──────────────────────┘
+                              └───────────────────────┘
   CQ ring (mmap'd)  ◄────────         │
                               io_uring_enter() or SQPOLL
                                        │

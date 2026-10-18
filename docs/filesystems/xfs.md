@@ -30,7 +30,7 @@ XFS divides the filesystem into **Allocation Groups (AGs)**. Each AG manages its
 ```
 XFS filesystem:
 ┌──────────────────────────────────────────────────────────┐
-│ Superblock │ AG 0 │ AG 1 │ AG 2 │ AG 3 │ ... │ AG N-1  │
+│ Superblock │ AG 0 │ AG 1 │ AG 2 │ AG 3 │ ... │ AG N-1    │
 └──────────────────────────────────────────────────────────┘
               Each AG:
               ┌────────────────────────────────────────┐

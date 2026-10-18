@@ -204,14 +204,14 @@ KFENCE does not use shadow memory. Instead it maintains a small **KFENCE pool** 
 
 ```
 KFENCE pool layout (one slot):
-┌─────────────────┐  ← unmapped guard page (4 KB)
-│  GUARD PAGE     │    OOB access here → page fault → KFENCE report
-├─────────────────┤
+┌──────────────────┐  ← unmapped guard page (4 KB)
+│  GUARD PAGE      │    OOB access here → page fault → KFENCE report
+├──────────────────┤
 │  object (N bytes)│   ← the actual allocation (left- or right-aligned, chosen at random)
-├─────────────────┤
-│  GUARD PAGE     │  ← unmapped guard page (4 KB)
-│                 │    OOB access here → page fault → KFENCE report
-└─────────────────┘
+├──────────────────┤
+│  GUARD PAGE      │  ← unmapped guard page (4 KB)
+│                  │    OOB access here → page fault → KFENCE report
+└──────────────────┘
 ```
 
 Each object is placed against **either the left or right page boundary, chosen at random per allocation** (`get_random_u32_below(2)` in `mm/kfence/core.c`), so that a one-byte overrun in that direction immediately hits the adjacent guard page.

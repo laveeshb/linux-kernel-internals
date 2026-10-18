@@ -26,15 +26,15 @@ Guest kernel                          Host (QEMU / vhost)
 │  virtio-net / virtio-blk   │        │  virtio-net backend        │
 │  device driver             │        │  (QEMU or vhost-net)       │
 │           │                │        │           ▲                │
-│    virtqueue (vring)        │        │    virtqueue (vring)        │
+│    virtqueue (vring)       │        │    virtqueue (vring)       │
 │    ┌──────────────────┐    │        │    ┌──────────────────┐    │
 │    │ desc  table      │◄───┼────────┼───►│ desc  table      │    │
 │    │ avail ring       │    │        │    │ avail ring       │    │
 │    │ used  ring       │    │        │    │ used  ring       │    │
 │    └──────────────────┘    │        │    └──────────────────┘    │
 │           │                │        │                            │
-│    kick (PCI notify)  ─────┼────────┼──► process descriptors    │
-│    ◄─── interrupt ─────────┼────────┼─── add to used ring       │
+│    kick (PCI notify)  ─────┼────────┼──► process descriptors     │
+│    ◄─── interrupt ─────────┼────────┼─── add to used ring        │
 └────────────────────────────┘        └────────────────────────────┘
 ```
 

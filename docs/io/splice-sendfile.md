@@ -19,23 +19,23 @@ Every iteration pays a full round trip through userspace. To understand why that
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Traditional read() + write() data path                         │
-│                                                                  │
-│  1. read(file_fd, buf, n)                                        │
+│                                                                 │
+│  1. read(file_fd, buf, n)                                       │
 │     ┌──────┐  DMA   ┌───────────────┐  CPU copy  ┌──────────┐   │
 │     │ Disk │──────► │ Kernel page   │──────────► │ Userspace│   │
 │     └──────┘        │ cache         │            │ buffer   │   │
 │                     └───────────────┘            └──────────┘   │
-│                                                                  │
-│  2. write(sock_fd, buf, n)                                       │
-│     ┌──────────┐  CPU copy  ┌───────────────┐  DMA   ┌─────┐   │
-│     │ Userspace│──────────► │ Socket send   │──────► │ NIC │   │
-│     │ buffer   │            │ buffer (sk_buff│        └─────┘   │
-│     └──────────┘            └───────────────┘                   │
-│                                                                  │
+│                                                                 │
+│  2. write(sock_fd, buf, n)                                      │
+│     ┌──────────┐  CPU copy  ┌─────────────────┐  DMA   ┌─────┐  │
+│     │ Userspace│──────────► │ Socket send     │──────► │ NIC │  │
+│     │ buffer   │            │ buffer (sk_buff)│        └─────┘  │
+│     └──────────┘            └─────────────────┘                 │
+│                                                                 │
 │  Copies: 4 (disk→pagecache, pagecache→user, user→skbuff,        │
-│             skbuff→NIC)                                          │
+│             skbuff→NIC)                                         │
 │  Context switches: 4 (user→kernel read, kernel→user,            │
-│                        user→kernel write, kernel→user)           │
+│                        user→kernel write, kernel→user)          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

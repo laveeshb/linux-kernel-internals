@@ -84,7 +84,7 @@ bzImage on disk:
 │  Protected-mode stub (startup_32)          │
 │  arch/x86/boot/compressed/head_32.S        │
 ├────────────────────────────────────────────┤
-│  Compressed vmlinux (gzip/lz4/zstd/xz)    │
+│  Compressed vmlinux (gzip/lz4/zstd/xz)     │
 │  • The actual kernel ELF, compressed       │
 │  • Decompressed into place at runtime      │
 └────────────────────────────────────────────┘

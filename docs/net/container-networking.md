@@ -13,11 +13,11 @@ Container networking is built from three Linux primitives:
 ```
 Host network namespace                 Container namespace
 ┌─────────────────────────┐            ┌──────────────────────┐
-│  eth0 (physical)         │            │  eth0 (veth1's peer) │
-│  docker0 (bridge)        │            │  10.0.0.2/24         │
+│  eth0 (physical)        │            │  eth0 (veth1's peer) │
+│  docker0 (bridge)       │            │  10.0.0.2/24         │
 │  ├── veth0 (10.0.0.1)   │════════════│  (sees only this)    │
 │  └── veth2              │════════════│                      │
-│  iptables MASQUERADE     │            └──────────────────────┘
+│  iptables MASQUERADE    │            └──────────────────────┘
 └─────────────────────────┘
 ```
 

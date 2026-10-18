@@ -8,7 +8,7 @@
 User space:    openssl / libgcrypt / kernel keyctl
                          │
       ┌──────────────────┼───────────────────────┐
-      │                  │                        │
+      │                  │                       │
   AF_ALG socket     kernel keyring           dm-crypt / fscrypt
   (access kernel    (key storage)            (disk/file encryption)
    crypto from       struct key
@@ -19,10 +19,10 @@ User space:    openssl / libgcrypt / kernel keyctl
          Kernel Crypto API
          (crypto/*)
          struct crypto_alg
-         ┌──────────────────────────────┐
+         ┌───────────────────────────────┐
          │ SKCIPHER  AEAD  HASH  AKCIPHER│
-         │ (AES-XTS) (AES-GCM) (SHA-256)│
-         └──────────────────────────────┘
+         │ (AES-XTS) (AES-GCM) (SHA-256) │
+         └───────────────────────────────┘
                  │
          Hardware acceleration
          Intel AES-NI / QAT / ARM CE

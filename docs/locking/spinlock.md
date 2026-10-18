@@ -115,7 +115,7 @@ Modern x86 uses **queued spinlocks** (MCS-based, introduced in Linux 4.2 by Waim
 
 ```
 Lock structure:
-┌──────────────────────────────┐
+┌────────────────────────────────────────┐
 │ locked byte | pending | tail (cpu+ctx) │  ← 32-bit word
 └────────────────────────────────────────┘
   bits 0-7: locked byte (0=free, 1=locked)

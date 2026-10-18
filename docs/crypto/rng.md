@@ -141,7 +141,7 @@ of 256 bytes or less, it is guaranteed to return the full buffer or fail — no 
 ## /dev/random and /dev/urandom
 
 ```
-                      ┌──────────────────────────────┐
+                      ┌───────────────────────────────┐
 Entropy sources ────► │  Input pool (BLAKE2s, 256 bits│
                       │  accumulating to crng_init=2) │
                       └──────────────────┬────────────┘

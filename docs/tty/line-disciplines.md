@@ -477,22 +477,22 @@ Keystroke to foreground `read()`, on a real serial line:
 Pty master/slave pair, terminal emulator + shell:
 
 ```
- ┌───────────────────────┐                    ┌───────────────────────┐
- │   Terminal emulator     │                    │   Shell (bash, etc.)   │
- │   (or sshd)             │                    │                       │
- │   holds the MASTER fd   │                    │   controlling terminal │
- └───────────┬─────────────┘                    │   is the SLAVE         │
+ ┌─────────────────────────┐                    ┌─────────────────────────┐
+ │   Terminal emulator     │                    │   Shell (bash, etc.)    │
+ │   (or sshd)             │                    │                         │
+ │   holds the MASTER fd   │                    │   controlling terminal  │
+ └───────────┬─────────────┘                    │   is the SLAVE          │
              │                                  └───────────┬─────────────┘
              │ open("/dev/ptmx")                            │ open("/dev/pts/N")
-             ▼                                               ▼
-   ┌─────────────────────┐   tty->link  /  o_tty->link  ┌─────────────────────┐
-   │  master tty_struct    │◄────────────────────────────►│  slave tty_struct     │
-   │  (no ldisc processing;│                              │  ldisc = N_TTY         │
-   │   pty_write() just     │   pty_write(): bytes written  │  (canonical editing,   │
-   │   pushes bytes to      │   on one side land straight   │   ISIG, job control    │
-   │   the other side's     │   in the other side's flip    │   all apply here)      │
-   │   flip buffer)          │   buffer, no wire involved    │                        │
-   └─────────────────────┘                              └─────────────────────┘
+             ▼                                              ▼
+   ┌─────────────────────────┐   tty->link  /  o_tty->link    ┌─────────────────────────┐
+   │  master tty_struct      │◄──────────────────────────────►│  slave tty_struct       │
+   │  (no ldisc processing;  │                                │  ldisc = N_TTY          │
+   │   pty_write() just      │   pty_write(): bytes written   │  (canonical editing,    │
+   │   pushes bytes to       │   on one side land straight    │   ISIG, job control     │
+   │   the other side's      │   in the other side's flip     │   all apply here)       │
+   │   flip buffer)          │   buffer, no wire involved     │                         │
+   └─────────────────────────┘                                └─────────────────────────┘
              ▲                                                     │
              │ user types in the emulator window /                 │ shell's stdin/stdout/
              │ bytes arrive over the SSH network connection        │ stderr are all fds on
