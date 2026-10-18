@@ -678,56 +678,56 @@ module_hid_driver(pl_driver);
  (keyboard, mouse, gamepad, touchpad...)
         │  descriptor bytes + report bytes, over one of:
         ▼
- ┌───────────────┬───────────────┬───────────────┐
- │   USB          │  Bluetooth     │  I2C           │
- │ (interrupt IN/  │  (HIDP, two    │  (I2C-HID       │
- │  OUT endpoints) │  L2CAP chans)  │  protocol)      │
- └───────┬───────┴───────┬───────┴───────┬───────┘
-         ▼                ▼                ▼
-   usb_hid_driver    hidp_hid_driver   i2c_hid_ll_driver
-         │  each is a struct hid_ll_driver: .parse/.start/.open/
-         │  .raw_request/.output_report/...
-         └────────────────┬────────────────┘
-                           ▼
-              HID core (drivers/hid/hid-core.c)
-              ┌─────────────────────────────────┐
-              │ hid_open_report()                │
-              │   .report_fixup (if any)          │  ← quirk driver, or HID-BPF
-              │   hid_parse_collections()          │     rdesc fixup program
-              │     → struct hid_report/hid_field/ │
-              │       hid_usage/hid_collection      │
-              │                                     │
-              │ __hid_input_report() (per packet)  │
-              │   .raw_event (if any)               │  ← quirk driver, raw bytes
-              │   hid_report_raw_event()            │
-              │     → field value extraction        │
-              └─────────────────┬───────────────────┘
+ ┌─────────────────┬─────────────────┬─────────────────┐
+ │  USB            │  Bluetooth      │  I2C            │
+ │ (interrupt IN/  │ (HIDP, two      │ (I2C-HID        │
+ │ OUT endpoints)  │ L2CAP chans)    │ protocol)       │
+ └────────┬────────┴────────┬────────┴────────┬────────┘
+          ▼                 ▼                 ▼
+         usb_hid_driver    hidp_hid_driver   i2c_hid_ll_driver
+          │  each is a struct hid_ll_driver: .parse/.start/.open/
+          │  .raw_request/.output_report/...
+          └─────────────────┬─────────────────┘
+                            ▼
+                HID core (drivers/hid/hid-core.c)
+              ┌──────────────────────────────────────┐
+              │ hid_open_report()                    │
+              │   .report_fixup (if any)             │  ← quirk driver, or HID-BPF
+              │   hid_parse_collections()            │     rdesc fixup program
+              │     → struct hid_report/hid_field/   │
+              │       hid_usage/hid_collection       │
+              │                                      │
+              │ __hid_input_report() (per packet)    │
+              │   .raw_event (if any)                │  ← quirk driver, raw bytes
+              │   hid_report_raw_event()             │
+              │     → field value extraction         │
+              └──────────────────┬───────────────────┘
                                  ▼
-              hid-input.c: hidinput_configure_usage()
-              ┌─────────────────────────────────┐
-              │ .input_mapping (if any)  ──1──►  claims mapping
-              │       │0                          │
-              │       ▼                           │
-              │ generic switch(usage->hid          │
-              │   & HID_USAGE_PAGE) tables         │
-              │       │                            │
-              │       ▼                            │
-              │ hid_map_usage(): sets               │
-              │   usage->type / usage->code          │
-              │       │                              │
-              │       ▼                              │
-              │ .input_mapped (if any) ──◄───────────┘
-              │   may veto/adjust
-              └─────────────────┬───────────────────┘
-                                 ▼
+                hid-input.c: hidinput_configure_usage()
+              ┌───────────────────────────────────────────────────────┐
+              │ .input_mapping (if any)  ──1──► claims mapping──┐     │
+              │       │0                                        │     │
+              │       ▼                                         │     │
+              │ generic switch(usage->hid                       │     │
+              │   & HID_USAGE_PAGE) tables                      │     │
+              │       │                                         │     │
+              │       ▼                                         │     │
+              │ hid_map_usage(): sets                           │     │
+              │   usage->type / usage->code                     │     │
+              │       │                                         │     │
+              │       ▼                                         │     │
+              │ .input_mapped (if any) ◄────────────────────────┘     │
+              │   may veto/adjust                                     │
+              └───────────────────────────┬───────────────────────────┘
+                                          ▼
               hidinput_hid_event() → input_event(dev,
                 usage->type, usage->code, value)
-                                 ▼
-                        evdev (/dev/input/eventN)
-                                 ▼
-                    userspace (libinput, Xorg, Wayland
-                    compositor, a game reading /dev/input
-                    directly...)
+                                          ▼
+                      evdev (/dev/input/eventN)
+                                          ▼
+                      userspace (libinput, Xorg, Wayland
+                      compositor, a game reading /dev/input
+                      directly...)
 ```
 
 ## Further reading
