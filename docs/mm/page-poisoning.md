@@ -31,24 +31,24 @@ The pattern used:
 Page lifecycle with CONFIG_PAGE_POISONING:
 
   Allocate page
-  ┌────────────────────────┐
+  ┌────────────────────────────┐
   │  verify all bytes == 0xAA  │  ← if not: BUG (someone wrote after free)
   │  fill with 0x00            │  ← caller gets zeroed page
-  └────────────────────────┘
+  └────────────────────────────┘
           │
           │  (caller uses page)
           ▼
   Free page
-  ┌────────────────────────┐
+  ┌────────────────────────────┐
   │  fill with 0xAA            │  ← poison marker
-  └────────────────────────┘
+  └────────────────────────────┘
           │
           │  (page sits on free list)
           ▼
   Next allocation from this page:
-  ┌────────────────────────┐
+  ┌────────────────────────────┐
   │  verify all bytes == 0xAA  │  ← catches writes that happened while freed
-  └────────────────────────┘
+  └────────────────────────────┘
 ```
 
 ### How It Catches Use-After-Free

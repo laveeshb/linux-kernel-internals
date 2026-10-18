@@ -26,7 +26,7 @@ kmalloc(128, GFP_KERNEL)
 kmalloc-128 cache (struct kmem_cache)
          │
     ┌────┴─────────────────────────────────┐
-    │ Per-CPU slab (struct kmem_cache_cpu)  │  ← current CPU
+    │ Per-CPU slab (struct kmem_cache_cpu) │  ← current CPU
     │   freelist: →obj1 →obj2 →obj3        │  ← hot, no lock
     └────┬─────────────────────────────────┘
          │ (per-CPU depleted)

@@ -8,9 +8,9 @@ NUMA (Non-Uniform Memory Access) describes systems where memory access time depe
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      NUMA System                         │
-│                                                          │
-│   Node 0                          Node 1                 │
+│                      NUMA System                        │
+│                                                         │
+│   Node 0                          Node 1                │
 │  ┌──────────────┐                ┌──────────────┐       │
 │  │    CPU 0-7   │                │   CPU 8-15   │       │
 │  └──────┬───────┘                └──────┬───────┘       │
@@ -18,7 +18,7 @@ NUMA (Non-Uniform Memory Access) describes systems where memory access time depe
 │  ┌──────▼───────┐                ┌──────▼───────┐       │
 │  │  Memory 64GB │◄───────────────►  Memory 64GB │       │
 │  └──────────────┘     slow       └──────────────┘       │
-│                    interconnect                          │
+│                    interconnect                         │
 └─────────────────────────────────────────────────────────┘
 
 CPU 0 accessing Node 0 memory: ~80-100ns (local)
@@ -188,8 +188,8 @@ Modern systems add new memory tiers via CXL (Compute Express Link):
 
 ```
 ┌─────────────────────────────────────────────┐
-│              Tiered Memory                   │
-│                                              │
+│              Tiered Memory                  │
+│                                             │
 │  Tier 0: Local DRAM     (~80ns, expensive)  │
 │  Tier 1: CXL Memory     (~200ns, cheaper)   │
 │  Tier 2: Persistent Mem (~300ns, persistent)│

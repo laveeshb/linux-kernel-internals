@@ -227,7 +227,7 @@ WAL writes:                         Data file writes:
 │ Sequential       │                │ Random           │
 │ Small (8KB-64KB) │                │ Large (pages)    │
 │ Frequent fsync() │                │ Periodic bursts  │
-│ Latency-critical │                │ Throughput-ok     │
+│ Latency-critical │                │ Throughput-ok    │
 └──────────────────┘                └──────────────────┘
 ```
 

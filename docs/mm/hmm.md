@@ -25,8 +25,8 @@ With HMM (unified virtual address space):
 Application virtual address space
          │
     ┌────┴────────────────────────────────┐
-    │         CPU page tables (MMU)        │
-    │         GPU page tables (IOMMU)      │
+    │         CPU page tables (MMU)       │
+    │         GPU page tables (IOMMU)     │
     └────┬────────────────────────────────┘
          │
     ┌────┴───────────────────────┐
@@ -36,11 +36,11 @@ Application virtual address space
     │  - device memory (VRAM)    │
     └────┬──────────────────────┘
          │
-    ┌────┴───────────────────────────────────────────┐
-    │  Physical memory:                              │
-    │  DRAM (system RAM)    VRAM (GPU memory)        │
+    ┌────┴────────────────────────────────────────────┐
+    │  Physical memory:                               │
+    │  DRAM (system RAM)    VRAM (GPU memory)         │
     │  struct page          struct page (ZONE_DEVICE) │
-    └────────────────────────────────────────────────┘
+    └─────────────────────────────────────────────────┘
 ```
 
 ## struct page for device memory

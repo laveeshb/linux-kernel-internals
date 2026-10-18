@@ -84,11 +84,11 @@ Kernel address space layout with KASAN:
 ┌──────────────────────────┐  High addresses
 │    Kernel code/data      │
 ├──────────────────────────┤
-│    Shadow memory          │  ← 1/8 of kernel address space
-│    (tracks validity of    │
-│     all kernel memory)    │
+│    Shadow memory         │  ← 1/8 of kernel address space
+│    (tracks validity of   │
+│     all kernel memory)   │
 ├──────────────────────────┤
-│    Normal kernel memory   │
+│    Normal kernel memory  │
 └──────────────────────────┘  Low addresses
 ```
 
@@ -99,7 +99,7 @@ Generic KASAN's overhead made it impractical for broad testing beyond dedicated 
 ```
 Tagged pointer (arm64 Top Byte Ignore):
 ┌────────┬──────────────────────────────────────────────┐
-│ Tag(8) │              Virtual Address (56)             │
+│ Tag(8) │              Virtual Address (56)            │
 └────────┴──────────────────────────────────────────────┘
 
 Shadow memory stores the memory tag (1 byte per 16 bytes of real memory).
@@ -125,8 +125,8 @@ HW_TAGS KASAN uses ARM Memory Tagging Extension (MTE), available on ARMv8.5+ pro
 ```
 ARM MTE (tag in bits [59:56], defined in arch/arm64/include/asm/mte-def.h):
 ┌──────┬──────────┬──────────────────────────────────────┐
-│ (4)  │ Tag(4)   │          Virtual Address (56)         │
-│63..60│ 59..56   │              55..0                    │
+│ (4)  │ Tag(4)   │          Virtual Address (56)        │
+│63..60│ 59..56   │              55..0                   │
 └──────┴──────────┴──────────────────────────────────────┘
         │                        │
         │   hardware checks      │
