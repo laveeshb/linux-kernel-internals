@@ -14,7 +14,7 @@ User space:    openssl / libgcrypt / kernel keyctl
    crypto from       struct key
    userspace)             │
       │                   │
-      └──────────┬─────────┘
+      └──────────┬────────┘
                  │
          Kernel Crypto API
          (crypto/*)
