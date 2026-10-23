@@ -34,7 +34,7 @@ Application virtual address space
     │  - mirror (CPU↔GPU sync)   │
     │  - range (snapshot VA)     │
     │  - device memory (VRAM)    │
-    └────┬──────────────────────┘
+    └────┬───────────────────────┘
          │
     ┌────┴────────────────────────────────────────────┐
     │  Physical memory:                               │
