@@ -482,9 +482,9 @@ Pty master/slave pair, terminal emulator + shell:
  │   (or sshd)             │                    │                         │
  │   holds the MASTER fd   │                    │   controlling terminal  │
  └───────────┬─────────────┘                    │   is the SLAVE          │
-             │                                  └───────────┬─────────────┘
-             │ open("/dev/ptmx")                            │ open("/dev/pts/N")
-             ▼                                              ▼
+             │                                  └──────────────────┬──────┘
+             │ open("/dev/ptmx")                                   │ open("/dev/pts/N")
+             ▼                                                     ▼
    ┌─────────────────────────┐   tty->link  /  o_tty->link    ┌─────────────────────────┐
    │  master tty_struct      │◄──────────────────────────────►│  slave tty_struct       │
    │  (no ldisc processing;  │                                │  ldisc = N_TTY          │

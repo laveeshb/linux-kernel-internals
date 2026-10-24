@@ -753,10 +753,10 @@ rc = uart_add_one_port(&ulite_uart_driver, port);
  │  TX: uart_fifo_get() drains xmit_fifo          │
  │        → serial_out()/uart_out32() to hw       │
  └───────────────────┬────────────────────────────┘
-                      │  both directions go through struct uart_ops
-                      │  (.startup/.shutdown/.set_termios/.start_tx/
-                      │   .stop_tx/.set_mctrl/.get_mctrl/.tx_empty/...)
-                      ▼
+                     │  both directions go through struct uart_ops
+                     │  (.startup/.shutdown/.set_termios/.start_tx/
+                     │   .stop_tx/.set_mctrl/.get_mctrl/.tx_empty/...)
+                     ▼
         serial_core.c (drivers/tty/serial/serial_core.c)
         ┌──────────────────────────────────────────────────────────────┐
         │ struct uart_port  ←──ops──→ struct uart_ops (driver's table) │

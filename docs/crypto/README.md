@@ -12,9 +12,9 @@ User space:    openssl / libgcrypt / kernel keyctl
   AF_ALG socket     kernel keyring           dm-crypt / fscrypt
   (access kernel    (key storage)            (disk/file encryption)
    crypto from       struct key
-   userspace)             │
-      │                   │
-      └──────────┬────────┘
+   userspace)            │
+      │                  │
+      └──────────┬───────┘
                  │
          Kernel Crypto API
          (crypto/*)
