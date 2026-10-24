@@ -5,7 +5,7 @@ Big changes to the site — new sections, major expansions, and notable correcti
 ## October 2026
 
 - **Box-drawing diagrams fixed site-wide.** Code blocks now use a native system monospace font instead of a web font whose fallback didn't cover box-drawing characters, fixing ragged ASCII diagrams across the whole site.
-- **A full diagram-alignment audit beyond the font fix.** Dozens of diagrams had misaligned source text of their own — box edges sitting in different columns, arrows landing past their target, content overflowing its border — found and fixed across memory management, filesystems, networking, TTY/serial, ALSA, virtualization, crypto, and more. Two bit-field diagrams ([x86](arch/x86/page-tables.md) and [arm64](arch/arm64/page-tables.md) page tables) are still pending a content decision on their bit layout.
+- **A full diagram-alignment audit beyond the font fix.** Dozens of diagrams had misaligned source text of their own — box edges sitting in different columns, arrows landing past their target, content overflowing its border — found and fixed across memory management, filesystems, networking, TTY/serial, ALSA, virtualization, crypto, and more.
 
 ## September 2026
 
