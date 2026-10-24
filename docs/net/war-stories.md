@@ -4,11 +4,15 @@
 
 The network stack sits at a trust boundary that most of the kernel doesn't have to deal with: its input arrives from the wire, often from a remote, unauthenticated peer, and gets parsed and acted on before any application-layer authentication happens. A bug in TCP's SACK processing, in a netfilter compat shim, or in a socket-ring-buffer size calculation is reachable by anyone who can send packets to the box — no local shell required. That's why network-stack incidents skew toward remote denial-of-service and remote-triggered memory corruption, rather than the local data-loss and performance-regression stories that dominate filesystem and I/O history.
 
-Each incident below has its own page: root-cause analysis grounded in the actual patches, plus the real mailing-list discussion behind each fix — alternatives considered, trade-offs debated, and in a few cases genuinely notable process failures. Three are remote (reachable over the network with no local access); the other four are local — three of them reachable through capabilities (`CAP_NET_ADMIN`, `CAP_NET_RAW`) that are routinely granted to unprivileged processes inside user namespaces, and one through nothing more than an ordinary `sendmsg()` sequence. That capability angle is itself a recurring theme in how "local" bugs in this subsystem became "container escape" bugs.
+Each incident below has its own page: root-cause analysis grounded in the actual patches, plus the real mailing-list discussion behind each fix — alternatives considered, trade-offs debated, and in a few cases genuinely notable process failures. Three are remote (reachable over the network with no local access); the other five are local — three of them reachable through capabilities (`CAP_NET_ADMIN`, `CAP_NET_RAW`) that are routinely granted to unprivileged processes inside user namespaces, one through nothing more than an ordinary `sendmsg()` sequence, and one through the virtualized-networking path a VM guest talks to its host over. That capability angle is itself a recurring theme in how "local" bugs in this subsystem became "container escape" bugs.
 
 ## Incidents
 
 Ordered reverse chronologically by disclosure date — newest first.
+
+### [PwnEscape: A Guest-to-Host Memory Leak via IPv4 Checksum Offload](war-stories/pwnescape.md)
+**Found August 2026, fixed October 2026, disclosed October 2026 · CVE-2026-99999 · CVSS 9.3 (NVD)**
+A guest's own checksum-offload metadata, taken at face value by host IPv4 code nearly two decades after the feature was added, let it rewrite its own header after the kernel had already finished checking it — turning a 20-byte IPv4 header into a claimed 60-byte one and leaking 32 bytes of host memory into every packet. Demonstrated as a real memory leak against a cloud provider's production sandboxes during a $1M bug-bounty challenge; the researcher's claimed further chain to host-kernel writes and root execution was shown only in their own lab, not reproduced publicly.
 
 ### [The net/sched act_api Filter-Delete Race](war-stories/act-api-uaf.md)
 **Fixed May–June 2026, disclosed June 2026, independent 0-day write-up July 2026 · CVE-2026-53264 · CVSS 7.8 (Linux kernel CNA) / 7.0 (Red Hat)**
