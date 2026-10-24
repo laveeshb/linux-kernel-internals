@@ -2,11 +2,17 @@
 
 Big changes to the site — new sections, major expansions, and notable corrections — newest first. This is a *curated* list of the significant milestones, not a full commit log; the complete history lives in [the repository](https://github.com/laveeshb/linux-kernel-internals/commits/main).
 
+## October 2026
+
+- **Box-drawing diagrams fixed site-wide.** Code blocks now use a native system monospace font instead of a web font whose fallback didn't cover box-drawing characters, fixing ragged ASCII diagrams across the whole site.
+- **A full diagram-alignment audit beyond the font fix.** Dozens of diagrams had misaligned source text of their own — box edges sitting in different columns, arrows landing past their target, content overflowing its border — found and fixed across memory management, filesystems, networking, TTY/serial, ALSA, virtualization, crypto, and more.
+
 ## September 2026
 
 - **Accuracy audit extended site-wide.** Dozens more pages — spanning syscalls, kernel internals, debugging, power, time, crypto, IOMMU, virtualization, and IPC — had incorrect or stale technical details corrected against current kernel source, continuing the pass that started in [virtualization/](virtualization/README.md) in August.
 - **New pages: [PREEMPT_RT](locking/preempt-rt.md), [sched_ext](sched/sched-ext.md), [kGraft vs. kpatch](livepatch/kgraft-vs-kpatch-history.md), and two BPF deep-dives** ([security model](bpf/bpf-security-model.md), [helpers/kfuncs/JIT](bpf/bpf-helpers-kfuncs-jit.md)).
 - **War stories kept growing** — new pages for the [scheduler](sched/war-stories.md) and [interrupts](interrupts/war-stories.md), five more independently-sourced CVE write-ups across USB, XFS, and net/sched (the last found independently of the upstream report that fixed it), and an editorial pass clarifying which war-stories pages are illustrative rather than real, individually-cited incidents.
+- **Two war-stories pages reworked into a new narrative-arc template** — the [act_api use-after-free CVE](net/war-stories/act-api-uaf.md) gained three new diagrams, a real before/after code comparison, and new research into a discarded first-fix attempt; [Dirty Pipe](security/war-stories/dirty-pipe.md) was restructured to lead with its strongest section instead of burying it, with several inaccuracies fixed along the way.
 - **[Interrupts](interrupts/README.md) given real design history** — the section's shallowest pages now explain *why* the kernel has five different deferred-work mechanisms and how each one came to exist, not just how they work.
 
 ## August 2026
