@@ -2,6 +2,11 @@
 
 Big changes to the site — new sections, major expansions, and notable corrections — newest first. This is a *curated* list of the significant milestones, not a full commit log; the complete history lives in [the repository](https://github.com/laveeshb/linux-kernel-internals/commits/main).
 
+## October 2026
+
+- **Box-drawing diagrams fixed site-wide.** Code blocks now use a native system monospace font instead of a web font whose fallback didn't cover box-drawing characters, fixing ragged ASCII diagrams across the whole site.
+- **A full diagram-alignment audit beyond the font fix.** Dozens of diagrams had misaligned source text of their own — box edges sitting in different columns, arrows landing past their target, content overflowing its border — found and fixed across memory management, filesystems, networking, TTY/serial, ALSA, virtualization, crypto, and more. Two bit-field diagrams ([x86](arch/x86/page-tables.md) and [arm64](arch/arm64/page-tables.md) page tables) are still pending a content decision on their bit layout.
+
 ## September 2026
 
 - **Accuracy audit extended site-wide.** Dozens more pages — spanning syscalls, kernel internals, debugging, power, time, crypto, IOMMU, virtualization, and IPC — had incorrect or stale technical details corrected against current kernel source, continuing the pass that started in [virtualization/](virtualization/README.md) in August.
