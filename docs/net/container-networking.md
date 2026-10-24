@@ -158,7 +158,7 @@ Container A (192.168.0.1)            Container B (192.168.0.2)
    │                                        │
    VTEP (VXLAN Tunnel Endpoint)             VTEP
    │  encapsulate in UDP/VXLAN              │  decapsulate
-   │  outer: 10.0.0.1→10.0.0.2             │
+   │  outer: 10.0.0.1→10.0.0.2              │
    └────────── physical network ────────────┘
 ```
 

@@ -497,7 +497,7 @@ Pty master/slave pair, terminal emulator + shell:
              │ user types in the emulator window /                 │ shell's stdin/stdout/
              │ bytes arrive over the SSH network connection        │ stderr are all fds on
              │                                                     │ the slave
-             └─────────────── userspace I/O ──────────────────────┘
+             └─────────────── userspace I/O ───────────────────────┘
 ```
 
 ## Further reading

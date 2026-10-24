@@ -740,7 +740,7 @@ rc = uart_add_one_port(&ulite_uart_driver, port);
  UART hardware (8250, uartlite, PL011, ...)
         │  RBR/THR, LSR, IER, ... registers  ▲
         │  RX byte ready (IRQ)               │  TX register write
-        ▼                                     │
+        ▼                                    │
  ┌────────────────────────────────────────────────┐
  │  driver interrupt handler                      │
  │  (serial8250_handle_irq_locked / ulite_isr)    │
