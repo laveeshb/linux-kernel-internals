@@ -44,22 +44,22 @@ ext4 uses JBD2 (Journaling Block Device 2) as its journaling layer. JBD2 is inde
 
 ```
 Ext4 partition layout:
-┌────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────────────┐
 │ Superblock │ Block groups │ Journal (special inode) │
 │            │ [ext4 data]  │ [JBD2 circular log]     │
-└────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────┘
 
 Journal structure (circular log):
-┌──────────────────────────────────────────────────────────┐
+┌───────────────────────────────────────────────────────────┐
 │ Journal superblock │ T1: [commit block] │ T2: [commit] │..│
-│ (seq, tail_sequence, s_start)                            │
-└──────────────────────────────────────────────────────────┘
+│ (seq, tail_sequence, s_start)                             │
+└───────────────────────────────────────────────────────────┘
 
 T1 (transaction 1):
-  ┌─────────────────────────────────────────────────────┐
-  │ descriptor block │ data/metadata blocks │ commit block│
-  │ (lists what blocks follow) │ (original blocks) │ (seq #)│
-  └─────────────────────────────────────────────────────┘
+  ┌────────────────────────────┬──────────────────────┬──────────────┐
+  │ descriptor block           │ data/metadata blocks │ commit block │
+  │ (lists what blocks follow) │ (original blocks)    │ (seq #)      │
+  └────────────────────────────┴──────────────────────┴──────────────┘
 ```
 
 The journal superblock records `s_start` (tail) and `s_sequence` (current transaction). Recovery replays all transactions from `s_start` to the last valid commit block.

@@ -555,30 +555,30 @@ Both drivers are, structurally, just machine drivers themselves: they parse devi
                     (e.g. "ROCKCHIP-I2S", or built
                      from DT by simple-card/
                      audio-graph-card)
-                ┌───────────────────────────────┐
+                ┌────────────────────────────────┐
                 │ dai_link[] ─┬─ .cpus[]         │
                 │             ├─ .codecs[]       │
                 │             ├─ .platforms[]    │
                 │             └─ .dai_fmt        │
                 │ board dapm_widgets/routes      │  ("Headphone" → codec's HPL/HPR)
                 │ board controls                 │
-                └───────────────┬─────────────────┘
+                └────────────────┬───────────────┘
                                  │ binds cpus[i] <-> codecs[i]
               ┌──────────────────┴──────────────────┐
-              ▼                                      ▼
-  ┌─────────────────────────┐            ┌─────────────────────────┐
-  │   CPU DAI driver          │  I2S/TDM   │   Codec driver           │
-  │   (e.g. rockchip_i2s.c)   │◄──────────►│   (e.g. max98090.c)      │
-  │                           │ BCLK/LRCK  │                          │
-  │ snd_soc_component_driver  │  /DATA     │ snd_soc_component_driver │
-  │ snd_soc_dai_driver         │            │ snd_soc_dai_driver       │
-  │  .ops: set_fmt, hw_params, │            │  .ops: set_fmt, set_sysclk│
-  │        trigger             │            │  probe(): registers      │
-  │ + DMA engine (component)   │            │    ADC/DAC/mixer/amp     │
-  │                           │            │    widgets at runtime    │
-  │                           │            │  I2C/SPI regmap I/O      │
-  └─────────────┬─────────────┘            └─────────────┬─────────────┘
-                │                                          │
+              ▼                                     ▼
+  ┌──────────────────────────────┐            ┌──────────────────────────────┐
+  │  CPU DAI driver              │  I2S/TDM   │  Codec driver                │
+  │  (e.g. rockchip_i2s.c)       │◄──────────►│  (e.g. max98090.c)           │
+  │                              │ BCLK/LRCK  │                              │
+  │  snd_soc_component_driver    │  /DATA     │  snd_soc_component_driver    │
+  │  snd_soc_dai_driver          │            │  snd_soc_dai_driver          │
+  │  .ops: set_fmt, hw_params,   │            │  .ops: set_fmt, set_sysclk   │
+  │        trigger               │            │  probe(): registers          │
+  │  + DMA engine (component)    │            │    ADC/DAC/mixer/amp         │
+  │                              │            │    widgets at runtime        │
+  │                              │            │  I2C/SPI regmap I/O          │
+  └──────────────┬───────────────┘            └──────────────┬───────────────┘
+                 │                                           │
         part of the SoC die                    separate chip on the board,
                                                 reused across many boards
 ```

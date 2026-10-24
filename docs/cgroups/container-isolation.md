@@ -25,7 +25,7 @@ There is no "container" kernel object — it's a combination of existing primiti
     │  Cgroup namespace: /sys/fs/cgroup view  │
     ├─────────────────────────────────────────┤
     │  Cgroup: /sys/fs/cgroup/containers/c1/  │
-    │    cpu.max = 500000/1000000 (50%)        │
+    │    cpu.max = 500000/1000000 (50%)       │
     │    memory.max = 512M                    │
     │    pids.max = 100                       │
     ├─────────────────────────────────────────┤

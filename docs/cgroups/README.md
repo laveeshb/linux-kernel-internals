@@ -23,7 +23,7 @@ Together they implement container isolation: Docker, Kubernetes pods, and system
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Container / Pod                                              │
+│  Container / Pod                                             │
 │  ┌─────────────────────────┐  ┌────────────────────────────┐ │
 │  │ Namespaces (isolation)  │  │ Cgroup (resource limits)   │ │
 │  │  - PID: pid 1 inside    │  │  - cpu.max 200000/1000000  │ │

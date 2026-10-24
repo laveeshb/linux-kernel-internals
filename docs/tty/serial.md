@@ -740,30 +740,30 @@ rc = uart_add_one_port(&ulite_uart_driver, port);
  UART hardware (8250, uartlite, PL011, ...)
         │  RBR/THR, LSR, IER, ... registers  ▲
         │  RX byte ready (IRQ)               │  TX register write
-        ▼                                     │
- ┌─────────────────────────────────────────────┐
- │  driver interrupt handler                     │
- │  (serial8250_handle_irq_locked / ulite_isr)   │
+        ▼                                    │
+ ┌────────────────────────────────────────────────┐
+ │  driver interrupt handler                      │
+ │  (serial8250_handle_irq_locked / ulite_isr)    │
  │                                                │
- │  RX: serial8250_read_char() / ulite_receive() │
- │        → uart_insert_char() or                │
+ │  RX: serial8250_read_char() / ulite_receive()  │
+ │        → uart_insert_char() or                 │
  │          tty_insert_flip_char() directly       │
  │        → tty_flip_buffer_push()                │
  │                                                │
  │  TX: uart_fifo_get() drains xmit_fifo          │
- │        → serial_out()/uart_out32() to hw        │
+ │        → serial_out()/uart_out32() to hw       │
  └───────────────────┬────────────────────────────┘
-                      │  both directions go through struct uart_ops
-                      │  (.startup/.shutdown/.set_termios/.start_tx/
-                      │   .stop_tx/.set_mctrl/.get_mctrl/.tx_empty/...)
-                      ▼
+                     │  both directions go through struct uart_ops
+                     │  (.startup/.shutdown/.set_termios/.start_tx/
+                     │   .stop_tx/.set_mctrl/.get_mctrl/.tx_empty/...)
+                     ▼
         serial_core.c (drivers/tty/serial/serial_core.c)
-        ┌─────────────────────────────────────────┐
+        ┌──────────────────────────────────────────────────────────────┐
         │ struct uart_port  ←──ops──→ struct uart_ops (driver's table) │
         │      │ state                                                 │
         │      ▼                                                       │
         │ struct uart_state { tty_port, uart_port }                    │
-        └───────────────────────┬───────────────────────────────────────┘
+        └────────────────────────┬─────────────────────────────────────┘
                                  │  drv->state[port->line], shared
                                  │  static const struct tty_operations uart_ops
                                  ▼

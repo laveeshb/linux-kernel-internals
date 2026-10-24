@@ -29,7 +29,7 @@ sk_buff metadata:
 
 Packet data buffer (allocated separately):
  ┌─────────────┬───────────────────────────────────────┬────────┐
- │  headroom   │  packet data (data ... tail)           │  end   │
+ │  headroom   │  packet data (data ... tail)          │  end   │
  └─────────────┴───────────────────────────────────────┴────────┘
  ↑ head        ↑ data                           ↑ tail           ↑ end
 

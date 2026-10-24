@@ -187,7 +187,7 @@ When `kswapd` tries to reclaim pages, it cannot reclaim dirty pages without writ
 `sync()`, `fsync()`, and `fdatasync()` inject a `wb_writeback_work` item directly into the BDI's work queue, bypassing the periodic timer entirely.
 
 ```
-                ┌─────────────────────────────────────────┐
+                ┌──────────────────────────────────────────┐
                 │            writeback triggers            │
                 ├───────────┬───────────┬──────────────────┤
                 │ periodic  │ mem       │ explicit         │

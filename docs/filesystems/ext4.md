@@ -95,13 +95,13 @@ ext4 uses extents (contiguous block runs) instead of the old indirect block maps
 
 ```
 i_block[0..3] holds the extent tree root:
-┌──────────────────────────────────────────────────────┐
+┌───────────────────────────────────────────────────────┐
 │ ext4_extent_header                                    │
-│   eh_magic=0xF30A, eh_entries=N, eh_depth=0 (leaf)   │
-├──────────────────────────────────────────────────────┤
+│   eh_magic=0xF30A, eh_entries=N, eh_depth=0 (leaf)    │
+├───────────────────────────────────────────────────────┤
 │ ext4_extent[0]: ee_block=0,  ee_len=128, ee_start=1024│
 │ ext4_extent[1]: ee_block=128,ee_len=64,  ee_start=2048│
-└──────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────┘
 
 For deep files, eh_depth>0: i_block contains internal nodes
 with ext4_extent_idx entries pointing to child blocks

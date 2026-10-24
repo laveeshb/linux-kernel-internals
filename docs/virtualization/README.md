@@ -8,24 +8,24 @@ KVM (Kernel-based Virtual Machine) is a hypervisor built into the Linux kernel. 
 
 ```
 Host (Linux + KVM)
-┌─────────────────────────────────────────────────────────┐
-│  QEMU (userspace)                                        │
-│  ┌──────────────────────────────────────────────────┐    │
-│  │ VM process: manages devices, memory layout, VNC   │    │
-│  │  │                                                │    │
-│  │  │ ioctl(/dev/kvm, KVM_RUN)                      │    │
-│  └──│──────────────────────────────────────────────┘    │
-│     ▼                                                    │
-│  KVM kernel module                                       │
-│  ┌──────────────────────────────────────────────────┐    │
-│  │ vCPU thread: runs in VMX non-root mode            │    │
-│  │  ├── VM Entry: switch to guest (vmlaunch/vmresume)│    │
-│  │  ├── Guest runs (near-native speed)               │    │
-│  │  └── VM Exit: return to host on sensitive ops     │    │
-│  └──────────────────────────────────────────────────┘    │
-│                                                          │
-│  Hardware: Intel VT-x / AMD-V                           │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  QEMU (userspace)                                          │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │ VM process: manages devices, memory layout, VNC    │    │
+│  │  │                                                 │    │
+│  │  │ ioctl(/dev/kvm, KVM_RUN)                        │    │
+│  └──│─────────────────────────────────────────────────┘    │
+│     ▼                                                      │
+│  KVM kernel module                                         │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │ vCPU thread: runs in VMX non-root mode             │    │
+│  │  ├── VM Entry: switch to guest (vmlaunch/vmresume) │    │
+│  │  ├── Guest runs (near-native speed)                │    │
+│  │  └── VM Exit: return to host on sensitive ops      │    │
+│  └────────────────────────────────────────────────────┘    │
+│                                                            │
+│  Hardware: Intel VT-x / AMD-V                              │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ## Pages in this section
