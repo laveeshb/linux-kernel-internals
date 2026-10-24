@@ -9,15 +9,15 @@ CMA reserves regions of physical memory at boot that can be reclaimed for large 
 ```
 CMA region (idle):
 ┌────────────────────────────────────────────────────────────────┐
-│  Page   Page   Page   Page   Page   Page   Page   Page        │
-│  cache  anon   cache  anon   cache  anon   cache  cache       │
+│  Page   Page   Page   Page   Page   Page   Page   Page         │
+│  cache  anon   cache  anon   cache  anon   cache  cache        │
 │  (movable allocations using the CMA region normally)           │
 └────────────────────────────────────────────────────────────────┘
 
 DMA allocation request arrives:
 ┌────────────────────────────────────────────────────────────────┐
 │  Migrate all movable pages out...                              │
-│  ← pages moved to other free memory                           │
+│  ← pages moved to other free memory                            │
 └────────────────────────────────────────────────────────────────┘
 
 CMA region (allocated to device):
@@ -64,10 +64,10 @@ Zone layout with CMA:
 ┌──────────────────────────────────────────────────────────────────────┐
 │                           ZONE_NORMAL                                │
 │                                                                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  ┌──────────┐    │
-│  │ MOVABLE  │  │UNMOVABLE │  │   MIGRATE_CMA    │  │RECLAIMABLE│   │
-│  │          │  │          │  │  (CMA region)    │  │          │    │
-│  └──────────┘  └──────────┘  └──────────────────┘  └──────────┘    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  ┌───────────┐     │
+│  │ MOVABLE  │  │UNMOVABLE │  │   MIGRATE_CMA    │  │RECLAIMABLE│     │
+│  │          │  │          │  │  (CMA region)    │  │           │     │
+│  └──────────┘  └──────────┘  └──────────────────┘  └───────────┘     │
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```

@@ -26,14 +26,14 @@ kmalloc(128, GFP_KERNEL)
 kmalloc-128 cache (struct kmem_cache)
          │
     ┌────┴─────────────────────────────────┐
-    │ Per-CPU slab (struct kmem_cache_cpu)  │  ← current CPU
+    │ Per-CPU slab (struct kmem_cache_cpu) │  ← current CPU
     │   freelist: →obj1 →obj2 →obj3        │  ← hot, no lock
     └────┬─────────────────────────────────┘
          │ (per-CPU depleted)
-    ┌────▼─────────────────────────────────┐
+    ┌────▼───────────────────────────────────────────┐
     │ Per-node partial list (struct kmem_cache_node) │
-    │   partial slabs with some free objects │
-    └────┬─────────────────────────────────┘
+    │   partial slabs with some free objects         │
+    └────┬───────────────────────────────────────────┘
          │ (no partial slabs)
          ▼
     Page allocator (get a new slab page)
