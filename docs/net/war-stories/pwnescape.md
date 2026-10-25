@@ -126,18 +126,29 @@ Yibelo's write-up credits the discovery to a research campaign — the "Omega-Pw
 
 The reported timeline, from the write-up and its oss-security forward:
 
-```mermaid
-timeline
-    title From challenge announcement to disclosure
-    2026-08-18 : Vercel announces the $1M Sandbox Challenge
-    2026-08-20 : Initial bounded host-memory-leak report submitted
-    2026-09-04 : Root cause and candidate patch reported privately to kernel security/netdev maintainers
-    2026-09-07 : Michael S. Tsirkin reproduces the issue, acknowledges the patch
-    2026-09-19 to 2026-09-22 : Patch posted and revised on netdev in the open
-    2026-10-07 to 2026-10-08 : Revised patch accepted into net.git
-    2026-10-13 to 2026-10-14 : Stable backports and CVE coordination; merged to mainline
-    2026-10-15 : CVE-2026-99999 published; disclosure forwarded to oss-security
-```
+2026-08-18
+:   Vercel announces the $1M Sandbox Challenge
+
+2026-08-20
+:   Initial bounded host-memory-leak report submitted
+
+2026-09-04
+:   Root cause and candidate patch reported privately to kernel security/netdev maintainers
+
+2026-09-07
+:   Michael S. Tsirkin reproduces the issue, acknowledges the patch
+
+2026-09-19 to 2026-09-22
+:   Patch posted and revised on netdev in the open
+
+2026-10-07 to 2026-10-08
+:   Revised patch accepted into `net.git`
+
+2026-10-13 to 2026-10-14
+:   Stable backports and CVE coordination; merged to mainline
+
+2026-10-15
+:   CVE-2026-99999 published; disclosure forwarded to oss-security
 
 The fix's own `Closes:` tag points to a [netdev posting](https://lore.kernel.org/netdev/20260922030310.8684-2-habte.yibelo@gmail.com/) from Yibelo dated September 22 — consistent with the write-up's account of the patch moving from a private report in early September to ordinary public review on netdev by late September, a routine path once a fix is just a hardening patch under normal review rather than something needing a continued embargo.
 
