@@ -120,6 +120,43 @@ The write-up explicitly does not publish what comes after the leak. It describes
 
 Yibelo's own post is careful to separate two different claims that press coverage tended to blur: *escaping a sandbox's network isolation* (what the disclosed leak does) and *escaping a VM to the underlying host* (what the lab-only write/execution chain claims to do). The bug itself lives in ordinary host IPv4 code — not inside KVM, Firecracker, or any other hypervisor's own implementation — a point Edera's Alex Zenla made to CSO Online in the same terms: *"When a guest breaks out, it isn't escaping into some neatly contained hypervisor."* "KVM escape" and "VM escape," as used in coverage of this bug, name the trust boundary the researchers crossed in their own lab, not the component that actually contained the flaw.
 
+## What this means for you
+
+The published disclosure is specifically about one scenario: code running inside a VM attacking the machine hosting it. But the kernel's actual fix doesn't patch "the VM path" — it patches the shared, generic code those VM packets happen to flow through, and that same code has another, ordinary way in that has nothing to do with virtualization. The two meet at the same vulnerable function:
+
+```
+┌──────────────────────────┐      ┌──────────────────────────┐
+│ Scenario A               │      │ Scenario B               │
+│                          │      │                          │
+│ Code inside a VM         │      │ An unprivileged          │
+│ guest (e.g. a cloud      │      │ process on the SAME      │
+│ tenant's workload)       │      │ machine, in its own      │
+│                          │      │ user+network             │
+│ via virtio-net/tun       │      │ namespace                │
+└──────────────────────────┘      └──────────────────────────┘
+             │                                │               
+             └───────────────┬────────────────┘               
+                             ▼                                
+┌────────────────────────────────────────────────────────────┐
+│    Host kernel's generic IPv4 checksum-completion code     │
+│       (ip_do_fragment, netfilter CHECKSUM, nfqueue,        │
+│            bridge conntrack, xfrm/IPsec output)            │
+└────────────────────────────────────────────────────────────┘
+                             │                                
+                             ▼                                
+             leaks or corrupts host-kernel memory
+```
+
+Scenario B is *not* a second vulnerability. It's the same bug, closed by the same commit, the same day — the fix touches five call sites, and only one of them (`ip_do_fragment`, reached via `tun`) is specific to the VM story that made headlines. `af_packet`'s own `PACKET_VNET_HDR` option (added in 2010, the same mechanism, modeled directly on `tun`'s) lets any process with `CAP_NET_RAW` hand the kernel the same kind of attacker-controlled metadata, with no VM involved at all — confirmed in the actual `net/packet/af_packet.c` source. And `CAP_NET_RAW` is checked against the network namespace's *own* user namespace (`ns_capable(net->user_ns, CAP_NET_RAW)`, also checked directly in source) — a capability any unprivileged process can get for itself, on a system where unprivileged user namespaces are allowed, by creating one. That's not new or specific to this bug either; it's the same mechanism behind the older CVE-2017-1000111, and the exact "capabilities routinely granted to unprivileged processes inside user namespaces" theme this page's own index already calls out across other incidents in this collection. Nobody in the public write-ups tested or claimed Scenario B specifically — it's this page's own reading of what the fix's scope implies, not a second finding, and it's already fixed, not a live gap.
+
+What it does change is who should care, and why:
+
+**If Linux is just your development machine, with no VMs involved.** Scenario B is the relevant one, and it needs a process already running on your machine as some user — nothing here is reachable by a remote attacker with no foothold at all, a malicious website, or an email attachment on its own (NVD scores this `AV:L`, local, not `AV:N`). What it does mean: if you ever run code you don't fully trust locally — an untrusted package's install script, a downloaded binary, a CI job building someone else's PR — that code gets one more way to read fragments of kernel memory it has no business seeing, on top of whatever else an unprivileged process could already attempt. The fix is the same as for any kernel bug: keep your distro's kernel updated. Mainline picked it up October 14, 2026; it's backported to the 5.10, 5.15, 6.1, 6.6, 6.12, 6.18, and 7.2 stable series, so an ordinary kernel update once your distro ships one covers it.
+
+**If you host Linux VMs yourself — a PC, a Mac, a home server.** This is where it matters whether the thing directly underneath your VM is a Linux kernel. Run KVM, QEMU, VirtualBox, or libvirt on a Linux machine, and that host kernel is exactly what this bug describes — any VM guest you run, including a prebuilt image you downloaded rather than built yourself (a CTF challenge VM, a vendor appliance, a "run this suspicious file in a sandboxed VM" workflow), gets Scenario A against your own host if your kernel predates the fix. If your host OS is macOS or Windows, that specific host-side code isn't in Darwin or NT's kernel at all, so this bug doesn't describe your host directly — though whatever Linux kernel is running one layer in (inside a VM, inside WSL2, inside whatever VM a container tool manages for you) is still an ordinary Linux kernel subject to Scenario B on its own terms, and still worth keeping patched. The practical check is simple: whatever is the *nearest* Linux kernel underneath whatever you're running, is it updated past October 2026?
+
+**If you run production services on Linux VMs in the cloud.** Two different cases. If you're a customer of a managed service — AWS's own EC2, Lambda, and Fargate, or a platform like Vercel's Sandbox — the provider owns the host kernel, and both AWS and Vercel have already stated their managed fleets are patched or unaffected; there's nothing for you to do beyond normal patching inside your own VM. If instead *you* operate your own KVM or Firecracker infrastructure — your own multi-tenant platform, your own sandboxing product, self-managed virtualization on rented bare metal — you're the host operator, in exactly the same position as the "host Linux VMs yourself" case above, just at larger scale: patch the hosts, not just the guests, since updating a guest's kernel does nothing for a host that's still vulnerable underneath it.
+
 ## How it was found
 
 Yibelo's write-up credits the discovery to a research campaign — the "Omega-Pwn" harness paired with an AI model ("GPT-5.6 Sol") for source-level analysis, under human direction — reaching the underlying primitive in about three days. The write-up doesn't claim the AI found or exploited the bug unassisted; as with this collection's other AI-assisted finds, the human researcher directed the search and did the verification.
