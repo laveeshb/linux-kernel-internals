@@ -268,7 +268,40 @@ static inline int ip_check_csum_start(const struct sk_buff *skb)
 
 — and calls it immediately before `skb_checksum_help()` at every IPv4 site the fix touches: `ip_do_fragment()`, bridge netfilter's connection-tracking fragmentation path, `nfnetlink_queue`'s checksum-help path, the `CHECKSUM` netfilter target, and IPsec's `xfrm_output()`.
 
-Each site now refuses to complete the checksum at all if `csum_start` doesn't point at or after the end of the IPv4 header — closing off the specific corruption this disclosure used, without changing how legitimate deferred checksums behave.
+Each site now refuses to complete the checksum at all if `csum_start` doesn't point at or after the end of the IPv4 header — closing off the specific corruption this disclosure used, without changing how legitimate deferred checksums behave. The same packet, traced through `ip_do_fragment()` both ways:
+
+```mermaid
+flowchart TD
+    A["Attacker-crafted packet<br/>csum_start = 0, inside the IP header"]
+
+    subgraph before[" BEFORE the fix "]
+        direction TB
+        B1["skb_checksum_help() writes the<br/>checksum at byte 0 — no check"]
+        B2["iph-&gt;ihl read back as 15<br/>(corrupted — was really 5)"]
+        B3["ip_do_fragment() copies 60 bytes<br/>32B leaked from host memory"]
+        B1 --> B2 --> B3
+    end
+
+    subgraph after[" AFTER the fix "]
+        direction TB
+        C1["ip_check_csum_start() runs first:<br/>is csum_start before header's end?"]
+        C2["yes — returns -EINVAL<br/>before any write happens"]
+        C3["checksum never completed —<br/>packet rejected, nothing leaks"]
+        C1 --> C2 --> C3
+    end
+
+    A --> B1
+    A --> C1
+
+    classDef bugNode fill:#f8d7da,stroke:#dc3545,color:#58151c
+    classDef fixNode fill:#d4edda,stroke:#28a745,color:#14532d
+    class B1,B2,B3 bugNode
+    class C1,C2,C3 fixNode
+    style before fill:#fff5f5,stroke:#dc3545,color:#58151c
+    style after fill:#f3fbf4,stroke:#28a745,color:#14532d
+```
+
+The fix doesn't change what happens to a well-formed packet at all — it only adds that one branch point in the second step (green), before anything downstream has a chance to trust a value the write (red) hasn't happened yet.
 
 The commit message is explicit that this is a defense-in-depth patch, not a full redesign of how the kernel trusts checksum-offload metadata from an untrusted source: *"We really shouldn't allow such packets in, but as a defence in depth measure, let's also check before we complete the checksum. A more complete validation at input is forthcoming, but needs more work."*
 
@@ -283,8 +316,6 @@ The same day it landed upstream, it was backported as seven separate stable comm
 **Validate position, not just extent.** `skb_checksum_help()`'s existing checks were about *not overrunning* the packet — a real and necessary check, just not the one this bug needed. Nothing stopped the write from landing too *early*, inside a region the caller still needed to trust. A bounds check that only looks at one end of a range can still leave the other end wide open.
 
 **A fix can be explicit about not being finished.** The patch that shipped doesn't claim to solve attacker-controlled checksum offload in general — its own commit message says fuller input-side validation is still pending. Landing the narrow, well-understood defense-in-depth check now, while saying plainly what's still open, is a reasonable way to ship a partial fix under real time pressure.
-
-**Responsible disclosure means choosing what to publish, not publishing everything you found.** Yibelo's write-up demonstrates a genuine, reproducible host-memory leak against production infrastructure — and is just as explicit about withholding the allocator-control and write mechanics that would turn it into a ready-made host-compromise chain. That's not evasion; publishing those specifics would hand anyone reading the post a working exploit, which is exactly the detail a write-up aimed at explaining the risk doesn't need to include.
 
 !!! warning "Pattern to watch for"
     Any deferred or offloaded operation that writes into a buffer based on an offset supplied by the sender — a checksum, a length field, an alignment pad — needs that offset validated against the structure it's about to be read back as, not just against the buffer's own bounds. This applies most sharply wherever the sender can be a guest, a container, or any other principal less trusted than the code doing the deferred work; a check that was safe when every caller was local kernel code doesn't stay safe once an external party controls the inputs.
