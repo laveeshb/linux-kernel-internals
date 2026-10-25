@@ -292,6 +292,7 @@ flowchart TD
 
     A --> B1
     A --> C1
+    before ~~~ after
 
     classDef bugNode fill:#f8d7da,stroke:#dc3545,color:#58151c
     classDef fixNode fill:#d4edda,stroke:#28a745,color:#14532d
