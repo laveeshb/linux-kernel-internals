@@ -24,9 +24,24 @@ Actively exploited
 
 ## What happened
 
-A security researcher taking part in a cloud provider's public bug-bounty challenge found that a virtual machine's guest could hand the host's network stack a packet with self-contradictory metadata — correct enough to pass the checks the kernel already runs, but able to rewrite part of the packet's own header *after* those checks had already relied on it being well-formed. The rewrite could turn a 20-byte IPv4 header into one the kernel believed was 60 bytes long, and the 40 bytes of "header" that didn't actually exist got filled in from whatever host memory happened to sit next to the packet — which then went out over the network, to the guest that asked for it.
+A security researcher taking part in a cloud provider's public bug-bounty challenge found that a virtual machine's guest could hand the host's network stack a packet with self-contradictory metadata — correct enough to pass the checks the kernel already runs, but able to rewrite part of the packet's own header *after* those checks had already relied on it being well-formed. The rewrite could turn a 20-byte IPv4 header into one the kernel believed was 60 bytes long, and the 32 bytes of "header" that didn't actually exist got filled in from whatever host memory happened to sit next to the packet — which then went out over the network, to the guest that asked for it.
 
-The bug itself isn't inside KVM, Firecracker, or any hypervisor's own code. It's in ordinary IPv4 packet handling that every Linux host runs regardless of virtualization; what makes it a guest-to-host issue is that virtual-machine networking (`tun`/`tap` devices carrying `virtio_net_hdr` metadata) is one of the paths that hands a guest direct control over the fields the bug depends on.
+The bug itself isn't inside KVM, Firecracker, or any hypervisor's own code. It's in ordinary IPv4 packet handling that every Linux host runs regardless of virtualization; what makes it a guest-to-host issue is where that packet metadata comes from. A VM's network traffic doesn't travel over a real wire — the guest's virtual NIC (`virtio-net`) hands its packets to the host through a `tun`/`tap` device, prefixed with a small `virtio_net_hdr` struct that *the guest itself fills in*, including the checksum-offload fields this bug depends on:
+
+```
+┌──────────────────────┐          ┌───────────────────────────────────┐
+│ Guest VM             │          │ Host kernel                       │
+│                      │          │                                   │
+│ app sends a packet   │  virtio  │ tun/tap receives it,              │
+│ virtio-net driver    │  ring ▶  │ reads the guest-supplied          │
+│ attaches a           │          │ virtio_net_hdr (csum_start,       │
+│ virtio_net_hdr it    │          │ csum_offset, ...) and later       │
+│ fills in itself      │          │ completes the checksum using      │
+│                      │          │ those guest-chosen values         │
+└──────────────────────┘          └───────────────────────────────────┘
+```
+
+Nothing about this path is unusual or misconfigured — it's exactly how virtio-net is supposed to work, letting a guest offload checksum work the way real NIC hardware would. The bug is that once that metadata reaches ordinary IPv4 code deep in the host, nothing re-checks it against what a hostile sender might supply.
 
 ## How the code was vulnerable
 
@@ -70,6 +85,28 @@ hlen = iph->ihl * 4;
 ```
 
 By the time `hlen` is computed, the checksum write has already run — so if it corrupted `iph->ihl`, `ip_do_fragment()` trusts the corrupted value for how much "header" to copy into the first fragment. Per the disclosure, the packet's real linear data ran out at 28 bytes; told the header was 60, the fragmenting code copied 32 bytes past the end of what the packet actually contained — and whatever host memory happened to sit there went out as spurious IP options in the emitted packet.
+
+The packet before the attacker's write — 28 real bytes, a normal 20-byte header plus 8 bytes of payload:
+
+```
+┌───────────────────────────┬──────────┐
+│     IP header (IHL=5)     │ payload  │
+│         20 bytes          │ 8 bytes  │
+└───────────────────────────┴──────────┘
+0                           20         28
+```
+
+`skb_checksum_help()` writes its 2-byte checksum at byte 0 — landing on the IHL field itself — and `ip_do_fragment()` reads the result back as the new header length. Nothing else in the packet changed; only that one field did:
+
+```
+┌───────────────────────────┬──────────┬───────────────────────┐
+│    IP header (IHL=15!)    │ payload  │ 32B: NOT this packet  │
+│         20 bytes          │ 8 bytes  │ adjacent host memory  │
+└───────────────────────────┴──────────┴───────────────────────┘
+0                           20         28                      60
+```
+
+`ip_do_fragment()` treats the whole 0–60 range as "header" and copies all of it into the fragment. Bytes 0–27 are real; bytes 28–59 are just whatever happened to be sitting in host memory next to the packet — and they go out over the network as if they were IP header options.
 
 `skb_checksum_help()` isn't only reachable from `ip_do_fragment()` — the same missing check applied to four other call sites the fix touches: netfilter's `CHECKSUM` target, `nfnetlink_queue`, bridge connection tracking, and IPsec output. Any of them completing a checksum on attacker-steered metadata hits the same gap; `ip_do_fragment()` is simply the one the published disclosure walks through in detail.
 
