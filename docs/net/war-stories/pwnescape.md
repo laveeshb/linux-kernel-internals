@@ -187,6 +187,15 @@ Scenario B is *not* a second vulnerability. It's the same bug, closed by the sam
 
 That's not new or specific to this bug either; it's the same mechanism behind the older CVE-2017-1000111, and the exact "capabilities routinely granted to unprivileged processes inside user namespaces" theme this page's own index already calls out across other incidents in this collection. Nobody in the public write-ups tested or claimed Scenario B specifically — it's this page's own reading of what the fix's scope implies, not a second finding, and it's already fixed, not a live gap.
 
+!!! example "A concrete walkthrough (hypothetical — not a reported incident)"
+    Picture a small engineering team running its own GitHub Actions self-hosted runner inside a KVM virtual machine, on one of their own Linux build servers — specifically so that a pull request from an outside contributor can't touch anything on the real machine. The VM is the whole point of the setup: whatever a PR's CI job does, it's supposed to stay contained inside that guest.
+
+    A malicious PR adds a build step that opens a socket inside the VM and sends a few deliberately oversized packets out through the VM's `virtio-net` interface — each one with `csum_start` set to point at byte 0 of its own IP header instead of past it, forcing the host to fragment them. On a pre-fix kernel, the host's `ip_do_fragment()` completes the checksum, corrupts the packet's IHL field in the process, and copies 32 bytes of whatever the host kernel had sitting in memory nearby into the fragment it sends back out. The CI job just reads that fragment back over the connection it already opened.
+
+    One leak like that is nearly worthless by itself — 32 unlabeled bytes, not a credential with a name on it. But the job can repeat this as many times as the workflow run lasts, and keep whatever comes back each time. Nothing about it requires the PR's code to be especially clever; it's just using the ordinary `virtio-net` checksum-offload path the VM was always going to give it.
+
+    The team's actual exposure here isn't "our CI secrets got stolen outright" — it's that the specific guarantee they were relying on, "a bad PR can't reach anything outside its VM," wasn't quite true on an unpatched host, for traffic shaped exactly like this.
+
 What it does change is who should care, and why:
 
 **If Linux is just your development machine, with no VMs involved.** Scenario B is the relevant one, and it needs a process already running on your machine as some user — nothing here is reachable by a remote attacker with no foothold at all, a malicious website, or an email attachment on its own (NVD scores this `AV:L`, local, not `AV:N`).
