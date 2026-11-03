@@ -291,19 +291,20 @@ Client sends data:
 = 0 syscalls per request (while ring is active)
 ```
 
-### Numbers from the wild
+### Directional effects, not hard numbers
 
-Benchmarks on high-connection workloads (sources: io_uring author talks,
-Cloudflare blog, Nginx io_uring experiments):
+Exact percentages vary too much by workload, kernel version, and CPU
+mitigations to state as fixed figures, but the direction is consistent:
 
-- At 100 K connections, epoll servers typically spend 15–25% of CPU time in
-  syscall overhead alone.
-- io_uring with SQPOLL reduces syscall count by ~80% in echo-server
-  micro-benchmarks.
-- `io_uring_enter` with batching (submit 32 SQEs, wait for 32 CQEs) brings
-  per-operation syscall cost below 10 ns on modern CPUs.
-- Zero-copy send (`IORING_OP_SEND_ZC`) removes the user→kernel buffer copy
-  on large payloads, yielding another 10–15% throughput gain for >4 KB messages.
+- At high connection counts, syscall overhead becomes a measurable share of
+  total CPU time for epoll-based servers.
+- SQPOLL substantially cuts syscall count in echo-server-style workloads by
+  moving submission off the calling thread entirely.
+- Batching submissions — filling the SQ ring before a single
+  `io_uring_enter` call — amortizes the fixed per-syscall cost across many
+  operations.
+- Zero-copy send (`IORING_OP_SEND_ZC`) avoids a user→kernel buffer copy on
+  send, with the benefit growing as message size grows past a few KB.
 
 ---
 
@@ -553,8 +554,9 @@ io_uring_queue_init_params(QUEUE_DEPTH, &ring, &params);
    for IORING_SQ_NEED_WAKEUP before calling it */
 ```
 
-Requires `CAP_SYS_NICE` on kernels < 5.11, or `IORING_SETUP_SQPOLL` + a
-privileged process. On 5.11+, unprivileged SQPOLL is allowed.
+Requires `CAP_SYS_ADMIN` on kernels older than 5.11. Starting in 5.11, SQPOLL
+becomes usable by non-root processes that hold `CAP_SYS_NICE`; from 5.13
+onward, no special privileges are needed at all.
 
 ### Incremental migration strategy
 
@@ -588,12 +590,12 @@ io_uring.
 
 ```
 5.1   — initial release (incomplete, many bugs)
-5.6   — IORING_OP_SPLICE, fixed buffers stable
-5.10  — IOSQE_BUFFER_SELECT, good stability baseline
-5.11  — unprivileged SQPOLL
-5.19  — multishot recv, send_zc prototype
-6.0   — IORING_OP_SEND_ZC stable
-6.1   — multishot recv stable
+5.7   — IORING_OP_SPLICE, IOSQE_BUFFER_SELECT
+5.10  — IORING_REGISTER_RESTRICTIONS, good stability baseline
+5.11  — SQPOLL usable non-root with CAP_SYS_NICE
+5.13  — SQPOLL fully unprivileged, multishot poll (IORING_POLL_ADD_MULTI)
+5.19  — multishot accept
+6.0   — multishot recvmsg, IORING_OP_SEND_ZC stable
 ```
 
 If the deployment target is RHEL 8 (kernel 4.18) or any kernel older than
@@ -644,8 +646,9 @@ PostgreSQL, RocksDB, and ScyllaDB have all moved or are moving io_uring paths.
 
 **Latency-critical paths.** With SQPOLL and registered fds/buffers, the data
 path can be entirely in shared memory — no syscall crossing on the hot path.
-Measured p99 latency improvements of 20–40% are reported for in-kernel SQPOLL
-workloads vs. equivalent epoll servers.
+SQPOLL workloads with registered fds/buffers commonly report meaningfully
+lower p99 latency than equivalent epoll servers, though the exact
+improvement is workload- and hardware-dependent.
 
 **Zero-copy send for large payloads.** `IORING_OP_SEND_ZC` avoids the
 userspace→kernel buffer copy on `send`. For payloads ≥ 4 KB (typical HTTP
