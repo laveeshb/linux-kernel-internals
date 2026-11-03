@@ -71,9 +71,12 @@ extra_css:
 
 extra_javascript:
   - javascripts/external-links.js
+  - javascripts/oom-killer.js
 
 nav:
   - Home: index.md
+  - Playground:
+    - "Try it: OOM Killer": playground/oom-killer.md
   - Foundations:
     - categories/foundations.md
     - Background:
