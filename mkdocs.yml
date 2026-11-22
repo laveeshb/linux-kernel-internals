@@ -481,6 +481,7 @@ nav:
     - Input / HID:
       - Getting Started: input/README.md
       - The HID Subsystem: input/hid.md
+      - Gamepad Buttons - Position, Not Label: input/gamepad-buttons.md
       - War Stories:
         - Input/HID War Stories: input/war-stories.md
         - The Uninitialized HID Report Buffer Kernel Memory Leak: input/war-stories/uninitialized-report-buffer-leak.md
