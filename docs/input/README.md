@@ -143,6 +143,7 @@ A single touch point fits neatly into `ABS_X`/`ABS_Y`, but a touchscreen or trac
 ### The rest of this section
 
 - **[HID: the Human Interface Device layer](hid.md)** — how USB/Bluetooth/I2C HID report descriptors get parsed and mapped onto `input_dev` capabilities, the HID driver model, and transport layering.
+- **[Gamepad Buttons: Position, Not Label](gamepad-buttons.md)** — why the kernel names face buttons by compass point, and why `xpad`'s X and Y land on the wrong compass points.
 - **[War Stories](war-stories.md)** — real incidents from the input/HID subsystems.
 
 ### Prerequisites and neighbors
