@@ -14,7 +14,7 @@ In April 2013 Todd Showalter ran `evtest` on an Xbox pad, an Xbox 360 pad and a 
 
 ## The decision
 
-In June, David Herrmann sent the fix. The commits credit Showalter with `Reported-by`. The message opens:
+In June, David Herrmann posted the patch that was merged. The commits credit Showalter with `Reported-by`. The message opens:
 
 > Until today all gamepad input drivers report their data differently. It is nearly impossible to write applications for more than one device in a generic way. Therefore, this patch introduces a uniform gamepad API which will be used for all new drivers.
 >
@@ -69,9 +69,9 @@ So what a pad reports depends on which driver handles it:
 | `xpad` | A `BTN_A`, B `BTN_B`, X `BTN_X`, Y `BTN_Y` | By label |
 | `hid-steam` (added 2018) | `BTN_A`, `BTN_B`, `BTN_X`, `BTN_Y` | By label |
 
-Other tables in the same driver differ. The NES and N64 tables put A on `BTN_SOUTH` and B on `BTN_EAST`. The Switch 2 tables, added in 2026, also put A on `BTN_SOUTH` and B on `BTN_EAST`, the opposite of the Switch 1 tables above, with X on `BTN_NORTH` and Y on `BTN_WEST` as before.
+Other tables in the same driver differ. The NES table puts A on `BTN_SOUTH` and B on `BTN_EAST`, and the N64 table uses `BTN_A` and `BTN_B`, the same codes. The Switch 2 tables, added in 2026, also put A on `BTN_SOUTH` and B on `BTN_EAST`, where the Switch 1 tables above have A on `BTN_EAST` and B on `BTN_SOUTH`. X stays on `BTN_NORTH` and Y on `BTN_WEST`.
 
-`gamepad.rst` says all new gamepads are "supposed to" comply with the mapping and asks for bug reports when they don't. `hid-steam`, added in 2018, uses `BTN_A`, `BTN_B`, `BTN_X` and `BTN_Y` for the buttons with those letters.
+`gamepad.rst` says all new gamepads are "supposed to" comply with the mapping and asks for bug reports when they don't.
 
 `xpad` is where the opening question comes from. It dates from 2002, eleven years before the spec, and reports each Xbox button under the letter printed on it. A and B land on the right positions, since `BTN_A` is south and `BTN_B` is east. X and Y don't: the Xbox X is on the left but `BTN_X` is `BTN_NORTH`, and the Xbox Y is on top but `BTN_Y` is `BTN_WEST`.
 
@@ -79,7 +79,7 @@ The same two codes line up with a Nintendo layout instead. On a Switch controlle
 
 ## Why mappings rarely change
 
-The reason is the one the spec gives: changing a mapping breaks userspace. It has been done. In 2016 and 2017 Roderick Colenbrander moved the DualShock 4 and DualShock 3 in `hid-sony` to the spec ([`9131f8cc2b4e`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9131f8cc2b4eaf7c08d402243429e0bfba9aa0d6), [`e19a267b9987`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e19a267b9987135c00155a51e683e434b9abb56b)). For the DS4, SDL2's controller database is keyed on vendor, device and version, so the commit says "In order to not break SDL2 we discussed adjusting the version number, so it can have both mappings".
+The reason is the one the spec gives: changing a mapping breaks userspace. Mappings have been changed before. In 2016 and 2017 Roderick Colenbrander moved the DualShock 4 and DualShock 3 in `hid-sony` to the spec ([`9131f8cc2b4e`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9131f8cc2b4eaf7c08d402243429e0bfba9aa0d6), [`e19a267b9987`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e19a267b9987135c00155a51e683e434b9abb56b)). For the DS4, SDL2's controller database is keyed on vendor, device and version, so the commit says "In order to not break SDL2 we discussed adjusting the version number, so it can have both mappings".
 
 In 2022 a patch tried to swap X and Y on `hid-nintendo` so they "match the Xbox layout". Colenbrander, who made the `hid-sony` change above, [replied](https://lkml.iu.edu/hypermail/linux/kernel/2205.1/08436.html) with two objections. The first:
 
@@ -89,7 +89,7 @@ and the second:
 
 > a changed mapping breaks user spaces and in general can't do this unless there is a really good reason. It just would break existing applications and libraries (often e.g. SDL)
 
-He added that one could argue the Xbox controller "should be flipped as it was the SNES controller back in the days which introduced X/Y". The series' second patch added a module parameter to swap the buttons, and the author asked whether that opt-in part could still be merged. Colenbrander [argued against that too](https://lkml.iu.edu/hypermail/linux/kernel/2205.1/09033.html): it "essentially adds new kernel APIs, which have to be maintained unless truly needed". He pointed to the HID-BPF work then in progress as a way to do such fixups.
+He added that one could argue the Xbox controller "should be flipped as it was the SNES controller back in the days which introduced X/Y". The series' second patch added a module parameter to swap the buttons, and the author asked whether that opt-in part could still be merged. Colenbrander [argued against that too](https://lkml.iu.edu/hypermail/linux/kernel/2205.1/09033.html): it "essentially adds new kernel APIs, which have to be maintained unless truly needed". He suggested that the HID-BPF work then in progress could "probably" allow a similar fixup without changing the kernel module.
 
 ## What this means in practice
 
@@ -102,8 +102,8 @@ He added that one could argue the Xbox controller "should be flipped as it was t
 
 - [`include/uapi/linux/input-event-codes.h`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/input-event-codes.h) — the `BTN_SOUTH` / `BTN_A` definitions
 - [`Documentation/input/gamepad.rst`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/input/gamepad.rst) — the spec, including the legacy-driver paragraph
-- [`drivers/input/joystick/xpad.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/input/joystick/xpad.c) — Xbox pads, reporting by label; first added in July 2002 ([history.git log](https://git.kernel.org/pub/scm/linux/kernel/git/tglx/history.git/log/drivers/usb/input/xpad.c))
-- [`drivers/hid/hid-playstation.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/hid/hid-playstation.c) · [`drivers/hid/hid-nintendo.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/hid/hid-nintendo.c) — drivers that report by position
+- [`drivers/input/joystick/xpad.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/input/joystick/xpad.c) — Xbox pads, reporting by label; first added in 2002 ([history.git log](https://git.kernel.org/pub/scm/linux/kernel/git/tglx/history.git/log/drivers/usb/input/xpad.c))
+- [`drivers/hid/hid-playstation.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/hid/hid-playstation.c) · [`drivers/hid/hid-nintendo.c`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/hid/hid-nintendo.c) — `hid-playstation` reports by position; `hid-nintendo` does for the Switch 1 pads
 
 ### Commits and threads
 
