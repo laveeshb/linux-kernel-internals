@@ -81,7 +81,7 @@ The same two codes line up with a Nintendo layout instead. On a Switch controlle
 
 The reason is the one the spec gives: changing a mapping breaks userspace. It has been done. In 2016 and 2017 Roderick Colenbrander moved the DualShock 4 and DualShock 3 in `hid-sony` to the spec ([`9131f8cc2b4e`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9131f8cc2b4eaf7c08d402243429e0bfba9aa0d6), [`e19a267b9987`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e19a267b9987135c00155a51e683e434b9abb56b)). For the DS4, SDL2's controller database is keyed on vendor, device and version, so the commit says "In order to not break SDL2 we discussed adjusting the version number, so it can have both mappings".
 
-In 2022 a patch tried to swap X and Y on `hid-nintendo` so they "match the Xbox layout". Colenbrander, who maintains the PlayStation HID driver, [replied](https://lkml.iu.edu/hypermail/linux/kernel/2205.1/08436.html) with two objections. The first:
+In 2022 a patch tried to swap X and Y on `hid-nintendo` so they "match the Xbox layout". Colenbrander, who made the `hid-sony` change above, [replied](https://lkml.iu.edu/hypermail/linux/kernel/2205.1/08436.html) with two objections. The first:
 
 > The standard which this driver (as well as others such as hid-sony/hid-playstation) follow is the Linux gamepad standard (see Documentation/input/gamepad.rst). It stays away of the debate what is A/B/X/Y.
 
